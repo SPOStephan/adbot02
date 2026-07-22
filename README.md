@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AdPilot – Multi-Platform Ad Portal
 
-## Getting Started
+AdPilot ist die portable Grundlage für ein kanalübergreifendes Marketing-Portal auf **Next.js, Supabase und Vercel**. Der Code bleibt in einem eigenen GitHub-Repository und kann unabhängig weiterentwickelt oder zu einem anderen Hosting-Anbieter migriert werden.
 
-First, run the development server:
+## Aktueller Funktionsumfang
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+| Bereich | Stand |
+|---|---|
+| Öffentliche Landingpage | Fertig |
+| Registrierung mit Supabase Auth | Fertig |
+| Anmeldung und Abmeldung | Fertig |
+| Serverseitig geschütztes Dashboard | Fertig |
+| Responsive Dashboard-Oberfläche | Fertig, Kennzahlen klar als Demo markiert |
+| Connector-Status-API | Fertig und authentifiziert |
+| Meta-/Google-/TikTok-/Pinterest-OAuth | Vorbereitet, noch nicht aktiviert |
+| Reale Kampagnendaten und Kampagnenstarts | Noch nicht implementiert |
+| KI-Creatives und Optimierungsagent | Noch nicht implementiert |
+
+> Kampagnenstarts und Budgetänderungen werden später nur mit expliziten Freigaben und technischen Leitplanken freigeschaltet.
+
+## Architektur
+
+| Komponente | Technologie |
+|---|---|
+| Web-App | Next.js 16 mit App Router und TypeScript |
+| Styling | Tailwind CSS 4 |
+| Authentifizierung | Supabase Auth mit SSR-Cookies |
+| Datenbank | Supabase PostgreSQL mit Row Level Security |
+| Hosting | Vercel |
+| Plattform-Connectoren | Modulare, serverseitige Adapter |
+
+Portal-Login und Werbeplattform-Autorisierung sind bewusst getrennt. Ein Nutzer meldet sich über **Supabase Auth** im Portal an. Meta, Google und weitere Werbekonten werden später über jeweils eigene OAuth-Connectoren verknüpft.
+
+## Umgebungsvariablen
+
+Für den aktuellen Stand werden in Vercel benötigt:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Alternativ unterstützt der Code den neueren Variablennamen `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Die geplanten, serverseitigen Plattformvariablen sind in `.env.example` dokumentiert. Geheime Werte dürfen niemals mit `NEXT_PUBLIC_` beginnen oder in GitHub gespeichert werden.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase-Migration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Nach dem ursprünglichen Basisschema muss einmal die folgende Migration im Supabase SQL Editor ausgeführt werden:
 
-## Learn More
+```text
+supabase/migrations/20260722_auth_and_connector_security.sql
+```
 
-To learn more about Next.js, take a look at the following resources:
+Sie synchronisiert neue Auth-Nutzer mit `public.users` und schränkt Connector-Zugriffe so ein, dass OAuth-Tokens nicht aus dem Browser geschrieben oder verändert werden können.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Lokale Prüfung
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm install
+npm run lint
+npm run build
+npm run dev
+```
 
-## Deploy on Vercel
+Die App stellt außerdem zwei Diagnose-Endpunkte bereit:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Route | Zugriff | Zweck |
+|---|---|---|
+| `/api/health` | öffentlich | Deployment- und Konfigurationsstatus ohne Geheimnisse |
+| `/api/connectors` | nur angemeldet | Status der eigenen Plattformverbindungen ohne Tokens |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Sicherheitsgrenzen des aktuellen Stands
+
+Die bestehenden Connector-Tabellen sind vorbereitet, aber **echte OAuth-Tokens werden noch nicht geschrieben**. Vor der ersten realen Plattformanbindung wird eine serverseitige Tokenverschlüsselung oder ein geeigneter Secret Store ergänzt. Die Plattform-Credentials bleiben ausschließlich in Vercel-Umgebungsvariablen.
+
+## Nächster Produktbaustein
+
+Als nächstes sollte genau **ein** Connector vollständig umgesetzt werden, idealerweise Meta Ads: Developer-App, OAuth mit signiertem `state`, serverseitiger Tokenaustausch, verschlüsselte Speicherung, Kontenauswahl und read-only Kampagnensynchronisation. Erst wenn dieser Ablauf stabil getestet ist, folgt eine schreibende Kampagnenfunktion.
