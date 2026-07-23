@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ArrowRight, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
 
+import { APP_SITE_URL } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthFormProps = {
@@ -51,7 +52,7 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNextPath)}`,
+        emailRedirectTo: `${APP_SITE_URL}/auth/callback?next=${encodeURIComponent(safeNextPath)}`,
       },
     });
 
@@ -142,7 +143,7 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
         {isLogin ? "Noch kein Konto?" : "Schon registriert?"}{" "}
         <Link
           className="font-semibold text-blue-600 hover:text-blue-700"
-          href={isLogin ? "/registrieren" : "/login"}
+          href={`${APP_SITE_URL}${isLogin ? "/registrieren" : "/login"}`}
         >
           {isLogin ? "Jetzt registrieren" : "Zur Anmeldung"}
         </Link>

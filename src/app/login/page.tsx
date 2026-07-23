@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BarChart3, CheckCircle2, ShieldCheck } from "lucide-react";
 
 import { AuthForm } from "@/components/AuthForm";
+import { MARKETING_SITE_URL } from "@/lib/site-urls";
 
 type LoginPageProps = {
   searchParams: Promise<{ next?: string }>;
@@ -14,7 +15,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto grid min-h-screen max-w-7xl lg:grid-cols-2">
         <section className="flex flex-col justify-between px-6 py-8 sm:px-10 lg:px-14 lg:py-12">
-          <Link className="flex items-center gap-3 font-bold" href="/">
+          <Link className="flex items-center gap-3 font-bold" href={MARKETING_SITE_URL}>
             <span className="grid size-10 place-items-center rounded-xl bg-blue-600 shadow-lg shadow-blue-600/30">
               <BarChart3 className="size-5" />
             </span>

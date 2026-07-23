@@ -8,6 +8,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { APP_SITE_URL } from "@/lib/site-urls";
+
 const benefits = [
   "Meta, Google, TikTok und weitere Kanäle in einer Oberfläche",
   "Klare Budgetgrenzen und kontrollierte Freigaben",
@@ -25,12 +27,12 @@ export default function HomePage() {
           <span>AdPilot</span>
         </Link>
         <div className="flex items-center gap-3">
-          <Link className="hidden px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white sm:block" href="/login">
+          <Link className="hidden px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white sm:block" href={`${APP_SITE_URL}/login`}>
             Anmelden
           </Link>
           <Link
             className="rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-blue-50"
-            href="/registrieren"
+            href={`${APP_SITE_URL}/registrieren`}
           >
             Portal öffnen
           </Link>
@@ -54,14 +56,14 @@ export default function HomePage() {
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Link
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 font-bold shadow-xl shadow-blue-600/20 transition hover:bg-blue-500"
-              href="/registrieren"
+              href={`${APP_SITE_URL}/registrieren`}
             >
               Kostenlos starten
               <ArrowRight className="size-5" />
             </Link>
             <Link
               className="inline-flex items-center justify-center rounded-xl border border-slate-700 px-6 py-3.5 font-bold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
-              href="/login"
+              href={`${APP_SITE_URL}/login`}
             >
               Zum Dashboard
             </Link>
