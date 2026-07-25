@@ -40,25 +40,29 @@ Für den Meta-Connector werden in Vercel die folgenden Variablen benötigt:
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | öffentlich | Supabase-Projekt-URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` oder `NEXT_PUBLIC_SUPABASE_ANON_KEY` | öffentlich | Browser- und SSR-Authentifizierung |
-| `SUPABASE_SERVICE_ROLE_KEY` | nur Server | Connector-Daten trotz RLS schreiben und Compliance-Löschungen ausführen |
+| `SUPABASE_SECRET_KEY` | nur Server | Bevorzugter moderner, rotierbarer Admin-Key für Connector-Schreibzugriffe und Compliance-Löschungen |
+| `SUPABASE_SERVICE_ROLE_KEY` | nur Server | Ausschließlich befristeter Legacy-Fallback für die bestehende Produktion |
 | `META_APP_ID` | nur Server | Meta-App-ID |
 | `META_APP_SECRET` | nur Server | Codeaustausch und Prüfung von Meta-`signed_request` |
 | `META_LOGIN_CONFIG_ID` | nur Server | ID der Facebook-Login-for-Business-Konfiguration |
 | `META_STATE_SECRET` | nur Server | HMAC-Signatur des zehn Minuten gültigen OAuth-State |
 | `META_TOKEN_ENCRYPTION_KEY` | nur Server | AES-256-GCM-Verschlüsselung der Zugriffstokens |
 
-`META_STATE_SECRET` muss mindestens 32 Zeichen lang sein. `META_TOKEN_ENCRYPTION_KEY` muss ein Base64-kodierter 32-Byte-Schlüssel sein; er kann lokal mit `openssl rand -base64 32` erzeugt und anschließend ausschließlich in Vercel gespeichert werden. Die Datei `.env.example` enthält nur Namen und sichere Platzhalter. Geheime Werte dürfen niemals mit `NEXT_PUBLIC_` beginnen oder in GitHub gespeichert werden.
+`SUPABASE_SECRET_KEY` wird bevorzugt. Falls während der Produktionsmigration vorübergehend beide Admin-Variablen gesetzt sind, verwendet die Anwendung immer den modernen Key; nach erfolgreicher Prüfung wird der Legacy-Key entfernt. `META_STATE_SECRET` muss mindestens 32 Zeichen lang sein. `META_TOKEN_ENCRYPTION_KEY` muss ein Base64-kodierter 32-Byte-Schlüssel sein; er kann lokal mit `openssl rand -base64 32` erzeugt und anschließend ausschließlich in Vercel gespeichert werden. Die Datei `.env.example` enthält nur Namen und sichere Platzhalter. Geheime Werte dürfen niemals mit `NEXT_PUBLIC_` beginnen oder in GitHub gespeichert werden.
 
 ## Supabase-Migration
 
 Nach dem ursprünglichen Basisschema müssen die Migrationen in dieser Reihenfolge im Supabase SQL Editor ausgeführt werden:
 
 ```text
+supabase/migrations/20260721000000_initial_remote_schema.sql
 supabase/migrations/20260722_auth_and_connector_security.sql
 supabase/migrations/20260725_meta_connector_oauth.sql
+supabase/migrations/20260725091500_restrict_auth_trigger_function.sql
+supabase/migrations/20260725092000_optimize_rls_and_foreign_keys.sql
 ```
 
-Die erste Migration synchronisiert Auth-Nutzer und sichert die bestehende Connector-Tabelle mit RLS ab. Die zweite ergänzt AES-GCM-Tokenfelder, Meta-Business- und Asset-Metadaten, einen eindeutigen Connector pro Nutzer und Plattform sowie minimale, nicht rückrechenbare Statusnachweise für Datenlöschungsanfragen. Browserrollen können keine Tokenfelder lesen oder schreiben.
+Die Baseline bildet das verifizierte Produktionsschema ohne Nutzerdaten oder Secrets ab. Darauf folgen Auth-/Connector-RLS, AES-GCM-Tokenfelder und Meta-Compliance-Daten, die Einschränkung der Auth-Triggerfunktion sowie skalierungsrelevante RLS- und Fremdschlüsselindex-Optimierungen. Browserrollen können keine Tokenfelder lesen oder schreiben. Diese vollständige Kette wurde zuerst auf dem getrennten Staging-Projekt angewendet und dort ohne Security-, Performance-WARN- oder ERROR-Befunde geprüft.
 
 ## Lokale Prüfung
 
@@ -66,6 +70,7 @@ Die erste Migration synchronisiert Auth-Nutzer und sichert die bestehende Connec
 npm ci
 npm run lint
 npm run test:meta-security
+npm run test:supabase-admin-env
 npm run build
 npm run dev
 ```

@@ -1,3 +1,7 @@
+import "server-only";
+
+import { hasSupabaseAdminKey } from "@/lib/supabase/admin-env";
+
 export const platformIds = ["meta", "google", "tiktok", "pinterest"] as const;
 
 export type PlatformId = (typeof platformIds)[number];
@@ -8,6 +12,7 @@ export type PlatformDefinition = {
   description: string;
   configured: boolean;
   requiredEnvironmentVariables: string[];
+  requiresSupabaseAdminKey?: boolean;
 };
 
 const definitions: Record<
@@ -24,8 +29,8 @@ const definitions: Record<
       "META_LOGIN_CONFIG_ID",
       "META_STATE_SECRET",
       "META_TOKEN_ENCRYPTION_KEY",
-      "SUPABASE_SERVICE_ROLE_KEY",
     ],
+    requiresSupabaseAdminKey: true,
   },
   google: {
     id: "google",
@@ -58,9 +63,13 @@ export function isPlatformId(value: string): value is PlatformId {
 export function getPlatformCatalog(): PlatformDefinition[] {
   return platformIds.map((id) => {
     const definition = definitions[id];
-    const configured = definition.requiredEnvironmentVariables.every(
-      (variable) => Boolean(process.env[variable]),
-    );
+    const requiredVariablesPresent =
+      definition.requiredEnvironmentVariables.every((variable) =>
+        Boolean(process.env[variable]?.trim()),
+      );
+    const adminKeyPresent =
+      !definition.requiresSupabaseAdminKey || hasSupabaseAdminKey();
+    const configured = requiredVariablesPresent && adminKeyPresent;
 
     return { ...definition, configured };
   });

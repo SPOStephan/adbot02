@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:meta-security": "node scripts/test-meta-security.mjs"
+    "test:meta-security": "node scripts/test-meta-security.mjs",
+    "test:supabase-admin-env": "node scripts/test-supabase-admin-env.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
