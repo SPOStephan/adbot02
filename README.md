@@ -12,7 +12,8 @@ AdPilot ist die portable Grundlage für ein kanalübergreifendes Marketing-Porta
 | Serverseitig geschütztes Dashboard | Fertig |
 | Responsive Dashboard-Oberfläche | Fertig, Kennzahlen klar als Demo markiert |
 | Connector-Status-API | Fertig und authentifiziert |
-| Meta-/Google-/TikTok-/Pinterest-OAuth | Vorbereitet, noch nicht aktiviert |
+| Meta OAuth und Compliance-Callbacks | Serverseitig implementiert, Aktivierung und Pilot ausstehend |
+| Google-/TikTok-/Pinterest-OAuth | Vorbereitet, noch nicht aktiviert |
 | Reale Kampagnendaten und Kampagnenstarts | Noch nicht implementiert |
 | KI-Creatives und Optimierungsagent | Noch nicht implementiert |
 
@@ -33,45 +34,57 @@ Portal-Login und Werbeplattform-Autorisierung sind bewusst getrennt. Ein Nutzer 
 
 ## Umgebungsvariablen
 
-Für den aktuellen Stand werden in Vercel benötigt:
+Für den Meta-Connector werden in Vercel die folgenden Variablen benötigt:
 
-```text
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-```
+| Variable | Sichtbarkeit | Zweck |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | öffentlich | Supabase-Projekt-URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` oder `NEXT_PUBLIC_SUPABASE_ANON_KEY` | öffentlich | Browser- und SSR-Authentifizierung |
+| `SUPABASE_SERVICE_ROLE_KEY` | nur Server | Connector-Daten trotz RLS schreiben und Compliance-Löschungen ausführen |
+| `META_APP_ID` | nur Server | Meta-App-ID |
+| `META_APP_SECRET` | nur Server | Codeaustausch und Prüfung von Meta-`signed_request` |
+| `META_LOGIN_CONFIG_ID` | nur Server | ID der Facebook-Login-for-Business-Konfiguration |
+| `META_STATE_SECRET` | nur Server | HMAC-Signatur des zehn Minuten gültigen OAuth-State |
+| `META_TOKEN_ENCRYPTION_KEY` | nur Server | AES-256-GCM-Verschlüsselung der Zugriffstokens |
 
-Alternativ unterstützt der Code den neueren Variablennamen `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Die geplanten, serverseitigen Plattformvariablen sind in `.env.example` dokumentiert. Geheime Werte dürfen niemals mit `NEXT_PUBLIC_` beginnen oder in GitHub gespeichert werden.
+`META_STATE_SECRET` muss mindestens 32 Zeichen lang sein. `META_TOKEN_ENCRYPTION_KEY` muss ein Base64-kodierter 32-Byte-Schlüssel sein; er kann lokal mit `openssl rand -base64 32` erzeugt und anschließend ausschließlich in Vercel gespeichert werden. Die Datei `.env.example` enthält nur Namen und sichere Platzhalter. Geheime Werte dürfen niemals mit `NEXT_PUBLIC_` beginnen oder in GitHub gespeichert werden.
 
 ## Supabase-Migration
 
-Nach dem ursprünglichen Basisschema muss einmal die folgende Migration im Supabase SQL Editor ausgeführt werden:
+Nach dem ursprünglichen Basisschema müssen die Migrationen in dieser Reihenfolge im Supabase SQL Editor ausgeführt werden:
 
 ```text
 supabase/migrations/20260722_auth_and_connector_security.sql
+supabase/migrations/20260725_meta_connector_oauth.sql
 ```
 
-Sie synchronisiert neue Auth-Nutzer mit `public.users` und schränkt Connector-Zugriffe so ein, dass OAuth-Tokens nicht aus dem Browser geschrieben oder verändert werden können.
+Die erste Migration synchronisiert Auth-Nutzer und sichert die bestehende Connector-Tabelle mit RLS ab. Die zweite ergänzt AES-GCM-Tokenfelder, Meta-Business- und Asset-Metadaten, einen eindeutigen Connector pro Nutzer und Plattform sowie minimale, nicht rückrechenbare Statusnachweise für Datenlöschungsanfragen. Browserrollen können keine Tokenfelder lesen oder schreiben.
 
 ## Lokale Prüfung
 
 ```bash
-npm install
+npm ci
 npm run lint
+npm run test:meta-security
 npm run build
 npm run dev
 ```
 
-Die App stellt außerdem zwei Diagnose-Endpunkte bereit:
+Die App stellt außerdem folgende Diagnose- und Connector-Endpunkte bereit:
 
 | Route | Zugriff | Zweck |
 |---|---|---|
 | `/api/health` | öffentlich | Deployment- und Konfigurationsstatus ohne Geheimnisse |
 | `/api/connectors` | nur angemeldet | Status der eigenen Plattformverbindungen ohne Tokens |
+| `/api/connectors/meta/start` | nur angemeldet | Startet Facebook Login for Business mit signiertem State |
+| `/api/connectors/meta/callback` | nur angemeldet | Prüft State, tauscht den Code aus und speichert den Token verschlüsselt |
+| `/api/connectors/meta/deauthorize` | Meta-Webhook | Validiert `signed_request` und entfernt die Verbindung |
+| `/api/connectors/meta/data-deletion` | Meta-Webhook beziehungsweise Status-Link | Löscht Verbindungsdaten und liefert Bestätigungscode plus Statusseite |
 
 ## Sicherheitsgrenzen des aktuellen Stands
 
-Die bestehenden Connector-Tabellen sind vorbereitet, aber **echte OAuth-Tokens werden noch nicht geschrieben**. Vor der ersten realen Plattformanbindung wird eine serverseitige Tokenverschlüsselung oder ein geeigneter Secret Store ergänzt. Die Plattform-Credentials bleiben ausschließlich in Vercel-Umgebungsvariablen.
+Meta-Zugriffstokens werden ausschließlich im serverseitigen Callback verarbeitet und mit **AES-256-GCM**, zufälligem Initialisierungsvektor und Authentifizierungstag gespeichert. Der Browser erhält weder Token noch Service-Role-Schlüssel. OAuth-State ist HMAC-signiert, an den angemeldeten Supabase-Nutzer gebunden und zehn Minuten gültig. Deautorisierungs- und Datenlöschungsaufrufe werden mit dem Meta App Secret kryptografisch validiert. Plattform-Credentials bleiben ausschließlich in Vercel-Umgebungsvariablen.
 
 ## Nächster Produktbaustein
 
-Als nächstes sollte genau **ein** Connector vollständig umgesetzt werden, idealerweise Meta Ads: Developer-App, OAuth mit signiertem `state`, serverseitiger Tokenaustausch, verschlüsselte Speicherung, Kontenauswahl und read-only Kampagnensynchronisation. Erst wenn dieser Ablauf stabil getestet ist, folgt eine schreibende Kampagnenfunktion.
+Als nächstes folgen die kontrollierte Aktivierung dieses Meta-Fundaments: Supabase-Migration anwenden, serverseitige Vercel-Variablen hinterlegen, den Dashboard-Button anbinden und den OAuth-Ablauf mit dem internen Business-Portfolio testen. Danach werden freigegebene Werbekonten, Seiten und Instagram-Konten synchronisiert und zunächst ausschließlich read-only Kampagnendaten geladen. Schreibende Aktionen bleiben bis zur separaten Freigabe deaktiviert.

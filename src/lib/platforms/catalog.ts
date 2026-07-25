@@ -18,7 +18,14 @@ const definitions: Record<
     id: "meta",
     name: "Meta Ads",
     description: "Facebook und Instagram Kampagnen",
-    requiredEnvironmentVariables: ["META_APP_ID", "META_APP_SECRET"],
+    requiredEnvironmentVariables: [
+      "META_APP_ID",
+      "META_APP_SECRET",
+      "META_LOGIN_CONFIG_ID",
+      "META_STATE_SECRET",
+      "META_TOKEN_ENCRYPTION_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+    ],
   },
   google: {
     id: "google",
