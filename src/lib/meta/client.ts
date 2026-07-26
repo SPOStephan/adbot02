@@ -15,7 +15,6 @@ export type MetaAccessToken = {
 
 export type MetaIdentity = {
   id: string;
-  clientBusinessId: string;
 };
 
 type MetaErrorBody = {
@@ -126,7 +125,7 @@ export async function getMetaIdentity(input: {
   appSecret: string;
 }): Promise<MetaIdentity> {
   const url = new URL(`/${META_GRAPH_VERSION}/me`, META_GRAPH_ORIGIN);
-  url.searchParams.set("fields", "id,client_business_id");
+  url.searchParams.set("fields", "id");
   url.searchParams.set(
     "appsecret_proof",
     createAppSecretProof(input.accessToken, input.appSecret),
@@ -136,16 +135,11 @@ export async function getMetaIdentity(input: {
     Authorization: `Bearer ${input.accessToken}`,
   });
 
-  if (
-    !isRecord(body) ||
-    typeof body.id !== "string" ||
-    typeof body.client_business_id !== "string"
-  ) {
+  if (!isRecord(body) || typeof body.id !== "string") {
     throw new MetaGraphError(502, {});
   }
 
   return {
     id: body.id,
-    clientBusinessId: body.client_business_id,
   };
 }

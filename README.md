@@ -50,6 +50,8 @@ Für den Meta-Connector werden in Vercel die folgenden Variablen benötigt:
 
 `SUPABASE_SECRET_KEY` wird bevorzugt. Falls während der Produktionsmigration vorübergehend beide Admin-Variablen gesetzt sind, verwendet die Anwendung immer den modernen Key; nach erfolgreicher Prüfung wird der Legacy-Key entfernt. `META_STATE_SECRET` muss mindestens 32 Zeichen lang sein. `META_TOKEN_ENCRYPTION_KEY` muss ein Base64-kodierter 32-Byte-Schlüssel sein; er kann lokal mit `openssl rand -base64 32` erzeugt und anschließend ausschließlich in Vercel gespeichert werden. Die Datei `.env.example` enthält nur Namen und sichere Platzhalter. Geheime Werte dürfen niemals mit `NEXT_PUBLIC_` beginnen oder in GitHub gespeichert werden.
 
+Staging und Produktion verwenden getrennte Supabase-Projekte, Meta-Apps, Login-Konfigurationen und Secrets. Die Read-only-Login-Konfiguration fordert ausschließlich `ads_read`, `instagram_basic`, `pages_read_engagement` und `pages_show_list` an. `ads_management` und `business_management` bleiben deaktiviert. Der Callback liest deshalb nur die app-spezifische Meta-Nutzer-ID und benötigt kein `client_business_id`.
+
 ## Supabase-Migration
 
 Nach dem ursprünglichen Basisschema müssen die Migrationen in dieser Reihenfolge im Supabase SQL Editor ausgeführt werden:
@@ -70,6 +72,7 @@ Die Baseline bildet das verifizierte Produktionsschema ohne Nutzerdaten oder Sec
 npm ci
 npm run lint
 npm run test:meta-security
+npm run test:meta-readonly
 npm run test:supabase-admin-env
 npm run build
 npm run dev
@@ -89,6 +92,8 @@ Die App stellt außerdem folgende Diagnose- und Connector-Endpunkte bereit:
 ## Sicherheitsgrenzen des aktuellen Stands
 
 Meta-Zugriffstokens werden ausschließlich im serverseitigen Callback verarbeitet und mit **AES-256-GCM**, zufälligem Initialisierungsvektor und Authentifizierungstag gespeichert. Der Browser erhält weder Token noch Service-Role-Schlüssel. OAuth-State ist HMAC-signiert, an den angemeldeten Supabase-Nutzer gebunden und zehn Minuten gültig. Deautorisierungs- und Datenlöschungsaufrufe werden mit dem Meta App Secret kryptografisch validiert. Plattform-Credentials bleiben ausschließlich in Vercel-Umgebungsvariablen.
+
+Die optionale Meta-Dashboard-Auswahl für Asset-Aufgaben ist keine verlässliche Sicherheitsgrenze, da sie in der aktuellen Oberfläche nicht dauerhaft angezeigt wird. Maßgeblich sind daher die vier ausgewählten OAuth-Scopes, die serverseitig verwendeten Graph-Endpunkte und die technische Prüfung des ausgestellten Testtokens. Schreibende Scopes und schreibende API-Operationen sind im aktuellen Stand ausgeschlossen.
 
 ## Nächster Produktbaustein
 

@@ -39,9 +39,11 @@ try {
     cryptoModule.verifyOAuthState(state, stateSecret, "other-user", now),
     null,
   );
+  const [statePayload, stateSignature] = state.split(".");
+  const tamperedSignature = `${stateSignature.startsWith("A") ? "B" : "A"}${stateSignature.slice(1)}`;
   assert.equal(
     cryptoModule.verifyOAuthState(
-      `${state.slice(0, -1)}${state.endsWith("A") ? "B" : "A"}`,
+      `${statePayload}.${tamperedSignature}`,
       stateSecret,
       userId,
       now,
