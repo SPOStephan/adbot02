@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  AlertCircle,
   BarChart3,
   Bell,
   CalendarDays,
+  CheckCircle2,
   CircleDollarSign,
   HelpCircle,
   ImageIcon,
@@ -15,6 +17,7 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldCheck,
   Sparkles,
   Target,
   TrendingUp,
@@ -66,6 +69,69 @@ const metrics = [
   },
 ];
 
+type DashboardPageProps = {
+  searchParams: Promise<{
+    meta?: string | string[];
+    meta_error?: string | string[];
+  }>;
+};
+
+type MetaNotice = {
+  tone: "success" | "error";
+  title: string;
+  message: string;
+};
+
+const META_ERROR_MESSAGES: Record<string, string> = {
+  cancelled: "Die Meta-Verbindung wurde abgebrochen. Es wurden keine Änderungen gespeichert.",
+  provider: "Meta konnte die Autorisierung nicht abschließen. Bitte versuche es erneut.",
+  configuration: "Der Meta-Connector ist noch nicht vollständig konfiguriert.",
+  missing_response: "Meta hat keine vollständige Antwort zurückgegeben. Bitte starte die Verbindung erneut.",
+  invalid_state: "Die Sicherheitsprüfung ist abgelaufen oder ungültig. Bitte starte die Verbindung erneut.",
+  storage: "Die Verbindung konnte nicht sicher gespeichert werden. Es wurde keine Verbindung aktiviert.",
+  callback: "Die Meta-Antwort konnte nicht verarbeitet werden. Bitte starte die Verbindung erneut.",
+};
+
+function firstQueryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getMetaNotice(
+  meta: string | undefined,
+  errorReason: string | undefined,
+  metaConnected: boolean,
+): MetaNotice | null {
+  if (meta === "connected" && metaConnected) {
+    return {
+      tone: "success",
+      title: "Meta wurde erfolgreich verbunden.",
+      message:
+        "Der Connector arbeitet mit Lesezugriff. Kampagnen können nicht erstellt oder verändert werden.",
+    };
+  }
+
+  if (meta === "connected" && !metaConnected) {
+    return {
+      tone: "error",
+      title: "Meta-Verbindung noch nicht bestätigt.",
+      message:
+        "Die Rückleitung war erfolgreich, aber es wurde kein aktiver Connector gefunden. Bitte starte die Verbindung erneut.",
+    };
+  }
+
+  if (meta === "error" || errorReason) {
+    return {
+      tone: "error",
+      title: "Meta konnte nicht verbunden werden.",
+      message:
+        META_ERROR_MESSAGES[errorReason ?? ""] ??
+        "Die Verbindung wurde nicht abgeschlossen. Bitte starte den Vorgang erneut.",
+    };
+  }
+
+  return null;
+}
+
 const platformVisuals = {
   meta: {
     accentClass: "bg-blue-50 text-blue-600",
@@ -85,7 +151,8 @@ const platformVisuals = {
   },
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const query = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -105,20 +172,45 @@ export default async function DashboardPage() {
       (item) => item.platform === platform.id,
     );
 
+    const isMeta = platform.id === "meta";
+
     return {
+      id: platform.id,
       name: platform.name,
       description: platform.description,
       status: account
-        ? account.account_name
-          ? `Verbunden: ${account.account_name}`
-          : "Verbunden"
+        ? isMeta
+          ? "Verbunden"
+          : account.account_name
+            ? `Verbunden: ${account.account_name}`
+            : "Verbunden"
         : platform.configured
           ? "Bereit zur Verbindung"
           : "API-Zugang noch nicht hinterlegt",
       connected: Boolean(account),
+      badge: isMeta && platform.configured ? "Nur Lesezugriff" : undefined,
+      helperText: isMeta
+        ? "Liest Anzeigen-, Seiten- und Instagram-Basisdaten. Keine Kampagnen-, Publishing- oder Messaging-Rechte."
+        : undefined,
+      actionHref:
+        isMeta && platform.configured && !account
+          ? "/api/connectors/meta/start"
+          : undefined,
+      actionLabel:
+        isMeta && platform.configured && !account ? "Meta verbinden" : undefined,
       ...platformVisuals[platform.id],
     };
   });
+
+  const hasConnectedPlatform = platforms.some((platform) => platform.connected);
+  const metaConnected = platforms.some(
+    (platform) => platform.id === "meta" && platform.connected,
+  );
+  const metaNotice = getMetaNotice(
+    firstQueryValue(query.meta),
+    firstQueryValue(query.meta_error),
+    metaConnected,
+  );
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
@@ -190,7 +282,11 @@ export default async function DashboardPage() {
                 <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
                   Demoansicht
                 </span>
-                <span className="text-xs text-slate-400">Noch keine Werbekonten verbunden</span>
+                <span className="text-xs text-slate-400">
+                  {hasConnectedPlatform
+                    ? "Mindestens eine Plattform ist verbunden"
+                    : "Noch keine Werbekonten verbunden"}
+                </span>
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Marketing-Übersicht</h1>
               <p className="mt-2 text-slate-500">
@@ -214,6 +310,28 @@ export default async function DashboardPage() {
               </a>
             </div>
           </div>
+
+          {metaNotice ? (
+            <section
+              aria-live="polite"
+              className={`mt-8 flex gap-3 rounded-2xl border p-4 sm:p-5 ${
+                metaNotice.tone === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+                  : "border-red-200 bg-red-50 text-red-950"
+              }`}
+              role={metaNotice.tone === "error" ? "alert" : "status"}
+            >
+              {metaNotice.tone === "success" ? (
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
+              ) : (
+                <AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" />
+              )}
+              <div>
+                <p className="font-bold">{metaNotice.title}</p>
+                <p className="mt-1 text-sm leading-6 opacity-80">{metaNotice.message}</p>
+              </div>
+            </section>
+          ) : null}
 
           <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map(({ label, value, change, icon: Icon, color }) => (
@@ -275,12 +393,16 @@ export default async function DashboardPage() {
             <div>
               <h2 className="text-xl font-extrabold">Werbeplattformen</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Technische Connectoren werden getrennt und schrittweise freigeschaltet.
+                Verbinde Konten direkt im Dashboard. Jede Integration zeigt ihren Freigabeumfang vor dem Start.
               </p>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                <ShieldCheck className="size-3.5" />
+                Meta startet ausschließlich mit dokumentiertem Lesezugriff
+              </div>
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {platforms.map((platform) => (
-                <PlatformStatusCard key={platform.name} {...platform} />
+              {platforms.map(({ id, ...platform }) => (
+                <PlatformStatusCard key={id} {...platform} />
               ))}
             </div>
           </section>
