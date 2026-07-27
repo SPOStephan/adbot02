@@ -27,6 +27,8 @@ export function normalizeHostname(host: string | null | undefined) {
 }
 
 export function isMarketingHostname(hostname: string) {
+  if (marketingHostname === appHostname) return false;
+
   return hostname === marketingHostname || hostname === `www.${marketingHostname}`;
 }
 

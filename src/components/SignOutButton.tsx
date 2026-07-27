@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { LogOut } from "lucide-react";
 
-import { MARKETING_SITE_URL } from "@/lib/site-urls";
+import { APP_SITE_URL } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/client";
 
 export function SignOutButton() {
@@ -13,7 +13,7 @@ export function SignOutButton() {
     setLoading(true);
     const supabase = createClient();
     await supabase.auth.signOut();
-    window.location.assign(MARKETING_SITE_URL);
+    window.location.assign(`${APP_SITE_URL}/login`);
   }
 
   return (
