@@ -42,9 +42,20 @@ try {
     callbackSource,
     /clientBusinessId|client_business_id|business_management|ads_management/,
   );
-  assert.match(callbackSource, /platform_account_id:\s*identity\.id/);
-  assert.match(callbackSource, /account_id:\s*identity\.id/);
-  assert.match(callbackSource, /meta_business_id:\s*null/);
+  assert.match(callbackSource, /exchangeForLongLivedAccessToken/);
+  assert.match(callbackSource, /debugMetaAccessToken/);
+  assert.match(callbackSource, /replace_meta_connection/);
+  assert.match(callbackSource, /p_meta_user_id:\s*identity\.id/);
+  assert.match(callbackSource, /p_assets:\s*assetRows/);
+  assert.match(callbackSource, /p_scopes:\s*\[\.\.\.META_ALLOWED_SCOPES\]/);
+
+  const assetRowsStart = callbackSource.indexOf("const assetRows");
+  const assetRowsEnd = callbackSource.indexOf("const encryptedToken");
+  assert.ok(assetRowsStart >= 0 && assetRowsEnd > assetRowsStart);
+  assert.doesNotMatch(
+    callbackSource.slice(assetRowsStart, assetRowsEnd),
+    /accessToken|access_token|token_iv|token_auth_tag/,
+  );
 
   const cryptoModulePath = join(temporaryDirectory, "crypto.mjs");
   const clientModulePath = join(temporaryDirectory, "client.mjs");
@@ -52,23 +63,16 @@ try {
   await writeFile(clientModulePath, transpile(clientSource), "utf8");
 
   const clientModule = await import(pathToFileURL(clientModulePath).href);
-  let requestedUrl;
-  let requestedInit;
+  const requests = [];
 
   globalThis.fetch = async (input, init) => {
-    requestedUrl = new URL(String(input));
-    requestedInit = init;
+    const url = new URL(String(input));
+    requests.push({ url, init });
 
-    return new Response(
-      JSON.stringify({
-        id: "meta-app-scoped-user-id",
-        client_business_id: "ignored-business-id",
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    return new Response(JSON.stringify({ id: "meta-app-scoped-user-id" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   };
 
   const identity = await clientModule.getMetaIdentity({
@@ -77,19 +81,143 @@ try {
   });
 
   assert.deepEqual(identity, { id: "meta-app-scoped-user-id" });
-  assert.equal(requestedUrl.pathname, "/v25.0/me");
-  assert.equal(requestedUrl.searchParams.get("fields"), "id");
-  assert.ok(requestedUrl.searchParams.get("appsecret_proof"));
+  assert.equal(requests[0].url.pathname, "/v25.0/me");
+  assert.equal(requests[0].url.searchParams.get("fields"), "id");
+  assert.ok(requests[0].url.searchParams.get("appsecret_proof"));
+  assert.equal(requests[0].init.method, "GET");
+  assert.equal(requests[0].init.cache, "no-store");
   assert.equal(
-    requestedInit.headers.Authorization,
+    requests[0].init.headers.Authorization,
     "Bearer read-only-test-token",
   );
 
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    return new Response(
+      JSON.stringify({
+        access_token: "long-lived-test-token",
+        token_type: "bearer",
+        expires_in: 5_184_000,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  const longLived = await clientModule.exchangeForLongLivedAccessToken({
+    appId: "meta-app-id",
+    appSecret: "meta-app-secret",
+    shortLivedAccessToken: "short-lived-token",
+  });
+
+  assert.equal(longLived.accessToken, "long-lived-test-token");
+  assert.equal(longLived.expiresInSeconds, 5_184_000);
+  assert.equal(requests[0].url.pathname, "/v25.0/oauth/access_token");
+  assert.equal(requests[0].url.searchParams.get("grant_type"), "fb_exchange_token");
+  assert.equal(requests[0].url.searchParams.get("fb_exchange_token"), "short-lived-token");
+  assert.equal(requests[0].init.method, "GET");
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: "page_post_1",
+            message: `  ${"x".repeat(520)}  `,
+            permalink_url: "http://unsafe.example/post",
+            full_picture: "https://cdn.example.test/post.jpg",
+            created_time: "2026-07-27T10:00:00+0000",
+          },
+        ],
+        paging: {
+          next: "https://attacker.example/v25.0/leak?access_token=stolen",
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "x-app-usage": JSON.stringify({ call_count: 23, total_time: 5 }),
+        },
+      },
+    );
+  };
+
+  const facebook = await clientModule.getFacebookPublishedPosts({
+    pageId: "page/with spaces",
+    pageAccessToken: "ephemeral-page-token",
+    appSecret: "test-app-secret",
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].init.method, "GET");
+  assert.equal(requests[0].init.cache, "no-store");
+  assert.equal(requests[0].init.headers.Authorization, "Bearer ephemeral-page-token");
+  assert.ok(requests[0].url.searchParams.get("appsecret_proof"));
+  assert.equal(facebook.items.length, 1);
+  assert.equal(facebook.items[0].captionExcerpt.length, 500);
+  assert.equal(facebook.items[0].permalinkUrl, null);
+  assert.equal(facebook.items[0].previewUrl, "https://cdn.example.test/post.jpg");
+  assert.equal(facebook.usage.appPercent, 23);
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: "ig_media_1",
+            caption: "Neuer Beitrag",
+            media_type: "VIDEO",
+            media_product_type: "REELS",
+            permalink: "https://instagram.example.test/p/1",
+            timestamp: "2026-07-27T11:00:00+0000",
+            thumbnail_url: "javascript:alert(1)",
+            media_url: "https://cdn.example.test/reel.jpg",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  const instagram = await clientModule.getInstagramMedia({
+    instagramAccountId: "ig-id",
+    pageAccessToken: "ephemeral-page-token",
+    appSecret: "test-app-secret",
+  });
+
+  assert.equal(requests[0].init.method, "GET");
+  assert.equal(instagram.items[0].contentType, "reel");
+  assert.equal(instagram.items[0].previewUrl, "https://cdn.example.test/reel.jpg");
+
   globalThis.fetch = async () =>
-    new Response(JSON.stringify({ client_business_id: "business-only" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    new Response(
+      JSON.stringify({ error: { code: 4, error_subcode: 99 } }),
+      {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "x-app-usage": JSON.stringify({ call_count: 100 }),
+          "retry-after": "120",
+        },
+      },
+    );
 
   await assert.rejects(
     clientModule.getMetaIdentity({
@@ -97,7 +225,26 @@ try {
       appSecret: "test-app-secret",
     }),
     (error) =>
-      error instanceof clientModule.MetaGraphError && error.status === 502,
+      error instanceof clientModule.MetaGraphError &&
+      error.rateLimited === true &&
+      error.usage.appPercent === 100 &&
+      error.usage.retryAfterSeconds === 120,
+  );
+
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ error: { code: 190 } }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  await assert.rejects(
+    clientModule.getMetaIdentity({
+      accessToken: "expired-token",
+      appSecret: "test-app-secret",
+    }),
+    (error) =>
+      error instanceof clientModule.MetaGraphError &&
+      error.reconnectRequired === true,
   );
 
   console.log("Meta read-only checks passed");

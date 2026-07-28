@@ -11,7 +11,8 @@
     "test:meta-readonly": "node scripts/test-meta-readonly.mjs",
     "test:supabase-admin-env": "node scripts/test-supabase-admin-env.mjs",
     "test:staging-routing": "node scripts/test-staging-routing.mjs",
-    "test:dashboard-meta-connector": "node scripts/test-dashboard-meta-connector.mjs"
+    "test:dashboard-meta-connector": "node scripts/test-dashboard-meta-connector.mjs",
+    "test:meta-content-sync": "node scripts/test-meta-content-sync.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

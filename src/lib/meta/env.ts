@@ -42,14 +42,28 @@ export function getMetaLoginStartEnv() {
   };
 }
 
-export function getMetaCallbackEnv() {
+export function getMetaSyncEnv() {
   return {
-    ...getMetaLoginStartEnv(),
+    appId: required("META_APP_ID", process.env.META_APP_ID),
     appSecret: required("META_APP_SECRET", process.env.META_APP_SECRET),
     tokenEncryptionKey: required(
       "META_TOKEN_ENCRYPTION_KEY",
       process.env.META_TOKEN_ENCRYPTION_KEY,
     ),
+  };
+}
+
+export function getMetaCallbackEnv() {
+  return {
+    ...getMetaLoginStartEnv(),
+    ...getMetaSyncEnv(),
+  };
+}
+
+export function getMetaCronEnv() {
+  return {
+    ...getMetaSyncEnv(),
+    cronSecret: requiredSecret("CRON_SECRET", process.env.CRON_SECRET),
   };
 }
 
