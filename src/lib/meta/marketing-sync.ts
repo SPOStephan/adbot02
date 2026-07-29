@@ -276,6 +276,27 @@ function persistedCount(value: unknown, key: string, fallback: number): number {
   return fallback;
 }
 
+function persistenceDiagnostic(error: {
+  code?: string;
+  message?: string;
+}): { sqlState: string; message: string } {
+  const sqlState =
+    typeof error.code === "string" && /^[A-Z0-9]{4,10}$/i.test(error.code)
+      ? error.code
+      : "unknown";
+  const message =
+    typeof error.message === "string"
+      ? error.message
+          .replace(/'(?:[^']|'')*'/g, "'[redacted]'")
+          .replace(/"(?:[^"\\]|\\.)*"/g, '"[redacted]"')
+          .replace(/\b\d{6,}\b/g, "[redacted]")
+          .replace(/https?:\/\/\S+/gi, "[redacted-url]")
+          .slice(0, 240)
+      : "No database message available";
+
+  return { sqlState, message };
+}
+
 export async function syncMetaMarketingSnapshot(input: {
   platformAccountId: string;
   userId: string;
@@ -350,6 +371,10 @@ export async function syncMetaMarketingSnapshot(input: {
   });
 
   if (error) {
+    console.error(
+      "Meta Marketing snapshot persistence failed",
+      persistenceDiagnostic(error),
+    );
     throw new MetaMarketingDataError("persistence_failed");
   }
 
