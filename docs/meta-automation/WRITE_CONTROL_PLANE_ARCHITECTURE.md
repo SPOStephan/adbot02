@@ -360,7 +360,7 @@ Der Control-Plane-, Creative-Asset-, Budget-Planner-, Mutation-Executor- und Act
 | Statische Prüfung | `npm run lint` |
 | Typprüfung | `npx tsc --noEmit` |
 
-Die numerischen Randwerte, Fail-closed Zustände und noch ausstehenden externen Staging-Gates sind im [`RELEASE_SAFETY_EVIDENCE.md`](./RELEASE_SAFETY_EVIDENCE.md) mit Durchsetzungsort und ausführbarer Regression dokumentiert.
+Die numerischen Randwerte, Fail-closed Zustände und noch ausstehenden externen Staging-Gates sind im [`RELEASE_SAFETY_EVIDENCE.md`](./RELEASE_SAFETY_EVIDENCE.md) mit Durchsetzungsort und ausführbarer Regression dokumentiert. Der tatsächlich bereitgestellte Preview-Commit, die Staging-Migrationen, Datenbankbindung, sicheren Nullzustände, Rollenentzüge und Laufzeitprüfungen sind im [`STAGING_DEPLOYMENT_EVIDENCE.md`](./STAGING_DEPLOYMENT_EVIDENCE.md) festgehalten.
 
 Die Browserrollen besitzen weder Tabellen-Schreibrechte noch `EXECUTE` auf Materializer-, Executor-, Dispatch-, Snapshot-, Completion- oder Reconciliation-RPCs. Nur der serverseitige Executor mit service role darf einen geclaimten Plan gegen Meta ausführen.
 
