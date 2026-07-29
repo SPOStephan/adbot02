@@ -1,0 +1,29 @@
+flowchart LR
+  U["Kunde\nDashboard"] -->|"authentifizierte Server-API"| P["Policy-, Domain-, Blueprint-\nund Asset-Konfiguration"]
+  C1["Vercel Cron\nMeta Read Sync"] --> L["Account-Operationslock\nSupabase RPC"]
+  C2["Vercel Cron\nAutomation"] --> Q["Deterministischer Planner"]
+  P --> D[("Supabase\nControl Plane")]
+  L --> M["Meta Marketing API v25"]
+  M --> R["Read-only Live-Snapshot"]
+  R --> D
+  D --> Q
+  Q -->|"idempotenter Plan"| D
+  Q --> X["Executor / Saga"]
+  X -->|"validate_only"| M
+  X -->|"atomarer Claim + Budgetreserve"| L
+  L --> X
+  X -->|"PAUSED Eltern, Creative, ACTIVE Ad,\nAktivierung zuletzt"| M
+  M -->|"read-after-write"| X
+  X --> A["Append-only Audit\nBefore / Request / Response / After"]
+  X --> D
+  K["Kill-Switch\nSystem > Account > Plan"] --> L
+  K --> X
+  D --> V["Mandantensichere Read Views"]
+  V --> U
+
+  classDef boundary fill:#eef2ff,stroke:#3730a3,color:#111827;
+  classDef data fill:#ecfdf5,stroke:#047857,color:#111827;
+  classDef risk fill:#fff7ed,stroke:#c2410c,color:#111827;
+  class U,C1,C2 boundary;
+  class D,R,A,V data;
+  class M,L,X,K risk;

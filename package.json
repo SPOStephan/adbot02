@@ -14,7 +14,8 @@
     "test:dashboard-meta-connector": "node scripts/test-dashboard-meta-connector.mjs",
     "test:meta-content-sync": "node scripts/test-meta-content-sync.mjs",
     "test:meta-marketing-readonly": "node scripts/test-meta-marketing-readonly.mjs",
-    "test:meta-marketing-sync": "node scripts/test-meta-marketing-sync.mjs"
+    "test:meta-marketing-sync": "node scripts/test-meta-marketing-sync.mjs",
+    "test:meta-write-control-plane": "node scripts/test-meta-write-control-plane.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
