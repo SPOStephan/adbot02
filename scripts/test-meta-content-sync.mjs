@@ -195,6 +195,7 @@ try {
     .replace('from "./crypto";', 'from "./crypto.mjs";')
     .replace('from "./env";', 'from "./env.mjs";')
     .replace('from "./marketing-sync";', 'from "./marketing-sync.mjs";')
+    .replace('from "./planner";', 'from "./planner.mjs";')
     .replace('from "../supabase/admin";', 'from "./admin.mjs";');
 
   const clientStub = `
@@ -283,6 +284,41 @@ export async function syncMetaMarketingSnapshot(input) {
 }
 `;
 
+  const plannerStub = `
+export class MetaBudgetPlannerError extends Error {
+  constructor(code) {
+    super(\`Meta budget planner failed: \${code}\`);
+    this.code = code;
+  }
+}
+
+export async function claimMetaReadOperation(input) {
+  globalThis.__metaTest.calls.push({ name: "claimMetaReadOperation", input });
+  if (globalThis.__metaTest.plannerClaimError) {
+    throw globalThis.__metaTest.plannerClaimError;
+  }
+  return globalThis.__metaTest.readLeaseToken;
+}
+
+export async function runMetaBudgetPlannerAfterSnapshot(input) {
+  globalThis.__metaTest.calls.push({
+    name: "runMetaBudgetPlannerAfterSnapshot",
+    input,
+  });
+  if (globalThis.__metaTest.plannerError) {
+    throw globalThis.__metaTest.plannerError;
+  }
+  return globalThis.__metaTest.plannerResult;
+}
+
+export async function releaseMetaAccountOperation(input) {
+  globalThis.__metaTest.calls.push({ name: "releaseMetaAccountOperation", input });
+  if (globalThis.__metaTest.plannerReleaseError) {
+    throw globalThis.__metaTest.plannerReleaseError;
+  }
+}
+`;
+
   const cryptoStub = `
 export function decryptAccessToken(value, key) {
   globalThis.__metaTest.decryptInput = { value, key };
@@ -310,6 +346,7 @@ export function createAdminClient() {
     marketingStub,
     "utf8",
   );
+  await writeFile(join(temporaryDirectory, "planner.mjs"), plannerStub, "utf8");
   await writeFile(join(temporaryDirectory, "crypto.mjs"), cryptoStub, "utf8");
   await writeFile(join(temporaryDirectory, "env.mjs"), envStub, "utf8");
   await writeFile(join(temporaryDirectory, "admin.mjs"), adminStub, "utf8");
@@ -317,6 +354,9 @@ export function createAdminClient() {
   await writeFile(syncModulePath, transpile(syncSource), "utf8");
 
   const syncModule = await import(pathToFileURL(syncModulePath).href);
+  const plannerModule = await import(
+    pathToFileURL(join(temporaryDirectory, "planner.mjs")).href,
+  );
 
   assert.equal(syncModule.calculateSyncBackoffSeconds(0), 300);
   assert.equal(syncModule.calculateSyncBackoffSeconds(1), 600);
@@ -376,6 +416,16 @@ export function createAdminClient() {
       instagramResult: { items: [instagramItem], usage: emptyUsage },
       marketingResult: {
         syncId: "20000000-0000-4000-8000-000000000001",
+        campaignBudgetSharingSnapshot: [
+          {
+            platform_campaign_id: "30000000000000001",
+            is_adset_budget_sharing_enabled: false,
+          },
+          {
+            platform_campaign_id: "30000000000000002",
+            is_adset_budget_sharing_enabled: null,
+          },
+        ],
         campaignsCount: 2,
         adSetsCount: 3,
         adsCount: 4,
@@ -387,6 +437,21 @@ export function createAdminClient() {
         usage: emptyUsage,
       },
       marketingError: null,
+      readLeaseToken: "30000000-0000-4000-8000-000000000001",
+      plannerResult: {
+        status: "PLANNED",
+        snapshotId: "40000000-0000-4000-8000-000000000001",
+        accountDay: "2026-07-29",
+        observedBudgetOwnerCount: 2,
+        reservedExposureMinor: 26250,
+        plansCreated: 1,
+        plansExisting: 0,
+        candidatesBlocked: 0,
+        hardCapBreach: false,
+      },
+      plannerClaimError: null,
+      plannerError: null,
+      plannerReleaseError: null,
       ...overrides,
     };
   }
@@ -408,6 +473,9 @@ export function createAdminClient() {
   assert.equal(baselineResult.marketingStatus, "success");
   assert.equal(baselineResult.campaignsCount, 2);
   assert.equal(baselineResult.insightsCount, 37);
+  assert.equal(baselineResult.plannerStatus, "PLANNED");
+  assert.equal(baselineResult.plannerPlansCreated, 1);
+  assert.equal(baselineResult.plannerReservedExposureMinor, 26250);
   assert.equal(globalThis.__metaTest.decryptInput.value.ciphertext, "ciphertext");
   assert.equal(
     globalThis.__metaTest.calls.find(
@@ -439,6 +507,36 @@ export function createAdminClient() {
   assert.equal(marketingCall.input.adAccountId, "ad-account-1");
   assert.equal(marketingCall.input.accessToken, "decrypted-user-token");
   assert.equal(marketingCall.input.appSecret, "meta-app-secret");
+  const controlCalls = globalThis.__metaTest.calls.filter((call) =>
+    [
+      "claimMetaReadOperation",
+      "syncMetaMarketingSnapshot",
+      "runMetaBudgetPlannerAfterSnapshot",
+      "releaseMetaAccountOperation",
+    ].includes(call.name),
+  );
+  assert.deepEqual(
+    controlCalls.map((call) => call.name),
+    [
+      "claimMetaReadOperation",
+      "syncMetaMarketingSnapshot",
+      "runMetaBudgetPlannerAfterSnapshot",
+      "releaseMetaAccountOperation",
+    ],
+  );
+  assert.equal(
+    controlCalls[2].input.marketingSyncId,
+    "20000000-0000-4000-8000-000000000001",
+  );
+  assert.equal(controlCalls[2].input.campaignBudgetSharingSnapshot.length, 2);
+  assert.equal(
+    controlCalls[2].input.readLeaseToken,
+    "30000000-0000-4000-8000-000000000001",
+  );
+  assert.equal(
+    baselineHarness.state.updates.at(-1).values.automation_planner_status,
+    "success",
+  );
 
   const marketingPartialHarness = makeAdminHarness();
   configureMeta(marketingPartialHarness.admin, {
@@ -452,6 +550,17 @@ export function createAdminClient() {
   assert.equal(marketingPartialResult.status, "partial");
   assert.equal(marketingPartialResult.marketingStatus, "error");
   assert.equal(marketingPartialResult.campaignsCount, 0);
+  assert.equal(marketingPartialResult.plannerStatus, "not_run");
+  assert.equal(
+    globalThis.__metaTest.calls.some(
+      (call) => call.name === "runMetaBudgetPlannerAfterSnapshot",
+    ),
+    false,
+  );
+  assert.equal(
+    globalThis.__metaTest.calls.at(-1).name,
+    "releaseMetaAccountOperation",
+  );
   assert.equal(
     marketingPartialHarness.state.updates.at(-1).values.sync_error_code,
     "marketing_sync_failed",
@@ -463,6 +572,71 @@ export function createAdminClient() {
   assert.equal(
     typeof marketingPartialHarness.state.updates.at(-1).values.baseline_completed_at,
     "string",
+  );
+
+  const operationLockedHarness = makeAdminHarness();
+  configureMeta(operationLockedHarness.admin, { readLeaseToken: null });
+  const operationLockedResult = await syncModule.syncMetaConnector({
+    platformAccountId: operationLockedHarness.state.connector.id,
+    mode: "cron",
+  });
+  assert.equal(operationLockedResult.status, "partial");
+  assert.equal(operationLockedResult.marketingStatus, "error");
+  assert.equal(operationLockedResult.plannerStatus, "not_run");
+  assert.equal(
+    operationLockedHarness.state.updates.at(-1).values.sync_error_code,
+    "marketing_operation_locked",
+  );
+  assert.deepEqual(
+    globalThis.__metaTest.calls
+      .filter((call) =>
+        [
+          "claimMetaReadOperation",
+          "syncMetaMarketingSnapshot",
+          "runMetaBudgetPlannerAfterSnapshot",
+          "releaseMetaAccountOperation",
+        ].includes(call.name),
+      )
+      .map((call) => call.name),
+    ["claimMetaReadOperation"],
+  );
+
+  const plannerFailureHarness = makeAdminHarness();
+  configureMeta(plannerFailureHarness.admin, {
+    plannerError: new plannerModule.MetaBudgetPlannerError("planner_failed"),
+  });
+  const plannerFailureResult = await syncModule.syncMetaConnector({
+    platformAccountId: plannerFailureHarness.state.connector.id,
+    mode: "cron",
+  });
+  assert.equal(plannerFailureResult.status, "partial");
+  assert.equal(plannerFailureResult.marketingStatus, "success");
+  assert.equal(plannerFailureResult.plannerStatus, "error");
+  assert.equal(
+    plannerFailureHarness.state.updates.at(-1).values.sync_error_code,
+    "planner_failed",
+  );
+  assert.equal(
+    plannerFailureHarness.state.updates.at(-1).values.automation_planner_status,
+    "error",
+  );
+  assert.deepEqual(
+    globalThis.__metaTest.calls
+      .filter((call) =>
+        [
+          "claimMetaReadOperation",
+          "syncMetaMarketingSnapshot",
+          "runMetaBudgetPlannerAfterSnapshot",
+          "releaseMetaAccountOperation",
+        ].includes(call.name),
+      )
+      .map((call) => call.name),
+    [
+      "claimMetaReadOperation",
+      "syncMetaMarketingSnapshot",
+      "runMetaBudgetPlannerAfterSnapshot",
+      "releaseMetaAccountOperation",
+    ],
   );
 
   const newContentHarness = makeAdminHarness({
@@ -723,6 +897,7 @@ export function createAdminClient() {
   assert.match(envSource, /requiredSecret\("CRON_SECRET", process\.env\.CRON_SECRET\)/);
   assert.deepEqual(vercelConfig.crons, [
     { path: "/api/cron/meta-sync", schedule: "0 * * * *" },
+    { path: "/api/cron/creative-assets", schedule: "*/5 * * * *" },
   ]);
 
   console.log("Meta content sync checks passed");

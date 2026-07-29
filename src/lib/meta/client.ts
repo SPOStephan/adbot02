@@ -921,6 +921,7 @@ export type MetaCampaign = {
   budgetRemainingMinor: string | null;
   spendCapMinor: string | null;
   bidStrategy: string | null;
+  isAdSetBudgetSharingEnabled: boolean | null;
   specialAdCategories: string[];
   startTime: string | null;
   stopTime: string | null;
@@ -1047,6 +1048,10 @@ function enumString(value: unknown): string | null {
   return candidate && /^[A-Z0-9_]{1,100}$/i.test(candidate) ? candidate : null;
 }
 
+function optionalBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
 function nonNegativeNumericString(value: unknown): string | null {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return String(value);
@@ -1162,6 +1167,9 @@ function parseCampaign(value: unknown): MetaCampaign | null {
     budgetRemainingMinor: nonNegativeNumericString(value.budget_remaining),
     spendCapMinor: nonNegativeNumericString(value.spend_cap),
     bidStrategy: enumString(value.bid_strategy),
+    isAdSetBudgetSharingEnabled: optionalBoolean(
+      value.is_adset_budget_sharing_enabled,
+    ),
     specialAdCategories: stringArray(value.special_ad_categories),
     startTime: platformTimestamp(value.start_time),
     stopTime: platformTimestamp(value.stop_time),
@@ -1348,7 +1356,7 @@ export function getMetaCampaigns(input: {
     initialUrl: marketingCollectionUrl(
       input.adAccountId,
       "campaigns",
-      "id,account_id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,bid_strategy,special_ad_categories,start_time,stop_time,created_time,updated_time",
+      "id,account_id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,bid_strategy,is_adset_budget_sharing_enabled,special_ad_categories,start_time,stop_time,created_time,updated_time",
     ),
     accessToken: input.accessToken,
     appSecret: input.appSecret,

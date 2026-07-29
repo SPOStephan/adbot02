@@ -14,6 +14,10 @@ const creativeRegressionPath = join(
   scriptsDirectory,
   "test-meta-creative-assets.sql",
 );
+const plannerRegressionPath = join(
+  scriptsDirectory,
+  "test-meta-budget-planner.sql",
+);
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -153,8 +157,16 @@ try {
     throw new Error("Creative Asset regression did not emit its success marker");
   }
 
+  const { stdout: plannerStdout } = await run(psqlPath, [
+    ...psqlBase,
+    "--file", plannerRegressionPath,
+  ]);
+  if (!plannerStdout.includes("Meta Budget Planner migration checks passed")) {
+    throw new Error("Budget Planner regression did not emit its success marker");
+  }
+
   console.log(
-    "Meta Write Control Plane and Creative Asset checks passed on a fresh PostgreSQL cluster",
+    "Meta Write Control Plane, Creative Asset and Budget Planner checks passed on a fresh PostgreSQL cluster",
   );
 } finally {
   if (serverStarted && pgCtlPath) {

@@ -15,6 +15,13 @@ import {
   syncMetaMarketingSnapshot,
   type MetaMarketingSyncResult,
 } from "./marketing-sync";
+import {
+  claimMetaReadOperation,
+  MetaBudgetPlannerError,
+  releaseMetaAccountOperation,
+  runMetaBudgetPlannerAfterSnapshot,
+  type MetaBudgetPlannerResult,
+} from "./planner";
 import { decryptAccessToken } from "./crypto";
 import { getMetaSyncEnv } from "./env";
 import { createAdminClient } from "../supabase/admin";
@@ -87,6 +94,15 @@ export type MetaSyncResult = {
   recommendationsCount: number;
   insightsSince: string | null;
   insightsUntil: string | null;
+  plannerStatus: MetaBudgetPlannerResult["status"] | "error" | "not_run";
+  plannerSnapshotId: string | null;
+  plannerAccountDay: string | null;
+  plannerObservedBudgetOwnerCount: number;
+  plannerReservedExposureMinor: number;
+  plannerPlansCreated: number;
+  plannerPlansExisting: number;
+  plannerCandidatesBlocked: number;
+  plannerHardCapBreach: boolean;
   nextSyncAt: string | null;
   retryAt: string | null;
 };
@@ -122,6 +138,31 @@ const EMPTY_MARKETING_RESULT: MetaSyncMarketingFields = {
   insightsUntil: null,
 };
 
+type MetaSyncPlannerFields = Pick<
+  MetaSyncResult,
+  | "plannerStatus"
+  | "plannerSnapshotId"
+  | "plannerAccountDay"
+  | "plannerObservedBudgetOwnerCount"
+  | "plannerReservedExposureMinor"
+  | "plannerPlansCreated"
+  | "plannerPlansExisting"
+  | "plannerCandidatesBlocked"
+  | "plannerHardCapBreach"
+>;
+
+const EMPTY_PLANNER_RESULT: MetaSyncPlannerFields = {
+  plannerStatus: "not_run",
+  plannerSnapshotId: null,
+  plannerAccountDay: null,
+  plannerObservedBudgetOwnerCount: 0,
+  plannerReservedExposureMinor: 0,
+  plannerPlansCreated: 0,
+  plannerPlansExisting: 0,
+  plannerCandidatesBlocked: 0,
+  plannerHardCapBreach: false,
+};
+
 function marketingFields(
   result: MetaMarketingSyncResult | null,
   failed = false,
@@ -142,6 +183,38 @@ function marketingFields(
         ...EMPTY_MARKETING_RESULT,
         marketingStatus: failed ? "error" : "not_run",
       };
+}
+
+function plannerFields(
+  result: MetaBudgetPlannerResult | null,
+  failed = false,
+): MetaSyncPlannerFields {
+  return result
+    ? {
+        plannerStatus: failed ? "error" : result.status,
+        plannerSnapshotId: result.snapshotId,
+        plannerAccountDay: result.accountDay,
+        plannerObservedBudgetOwnerCount: result.observedBudgetOwnerCount,
+        plannerReservedExposureMinor: result.reservedExposureMinor,
+        plannerPlansCreated: result.plansCreated,
+        plannerPlansExisting: result.plansExisting,
+        plannerCandidatesBlocked: result.candidatesBlocked,
+        plannerHardCapBreach: result.hardCapBreach,
+      }
+    : {
+        ...EMPTY_PLANNER_RESULT,
+        plannerStatus: failed ? "error" : "not_run",
+      };
+}
+
+function classifyPlannerError(error: unknown): string {
+  if (!(error instanceof MetaBudgetPlannerError)) {
+    return "planner_failed";
+  }
+
+  return error.code.startsWith("planner_")
+    ? error.code
+    : `planner_${error.code}`;
 }
 
 function classifyMarketingError(error: unknown): string {
@@ -305,6 +378,7 @@ function blockedResult(
     syncedAssetCount: 0,
     failedAssetCount: 0,
     ...EMPTY_MARKETING_RESULT,
+    ...EMPTY_PLANNER_RESULT,
     nextSyncAt: null,
     retryAt,
   };
@@ -379,6 +453,7 @@ async function markReconnectRequired(
     syncedAssetCount: 0,
     failedAssetCount: 0,
     ...EMPTY_MARKETING_RESULT,
+    ...EMPTY_PLANNER_RESULT,
     nextSyncAt: null,
     retryAt: null,
   };
@@ -427,6 +502,7 @@ async function markFailed(input: {
     syncedAssetCount: 0,
     failedAssetCount: 0,
     ...EMPTY_MARKETING_RESULT,
+    ...EMPTY_PLANNER_RESULT,
     nextSyncAt: retryAt,
     retryAt,
   };
@@ -646,29 +722,80 @@ export async function syncMetaConnector(
 
     let marketingResult: MetaMarketingSyncResult | null = null;
     let marketingErrorCode: string | null = null;
+    let plannerResult: MetaBudgetPlannerResult | null = null;
+    let plannerErrorCode: string | null = null;
+    let plannerAttemptedAt: string | null = null;
     const marketingStartedAt = new Date().toISOString();
+    let readLeaseToken: string | null = null;
 
     try {
-      marketingResult = await syncMetaMarketingSnapshot({
-        platformAccountId: connector.id,
-        userId: connector.user_id,
-        adAccountId: adAccountAsset.meta_asset_id,
-        accessToken,
-        appSecret: env.appSecret,
-      });
-      usage = mergeMetaUsage(usage, marketingResult.usage);
-    } catch (error) {
-      if (error instanceof MetaGraphError) {
-        usage = mergeMetaUsage(usage, error.usage);
-
-        if (error.rateLimited || error.reconnectRequired) {
-          throw error;
-        }
-      } else if (error instanceof MetaCollectionLimitError) {
-        usage = mergeMetaUsage(usage, error.usage);
+      try {
+        readLeaseToken = await claimMetaReadOperation({
+          platformAccountId: connector.id,
+          userId: connector.user_id,
+          ownerId: `meta-sync:${connector.id}:${marketingStartedAt}`,
+        });
+      } catch {
+        marketingErrorCode = "marketing_operation_lease_failed";
       }
 
-      marketingErrorCode = classifyMarketingError(error);
+      if (!readLeaseToken && !marketingErrorCode) {
+        marketingErrorCode = "marketing_operation_locked";
+      }
+
+      if (readLeaseToken) {
+        try {
+          marketingResult = await syncMetaMarketingSnapshot({
+            platformAccountId: connector.id,
+            userId: connector.user_id,
+            adAccountId: adAccountAsset.meta_asset_id,
+            accessToken,
+            appSecret: env.appSecret,
+          });
+          usage = mergeMetaUsage(usage, marketingResult.usage);
+
+          if (!isHighUsage(usage)) {
+            plannerAttemptedAt = new Date().toISOString();
+            try {
+              plannerResult = await runMetaBudgetPlannerAfterSnapshot({
+                platformAccountId: connector.id,
+                userId: connector.user_id,
+                marketingSyncId: marketingResult.syncId,
+                readLeaseToken,
+                campaignBudgetSharingSnapshot:
+                  marketingResult.campaignBudgetSharingSnapshot,
+                plannedAt: plannerAttemptedAt,
+              });
+            } catch (error) {
+              plannerErrorCode = classifyPlannerError(error);
+            }
+          }
+        } catch (error) {
+          if (error instanceof MetaGraphError) {
+            usage = mergeMetaUsage(usage, error.usage);
+
+            if (error.rateLimited || error.reconnectRequired) {
+              throw error;
+            }
+          } else if (error instanceof MetaCollectionLimitError) {
+            usage = mergeMetaUsage(usage, error.usage);
+          }
+
+          marketingErrorCode = classifyMarketingError(error);
+        }
+      }
+    } finally {
+      if (readLeaseToken) {
+        try {
+          await releaseMetaAccountOperation({
+            platformAccountId: connector.id,
+            userId: connector.user_id,
+            leaseToken: readLeaseToken,
+          });
+        } catch (error) {
+          plannerErrorCode ??= classifyPlannerError(error);
+        }
+      }
     }
 
     if (isHighUsage(usage)) {
@@ -690,9 +817,15 @@ export async function syncMetaConnector(
       };
     }
 
-    const status = failedAssetCount || marketingErrorCode ? "partial" : "success";
-    const syncErrorCode =
-      failedAssetCount && marketingErrorCode
+    const status =
+      failedAssetCount || marketingErrorCode || plannerErrorCode
+        ? "partial"
+        : "success";
+    const syncErrorCode = plannerErrorCode
+      ? failedAssetCount || marketingErrorCode
+        ? "content_marketing_or_planner_partial"
+        : plannerErrorCode
+      : failedAssetCount && marketingErrorCode
         ? "content_and_marketing_partial"
         : failedAssetCount
           ? "asset_partial"
@@ -715,6 +848,19 @@ export async function syncMetaConnector(
       marketing_sync_error_code: marketingErrorCode,
       marketing_last_sync_started_at: marketingStartedAt,
       marketing_next_sync_at: nextSyncAt,
+      automation_planner_status: plannerErrorCode
+        ? "error"
+        : plannerResult
+          ? "success"
+          : "not_run",
+      automation_planner_error_code: plannerErrorCode,
+      automation_planner_last_run_at: plannerAttemptedAt ?? undefined,
+      automation_planner_last_success_at: plannerResult
+        ? plannerAttemptedAt
+        : undefined,
+      automation_planner_last_marketing_sync_id: plannerResult
+        ? marketingResult?.syncId
+        : undefined,
     });
 
     return {
@@ -726,6 +872,7 @@ export async function syncMetaConnector(
       syncedAssetCount,
       failedAssetCount,
       ...marketingFields(marketingResult, marketingErrorCode !== null),
+      ...plannerFields(plannerResult, plannerErrorCode !== null),
       nextSyncAt,
       retryAt: null,
     };

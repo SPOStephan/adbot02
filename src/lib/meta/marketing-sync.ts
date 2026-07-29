@@ -45,8 +45,14 @@ export class MetaMarketingDataError extends Error {
   }
 }
 
+export type MetaCampaignBudgetSharingSnapshot = {
+  platform_campaign_id: string;
+  is_adset_budget_sharing_enabled: boolean | null;
+};
+
 export type MetaMarketingSyncResult = {
   syncId: string;
+  campaignBudgetSharingSnapshot: MetaCampaignBudgetSharingSnapshot[];
   campaignsCount: number;
   adSetsCount: number;
   adsCount: number;
@@ -174,6 +180,7 @@ function serializeCampaigns(items: MetaCampaign[]) {
     budget_remaining_minor: item.budgetRemainingMinor,
     spend_cap_minor: item.spendCapMinor,
     bid_strategy: item.bidStrategy,
+    is_adset_budget_sharing_enabled: item.isAdSetBudgetSharingEnabled,
     special_ad_categories: item.specialAdCategories,
     start_time: item.startTime,
     stop_time: item.stopTime,
@@ -355,6 +362,12 @@ export async function syncMetaMarketingSnapshot(input: {
   });
 
   const syncId = randomUUID();
+  const serializedCampaigns = serializeCampaigns(campaignsResult.items);
+  const campaignBudgetSharingSnapshot = serializedCampaigns.map((campaign) => ({
+    platform_campaign_id: campaign.platform_campaign_id,
+    is_adset_budget_sharing_enabled:
+      campaign.is_adset_budget_sharing_enabled,
+  }));
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("replace_meta_marketing_snapshot", {
     p_platform_account_id: input.platformAccountId,
@@ -368,7 +381,7 @@ export async function syncMetaMarketingSnapshot(input: {
       timezone_offset_hours_utc: accountResult.account.timezoneOffsetHoursUtc,
       account_status: accountResult.account.accountStatus,
     },
-    p_campaigns: serializeCampaigns(campaignsResult.items),
+    p_campaigns: serializedCampaigns,
     p_ad_sets: serializeAdSets(adSetsResult.items),
     p_ads: serializeAds(adsResult.items),
     p_creatives: serializeCreatives(creativesResult.items),
@@ -390,6 +403,7 @@ export async function syncMetaMarketingSnapshot(input: {
 
   return {
     syncId,
+    campaignBudgetSharingSnapshot,
     campaignsCount: persistedCount(
       persisted,
       "campaigns_count",

@@ -17,6 +17,7 @@
     "test:meta-marketing-sync": "node scripts/test-meta-marketing-sync.mjs",
     "test:meta-write-client": "node scripts/test-meta-write-client.mjs",
     "test:meta-write-control-plane": "node scripts/test-meta-write-control-plane.mjs",
+    "test:meta-budget-planner": "node scripts/test-meta-budget-planner.mjs",
     "test:meta-creative-assets": "node scripts/test-meta-creative-assets.mjs"
   },
   "dependencies": {

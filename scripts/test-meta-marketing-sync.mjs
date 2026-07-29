@@ -96,6 +96,7 @@ export async function getMetaCampaigns() {
       budgetRemainingMinor: null,
       spendCapMinor: null,
       bidStrategy: null,
+      isAdSetBudgetSharingEnabled: false,
       specialAdCategories: [],
       startTime: null,
       stopTime: null,
@@ -255,9 +256,17 @@ export function createAdminClient() {
   });
 
   assert.equal(result.insightsCount, 2);
+  assert.deepEqual(result.campaignBudgetSharingSnapshot, [{
+    platform_campaign_id: "campaign-1",
+    is_adset_budget_sharing_enabled: false,
+  }]);
   assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 1);
   const call = globalThis.__marketingSyncTest.rpcCalls[0];
   assert.equal(call.name, "replace_meta_marketing_snapshot");
+  assert.equal(
+    call.args.p_campaigns[0].is_adset_budget_sharing_enabled,
+    false,
+  );
   assert.equal(call.args.p_insights.length, 2);
   assert.deepEqual(call.args.p_insights[0].actions, {
     link_click: "30",
