@@ -18,6 +18,14 @@ const plannerRegressionPath = join(
   scriptsDirectory,
   "test-meta-budget-planner.sql",
 );
+const executorRegressionPath = join(
+  scriptsDirectory,
+  "test-meta-mutation-executor.sql",
+);
+const reconnectRegressionPath = join(
+  scriptsDirectory,
+  "test-meta-reconnect-persistence.sql",
+);
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -165,8 +173,33 @@ try {
     throw new Error("Budget Planner regression did not emit its success marker");
   }
 
+  const { stdout: executorStdout } = await run(psqlPath, [
+    ...psqlBase,
+    "--file", executorRegressionPath,
+  ]);
+  if (!executorStdout.includes("Meta Mutation Executor migration checks passed")) {
+    throw new Error("Mutation Executor regression did not emit its success marker");
+  }
+
+  await run(psqlPath, [
+    ...psqlBase,
+    "--command", "create database adbot_reconnect_test",
+  ]);
+  const reconnectPsqlBase = psqlBase.map((value, index, values) =>
+    index > 0 && values[index - 1] === "--dbname"
+      ? "adbot_reconnect_test"
+      : value,
+  );
+  const { stdout: reconnectStdout } = await run(psqlPath, [
+    ...reconnectPsqlBase,
+    "--file", reconnectRegressionPath,
+  ]);
+  if (!reconnectStdout.includes("Meta reconnect persistence integration checks passed")) {
+    throw new Error("Reconnect persistence regression did not emit its success marker");
+  }
+
   console.log(
-    "Meta Write Control Plane, Creative Asset and Budget Planner checks passed on a fresh PostgreSQL cluster",
+    "Meta Write Control Plane, Creative Asset, Budget Planner, Mutation Executor and reconnect persistence checks passed on a fresh PostgreSQL cluster",
   );
 } finally {
   if (serverStarted && pgCtlPath) {

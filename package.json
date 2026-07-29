@@ -18,7 +18,10 @@
     "test:meta-write-client": "node scripts/test-meta-write-client.mjs",
     "test:meta-write-control-plane": "node scripts/test-meta-write-control-plane.mjs",
     "test:meta-budget-planner": "node scripts/test-meta-budget-planner.mjs",
-    "test:meta-creative-assets": "node scripts/test-meta-creative-assets.mjs"
+    "test:meta-creative-assets": "node scripts/test-meta-creative-assets.mjs",
+    "test:meta-mutation-executor": "node scripts/test-meta-mutation-executor.mjs",
+    "test:meta-customer-controls": "node scripts/test-meta-customer-controls.mjs",
+    "test:meta-all": "npm run test:meta-security && npm run test:meta-readonly && npm run test:supabase-admin-env && npm run test:staging-routing && npm run test:dashboard-meta-connector && npm run test:meta-content-sync && npm run test:meta-marketing-readonly && npm run test:meta-marketing-sync && npm run test:meta-write-client && npm run test:meta-customer-controls && npm run test:meta-mutation-executor && npm run test:meta-write-control-plane"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

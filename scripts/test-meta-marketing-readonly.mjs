@@ -39,7 +39,8 @@ try {
     .replace('import "server-only";', "")
     .replace('from "./crypto";', 'from "./crypto.mjs";');
 
-  assert.doesNotMatch(clientSource, /ads_management/);
+  assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
+  assert.doesNotMatch(clientSource, /business_management/);
   assert.match(clientSource, /method:\s*"GET"/);
   assert.doesNotMatch(clientSource, /method:\s*"(?:POST|PUT|PATCH|DELETE)"/);
 

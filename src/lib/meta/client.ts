@@ -5,6 +5,7 @@ import { createAppSecretProof } from "./crypto";
 export const META_GRAPH_VERSION = "v25.0";
 export const META_ALLOWED_SCOPES = [
   "ads_read",
+  "ads_management",
   "instagram_basic",
   "pages_read_engagement",
   "pages_show_list",
@@ -525,6 +526,7 @@ export function createMetaLoginUrl(input: {
   url.searchParams.set("state", input.state);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("config_id", input.configId);
+  url.searchParams.set("auth_type", "rerequest");
 
   return url;
 }

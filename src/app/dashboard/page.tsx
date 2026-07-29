@@ -30,6 +30,13 @@ import {
   WalletCards,
 } from "lucide-react";
 
+import {
+  AutomationControlCenter,
+  type AutomationAuditView,
+  type AutomationPolicyView,
+  type BrandProfileView,
+  type KillSwitchView,
+} from "@/components/AutomationControlCenter";
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
@@ -44,6 +51,7 @@ const navigation = [
   { label: "Kampagnen", icon: Megaphone },
   { label: "Creatives", icon: ImageIcon },
   { label: "Zielgruppen", icon: Target },
+  { label: "Autonomie", icon: ShieldCheck },
 ];
 
 type DashboardPageProps = {
@@ -65,7 +73,7 @@ const META_ERROR_MESSAGES: Record<string, string> = {
   configuration: "Der Meta-Connector ist noch nicht vollständig konfiguriert.",
   missing_response: "Meta hat keine vollständige Antwort zurückgegeben. Bitte starte die Verbindung erneut.",
   invalid_state: "Die Sicherheitsprüfung ist abgelaufen oder ungültig. Bitte starte die Verbindung erneut.",
-  scope_validation: "Die ausgewählten Berechtigungen entsprechen nicht dem sicheren Lesezugriff.",
+  scope_validation: "Die von Meta gewährten Berechtigungen entsprechen nicht dem minimalen sicheren Zugriff. Bitte bestätige den Reconnect vollständig.",
   token_validation: "Die Meta-Verbindung konnte nicht sicher bestätigt werden. Bitte verbinde Meta erneut.",
   no_assets: "Bitte eine Facebook-Seite, das verbundene Instagram-Profil und ein Werbekonto auswählen.",
   storage: "Die Verbindung konnte nicht sicher gespeichert werden. Es wurde keine Verbindung aktiviert.",
@@ -80,13 +88,15 @@ function getMetaNotice(
   meta: string | undefined,
   errorReason: string | undefined,
   metaConnected: boolean,
+  writeScopeGranted: boolean,
 ): MetaNotice | null {
   if (meta === "connected" && metaConnected) {
     return {
       tone: "success",
       title: "Meta wurde erfolgreich verbunden.",
-      message:
-        "Der Connector arbeitet mit Lesezugriff. Kampagnen können nicht erstellt oder verändert werden.",
+      message: writeScopeGranted
+        ? "Der minimale Meta-Schreibscope wurde bestätigt. Ausführung bleibt bis zu Kunden-Policy, EUR-Caps, Readiness-Gates und ausdrücklichem ALLOW fail-closed."
+        : "Der Connector ist verbunden, aber der minimale Schreibscope fehlt. Bitte führe den sicheren Reconnect aus.",
     };
   }
 
@@ -214,6 +224,16 @@ function formatPercent(value: number | null) {
   }).format(value)} %`;
 }
 
+function normalizeKillSwitchMode(
+  value: unknown,
+): NonNullable<KillSwitchView>["mode"] {
+  return value === "ALLOW" ||
+    value === "FREEZE_WRITES" ||
+    value === "PAUSE_MANAGED"
+    ? value
+    : "FREEZE_WRITES";
+}
+
 function sumAvailableMetric(
   rows: readonly Record<string, unknown>[],
   key: string,
@@ -266,16 +286,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const { data: connectedAccounts } = await supabase
     .from("platform_accounts")
     .select(
-      "id, platform, account_name, connected_at, revoked_at, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until",
+      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until",
     )
     .eq("user_id", user.id);
 
   const platforms = getPlatformCatalog().map((platform) => {
     const account = connectedAccounts?.find(
-      (item) => item.platform === platform.id,
+      (item) => item.platform === platform.id && !item.revoked_at,
     );
 
     const isMeta = platform.id === "meta";
+    const metaWriteScopeGranted =
+      isMeta &&
+      Array.isArray(account?.meta_scopes) &&
+      account.meta_scopes.includes("ads_management");
 
     return {
       id: platform.id,
@@ -291,9 +315,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ? "Bereit zur Verbindung"
           : "API-Zugang noch nicht hinterlegt",
       connected: Boolean(account),
-      badge: isMeta && platform.configured ? "Nur Lesezugriff" : undefined,
+      badge:
+        isMeta && platform.configured
+          ? metaWriteScopeGranted
+            ? "Minimaler Schreibscope bestätigt"
+            : "Reconnect für Autonomie"
+          : undefined,
       helperText: isMeta
-        ? "Liest Kampagnen, Anzeigen, tägliche Insights sowie Seiten- und Instagram-Beiträge. Keine Bearbeitungs-, Publishing- oder Messaging-Rechte."
+        ? metaWriteScopeGranted
+          ? "Liest Werbedaten und erlaubt ausschließlich policy-gedeckte Budget-, Status- und Active-Launch-Schritte. Keine Messaging- oder Beitrags-Publishing-Rechte."
+          : "Liest Kampagnen, Insights sowie Seiten- und Instagram-Beiträge. Schreibvorgänge bleiben bis zum expliziten Scope-Reconnect blockiert."
         : undefined,
       actionHref:
         isMeta && platform.configured && !account
@@ -310,6 +341,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     (account) => account.platform === "meta" && !account.revoked_at,
   );
   const metaConnected = Boolean(metaAccount?.connected_at);
+  const writeScopeGranted =
+    Array.isArray(metaAccount?.meta_scopes) &&
+    metaAccount.meta_scopes.includes("ads_management");
   const [
     { data: metaAssets },
     { data: contentCandidates },
@@ -344,7 +378,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     syncStatus === "idle" && metaAccount?.baseline_completed_at
       ? SYNC_STATUS.reconnected
       : (SYNC_STATUS[syncStatus as keyof typeof SYNC_STATUS] ?? SYNC_STATUS.idle);
-  const reconnectRequired = syncStatus === "reconnect_required";
+  const reconnectRequired =
+    syncStatus === "reconnect_required" || !writeScopeGranted;
   const pageAsset = metaAssets?.find(
     (asset) => asset.asset_type === "facebook_page",
   );
@@ -358,6 +393,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     firstQueryValue(query.meta),
     firstQueryValue(query.meta_error),
     metaConnected,
+    writeScopeGranted,
   );
   const [
     { data: liveCampaigns },
@@ -404,6 +440,149 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             .limit(50),
         ])
       : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  const [
+    { data: currentPolicy },
+    { data: activeBrandProfile },
+    { data: latestKillSwitch },
+    { data: controlAuditEvents },
+    { count: verifiedDomainCount },
+    { count: activeBlueprintCount },
+    { count: readyBrandAssetCount },
+  ] = metaConnected && metaAccount
+    ? await Promise.all([
+        supabase
+          .from("automation_policies")
+          .select(
+            "id,version,status,account_daily_hard_cap_minor,default_campaign_daily_hard_cap_minor,budget_change_limit_bps,cooldown_seconds,allow_budget_changes,allow_status_changes,allow_new_launches,customer_confirmed_at",
+          )
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("is_current", true)
+          .maybeSingle(),
+        supabase
+          .from("brand_profiles")
+          .select(
+            "id,version,display_name,brand_name,guidelines,forbidden_content,generation_defaults,generated_asset_approval_mode,activated_at",
+          )
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("status", "ACTIVE")
+          .order("version", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("kill_switch_state")
+          .select("mode,reason,actor_type,created_at")
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("scope_type", "ACCOUNT")
+          .order("sequence", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("mutation_audit_events")
+          .select("event_sequence,event_type,actor_type,error_class,occurred_at")
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .order("event_sequence", { ascending: false })
+          .limit(12),
+        supabase
+          .from("allowed_domains")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("status", "VERIFIED"),
+        supabase
+          .from("objective_blueprints")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("status", "ACTIVE"),
+        supabase
+          .from("brand_assets")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("status", "READY")
+          .eq("moderation_status", "APPROVED"),
+      ])
+    : [
+        { data: null },
+        { data: null },
+        { data: null },
+        { data: [] },
+        { count: 0 },
+        { count: 0 },
+        { count: 0 },
+      ];
+  const policyView: AutomationPolicyView | null = currentPolicy
+    ? {
+        id: String(currentPolicy.id),
+        version: toFiniteNumber(currentPolicy.version) ?? 1,
+        status: String(currentPolicy.status),
+        accountDailyHardCapMinor: toFiniteNumber(
+          currentPolicy.account_daily_hard_cap_minor,
+        ),
+        campaignDailyHardCapMinor: toFiniteNumber(
+          currentPolicy.default_campaign_daily_hard_cap_minor,
+        ),
+        budgetChangeLimitBps:
+          toFiniteNumber(currentPolicy.budget_change_limit_bps) ?? 2000,
+        cooldownSeconds: toFiniteNumber(currentPolicy.cooldown_seconds) ?? 43200,
+        allowBudgetChanges: Boolean(currentPolicy.allow_budget_changes),
+        allowStatusChanges: Boolean(currentPolicy.allow_status_changes),
+        allowNewLaunches: Boolean(currentPolicy.allow_new_launches),
+        customerConfirmedAt: currentPolicy.customer_confirmed_at
+          ? String(currentPolicy.customer_confirmed_at)
+          : null,
+      }
+    : null;
+  const brandProfileView: BrandProfileView | null = activeBrandProfile
+    ? {
+        id: String(activeBrandProfile.id),
+        version: toFiniteNumber(activeBrandProfile.version) ?? 1,
+        displayName: String(activeBrandProfile.display_name),
+        brandName: String(activeBrandProfile.brand_name),
+        guidelines:
+          activeBrandProfile.guidelines &&
+          typeof activeBrandProfile.guidelines === "object" &&
+          !Array.isArray(activeBrandProfile.guidelines)
+            ? (activeBrandProfile.guidelines as Record<string, unknown>)
+            : {},
+        forbiddenContent: Array.isArray(activeBrandProfile.forbidden_content)
+          ? activeBrandProfile.forbidden_content
+          : [],
+        generationDefaults:
+          activeBrandProfile.generation_defaults &&
+          typeof activeBrandProfile.generation_defaults === "object" &&
+          !Array.isArray(activeBrandProfile.generation_defaults)
+            ? (activeBrandProfile.generation_defaults as Record<string, unknown>)
+            : {},
+        generatedAssetApprovalMode: String(
+          activeBrandProfile.generated_asset_approval_mode,
+        ),
+        activatedAt: activeBrandProfile.activated_at
+          ? String(activeBrandProfile.activated_at)
+          : null,
+      }
+    : null;
+  const killSwitchView: KillSwitchView = latestKillSwitch
+    ? {
+        mode: normalizeKillSwitchMode(latestKillSwitch.mode),
+        reason: String(latestKillSwitch.reason),
+        actorType: String(latestKillSwitch.actor_type),
+        createdAt: String(latestKillSwitch.created_at),
+      }
+    : null;
+  const automationAuditViews: AutomationAuditView[] = (
+    controlAuditEvents ?? []
+  ).map((event) => ({
+    sequence: toFiniteNumber(event.event_sequence) ?? 0,
+    eventType: String(event.event_type),
+    actorType: String(event.actor_type),
+    errorClass: event.error_class ? String(event.error_class) : null,
+    occurredAt: String(event.occurred_at),
+  }));
   const marketingCurrency = metaAccount?.marketing_currency ?? "EUR";
   const performanceRows = (campaignPerformance ?? []) as Record<string, unknown>[];
   const dailyRows = ((dailyPerformance ?? []) as Record<string, unknown>[]).reverse();
@@ -592,7 +771,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Marketing-Übersicht</h1>
               <p className="mt-2 text-slate-500">
-                Echte Meta-Kampagnenleistung mit strikt schreibgeschütztem Zugriff.
+                Echte Meta-Kampagnenleistung mit kundenkontrollierten Automationsgrenzen.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -677,10 +856,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 Adbot bewertet ausschließlich gespeicherte Live-Kennzahlen anhand fester Schwellenwerte. Jede Empfehlung bleibt ein prüfbarer Diagnosehinweis und kann keine Kampagne verändern.
               </p>
               <div className="mt-8 rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-bold text-white">
-                Keine automatische Ausführung
+                Ausführung nur mit aktiver Kunden-Policy
               </div>
             </article>
           </section>
+
+          {metaConnected && metaAccount ? (
+            <AutomationControlCenter
+              accountName={metaAccount.account_name ?? "Meta-Werbekonto"}
+              auditEvents={automationAuditViews}
+              brandProfile={brandProfileView}
+              currency={marketingCurrency}
+              killSwitch={killSwitchView}
+              policy={policyView}
+              readiness={{
+                writeScopeGranted,
+                verifiedDomains: verifiedDomainCount ?? 0,
+                activeBlueprints: activeBlueprintCount ?? 0,
+                readyBrandAssets: readyBrandAssetCount ?? 0,
+              }}
+            />
+          ) : null}
 
           {metaConnected && metaAccount ? (
             <MetaCampaignOverview
@@ -710,7 +906,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </p>
               <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
                 <ShieldCheck className="size-3.5" />
-                Meta startet ausschließlich mit dokumentiertem Lesezugriff
+                Meta nutzt nur dokumentierte Lese- und policy-begrenzte Schreibrechte
               </div>
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -732,7 +928,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       Beiträge sicher abrufen
                     </h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-                      Adbot liest veröffentlichte Beiträge deiner ausgewählten Facebook-Seite und des verbundenen Instagram-Profils. Änderungen an Kampagnen oder Beiträgen sind technisch ausgeschlossen.
+                      Adbot liest veröffentlichte Beiträge deiner ausgewählten Facebook-Seite und des verbundenen Instagram-Profils. Dieser Sync-Pfad führt keine Mutation aus; Meta-Änderungen laufen ausschließlich über die getrennte, policy-gedeckte Control Plane.
                     </p>
                   </div>
                   <span
@@ -819,7 +1015,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {reconnectRequired ? (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-4">
                       <p className="text-sm font-bold text-red-950">
-                        Der Lesezugriff muss erneuert werden.
+                        {writeScopeGranted
+                          ? "Die Meta-Verbindung muss erneuert werden."
+                          : "Der minimale Schreibscope muss bestätigt werden."}
                       </p>
                       <Link
                         className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"

@@ -158,7 +158,10 @@ export async function GET(request: Request) {
       ...getGranularTargetIds(tokenDebug, "pages_show_list"),
       ...getGranularTargetIds(tokenDebug, "pages_read_engagement"),
     ]);
-    const allowedAdAccountIds = getGranularTargetIds(tokenDebug, "ads_read");
+    const allowedAdAccountIds = new Set([
+      ...getGranularTargetIds(tokenDebug, "ads_read"),
+      ...getGranularTargetIds(tokenDebug, "ads_management"),
+    ]);
     const assets = await getMetaConnectionAssets({
       accessToken: longLivedToken.accessToken,
       appSecret,

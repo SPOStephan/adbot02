@@ -898,6 +898,7 @@ export function createAdminClient() {
   assert.deepEqual(vercelConfig.crons, [
     { path: "/api/cron/meta-sync", schedule: "0 * * * *" },
     { path: "/api/cron/creative-assets", schedule: "*/5 * * * *" },
+    { path: "/api/cron/meta-executor", schedule: "* * * * *" },
   ]);
 
   console.log("Meta content sync checks passed");

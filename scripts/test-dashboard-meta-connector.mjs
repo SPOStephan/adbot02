@@ -44,10 +44,11 @@ const manualSyncRouteSource = await readFile(
 
 assert.match(dashboardSource, /actionHref:[\s\S]*"\/api\/connectors\/meta\/start"/);
 assert.match(dashboardSource, /actionLabel:[\s\S]*"Meta verbinden"/);
-assert.match(dashboardSource, /badge:[\s\S]*"Nur Lesezugriff"/);
+assert.match(dashboardSource, /"Minimaler Schreibscope bestätigt"/);
+assert.match(dashboardSource, /"Reconnect für Autonomie"/);
 assert.match(
   dashboardSource,
-  /Keine Bearbeitungs-, Publishing- oder Messaging-Rechte\./,
+  /Keine Messaging- oder Beitrags-Publishing-Rechte\./,
 );
 assert.match(dashboardSource, /meta === "connected" && metaConnected/);
 assert.match(dashboardSource, /Meta wurde erfolgreich verbunden\./);
@@ -58,7 +59,8 @@ assert.match(dashboardSource, /scope_validation/);
 assert.match(dashboardSource, /token_validation/);
 assert.match(dashboardSource, /no_assets/);
 assert.match(dashboardSource, /storage/);
-assert.doesNotMatch(dashboardSource, /ads_management|business_management/);
+assert.match(dashboardSource, /meta_scopes\.includes\("ads_management"\)/);
+assert.doesNotMatch(dashboardSource, /business_management/);
 assert.doesNotMatch(
   dashboardSource,
   /access_token_encrypted|token_iv|token_auth_tag|sync_backoff_until|sync_usage/,
@@ -94,8 +96,9 @@ assert.match(dashboardSource, /campaign_recommendations/);
 assert.match(dashboardSource, /\.eq\("status", "active"\)/);
 assert.match(dashboardSource, /\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
 assert.match(dashboardSource, /recommendations=\{recommendationRows\}/);
-assert.match(dashboardSource, /Keine automatische Ausführung/);
-assert.doesNotMatch(dashboardSource, /ads_management/);
+assert.match(dashboardSource, /Ausführung nur mit aktiver Kunden-Policy/);
+assert.match(dashboardSource, /writeScopeGranted/);
+assert.match(dashboardSource, /minimale Schreibscope muss bestätigt werden/);
 
 assert.match(cardSource, /href=\{actionHref!\}/);
 assert.match(cardSource, /prefetch=\{false\}/);

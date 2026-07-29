@@ -214,6 +214,21 @@ Meta stellt keine gemeinsame Transaktion über Kampagne, Ad Set, Creative und Ad
 | 9 | Finalen Guard und Hard-Cap erneut prüfen; Kampagne zuletzt aktivieren | Auslieferung freigegeben |
 | 10 | Gesamte Kette read-after-write reconciliieren | `SUCCEEDED` oder Compensationpfad |
 
+Die produktive Materialisierung erfolgt ausschließlich über die service-role-RPC `materialize_meta_launch_chain_plan`. Sie erzeugt Plan, 20 geordnete Saga-Schritte und eine provisorische Tagesbudget-Exposure in **einer Datenbanktransaktion**. Ein SHA-256-Schlüssel über die kanonischen Kundeneingaben macht Wiederholungen idempotent; ein zweiter identischer Aufruf liefert denselben Plan und reserviert kein weiteres Budget.
+
+| Materializer-Gate | Durchgesetzter Vertrag |
+|---|---|
+| Autonomie | Aktuelle, aktive EUR-Policy mit `allow_new_launches` und `allow_status_changes` |
+| Kundengrenzen | Account- und Kampagnenhardcap vorhanden; Budgetebene eindeutig `CAMPAIGN` oder `AD_SET` |
+| Snapshot | Vollständiger, frischer Marketing-Snapshot unter exklusiver `READ_SYNC`-Accountlease |
+| Domain | HTTPS-Ziel ohne Userinfo oder Fragment; verifizierter erwarteter und beobachteter Host |
+| Blueprint | Aktive bestätigte Version; bekannte Objektsektionen und objektbezogene Meta-Feld-Allowlist |
+| Brand | Aktives bestätigtes Profil; genau ein `READY`/`APPROVED` Asset derselben Profil- und Policyversion |
+| Payload | Größenbegrenzung, rekursive Secret-Key-Sperre und keine Remote-ID aus Kundeneingaben |
+| Exposure | Reservierung gegen effektives Meta-Flexspend-Maximum unter Account-/Policy-/Snapshot-Locks |
+
+Remote-IDs werden erst durch erfolgreiche Create-Schritte in `remote_object_bindings` geschrieben und anschließend in abhängige Payloads eingesetzt. Die LAUNCH-spezifische Reconciliation verlangt aktuelle Read-backs für Campaign, Ad Set, Creative und Ad, verifiziert Hierarchie, Endstatus und Budgetebene, materialisiert die vier lokalen Projektionen und erzeugt kanonische `automation_targets`. Die provisorische `launch:*`-Exposure wird unter denselben Sperren atomar durch die kanonische Remote-ID-Exposure ersetzt; dadurch zählt sie nie doppelt gegen das Kundenlimit. Auch eine IMAGE-Bindung gilt erst nach erfolgreicher Zuordnung ihres Meta-Hashes als reconciliert.
+
 Meta kann eine konfigurierte `ACTIVE`-Ad zunächst in einen Review-/Pending-Zustand überführen. Das ist kein technischer Fehler, solange IDs, konfigurierte Statuswerte, Creativebindung und erwartete Reviewfelder übereinstimmen. Eine Ablehnung oder Complianceverletzung blockiert den Plan dauerhaft; Adbot versucht keine Umgehung.
 
 ### 8.2 Neue Ad in bereits aktiver Kette
@@ -279,15 +294,16 @@ Tokens, Authorization-Header, Providersecrets, komplette personenbezogene Audien
 
 ## 12. Cron- und Laufzeitmodell
 
-Betriebsmodell A bleibt vollständig serverlos. Der bestehende stündliche Meta-Read-Sync bleibt bestehen. Eine zweite, mit `CRON_SECRET` authentifizierte Route plant und verarbeitet fällige Arbeit in kleinen, zeitlich begrenzten Batches. Vercel sendet `CRON_SECRET` als Authorization-Header und weist darauf hin, dass Funktionslimits auch für Cron gelten.[1]
+Betriebsmodell A bleibt vollständig serverlos. Der bestehende stündliche Meta-Read-Sync bleibt bestehen. Getrennte, mit `CRON_SECRET` authentifizierte Routen verarbeiten Creative-Asset-Jobs und bereits materialisierte Mutationspläne in kleinen, zeitlich begrenzten Einheiten. Vercel sendet `CRON_SECRET` als Authorization-Header und weist darauf hin, dass Funktionslimits auch für Cron gelten.[1]
 
 | Route | Takt | Verantwortlichkeit |
 |---|---|---|
 | `/api/cron/meta-sync` | Stündlich | Accountweise Operation-Lease, Live-Snapshot, Insights, manuelle Änderungen erkennen |
-| `/api/cron/meta-automation` | Stündlich, zeitversetzt | Policies prüfen, Pläne erzeugen, wenige fällige Pläne ausführen, Alerts aktualisieren |
+| `/api/cron/creative-assets` | Alle fünf Minuten | Fällige Creative-Asset-Jobs claimen, Providerergebnis moderieren und Assetherkunft persistieren |
+| `/api/cron/meta-executor` | Jede Minute | Genau einen fälligen Plan claimen und seine ausführbaren Steps bis zum Abschluss, Retry oder Blockzustand verarbeiten |
 | `/api/automation/*` | Kundenaktion | Policy-/Domain-/Blueprint-/Kill-Switch-Kommandos über serverseitige Autorisierung |
 
-Die Automation verarbeitet pro Invocation begrenzte Accounts und Pläne, speichert Cursor und `not_before` und verlässt sich nicht auf einen einzelnen Cronlauf. Der nächste Lauf greift abgelaufene Leases und unerledigte Arbeit erneut auf. `maxDuration`, Batchgrößen und Meta-Usage-Schwellen bleiben konfigurierbar.
+Die ausgelieferte Executor-Route läuft in der Node.js-Runtime mit `maxDuration = 300`, prüft `Authorization: Bearer CRON_SECRET` konstantzeitlich und antwortet mit `Cache-Control: private, no-store`. Sie gibt ausschließlich die sanitisierten Felder `ok`, `processed`, `outcome` und `steps` zurück; Plan-, Execution-, Account- und Remote-IDs verlassen die Route nicht. Pro Invocation wird höchstens ein Plan geclaimt. Der nächste Minutenlauf greift fällige Retries oder abgelaufene Leases auf, sodass die Ausführung nicht von einem einzelnen Cronlauf abhängt.
 
 ## 13. API- und Codegrenzen
 
@@ -296,8 +312,10 @@ Die Automation verarbeitet pro Invocation begrenzte Accounts und Pläne, speiche
 | `src/lib/meta/client.ts` | GET und explizite POST-Methoden; Timeout, Meta-Fehler, Request-ID, Usage; keine Businesslogik |
 | `src/lib/meta/write-contracts.ts` | Typisierte Allowlist-Payloads und kanonische Fingerprints |
 | `src/lib/meta/planner.ts` | Reine deterministische Funktionen ohne Netzwerk oder service role |
-| `src/lib/meta/executor.ts` | Saga-Orchestrierung; ausschließlich geclaimte Pläne |
-| `src/lib/meta/reconcile.ts` | Objektbezogene GETs und Soll/Ist-Vergleich |
+| `src/lib/meta/executor.ts` | Saga-Orchestrierung; ausschließlich geclaimte Pläne, Binding-Auflösung, `validate_only`, Remote-Writes, READ und Reconciliation |
+| `src/app/api/cron/meta-executor/route.ts` | Konstantzeitlich geschützte Ein-Plan-Cron-Invocation mit sanitisiertem Ergebnis |
+| `20260729220000_meta_mutation_executor.sql` | Claims, Guards, Dispatchzustand, Snapshots, Fehlerklassifikation und generische Reconciliation-Basis |
+| `20260729230000_meta_launch_chain.sql` | Atomarer Active-Launch-Materializer sowie LAUNCH-spezifische Projektion, Bindings und Exposure-Kanonisierung |
 | `src/lib/automation/policy.ts` | Policy-/Cap-/Blueprintvalidierung |
 | `src/lib/automation/budget.ts` | Minor-Unit-, Flexspend-, 20-Prozent- und Cooldownarithmetik |
 | `src/lib/brand-assets/provider.ts` | Austauschbares Providerinterface; keine Manus-Abhängigkeit |
@@ -323,10 +341,28 @@ Keine Provider- oder Meta-Entscheidung wird in React-Komponenten implementiert. 
 | Fremder Mandant sieht oder ändert nichts | RLS, Grants und service-role-RPC-Tenantscope testen |
 | Compliancefehler wird nicht umgangen | Terminalstatus ohne alternativen Payloadretry testen |
 | Reconciliation ist Pflicht | Kein `SUCCEEDED` ohne bestätigten Remote-After-Zustand |
+| Active Launch bleibt bis zuletzt sicher | Exakte 20-Step-Reihenfolge, PAUSED Parents, ACTIVE Shadow-Ad und finale Campaign-Aktivierung testen |
+| Launch-Replay reserviert nicht doppelt | Zweiter Materializer-Aufruf liefert denselben Plan und genau eine Exposure |
+| Launch-Hierarchie ist kanonisch | Vier Remote-Read-backs, lokale Projektionen, drei Managed Targets und fünf reconciled Bindings testen |
+| Provisorische Exposure bleibt nicht bestehen | `launch:*` wird atomar durch Campaign-/Ad-Set-Remote-Keys ersetzt |
+| Browser darf Launch-RPCs nicht ausführen | `authenticated` und `anon` besitzen kein `EXECUTE` auf Materializer, Executor oder private Reconciliation-Basis |
 
-## 15. Phase-5-Implementierungsreihenfolge
+## 15. Implementierungsstand und Verifikation
 
-Die nächste Migration implementiert zuerst Enums, Policy-/Domain-/Blueprint-/Assettabellen, anschließend Targets, Exposure- und Budgetledger, dann Plan-/Step-/Execution-/Audit-/Bindingtabellen und zuletzt Leases, RLS, Grants, Indizes, append-only-Trigger und atomare RPCs. Erst nach lokal bestandener Migration und SQL-Sicherheitsregression wird TypeScript-Schreibcode ergänzt.
+Der Control-Plane-, Creative-Asset-, Budget-Planner-, Mutation-Executor- und Active-Launch-Stand ist als vorwärtsgerichtete Migration implementiert. `scripts/test-meta-mutation-executor.sql` führt auf einem frischen PostgreSQL-Cluster die vollständige 20-Schritt-Kette mit synthetischen Meta-Antworten und vier Read-after-write-Snapshots aus. Der Test verlangt den finalen Zustand `SUCCEEDED`, aktive lokale Campaign/Ad-Set/Ad-Projektionen, Creativebindung, drei kanonische Managed Targets, fünf geschlossene Remote-Bindings, genau eine kanonische Exposure und keine verbleibende Accountlease.
+
+| Nachweis | Ausführbarer Befehl |
+|---|---|
+| Kanonische vollständige Meta-Release-Matrix | `npm run test:meta-all` |
+| Vollständiger Fresh-Cluster-Migrations- und SQL-Regressionslauf | `npm run test:meta-write-control-plane` |
+| Isolierter TypeScript-Executor- und Cron-Vertrag | `npm run test:meta-mutation-executor` |
+| Produktionskompilierung | `npm run build` |
+| Statische Prüfung | `npm run lint` |
+| Typprüfung | `npx tsc --noEmit` |
+
+Die numerischen Randwerte, Fail-closed Zustände und noch ausstehenden externen Staging-Gates sind im [`RELEASE_SAFETY_EVIDENCE.md`](./RELEASE_SAFETY_EVIDENCE.md) mit Durchsetzungsort und ausführbarer Regression dokumentiert.
+
+Die Browserrollen besitzen weder Tabellen-Schreibrechte noch `EXECUTE` auf Materializer-, Executor-, Dispatch-, Snapshot-, Completion- oder Reconciliation-RPCs. Nur der serverseitige Executor mit service role darf einen geclaimten Plan gegen Meta ausführen.
 
 ## References
 

@@ -38,9 +38,15 @@ try {
   const callbackSource = await readFile(callbackSourcePath, "utf8");
 
   assert.doesNotMatch(clientSource, /client_business_id|business_management/);
+  assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
+  assert.match(clientSource, /auth_type", "rerequest"/);
   assert.doesNotMatch(
     callbackSource,
-    /clientBusinessId|client_business_id|business_management|ads_management/,
+    /clientBusinessId|client_business_id|business_management/,
+  );
+  assert.match(
+    callbackSource,
+    /getGranularTargetIds\(tokenDebug, "ads_management"\)/,
   );
   assert.match(callbackSource, /exchangeForLongLivedAccessToken/);
   assert.match(callbackSource, /debugMetaAccessToken/);

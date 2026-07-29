@@ -286,7 +286,7 @@ select public.replace_meta_connection(
   '2026-10-01T00:00:00Z',
   null,
   '2026-10-15T00:00:00Z',
-  array['ads_read', 'pages_show_list'],
+  array['ads_read', 'ads_management', 'pages_show_list'],
   '["page-1"]'::jsonb,
   '["ad-1"]'::jsonb,
   '["ig-1"]'::jsonb,
@@ -342,6 +342,7 @@ begin
       and last_sync_seen_count = 100
       and last_sync_new_count = 2
       and sync_usage = '{"appPercent": 12}'::jsonb
+      and meta_scopes @> array['ads_management']::text[]
   ) then
     raise exception 'Connector history or encrypted token replacement was not preserved correctly';
   end if;

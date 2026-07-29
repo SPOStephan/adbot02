@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/creative-assets",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/meta-executor",
+      "schedule": "* * * * *"
     }
   ]
 }

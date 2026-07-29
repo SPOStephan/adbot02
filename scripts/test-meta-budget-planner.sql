@@ -329,6 +329,81 @@ begin
 end;
 $$;
 
+-- Cooldown boundary semantics are exact and deterministic: one millisecond
+-- before 43,200 seconds is blocked, equality passes the gate and reaches the
+-- already-materialized idempotent plan.
+do $$
+declare
+  v_boundary timestamptz := clock_timestamp();
+  v_target_id uuid;
+  v_snapshot_id uuid;
+  v_recommendation public.campaign_recommendations%rowtype;
+  v_before jsonb;
+  v_at_boundary jsonb;
+begin
+  select target.id into strict v_target_id
+  from public.automation_targets target
+  where target.platform_account_id = '21000000-0000-4000-8000-000000000001'
+    and target.target_key = 'campaign:111111111111';
+
+  select snapshot.id into strict v_snapshot_id
+  from public.daily_budget_exposure_snapshots snapshot
+  where snapshot.platform_account_id = '21000000-0000-4000-8000-000000000001'
+    and snapshot.status = 'COMPLETE'
+  order by snapshot.created_at desc
+  limit 1;
+
+  select recommendation.* into strict v_recommendation
+  from public.campaign_recommendations recommendation
+  where recommendation.platform_account_id = '21000000-0000-4000-8000-000000000001'
+    and recommendation.rule_key = 'spend_without_results_14d';
+
+  update public.automation_targets
+  set last_successful_mutation_at =
+        v_boundary - interval '12 hours' + interval '1 millisecond',
+      updated_at = v_boundary
+  where id = v_target_id;
+
+  v_before := public.queue_meta_budget_plan_internal(
+    '11000000-0000-4000-8000-000000000001',
+    '21000000-0000-4000-8000-000000000001',
+    '81000000-0000-4000-8000-000000000001',
+    v_snapshot_id,
+    '31000000-0000-4000-8000-000000000001',
+    v_recommendation.id,
+    v_recommendation.rule_key,
+    v_recommendation.rule_version,
+    v_target_id,
+    'DECREASE', 2000, v_recommendation.evidence, v_boundary
+  );
+
+  update public.automation_targets
+  set last_successful_mutation_at = v_boundary - interval '12 hours',
+      updated_at = v_boundary
+  where id = v_target_id;
+
+  v_at_boundary := public.queue_meta_budget_plan_internal(
+    '11000000-0000-4000-8000-000000000001',
+    '21000000-0000-4000-8000-000000000001',
+    '81000000-0000-4000-8000-000000000001',
+    v_snapshot_id,
+    '31000000-0000-4000-8000-000000000001',
+    v_recommendation.id,
+    v_recommendation.rule_key,
+    v_recommendation.rule_version,
+    v_target_id,
+    'DECREASE', 2000, v_recommendation.evidence, v_boundary
+  );
+
+  if v_before->>'outcome' <> 'BLOCKED'
+    or v_before->>'reason' <> 'cooldown'
+    or v_at_boundary->>'outcome' <> 'EXISTING'
+    or v_at_boundary->>'reason' <> 'idempotent_replay' then
+    raise exception 'Twelve-hour cooldown boundary semantics are incorrect';
+  end if;
+end;
+$$;
+
 -- A reconciled 20% change 13 hours ago is outside cooldown but consumes the
 -- entire rolling movement allowance for the original 2,000-minor baseline.
 insert into public.mutation_plans (

@@ -9,7 +9,7 @@ values
 
 insert into public.platform_accounts (
   id, user_id, platform, platform_account_id, account_name, access_token,
-  ad_account_ids, marketing_meta_ad_account_id, marketing_currency,
+  meta_scopes, ad_account_ids, marketing_meta_ad_account_id, marketing_currency,
   marketing_timezone_name, marketing_sync_status, marketing_sync_id,
   marketing_last_success_at
 ) values
@@ -17,14 +17,14 @@ insert into public.platform_accounts (
     '20000000-0000-4000-8000-000000000001',
     '10000000-0000-4000-8000-000000000001',
     'meta', 'meta-owner', 'Owner Meta Account', null,
-    '["act_111"]'::jsonb, '111', 'EUR', 'Europe/Berlin', 'success',
+    array['ads_read']::text[], '["act_111"]'::jsonb, '111', 'EUR', 'Europe/Berlin', 'success',
     '30000000-0000-4000-8000-000000000001', now()
   ),
   (
     '20000000-0000-4000-8000-000000000002',
     '10000000-0000-4000-8000-000000000002',
     'meta', 'meta-other', 'Other Meta Account', null,
-    '["act_222"]'::jsonb, '222', 'EUR', 'Europe/Berlin', 'success',
+    array['ads_read','ads_management']::text[], '["act_222"]'::jsonb, '222', 'EUR', 'Europe/Berlin', 'success',
     '30000000-0000-4000-8000-000000000002', now()
   );
 
@@ -119,6 +119,164 @@ insert into public.automation_policies (
     true, true, true, true, '{}'::jsonb, repeat('b', 64), true,
     now(), '10000000-0000-4000-8000-000000000002', null
   );
+
+-- Customer controls create one immutable current version, survive response
+-- retries idempotently and never permit a cross-tenant account reference.
+savepoint customer_control_rpc_test;
+
+do $$
+declare
+  v_policy_id uuid;
+  v_replay_id uuid;
+  v_kill_switch_id uuid;
+begin
+  begin
+    perform public.put_meta_customer_policy_version(
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000001',
+      10000,
+      5000,
+      true,
+      true,
+      true,
+      true
+    );
+    raise exception 'Active policy without ads_management was accepted';
+  exception
+    when others then
+      if sqlerrm = 'Active policy without ads_management was accepted' then raise; end if;
+  end;
+
+  begin
+    perform public.set_meta_customer_kill_switch(
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000001',
+      'ALLOW',
+      'Writes trotz fehlendem Scope freigeben'
+    );
+    raise exception 'ALLOW without ads_management was accepted';
+  exception
+    when others then
+      if sqlerrm = 'ALLOW without ads_management was accepted' then raise; end if;
+  end;
+
+  perform public.set_meta_customer_kill_switch(
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000001',
+    'FREEZE_WRITES',
+    'Scope fehlt, deshalb Writes sicher einfrieren'
+  );
+
+  select public.put_meta_customer_policy_version(
+    '10000000-0000-4000-8000-000000000002',
+    '20000000-0000-4000-8000-000000000002',
+    12000,
+    4000,
+    true,
+    true,
+    true,
+    true
+  ) into v_policy_id;
+
+  select public.put_meta_customer_policy_version(
+    '10000000-0000-4000-8000-000000000002',
+    '20000000-0000-4000-8000-000000000002',
+    12000,
+    4000,
+    true,
+    true,
+    true,
+    true
+  ) into v_replay_id;
+
+  if v_policy_id is distinct from v_replay_id
+    or not exists (
+      select 1
+      from public.automation_policies ap
+      where ap.id = v_policy_id
+        and ap.version = 2
+        and ap.status = 'ACTIVE'
+        and ap.is_current
+        and ap.currency = 'EUR'
+        and ap.account_daily_hard_cap_minor = 12000
+        and ap.default_campaign_daily_hard_cap_minor = 4000
+        and ap.budget_change_limit_bps = 2000
+        and ap.cooldown_seconds = 43200
+        and ap.allow_budget_changes
+        and ap.allow_status_changes
+        and ap.allow_new_launches
+        and ap.require_verified_domain
+        and ap.customer_confirmed_by = '10000000-0000-4000-8000-000000000002'
+    )
+    or (select count(*) from public.automation_policies
+        where platform_account_id = '20000000-0000-4000-8000-000000000002'
+          and is_current) <> 1
+    or (select count(*) from public.mutation_audit_events
+        where platform_account_id = '20000000-0000-4000-8000-000000000002'
+          and event_type = 'POLICY_ACTIVATED') <> 1 then
+    raise exception 'Customer policy RPC is not versioned or idempotent';
+  end if;
+
+  begin
+    perform public.put_meta_customer_policy_version(
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000002',
+      12000,
+      4000,
+      true,
+      true,
+      true,
+      true
+    );
+    raise exception 'Cross-tenant customer policy was accepted';
+  exception
+    when others then
+      if sqlerrm = 'Cross-tenant customer policy was accepted' then raise; end if;
+  end;
+
+  begin
+    perform public.put_meta_customer_policy_version(
+      '10000000-0000-4000-8000-000000000002',
+      '20000000-0000-4000-8000-000000000002',
+      12000,
+      4000,
+      true,
+      false,
+      true,
+      true
+    );
+    raise exception 'Active launch without status permission was accepted';
+  exception
+    when others then
+      if sqlerrm = 'Active launch without status permission was accepted' then raise; end if;
+  end;
+
+  select public.set_meta_customer_kill_switch(
+    '10000000-0000-4000-8000-000000000002',
+    '20000000-0000-4000-8000-000000000002',
+    'FREEZE_WRITES',
+    'Kundenseitiger Sicherheitsstopp im Dashboard'
+  ) into v_kill_switch_id;
+
+  if not exists (
+      select 1 from public.kill_switch_state ks
+      where ks.id = v_kill_switch_id
+        and ks.scope_type = 'ACCOUNT'
+        and ks.mode = 'FREEZE_WRITES'
+        and ks.actor_type = 'CUSTOMER'
+    )
+    or not exists (
+      select 1 from public.mutation_audit_events mae
+      where mae.platform_account_id = '20000000-0000-4000-8000-000000000002'
+        and mae.event_type = 'KILL_SWITCH_CHANGED'
+    ) then
+    raise exception 'Customer kill-switch command is incomplete';
+  end if;
+end;
+$$;
+
+rollback to savepoint customer_control_rpc_test;
+release savepoint customer_control_rpc_test;
 
 -- Policy constraints may be stricter than customer input, never looser.
 do $$
@@ -354,14 +512,35 @@ begin
     raise exception 'Campaign exposure aggregation is incorrect';
   end if;
 
+  -- Equality with the 6,000 campaign cap is valid. Force a nested rollback
+  -- afterwards so the following assertion can test exactly one minor unit over.
+  begin
+    select * into exposure_result
+    from public.reserve_meta_daily_budget_exposure(
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000001',
+      '80000000-0000-4000-8000-000000000001',
+      '90000000-0000-4000-8000-000000000001', null, null,
+      current_date, 'campaign:campaign-owner', 'adset:campaign-cap-exact',
+      'AD_SET', false, 'EUR', 357, 21000, 'PLAN'
+    );
+    if exposure_result.campaign_reserved_exposure_minor <> 6000 then
+      raise exception 'Exact campaign hard cap was not accepted';
+    end if;
+    raise exception 'Rollback exact campaign cap fixture';
+  exception
+    when others then
+      if sqlerrm <> 'Rollback exact campaign cap fixture' then raise; end if;
+  end;
+
   begin
     perform public.reserve_meta_daily_budget_exposure(
       '10000000-0000-4000-8000-000000000001',
       '20000000-0000-4000-8000-000000000001',
       '80000000-0000-4000-8000-000000000001',
       '90000000-0000-4000-8000-000000000001', null, null,
-      current_date, 'campaign:campaign-owner', 'adset:third',
-      'AD_SET', false, 'EUR', 500, 17500, 'PLAN'
+      current_date, 'campaign:campaign-owner', 'adset:campaign-cap-plus-one',
+      'AD_SET', false, 'EUR', 429, 17500, 'PLAN'
     );
     raise exception 'Campaign hard cap overrun was accepted';
   exception
@@ -397,14 +576,34 @@ begin
     raise exception 'Shared-budget 2.10 exposure was not reserved';
   end if;
 
+  -- Equality with the 10,000 account cap is valid and remains transactional.
+  begin
+    select * into exposure_result
+    from public.reserve_meta_daily_budget_exposure(
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000001',
+      '80000000-0000-4000-8000-000000000001',
+      '90000000-0000-4000-8000-000000000001', null, null,
+      current_date, 'campaign:account-cap-exact', 'adset:account-cap-exact',
+      'AD_SET', false, 'EUR', 314, 17500, 'PLAN'
+    );
+    if exposure_result.account_reserved_exposure_minor <> 10000 then
+      raise exception 'Exact account hard cap was not accepted';
+    end if;
+    raise exception 'Rollback exact account cap fixture';
+  exception
+    when others then
+      if sqlerrm <> 'Rollback exact account cap fixture' then raise; end if;
+  end;
+
   begin
     perform public.reserve_meta_daily_budget_exposure(
       '10000000-0000-4000-8000-000000000001',
       '20000000-0000-4000-8000-000000000001',
       '80000000-0000-4000-8000-000000000001',
       '90000000-0000-4000-8000-000000000001', null, null,
-      current_date, 'campaign:third', 'adset:fourth',
-      'AD_SET', false, 'EUR', 400, 17500, 'PLAN'
+      current_date, 'campaign:account-cap-plus-one', 'campaign:account-cap-plus-one',
+      'CAMPAIGN', true, 'EUR', 262, 21000, 'PLAN'
     );
     raise exception 'Account hard cap overrun was accepted';
   exception
@@ -721,6 +920,26 @@ begin
     or not has_function_privilege(
       'service_role',
       'public.claim_meta_account_operation(uuid,uuid,text,text,integer)',
+      'EXECUTE'
+    )
+    or has_function_privilege(
+      'authenticated',
+      'public.put_meta_customer_policy_version(uuid,uuid,bigint,bigint,boolean,boolean,boolean,boolean)',
+      'EXECUTE'
+    )
+    or has_function_privilege(
+      'anon',
+      'public.set_meta_customer_kill_switch(uuid,uuid,text,text)',
+      'EXECUTE'
+    )
+    or not has_function_privilege(
+      'service_role',
+      'public.put_meta_customer_policy_version(uuid,uuid,bigint,bigint,boolean,boolean,boolean,boolean)',
+      'EXECUTE'
+    )
+    or not has_function_privilege(
+      'service_role',
+      'public.set_meta_customer_kill_switch(uuid,uuid,text,text)',
       'EXECUTE'
     ) then
     raise exception 'Control Plane RPC grants are incorrect';
