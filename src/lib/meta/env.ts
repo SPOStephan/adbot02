@@ -60,10 +60,16 @@ export function getMetaCallbackEnv() {
   };
 }
 
+export function getCronAuthEnv() {
+  return {
+    cronSecret: requiredSecret("CRON_SECRET", process.env.CRON_SECRET),
+  };
+}
+
 export function getMetaCronEnv() {
   return {
     ...getMetaSyncEnv(),
-    cronSecret: requiredSecret("CRON_SECRET", process.env.CRON_SECRET),
+    ...getCronAuthEnv(),
   };
 }
 

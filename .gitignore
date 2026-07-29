@@ -10,5 +10,6 @@ out/
 
 # Local tooling and logs
 *.log
+*.tsbuildinfo
 .vercel/
 .DS_Store

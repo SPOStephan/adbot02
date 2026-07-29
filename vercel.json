@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/meta-sync",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/creative-assets",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

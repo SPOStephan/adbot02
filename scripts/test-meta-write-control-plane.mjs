@@ -10,6 +10,10 @@ const projectRoot = join(scriptsDirectory, "..");
 const migrationsDirectory = join(projectRoot, "supabase", "migrations");
 const bootstrapPath = join(scriptsDirectory, "bootstrap-local-supabase.sql");
 const regressionPath = join(scriptsDirectory, "test-meta-write-control-plane.sql");
+const creativeRegressionPath = join(
+  scriptsDirectory,
+  "test-meta-creative-assets.sql",
+);
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -141,7 +145,17 @@ try {
     throw new Error("Control Plane regression did not emit its success marker");
   }
 
-  console.log("Meta Write Control Plane checks passed on a fresh PostgreSQL cluster");
+  const { stdout: creativeStdout } = await run(psqlPath, [
+    ...psqlBase,
+    "--file", creativeRegressionPath,
+  ]);
+  if (!creativeStdout.includes("Meta Creative Asset migration checks passed")) {
+    throw new Error("Creative Asset regression did not emit its success marker");
+  }
+
+  console.log(
+    "Meta Write Control Plane and Creative Asset checks passed on a fresh PostgreSQL cluster",
+  );
 } finally {
   if (serverStarted && pgCtlPath) {
     await run(pgCtlPath, [

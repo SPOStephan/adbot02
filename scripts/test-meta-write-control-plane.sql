@@ -175,17 +175,15 @@ insert into public.objective_blueprints (
 );
 
 insert into public.brand_assets (
-  id, user_id, platform_account_id, source_type, provider_key,
-  provider_model, provider_version, provider_asset_id, sha256, mime_type,
-  byte_size, width, height, brand_policy_version, generation_input_hash,
+  id, user_id, platform_account_id, source_type, original_filename,
+  sha256, mime_type, byte_size, width, height, brand_policy_version,
   moderation_status, status, metadata, reviewed_at, reviewed_by
 ) values (
   '83000000-0000-4000-8000-000000000001',
   '10000000-0000-4000-8000-000000000001',
   '20000000-0000-4000-8000-000000000001',
-  'GENERATED', 'customer-provider', 'image-model', '2026-07',
-  'provider-asset-1', repeat('e', 64), 'image/png', 1024, 1200, 1200,
-  1, repeat('f', 64), 'APPROVED', 'READY',
+  'UPLOADED', 'approved-brand.png', repeat('e', 64), 'image/png',
+  1024, 1200, 1200, 1, 'APPROVED', 'READY',
   '{"purpose":"meta_ad"}'::jsonb, now(),
   '10000000-0000-4000-8000-000000000001'
 );
