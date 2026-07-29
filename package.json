@@ -15,6 +15,7 @@
     "test:meta-content-sync": "node scripts/test-meta-content-sync.mjs",
     "test:meta-marketing-readonly": "node scripts/test-meta-marketing-readonly.mjs",
     "test:meta-marketing-sync": "node scripts/test-meta-marketing-sync.mjs",
+    "test:meta-write-client": "node scripts/test-meta-write-client.mjs",
     "test:meta-write-control-plane": "node scripts/test-meta-write-control-plane.mjs"
   },
   "dependencies": {

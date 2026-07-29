@@ -131,7 +131,13 @@ export class MetaGraphError extends Error {
   }
 
   get rateLimited() {
-    return this.status === 429 || this.code === 4 || this.code === 17 || this.code === 32 || this.code === 80001;
+    return this.status === 429
+      || this.code === 4
+      || this.code === 17
+      || this.code === 32
+      || this.code === 613
+      || this.code === 80001
+      || this.code === 80004;
   }
 
   get reconnectRequired() {
@@ -261,7 +267,7 @@ function parseBusinessUsage(value: unknown): {
   };
 }
 
-function usageFromHeaders(headers: Headers): MetaUsageSnapshot {
+export function metaUsageFromHeaders(headers: Headers): MetaUsageSnapshot {
   const business = parseBusinessUsage(
     parseUsageHeader(headers.get("x-business-use-case-usage")),
   );
@@ -336,7 +342,7 @@ async function fetchMetaJson(
     },
   });
   const body = await readJson(response);
-  const usage = usageFromHeaders(response.headers);
+  const usage = metaUsageFromHeaders(response.headers);
 
   if (!response.ok) {
     throw new MetaGraphError(
