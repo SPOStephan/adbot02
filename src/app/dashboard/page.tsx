@@ -31,6 +31,7 @@ import {
   WalletCards,
 } from "lucide-react";
 
+import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
@@ -295,7 +296,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           supabase
             .from("meta_content_candidates")
             .select(
-              "id, source, content_type, caption_excerpt, permalink_url, published_at, first_seen_at",
+              "id, source, content_type, caption_excerpt, permalink_url, preview_url, published_at, first_seen_at",
             )
             .eq("platform_account_id", metaAccount.id)
             .eq("user_id", user.id)
@@ -675,46 +676,53 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
                   {contentCandidates.map((candidate) => (
                     <article
-                      className="flex min-h-52 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                      className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
                       key={candidate.id}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                          {candidate.source === "instagram" ? (
-                            <Camera className="size-3.5" />
-                          ) : (
-                            <Megaphone className="size-3.5" />
-                          )}
-                          {candidate.source === "instagram"
-                            ? "Instagram"
-                            : "Facebook"}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-500">
-                          {formatDateTime(
-                            candidate.published_at ?? candidate.first_seen_at,
-                          )}
-                        </span>
-                      </div>
-                      <p className="mt-5 line-clamp-4 text-sm leading-6 text-slate-700">
-                        {candidate.caption_excerpt ??
-                          "Beitrag ohne verfügbaren Text"}
-                      </p>
-                      <div className="mt-auto pt-5">
-                        {candidate.permalink_url ? (
-                          <a
-                            className="inline-flex items-center gap-2 text-sm font-bold text-blue-700 transition hover:text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                            href={candidate.permalink_url}
-                            rel="noreferrer"
-                            target="_blank"
-                          >
-                            Originalbeitrag ansehen
-                            <ExternalLink className="size-4" />
-                          </a>
-                        ) : (
-                          <span className="text-sm font-semibold text-slate-400">
-                            Kein öffentlicher Link verfügbar
+                      <ContentCandidatePreview
+                        contentType={candidate.content_type}
+                        previewUrl={candidate.preview_url}
+                        source={candidate.source}
+                      />
+                      <div className="flex min-h-52 flex-col p-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                            {candidate.source === "instagram" ? (
+                              <Camera className="size-3.5" />
+                            ) : (
+                              <Megaphone className="size-3.5" />
+                            )}
+                            {candidate.source === "instagram"
+                              ? "Instagram"
+                              : "Facebook"}
                           </span>
-                        )}
+                          <span className="text-xs font-semibold text-slate-500">
+                            {formatDateTime(
+                              candidate.published_at ?? candidate.first_seen_at,
+                            )}
+                          </span>
+                        </div>
+                        <p className="mt-5 line-clamp-4 text-sm leading-6 text-slate-700">
+                          {candidate.caption_excerpt ??
+                            "Beitrag ohne verfügbaren Text"}
+                        </p>
+                        <div className="mt-auto pt-5">
+                          {candidate.permalink_url ? (
+                            <a
+                              className="inline-flex items-center gap-2 text-sm font-bold text-blue-700 transition hover:text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                              href={candidate.permalink_url}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Originalbeitrag ansehen
+                              <ExternalLink className="size-4" />
+                            </a>
+                          ) : (
+                            <span className="text-sm font-semibold text-slate-400">
+                              Kein öffentlicher Link verfügbar
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </article>
                   ))}

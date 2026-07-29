@@ -18,6 +18,10 @@ const syncButtonSource = await readFile(
   join(projectRoot, "src/components/MetaSyncButton.tsx"),
   "utf8",
 );
+const candidatePreviewSource = await readFile(
+  join(projectRoot, "src/components/ContentCandidatePreview.tsx"),
+  "utf8",
+);
 const callbackSource = await readFile(
   join(projectRoot, "src/app/api/connectors/meta/callback/route.ts"),
   "utf8",
@@ -67,6 +71,9 @@ assert.match(dashboardSource, /Gespeichert/);
 assert.match(dashboardSource, /select\("id", \{ count: "exact", head: true \}\)/);
 assert.match(dashboardSource, /storedCandidateCount \?\? 0/);
 assert.match(dashboardSource, /Originalbeitrag ansehen/);
+assert.match(dashboardSource, /preview_url/);
+assert.match(dashboardSource, /<ContentCandidatePreview/);
+assert.match(dashboardSource, /previewUrl=\{candidate\.preview_url\}/);
 assert.match(dashboardSource, /\.eq\("is_new", true\)/);
 assert.match(dashboardSource, /\.limit\(8\)/);
 assert.match(dashboardSource, /<MetaSyncButton/);
@@ -76,6 +83,14 @@ assert.match(cardSource, /prefetch=\{false\}/);
 assert.match(cardSource, /Aktiv verbunden/);
 assert.match(cardSource, /In Vorbereitung/);
 assert.match(cardSource, /focus-visible:outline-blue-600/);
+
+assert.match(candidatePreviewSource, /loading="lazy"/);
+assert.match(candidatePreviewSource, /decoding="async"/);
+assert.match(candidatePreviewSource, /referrerPolicy="no-referrer"/);
+assert.match(candidatePreviewSource, /onError=\{\(\) => setFailedUrl\(previewUrl\)\}/);
+assert.match(candidatePreviewSource, /Keine Vorschau verfügbar/);
+assert.match(candidatePreviewSource, /aspect-\[16\/9\]/);
+assert.doesNotMatch(candidatePreviewSource, /dangerouslySetInnerHTML/);
 
 assert.match(syncButtonSource, /"use client"/);
 assert.match(syncButtonSource, /method: "POST"/);
