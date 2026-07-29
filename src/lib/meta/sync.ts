@@ -278,8 +278,6 @@ async function markReconnectRequired(
     sync_lock_until: null,
     sync_backoff_until: null,
     next_sync_at: null,
-    last_sync_seen_count: 0,
-    last_sync_new_count: 0,
     sync_usage: usageForStorage(usage),
   });
 
@@ -327,8 +325,6 @@ async function markFailed(input: {
     sync_backoff_until: retryAt,
     next_sync_at: retryAt,
     sync_consecutive_failures: failures + 1,
-    last_sync_seen_count: 0,
-    last_sync_new_count: 0,
     sync_usage: usageForStorage(input.usage),
   });
 

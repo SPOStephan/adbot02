@@ -169,6 +169,10 @@ const migrationPath = join(
   projectRoot,
   "supabase/migrations/20260727133000_meta_content_sync.sql",
 );
+const reconnectPersistenceMigrationPath = join(
+  projectRoot,
+  "supabase/migrations/20260729070000_preserve_meta_history_on_reconnect.sql",
+);
 const cronRoutePath = join(projectRoot, "src/app/api/cron/meta-sync/route.ts");
 const manualRoutePath = join(
   projectRoot,
@@ -425,6 +429,14 @@ export function createAdminClient() {
     expiredHarness.state.updates.at(-1).values.sync_error_code,
     "token_expired",
   );
+  assert.equal(
+    "last_sync_seen_count" in expiredHarness.state.updates.at(-1).values,
+    false,
+  );
+  assert.equal(
+    "last_sync_new_count" in expiredHarness.state.updates.at(-1).values,
+    false,
+  );
   assert.equal(globalThis.__metaTest.calls.length, 0);
 
   const partialHarness = makeAdminHarness({
@@ -467,6 +479,14 @@ export function createAdminClient() {
   assert.equal(
     rateLimitHarness.state.updates.at(-1).values.sync_error_code,
     "meta_rate_limited",
+  );
+  assert.equal(
+    "last_sync_seen_count" in rateLimitHarness.state.updates.at(-1).values,
+    false,
+  );
+  assert.equal(
+    "last_sync_new_count" in rateLimitHarness.state.updates.at(-1).values,
+    false,
   );
 
   const reconnectHarness = makeAdminHarness();
@@ -524,6 +544,10 @@ export function createAdminClient() {
   assert.deepEqual(await syncModule.getDueMetaConnectorIds(10), ["due"]);
 
   const migrationSource = await readFile(migrationPath, "utf8");
+  const reconnectPersistenceMigrationSource = await readFile(
+    reconnectPersistenceMigrationPath,
+    "utf8",
+  );
   const cronRouteSource = await readFile(cronRoutePath, "utf8");
   const manualRouteSource = await readFile(manualRoutePath, "utf8");
   const envSource = await readFile(envPath, "utf8");
@@ -564,6 +588,43 @@ export function createAdminClient() {
   assert.match(
     migrationSource,
     /access_token = null,[\s\S]*?refresh_token = null/,
+  );
+
+  assert.match(
+    reconnectPersistenceMigrationSource,
+    /alter column meta_asset_id drop not null/,
+  );
+  assert.match(
+    reconnectPersistenceMigrationSource,
+    /foreign key \(meta_asset_id\)[\s\S]*?on delete set null/,
+  );
+  assert.match(
+    reconnectPersistenceMigrationSource,
+    /baseline_completed_at = existing\.baseline_completed_at/,
+  );
+  assert.match(
+    reconnectPersistenceMigrationSource,
+    /last_sync_seen_count = existing\.last_sync_seen_count/,
+  );
+  assert.match(
+    reconnectPersistenceMigrationSource,
+    /last_sync_new_count = existing\.last_sync_new_count/,
+  );
+  assert.match(
+    reconnectPersistenceMigrationSource,
+    /on conflict \(platform_account_id, asset_type, meta_asset_id\)[\s\S]*?do update set/,
+  );
+  assert.match(
+    reconnectPersistenceMigrationSource,
+    /delete from public\.meta_assets existing_asset[\s\S]*?and not exists/,
+  );
+  assert.doesNotMatch(
+    reconnectPersistenceMigrationSource,
+    /delete from public\.meta_assets\s+where platform_account_id = v_platform_account_id/,
+  );
+  assert.match(
+    migrationSource,
+    /update public\.meta_content_candidates[\s\S]*?meta_asset_id = p_meta_asset_id/,
   );
 
   assert.match(cronRouteSource, /constantTimeEqual/);

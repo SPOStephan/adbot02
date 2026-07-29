@@ -275,9 +275,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     (account) => account.platform === "meta" && !account.revoked_at,
   );
   const metaConnected = Boolean(metaAccount?.connected_at);
-  const [{ data: metaAssets }, { data: contentCandidates }] =
-    metaConnected && metaAccount
-      ? await Promise.all([
+  const [
+    { data: metaAssets },
+    { data: contentCandidates },
+    { count: storedCandidateCount },
+  ] = metaConnected && metaAccount
+    ? await Promise.all([
           supabase
             .from("meta_assets")
             .select("id, asset_type, name, username, last_synced_at")
@@ -294,8 +297,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             .eq("is_new", true)
             .order("published_at", { ascending: false, nullsFirst: false })
             .limit(8),
+          supabase
+            .from("meta_content_candidates")
+            .select("id", { count: "exact", head: true })
+            .eq("platform_account_id", metaAccount.id)
+            .eq("user_id", user.id),
         ])
-      : [{ data: [] }, { data: [] }];
+      : [{ data: [] }, { data: [] }, { count: 0 }];
   const syncStatus = metaAccount?.sync_status ?? "idle";
   const syncInfo =
     SYNC_STATUS[syncStatus as keyof typeof SYNC_STATUS] ?? SYNC_STATUS.idle;
@@ -538,7 +546,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <p className="text-sm font-bold text-slate-900">
                     {syncInfo.description}
                   </p>
-                  <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     <div className="rounded-xl bg-slate-50 p-4">
                       <dt className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
                         <Clock3 className="size-4" />
@@ -571,6 +579,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       </dt>
                       <dd className="mt-2 text-2xl font-extrabold text-blue-700">
                         {metaAccount.last_sync_new_count ?? 0}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
+                        Gespeichert
+                      </dt>
+                      <dd className="mt-2 text-2xl font-extrabold text-slate-900">
+                        {storedCandidateCount ?? 0}
                       </dd>
                     </div>
                   </dl>
