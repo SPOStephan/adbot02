@@ -237,6 +237,14 @@ function serializeCreatives(items: MetaAdCreative[]) {
   }));
 }
 
+function actionMetricMap(
+  items: MetaAdInsight["actions"],
+): Record<string, string> {
+  return Object.fromEntries(
+    items.map((item) => [item.actionType, item.value] as const),
+  );
+}
+
 function serializeInsights(items: MetaAdInsight[]) {
   return items.map((item) => ({
     platform_campaign_id: item.campaignId,
@@ -257,9 +265,9 @@ function serializeInsights(items: MetaAdInsight[]) {
     cpm: item.cpm,
     cpc: item.cpc,
     ctr: item.ctr,
-    actions: item.actions,
-    action_values: item.actionValues,
-    cost_per_action_type: item.costPerActionType,
+    actions: actionMetricMap(item.actions),
+    action_values: actionMetricMap(item.actionValues),
+    cost_per_action_type: actionMetricMap(item.costPerActionType),
     attribution_setting: item.attributionSetting,
   }));
 }
