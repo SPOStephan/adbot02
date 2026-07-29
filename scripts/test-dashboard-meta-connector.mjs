@@ -53,6 +53,12 @@ assert.match(dashboardSource, /Meta Content Sync/);
 assert.match(dashboardSource, /Letzter Abruf/);
 assert.match(dashboardSource, /Nächster Abruf/);
 assert.match(dashboardSource, /Sicherer Ausgangsbestand/);
+assert.match(dashboardSource, /Wieder verbunden/);
+assert.match(dashboardSource, /Der gespeicherte Ausgangsbestand bleibt erhalten/);
+assert.match(
+  dashboardSource,
+  /syncStatus === "idle" && metaAccount\?\.baseline_completed_at/,
+);
 assert.match(dashboardSource, /Verbindung erneuern/);
 assert.match(dashboardSource, /Meta neu verbinden/);
 assert.match(dashboardSource, /Beitragskandidaten/);

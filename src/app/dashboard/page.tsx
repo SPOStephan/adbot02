@@ -148,6 +148,11 @@ const SYNC_STATUS = {
     className: "bg-blue-50 text-blue-700 ring-blue-200",
     description: "Die Verbindung steht. Der sichere Ausgangsbestand kann jetzt eingelesen werden.",
   },
+  reconnected: {
+    label: "Wieder verbunden",
+    className: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    description: "Die Verbindung wurde erneuert. Der gespeicherte Ausgangsbestand bleibt erhalten.",
+  },
   syncing: {
     label: "Abruf läuft",
     className: "bg-blue-50 text-blue-700 ring-blue-200",
@@ -306,7 +311,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       : [{ data: [] }, { data: [] }, { count: 0 }];
   const syncStatus = metaAccount?.sync_status ?? "idle";
   const syncInfo =
-    SYNC_STATUS[syncStatus as keyof typeof SYNC_STATUS] ?? SYNC_STATUS.idle;
+    syncStatus === "idle" && metaAccount?.baseline_completed_at
+      ? SYNC_STATUS.reconnected
+      : (SYNC_STATUS[syncStatus as keyof typeof SYNC_STATUS] ?? SYNC_STATUS.idle);
   const reconnectRequired = syncStatus === "reconnect_required";
   const pageAsset = metaAssets?.find(
     (asset) => asset.asset_type === "facebook_page",
