@@ -26,12 +26,12 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
-  TrendingUp,
   Users,
   WalletCards,
 } from "lucide-react";
 
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
+import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
@@ -44,37 +44,6 @@ const navigation = [
   { label: "Kampagnen", icon: Megaphone },
   { label: "Creatives", icon: ImageIcon },
   { label: "Zielgruppen", icon: Target },
-];
-
-const metrics = [
-  {
-    label: "Werbeausgaben",
-    value: "8.420 €",
-    change: "+12,4 %",
-    icon: WalletCards,
-    color: "bg-blue-50 text-blue-600",
-  },
-  {
-    label: "Generierte Leads",
-    value: "1.284",
-    change: "+18,7 %",
-    icon: Users,
-    color: "bg-violet-50 text-violet-600",
-  },
-  {
-    label: "Kosten pro Lead",
-    value: "6,56 €",
-    change: "−5,2 %",
-    icon: CircleDollarSign,
-    color: "bg-emerald-50 text-emerald-600",
-  },
-  {
-    label: "Klickrate",
-    value: "3,82 %",
-    change: "+0,6 %",
-    icon: MousePointerClick,
-    color: "bg-amber-50 text-amber-600",
-  },
 ];
 
 type DashboardPageProps = {
@@ -204,6 +173,66 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
+function toFiniteNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatMoney(value: number | null, currency: string) {
+  if (value === null) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatInteger(value: number | null) {
+  if (value === null) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("de-DE", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatPercent(value: number | null) {
+  if (value === null) {
+    return "—";
+  }
+
+  return `${new Intl.NumberFormat("de-DE", {
+    maximumFractionDigits: 2,
+  }).format(value)} %`;
+}
+
+function sumAvailableMetric(
+  rows: readonly Record<string, unknown>[],
+  key: string,
+) {
+  let hasValue = false;
+  let total = 0;
+
+  for (const row of rows) {
+    const value = toFiniteNumber(row[key]);
+
+    if (value !== null) {
+      hasValue = true;
+      total += value;
+    }
+  }
+
+  return hasValue ? total : null;
+}
+
 const platformVisuals = {
   meta: {
     accentClass: "bg-blue-50 text-blue-600",
@@ -237,7 +266,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const { data: connectedAccounts } = await supabase
     .from("platform_accounts")
     .select(
-      "id, platform, account_name, connected_at, revoked_at, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count",
+      "id, platform, account_name, connected_at, revoked_at, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until",
     )
     .eq("user_id", user.id);
 
@@ -264,7 +293,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       connected: Boolean(account),
       badge: isMeta && platform.configured ? "Nur Lesezugriff" : undefined,
       helperText: isMeta
-        ? "Liest Anzeigen-, Seiten- und Instagram-Basisdaten. Keine Kampagnen-, Publishing- oder Messaging-Rechte."
+        ? "Liest Kampagnen, Anzeigen, tägliche Insights sowie Seiten- und Instagram-Beiträge. Keine Bearbeitungs-, Publishing- oder Messaging-Rechte."
         : undefined,
       actionHref:
         isMeta && platform.configured && !account
@@ -330,6 +359,152 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     firstQueryValue(query.meta_error),
     metaConnected,
   );
+  const [
+    { data: liveCampaigns },
+    { data: campaignPerformance },
+    { data: dailyPerformance },
+    { data: campaignRecommendations },
+  ] = metaConnected && metaAccount
+      ? await Promise.all([
+          supabase
+            .from("campaigns")
+            .select("id, name, objective, status, effective_status, platform_updated_time")
+            .eq("platform_account_id", metaAccount.id)
+            .eq("user_id", user.id)
+            .eq("is_current", true)
+            .order("platform_updated_time", { ascending: false, nullsFirst: false })
+            .limit(50),
+          supabase
+            .from("meta_campaign_performance_30d")
+            .select(
+              "campaign_id, currency, spend, impressions, inline_link_clicks, leads, purchases, link_ctr, link_cpc, window_start, window_end",
+            )
+            .eq("platform_account_id", metaAccount.id)
+            .eq("user_id", user.id),
+          supabase
+            .from("meta_account_performance_daily")
+            .select(
+              "date, currency, spend, impressions, inline_link_clicks, leads, purchases",
+            )
+            .eq("platform_account_id", metaAccount.id)
+            .eq("user_id", user.id)
+            .order("date", { ascending: false })
+            .limit(30),
+          supabase
+            .from("campaign_recommendations")
+            .select(
+              "id, campaign_id, rule_key, rule_version, severity, priority, title, summary, evidence, window_start, window_end",
+            )
+            .eq("platform_account_id", metaAccount.id)
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .gt("expires_at", new Date().toISOString())
+            .order("priority", { ascending: false })
+            .order("generated_at", { ascending: false })
+            .limit(50),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  const marketingCurrency = metaAccount?.marketing_currency ?? "EUR";
+  const performanceRows = (campaignPerformance ?? []) as Record<string, unknown>[];
+  const dailyRows = ((dailyPerformance ?? []) as Record<string, unknown>[]).reverse();
+  const campaignPerformanceById = new Map(
+    performanceRows.map((row) => [String(row.campaign_id), row]),
+  );
+  const campaignRows = (liveCampaigns ?? [])
+    .map((campaign) => {
+      const performance = campaignPerformanceById.get(campaign.id);
+
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        objective: campaign.objective,
+        status: campaign.status,
+        effectiveStatus: campaign.effective_status,
+        spend: toFiniteNumber(performance?.spend),
+        impressions: toFiniteNumber(performance?.impressions),
+        linkClicks: toFiniteNumber(performance?.inline_link_clicks),
+        linkCtr: toFiniteNumber(performance?.link_ctr),
+        linkCpc: toFiniteNumber(performance?.link_cpc),
+        leads: toFiniteNumber(performance?.leads),
+        purchases: toFiniteNumber(performance?.purchases),
+        currency: String(performance?.currency ?? marketingCurrency),
+      };
+    })
+    .sort((left, right) => (right.spend ?? -1) - (left.spend ?? -1));
+  const campaignNameById = new Map(
+    campaignRows.map((campaign) => [campaign.id, campaign.name]),
+  );
+  const recommendationRows = ((campaignRecommendations ?? []) as Record<string, unknown>[])
+    .map((row) => {
+      const rawEvidence = row.evidence;
+      const evidence =
+        rawEvidence && typeof rawEvidence === "object" && !Array.isArray(rawEvidence)
+          ? (rawEvidence as Record<string, unknown>)
+          : {};
+      const campaignId = String(row.campaign_id ?? "");
+      const evidenceCampaignName =
+        typeof evidence.campaign_name === "string" ? evidence.campaign_name : null;
+
+      return {
+        id: String(row.id),
+        campaignName:
+          campaignNameById.get(campaignId) ?? evidenceCampaignName ?? "Meta-Kampagne",
+        ruleKey: String(row.rule_key),
+        ruleVersion: toFiniteNumber(row.rule_version) ?? 1,
+        severity: String(row.severity),
+        priority: toFiniteNumber(row.priority) ?? 1,
+        title: String(row.title),
+        summary: String(row.summary),
+        evidence,
+        windowStart: String(row.window_start),
+        windowEnd: String(row.window_end),
+      };
+    });
+  const totalSpend = sumAvailableMetric(dailyRows, "spend");
+  const totalImpressions = sumAvailableMetric(dailyRows, "impressions");
+  const totalLinkClicks = sumAvailableMetric(dailyRows, "inline_link_clicks");
+  const totalLeads = sumAvailableMetric(dailyRows, "leads");
+  const totalPurchases = sumAvailableMetric(dailyRows, "purchases");
+  const totalResults = totalLeads ?? totalPurchases;
+  const resultLabel = totalLeads !== null ? "Generierte Leads" : "Erkannte Käufe";
+  const costPerResult =
+    totalSpend !== null && totalResults !== null && totalResults > 0
+      ? totalSpend / totalResults
+      : null;
+  const linkCtr =
+    totalLinkClicks !== null && totalImpressions !== null && totalImpressions > 0
+      ? (totalLinkClicks * 100) / totalImpressions
+      : null;
+  const marketingMetrics = [
+    {
+      label: "Werbeausgaben",
+      value: formatMoney(totalSpend, marketingCurrency),
+      icon: WalletCards,
+      color: "bg-blue-50 text-blue-600",
+    },
+    {
+      label: resultLabel,
+      value: formatInteger(totalResults),
+      icon: Users,
+      color: "bg-violet-50 text-violet-600",
+    },
+    {
+      label: "Kosten pro Ergebnis",
+      value: formatMoney(costPerResult, marketingCurrency),
+      icon: CircleDollarSign,
+      color: "bg-emerald-50 text-emerald-600",
+    },
+    {
+      label: "Link-Klickrate",
+      value: formatPercent(linkCtr),
+      icon: MousePointerClick,
+      color: "bg-amber-50 text-amber-600",
+    },
+  ];
+  const chartPoints = dailyRows.map((row) => ({
+    date: String(row.date),
+    spend: toFiniteNumber(row.spend) ?? 0,
+  }));
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
@@ -398,28 +573,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
             <div>
               <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
-                  Demoansicht
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    metaAccount?.marketing_sync_status === "success"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-blue-100 text-blue-800"
+                  }`}
+                >
+                  {metaAccount?.marketing_sync_status === "success"
+                    ? "Meta Live"
+                    : "Live-Daten noch nicht verfügbar"}
                 </span>
                 <span className="text-xs text-slate-400">
                   {hasConnectedPlatform
-                    ? "Mindestens eine Plattform ist verbunden"
+                    ? `Datenstand ${formatDateTime(metaAccount?.marketing_last_success_at)}`
                     : "Noch keine Werbekonten verbunden"}
                 </span>
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Marketing-Übersicht</h1>
               <p className="mt-2 text-slate-500">
-                Willkommen zurück. Hier entsteht dein kanalübergreifendes Cockpit.
+                Echte Meta-Kampagnenleistung mit strikt schreibgeschütztem Zugriff.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm"
-                type="button"
-              >
+              <span className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm">
                 <CalendarDays className="size-4" />
-                Letzte 30 Tage
-              </button>
+                Letzte 30 Insight-Tage
+              </span>
               <a
                 className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
                 href="#plattformen"
@@ -453,15 +633,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ) : null}
 
           <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {metrics.map(({ label, value, change, icon: Icon, color }) => (
+            {marketingMetrics.map(({ label, value, icon: Icon, color }) => (
               <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" key={label}>
                 <div className="flex items-start justify-between gap-3">
                   <span className={`grid size-10 place-items-center rounded-xl ${color}`}>
                     <Icon className="size-5" />
                   </span>
-                  <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
-                    <TrendingUp className="size-3" />
-                    {change}
+                  <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+                    Meta Live
                   </span>
                 </div>
                 <p className="mt-5 text-sm font-medium text-slate-500">{label}</p>
@@ -474,14 +653,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-bold">Lead-Entwicklung</p>
-                  <p className="mt-1 text-sm text-slate-500">Beispielverlauf über alle Kanäle</p>
+                  <p className="font-bold">Tägliche Werbeausgaben</p>
+                  <p className="mt-1 text-sm text-slate-500">Letzte 30 vollständige Meta-Insight-Tage</p>
                 </div>
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
-                  Demo
+                <span className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                  {marketingCurrency}
                 </span>
               </div>
-              <PerformanceChart />
+              <PerformanceChart currency={marketingCurrency} points={chartPoints} />
             </article>
 
             <article className="overflow-hidden rounded-2xl bg-slate-950 p-6 text-white shadow-sm">
@@ -489,24 +668,39 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <Sparkles className="size-5" />
               </span>
               <p className="mt-6 text-sm font-bold uppercase tracking-[0.18em] text-blue-300">
-                KI-Assistent
+                Regelbasierte Analyse
               </p>
               <h2 className="mt-2 text-2xl font-extrabold tracking-tight">
-                Von einem Ziel zur fertigen Kampagne.
+                Hinweise mit messbarer Evidenz.
               </h2>
               <p className="mt-4 text-sm leading-6 text-slate-300">
-                Im nächsten Produktinkrement erhält der Assistent Briefing, Budget und Freigaberegeln.
-                Kampagnenstarts bleiben bis zur ausdrücklichen Freigabe gesperrt.
+                Adbot bewertet ausschließlich gespeicherte Live-Kennzahlen anhand fester Schwellenwerte. Jede Empfehlung bleibt ein prüfbarer Diagnosehinweis und kann keine Kampagne verändern.
               </p>
-              <button
-                className="mt-8 w-full rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-950 opacity-60"
-                disabled
-                type="button"
-              >
-                Assistent folgt im nächsten Schritt
-              </button>
+              <div className="mt-8 rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-bold text-white">
+                Keine automatische Ausführung
+              </div>
             </article>
           </section>
+
+          {metaConnected && metaAccount ? (
+            <MetaCampaignOverview
+              campaigns={campaignRows}
+              counts={{
+                campaigns: metaAccount.marketing_campaign_count ?? 0,
+                adSets: metaAccount.marketing_ad_set_count ?? 0,
+                ads: metaAccount.marketing_ad_count ?? 0,
+                creatives: metaAccount.marketing_creative_count ?? 0,
+                insights: metaAccount.marketing_insight_count ?? 0,
+              }}
+              currency={marketingCurrency}
+              errorCode={metaAccount.marketing_sync_error_code ?? null}
+              insightsSince={metaAccount.marketing_insights_since ?? null}
+              insightsUntil={metaAccount.marketing_insights_until ?? null}
+              lastSuccessAt={metaAccount.marketing_last_success_at ?? null}
+              recommendations={recommendationRows}
+              status={metaAccount.marketing_sync_status ?? "idle"}
+            />
+          ) : null}
 
           <section className="mt-10" id="plattformen">
             <div>

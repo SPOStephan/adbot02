@@ -22,6 +22,17 @@ const candidatePreviewSource = await readFile(
   join(projectRoot, "src/components/ContentCandidatePreview.tsx"),
   "utf8",
 );
+const campaignOverviewSource = await readFile(
+  join(projectRoot, "src/components/MetaCampaignOverview.tsx"),
+  "utf8",
+);
+const marketingMigrationSource = await readFile(
+  join(
+    projectRoot,
+    "supabase/migrations/20260729090000_meta_marketing_readonly_sync.sql",
+  ),
+  "utf8",
+);
 const callbackSource = await readFile(
   join(projectRoot, "src/app/api/connectors/meta/callback/route.ts"),
   "utf8",
@@ -36,7 +47,7 @@ assert.match(dashboardSource, /actionLabel:[\s\S]*"Meta verbinden"/);
 assert.match(dashboardSource, /badge:[\s\S]*"Nur Lesezugriff"/);
 assert.match(
   dashboardSource,
-  /Keine Kampagnen-, Publishing- oder Messaging-Rechte\./,
+  /Keine Bearbeitungs-, Publishing- oder Messaging-Rechte\./,
 );
 assert.match(dashboardSource, /meta === "connected" && metaConnected/);
 assert.match(dashboardSource, /Meta wurde erfolgreich verbunden\./);
@@ -77,6 +88,14 @@ assert.match(dashboardSource, /previewUrl=\{candidate\.preview_url\}/);
 assert.match(dashboardSource, /\.eq\("is_new", true\)/);
 assert.match(dashboardSource, /\.limit\(8\)/);
 assert.match(dashboardSource, /<MetaSyncButton/);
+assert.match(dashboardSource, /meta_account_performance_daily/);
+assert.match(dashboardSource, /meta_campaign_performance_30d/);
+assert.match(dashboardSource, /campaign_recommendations/);
+assert.match(dashboardSource, /\.eq\("status", "active"\)/);
+assert.match(dashboardSource, /\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
+assert.match(dashboardSource, /recommendations=\{recommendationRows\}/);
+assert.match(dashboardSource, /Keine automatische Ausführung/);
+assert.doesNotMatch(dashboardSource, /ads_management/);
 
 assert.match(cardSource, /href=\{actionHref!\}/);
 assert.match(cardSource, /prefetch=\{false\}/);
@@ -91,6 +110,36 @@ assert.match(candidatePreviewSource, /onError=\{\(\) => setFailedUrl\(previewUrl
 assert.match(candidatePreviewSource, /Keine Vorschau verfügbar/);
 assert.match(candidatePreviewSource, /aspect-\[16\/9\]/);
 assert.doesNotMatch(candidatePreviewSource, /dangerouslySetInnerHTML/);
+
+assert.match(campaignOverviewSource, /Deterministische Empfehlungen/);
+assert.match(campaignOverviewSource, /Prüfhilfen aus festen Schwellenwerten/);
+assert.match(campaignOverviewSource, /Nur Analyse/);
+assert.match(campaignOverviewSource, /ruleKey === "active_without_delivery_3d"/);
+assert.match(campaignOverviewSource, /ruleKey === "cost_per_result_up_30pct"/);
+assert.match(campaignOverviewSource, /ruleKey === "spend_without_results_14d"/);
+assert.match(campaignOverviewSource, /ruleKey === "low_link_ctr_7d"/);
+assert.doesNotMatch(
+  campaignOverviewSource,
+  /<button|<form|onClick=|fetch\(|method:\s*["'](?:POST|PATCH|PUT|DELETE)/,
+);
+
+for (const rule of [
+  "active_without_delivery_3d",
+  "cost_per_result_up_30pct",
+  "spend_without_results_14d",
+  "low_link_ctr_7d",
+]) {
+  assert.match(marketingMigrationSource, new RegExp(`'${rule}'`));
+}
+assert.match(
+  marketingMigrationSource,
+  /revoke all on function public\.rebuild_meta_campaign_recommendations\([\s\S]*from public, anon, authenticated/,
+);
+assert.match(
+  marketingMigrationSource,
+  /grant execute on function public\.rebuild_meta_campaign_recommendations\([\s\S]*to service_role/,
+);
+assert.doesNotMatch(marketingMigrationSource, /ads_management|POST\s+https?:\/\//);
 
 assert.match(syncButtonSource, /"use client"/);
 assert.match(syncButtonSource, /method: "POST"/);

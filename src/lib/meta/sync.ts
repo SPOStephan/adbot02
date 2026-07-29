@@ -5,10 +5,16 @@ import {
   getInstagramMedia,
   getMetaPageAssets,
   mergeMetaUsage,
+  MetaCollectionLimitError,
   MetaGraphError,
   type MetaContentItem,
   type MetaUsageSnapshot,
 } from "./client";
+import {
+  MetaMarketingDataError,
+  syncMetaMarketingSnapshot,
+  type MetaMarketingSyncResult,
+} from "./marketing-sync";
 import { decryptAccessToken } from "./crypto";
 import { getMetaSyncEnv } from "./env";
 import { createAdminClient } from "../supabase/admin";
@@ -25,6 +31,8 @@ const EMPTY_USAGE: MetaUsageSnapshot = {
   appPercent: null,
   pagePercent: null,
   businessPercent: null,
+  adAccountPercent: null,
+  insightsPercent: null,
   retryAfterSeconds: null,
 };
 
@@ -70,6 +78,15 @@ export type MetaSyncResult = {
   newCount: number;
   syncedAssetCount: number;
   failedAssetCount: number;
+  marketingStatus: "success" | "error" | "not_run";
+  campaignsCount: number;
+  adSetsCount: number;
+  adsCount: number;
+  creativesCount: number;
+  insightsCount: number;
+  recommendationsCount: number;
+  insightsSince: string | null;
+  insightsUntil: string | null;
   nextSyncAt: string | null;
   retryAt: string | null;
 };
@@ -79,6 +96,73 @@ type SyncInput = {
   userId?: string;
   mode: "manual" | "cron";
 };
+
+type MetaSyncMarketingFields = Pick<
+  MetaSyncResult,
+  | "marketingStatus"
+  | "campaignsCount"
+  | "adSetsCount"
+  | "adsCount"
+  | "creativesCount"
+  | "insightsCount"
+  | "recommendationsCount"
+  | "insightsSince"
+  | "insightsUntil"
+>;
+
+const EMPTY_MARKETING_RESULT: MetaSyncMarketingFields = {
+  marketingStatus: "not_run",
+  campaignsCount: 0,
+  adSetsCount: 0,
+  adsCount: 0,
+  creativesCount: 0,
+  insightsCount: 0,
+  recommendationsCount: 0,
+  insightsSince: null,
+  insightsUntil: null,
+};
+
+function marketingFields(
+  result: MetaMarketingSyncResult | null,
+  failed = false,
+): MetaSyncMarketingFields {
+  return result
+    ? {
+        marketingStatus: "success",
+        campaignsCount: result.campaignsCount,
+        adSetsCount: result.adSetsCount,
+        adsCount: result.adsCount,
+        creativesCount: result.creativesCount,
+        insightsCount: result.insightsCount,
+        recommendationsCount: result.recommendationsCount,
+        insightsSince: result.insightsSince,
+        insightsUntil: result.insightsUntil,
+      }
+    : {
+        ...EMPTY_MARKETING_RESULT,
+        marketingStatus: failed ? "error" : "not_run",
+      };
+}
+
+function classifyMarketingError(error: unknown): string {
+  if (error instanceof MetaCollectionLimitError) {
+    return `marketing_collection_${error.reason}`;
+  }
+
+  if (error instanceof MetaMarketingDataError) {
+    return `marketing_${error.code}`;
+  }
+
+  if (error instanceof MetaGraphError) {
+    return error.code ? `marketing_meta_${error.code}` : "marketing_meta_failed";
+  }
+
+  if (error instanceof Error && error.name === "TimeoutError") {
+    return "marketing_timeout";
+  }
+
+  return "marketing_sync_failed";
+}
 
 function parseDate(value: string | null): Date | null {
   if (!value) {
@@ -121,6 +205,8 @@ function highestUsage(usage: MetaUsageSnapshot): number {
     usage.appPercent ?? 0,
     usage.pagePercent ?? 0,
     usage.businessPercent ?? 0,
+    usage.adAccountPercent ?? 0,
+    usage.insightsPercent ?? 0,
   );
 }
 
@@ -133,6 +219,8 @@ function usageForStorage(usage: MetaUsageSnapshot) {
     app_percent: usage.appPercent,
     page_percent: usage.pagePercent,
     business_percent: usage.businessPercent,
+    ad_account_percent: usage.adAccountPercent ?? null,
+    insights_percent: usage.insightsPercent ?? null,
     retry_after_seconds: usage.retryAfterSeconds,
     observed_at: new Date().toISOString(),
   };
@@ -216,6 +304,7 @@ function blockedResult(
     newCount: 0,
     syncedAssetCount: 0,
     failedAssetCount: 0,
+    ...EMPTY_MARKETING_RESULT,
     nextSyncAt: null,
     retryAt,
   };
@@ -289,6 +378,7 @@ async function markReconnectRequired(
     newCount: 0,
     syncedAssetCount: 0,
     failedAssetCount: 0,
+    ...EMPTY_MARKETING_RESULT,
     nextSyncAt: null,
     retryAt: null,
   };
@@ -336,6 +426,7 @@ async function markFailed(input: {
     newCount: 0,
     syncedAssetCount: 0,
     failedAssetCount: 0,
+    ...EMPTY_MARKETING_RESULT,
     nextSyncAt: retryAt,
     retryAt,
   };
@@ -442,10 +533,19 @@ export async function syncMetaConnector(
     const instagramAssets = assets.filter(
       (asset) => asset.asset_type === "instagram_account",
     );
+    const adAccountAssets = assets.filter(
+      (asset) => asset.asset_type === "ad_account",
+    );
 
-    if (!pageAssets.length || !instagramAssets.length) {
+    if (
+      !pageAssets.length ||
+      !instagramAssets.length ||
+      adAccountAssets.length !== 1
+    ) {
       return markReconnectRequired(connector, "assets_missing");
     }
+
+    const adAccountAsset = adAccountAssets[0];
 
     const refreshedPages = await getMetaPageAssets({
       accessToken,
@@ -544,6 +644,33 @@ export async function syncMetaConnector(
       });
     }
 
+    let marketingResult: MetaMarketingSyncResult | null = null;
+    let marketingErrorCode: string | null = null;
+    const marketingStartedAt = new Date().toISOString();
+
+    try {
+      marketingResult = await syncMetaMarketingSnapshot({
+        platformAccountId: connector.id,
+        userId: connector.user_id,
+        adAccountId: adAccountAsset.meta_asset_id,
+        accessToken,
+        appSecret: env.appSecret,
+      });
+      usage = mergeMetaUsage(usage, marketingResult.usage);
+    } catch (error) {
+      if (error instanceof MetaGraphError) {
+        usage = mergeMetaUsage(usage, error.usage);
+
+        if (error.rateLimited || error.reconnectRequired) {
+          throw error;
+        }
+      } else if (error instanceof MetaCollectionLimitError) {
+        usage = mergeMetaUsage(usage, error.usage);
+      }
+
+      marketingErrorCode = classifyMarketingError(error);
+    }
+
     if (isHighUsage(usage)) {
       const rateLimitedResult = await markFailed({
         connector,
@@ -559,24 +686,35 @@ export async function syncMetaConnector(
         newCount,
         syncedAssetCount,
         failedAssetCount,
+        ...marketingFields(marketingResult, marketingErrorCode !== null),
       };
     }
 
-    const status = failedAssetCount ? "partial" : "success";
+    const status = failedAssetCount || marketingErrorCode ? "partial" : "success";
+    const syncErrorCode =
+      failedAssetCount && marketingErrorCode
+        ? "content_and_marketing_partial"
+        : failedAssetCount
+          ? "asset_partial"
+          : marketingErrorCode;
     const nextSyncAt = nextHourlyRun().toISOString();
     await updateConnector(connector.id, {
       baseline_completed_at:
-        status === "success" ? new Date().toISOString() : undefined,
+        failedAssetCount === 0 ? new Date().toISOString() : undefined,
       last_synced_at: new Date().toISOString(),
       next_sync_at: nextSyncAt,
       sync_lock_until: null,
       sync_backoff_until: null,
       sync_status: status,
-      sync_error_code: failedAssetCount ? "asset_partial" : null,
+      sync_error_code: syncErrorCode,
       sync_consecutive_failures: 0,
       last_sync_seen_count: seenCount,
       last_sync_new_count: newCount,
       sync_usage: usageForStorage(usage),
+      marketing_sync_status: marketingResult ? "success" : "error",
+      marketing_sync_error_code: marketingErrorCode,
+      marketing_last_sync_started_at: marketingStartedAt,
+      marketing_next_sync_at: nextSyncAt,
     });
 
     return {
@@ -587,6 +725,7 @@ export async function syncMetaConnector(
       newCount,
       syncedAssetCount,
       failedAssetCount,
+      ...marketingFields(marketingResult, marketingErrorCode !== null),
       nextSyncAt,
       retryAt: null,
     };

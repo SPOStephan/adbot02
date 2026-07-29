@@ -189,10 +189,12 @@ try {
   getInstagramMedia,
   getMetaPageAssets,
   mergeMetaUsage,
+  MetaCollectionLimitError,
   MetaGraphError,
 } from "./client.mjs";`)
     .replace('from "./crypto";', 'from "./crypto.mjs";')
     .replace('from "./env";', 'from "./env.mjs";')
+    .replace('from "./marketing-sync";', 'from "./marketing-sync.mjs";')
     .replace('from "../supabase/admin";', 'from "./admin.mjs";');
 
   const clientStub = `
@@ -200,6 +202,8 @@ const emptyUsage = {
   appPercent: null,
   pagePercent: null,
   businessPercent: null,
+  adAccountPercent: null,
+  insightsPercent: null,
   retryAfterSeconds: null,
 };
 
@@ -213,8 +217,18 @@ export function mergeMetaUsage(left, right) {
     appPercent: maximum(left.appPercent, right.appPercent),
     pagePercent: maximum(left.pagePercent, right.pagePercent),
     businessPercent: maximum(left.businessPercent, right.businessPercent),
+    adAccountPercent: maximum(left.adAccountPercent, right.adAccountPercent),
+    insightsPercent: maximum(left.insightsPercent, right.insightsPercent),
     retryAfterSeconds: maximum(left.retryAfterSeconds, right.retryAfterSeconds),
   };
+}
+
+export class MetaCollectionLimitError extends Error {
+  constructor(reason, usage = emptyUsage) {
+    super(\`Meta collection could not be completed: \${reason}\`);
+    this.reason = reason;
+    this.usage = usage;
+  }
 }
 
 export class MetaGraphError extends Error {
@@ -254,6 +268,21 @@ export async function getInstagramMedia(input) {
 }
 `;
 
+  const marketingStub = `
+export class MetaMarketingDataError extends Error {
+  constructor(code) {
+    super(\`Meta Marketing snapshot rejected: \${code}\`);
+    this.code = code;
+  }
+}
+
+export async function syncMetaMarketingSnapshot(input) {
+  globalThis.__metaTest.calls.push({ name: "syncMetaMarketingSnapshot", input });
+  if (globalThis.__metaTest.marketingError) throw globalThis.__metaTest.marketingError;
+  return globalThis.__metaTest.marketingResult;
+}
+`;
+
   const cryptoStub = `
 export function decryptAccessToken(value, key) {
   globalThis.__metaTest.decryptInput = { value, key };
@@ -276,6 +305,11 @@ export function createAdminClient() {
 `;
 
   await writeFile(join(temporaryDirectory, "client.mjs"), clientStub, "utf8");
+  await writeFile(
+    join(temporaryDirectory, "marketing-sync.mjs"),
+    marketingStub,
+    "utf8",
+  );
   await writeFile(join(temporaryDirectory, "crypto.mjs"), cryptoStub, "utf8");
   await writeFile(join(temporaryDirectory, "env.mjs"), envStub, "utf8");
   await writeFile(join(temporaryDirectory, "admin.mjs"), adminStub, "utf8");
@@ -295,6 +329,8 @@ export function createAdminClient() {
     appPercent: null,
     pagePercent: null,
     businessPercent: null,
+    adAccountPercent: null,
+    insightsPercent: null,
     retryAfterSeconds: null,
   };
   const facebookItem = {
@@ -338,6 +374,19 @@ export function createAdminClient() {
       },
       facebookResult: { items: [facebookItem], usage: emptyUsage },
       instagramResult: { items: [instagramItem], usage: emptyUsage },
+      marketingResult: {
+        syncId: "20000000-0000-4000-8000-000000000001",
+        campaignsCount: 2,
+        adSetsCount: 3,
+        adsCount: 4,
+        creativesCount: 4,
+        insightsCount: 37,
+        recommendationsCount: 1,
+        insightsSince: "2026-06-20",
+        insightsUntil: "2026-07-26",
+        usage: emptyUsage,
+      },
+      marketingError: null,
       ...overrides,
     };
   }
@@ -356,6 +405,9 @@ export function createAdminClient() {
   assert.equal(baselineResult.newCount, 0);
   assert.equal(baselineResult.syncedAssetCount, 2);
   assert.equal(baselineResult.failedAssetCount, 0);
+  assert.equal(baselineResult.marketingStatus, "success");
+  assert.equal(baselineResult.campaignsCount, 2);
+  assert.equal(baselineResult.insightsCount, 37);
   assert.equal(globalThis.__metaTest.decryptInput.value.ciphertext, "ciphertext");
   assert.equal(
     globalThis.__metaTest.calls.find(
@@ -379,6 +431,37 @@ export function createAdminClient() {
   );
   assert.equal(
     typeof baselineHarness.state.updates.at(-1).values.baseline_completed_at,
+    "string",
+  );
+  const marketingCall = globalThis.__metaTest.calls.find(
+    (call) => call.name === "syncMetaMarketingSnapshot",
+  );
+  assert.equal(marketingCall.input.adAccountId, "ad-account-1");
+  assert.equal(marketingCall.input.accessToken, "decrypted-user-token");
+  assert.equal(marketingCall.input.appSecret, "meta-app-secret");
+
+  const marketingPartialHarness = makeAdminHarness();
+  configureMeta(marketingPartialHarness.admin, {
+    marketingError: new Error("temporary Marketing API failure"),
+  });
+  const marketingPartialResult = await syncModule.syncMetaConnector({
+    platformAccountId: marketingPartialHarness.state.connector.id,
+    mode: "cron",
+  });
+
+  assert.equal(marketingPartialResult.status, "partial");
+  assert.equal(marketingPartialResult.marketingStatus, "error");
+  assert.equal(marketingPartialResult.campaignsCount, 0);
+  assert.equal(
+    marketingPartialHarness.state.updates.at(-1).values.sync_error_code,
+    "marketing_sync_failed",
+  );
+  assert.equal(
+    marketingPartialHarness.state.updates.at(-1).values.marketing_sync_status,
+    "error",
+  );
+  assert.equal(
+    typeof marketingPartialHarness.state.updates.at(-1).values.baseline_completed_at,
     "string",
   );
 
