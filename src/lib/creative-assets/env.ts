@@ -67,6 +67,10 @@ function parseBucket(value: string | undefined): string {
   return bucket;
 }
 
+export function getCreativeAssetStorageBucket(): string {
+  return parseBucket(process.env.CREATIVE_ASSET_STORAGE_BUCKET);
+}
+
 export function hasCreativeAssetProviderConfig(): boolean {
   return PROVIDER_ENV_NAMES.every((name) => normalized(process.env[name]));
 }
@@ -95,6 +99,6 @@ export function getCreativeAssetRuntimeConfig(): CreativeAssetRuntimeConfig {
       ),
       timeoutMs: parseTimeout(process.env.CREATIVE_ASSET_PROVIDER_TIMEOUT_MS),
     },
-    storageBucket: parseBucket(process.env.CREATIVE_ASSET_STORAGE_BUCKET),
+    storageBucket: getCreativeAssetStorageBucket(),
   };
 }

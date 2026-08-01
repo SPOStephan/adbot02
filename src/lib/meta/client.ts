@@ -972,6 +972,8 @@ export type MetaAdCreative = {
   title: string | null;
   body: string | null;
   callToActionType: string | null;
+  imageHash: string | null;
+  imageUrl: string | null;
   thumbnailUrl: string | null;
   effectiveObjectStoryId: string | null;
   effectiveInstagramMediaId: string | null;
@@ -1262,6 +1264,12 @@ function parseAdCreative(value: unknown): MetaAdCreative | null {
     title: boundedText(value.title, META_CREATIVE_TEXT_MAX_LENGTH),
     body: boundedText(value.body, META_CREATIVE_TEXT_MAX_LENGTH),
     callToActionType: enumString(value.call_to_action_type),
+    imageHash:
+      typeof value.image_hash === "string" &&
+      /^[A-Fa-f0-9]{16,128}$/.test(value.image_hash)
+        ? value.image_hash.toLowerCase()
+        : null,
+    imageUrl: safeHttpsUrl(value.image_url),
     thumbnailUrl: safeHttpsUrl(value.thumbnail_url),
     effectiveObjectStoryId: boundedText(value.effective_object_story_id, 100),
     effectiveInstagramMediaId: metaObjectId(value.effective_instagram_media_id),
@@ -1432,7 +1440,7 @@ export async function getMetaAdCreatives(input: {
     url.searchParams.set("ids", ids.join(","));
     url.searchParams.set(
       "fields",
-      "id,account_id,name,title,body,call_to_action_type,thumbnail_url,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url,object_type,status",
+      "id,account_id,name,title,body,call_to_action_type,image_hash,image_url,thumbnail_url,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url,object_type,status",
     );
     url.searchParams.set("thumbnail_width", "640");
     url.searchParams.set("thumbnail_height", "360");

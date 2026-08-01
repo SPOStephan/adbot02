@@ -87,7 +87,7 @@ try {
     readFile(vercelPath, "utf8"),
   ]);
   const sourceFiles = [
-    "types", "image", "http-provider", "env", "worker", "catalog",
+    "types", "image", "http-provider", "env", "storage", "worker", "catalog",
   ];
   for (const name of sourceFiles) {
     let source = await readFile(join(sourceRoot, `${name}.ts`), "utf8");
@@ -97,6 +97,7 @@ try {
       .replaceAll('from "./image";', 'from "./image.mjs";')
       .replaceAll('from "./http-provider";', 'from "./http-provider.mjs";')
       .replaceAll('from "./env";', 'from "./env.mjs";')
+      .replaceAll('from "./storage";', 'from "./storage.mjs";')
       .replace(
         'from "../supabase/admin";',
         'from "./admin-stub.mjs";',
@@ -109,7 +110,15 @@ try {
   }
   await writeFile(
     join(temporaryDirectory, "admin-stub.mjs"),
-    'export function createAdminClient() { throw new Error("admin stub"); }\n',
+    [
+      "let adminClient;",
+      "export function setAdminClient(value) { adminClient = value; }",
+      "export function createAdminClient() {",
+      '  if (!adminClient) throw new Error("admin stub");',
+      "  return adminClient;",
+      "}",
+      "",
+    ].join("\n"),
     "utf8",
   );
 
@@ -118,6 +127,12 @@ try {
     pathToFileURL(join(temporaryDirectory, "http-provider.mjs")).href
   );
   const types = await import(pathToFileURL(join(temporaryDirectory, "types.mjs")).href);
+  const adminStub = await import(
+    pathToFileURL(join(temporaryDirectory, "admin-stub.mjs")).href
+  );
+  const storage = await import(
+    pathToFileURL(join(temporaryDirectory, "storage.mjs")).href
+  );
   const worker = await import(pathToFileURL(join(temporaryDirectory, "worker.mjs")).href);
   const catalog = await import(
     pathToFileURL(join(temporaryDirectory, "catalog.mjs")).href
@@ -163,6 +178,62 @@ try {
       mimeType: "image/png",
     }),
     "Sonder-Motiv.png",
+  );
+
+  let bucketPublic = true;
+  let bucketUpdate;
+  let uploadedObject;
+  adminStub.setAdminClient({
+    storage: {
+      async getBucket() {
+        return { data: { public: bucketPublic }, error: null };
+      },
+      async createBucket() {
+        throw new Error("existing bucket must not be recreated");
+      },
+      async updateBucket(bucket, options) {
+        bucketUpdate = { bucket, options };
+        bucketPublic = options.public;
+        return { error: null };
+      },
+      from(bucket) {
+        return {
+          async upload(path, bytes, options) {
+            uploadedObject = { bucket, path, bytes, options };
+            return { error: null };
+          },
+        };
+      },
+    },
+  });
+  const stored = await storage.storeCreativeAssetInSupabase({
+    userId: "10000000-0000-4000-8000-000000000002",
+    platformAccountId: "10000000-0000-4000-8000-000000000003",
+    bytes: png,
+    sha256: inspected.sha256,
+    mimeType: "image/png",
+    bucket: "creative-assets",
+  });
+  assert.equal(bucketUpdate.options.public, false);
+  assert.deepEqual(bucketUpdate.options.allowedMimeTypes, ["image/png", "image/jpeg"]);
+  assert.equal(bucketPublic, false);
+  assert.equal(stored.bucket, "creative-assets");
+  assert.match(
+    stored.path,
+    /^10000000-0000-4000-8000-000000000002\/10000000-0000-4000-8000-000000000003\/[0-9a-f]{2}\/[0-9a-f]{64}\.png$/,
+  );
+  assert.equal(uploadedObject.path, stored.path);
+  assert.equal(uploadedObject.options.upsert, true);
+  await assert.rejects(
+    () => storage.storeCreativeAssetInSupabase({
+      userId: "10000000-0000-4000-8000-000000000002",
+      platformAccountId: "10000000-0000-4000-8000-000000000003",
+      bytes: png,
+      sha256: "../unsafe",
+      mimeType: "image/png",
+      bucket: "creative-assets",
+    }),
+    /storage input is invalid/,
   );
 
   const existingMetaAsset = {

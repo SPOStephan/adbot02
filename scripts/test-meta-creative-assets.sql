@@ -9,7 +9,7 @@ values
 
 insert into public.platform_accounts (
   id, user_id, platform, platform_account_id, account_name, access_token,
-  ad_account_ids, marketing_meta_ad_account_id, marketing_currency,
+  meta_scopes, ad_account_ids, marketing_meta_ad_account_id, marketing_currency,
   marketing_timezone_name, marketing_sync_status, marketing_sync_id,
   marketing_last_success_at
 ) values
@@ -17,6 +17,7 @@ insert into public.platform_accounts (
     '20000000-0000-4000-8000-000000000001',
     '10000000-0000-4000-8000-000000000001',
     'meta', 'creative-owner-meta', 'Creative Owner Meta', null,
+    array['ads_read','ads_management']::text[],
     '["act_111"]'::jsonb, '111', 'EUR', 'Europe/Berlin', 'success',
     '30000000-0000-4000-8000-000000000001', now()
   ),
@@ -24,6 +25,7 @@ insert into public.platform_accounts (
     '20000000-0000-4000-8000-000000000002',
     '10000000-0000-4000-8000-000000000002',
     'meta', 'creative-other-meta', 'Creative Other Meta', null,
+    array['ads_read','ads_management']::text[],
     '["act_222"]'::jsonb, '222', 'EUR', 'Europe/Berlin', 'success',
     '30000000-0000-4000-8000-000000000002', now()
   );
@@ -135,6 +137,139 @@ begin
       select id from creative_test_ids where key = 'other_profile'
     )) <> 'CUSTOMER_REVIEW' then
     raise exception 'Brand profile versioning or approval mode is incorrect';
+  end if;
+end;
+$$;
+
+insert into public.creatives (
+  id, user_id, platform_account_id, platform_creative_id, source,
+  name, type, content, generated_by_ai, last_seen_sync_id, is_current
+) values
+  (
+    '41000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000001',
+    '111000000001', 'meta', 'Current imported creative', 'image',
+    '{"image_url":"https://scontent.xx.fbcdn.net/current.jpg"}'::jsonb,
+    false, '30000000-0000-4000-8000-000000000001', true
+  ),
+  (
+    '41000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000001',
+    '111000000002', 'meta', 'Stale imported creative', 'image',
+    '{"image_url":"https://scontent.xx.fbcdn.net/stale.jpg"}'::jsonb,
+    false, '30000000-0000-4000-8000-000000000099', true
+  );
+
+insert into creative_test_ids (key, id)
+select 'imported_meta_asset', public.import_meta_brand_asset_from_creative(
+  p_user_id => '10000000-0000-4000-8000-000000000001',
+  p_platform_account_id => '20000000-0000-4000-8000-000000000001',
+  p_brand_profile_id => (
+    select id from creative_test_ids where key = 'owner_profile_v2'
+  ),
+  p_source_meta_asset_id => '111000000001',
+  p_source_marketing_sync_id => '30000000-0000-4000-8000-000000000001',
+  p_storage_bucket => 'creative-assets',
+  p_storage_path => '10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/aa/'
+    || public.meta_sha256('phase15-current-meta-import') || '.png',
+  p_original_filename => 'meta-creative-111000000001.png',
+  p_sha256 => public.meta_sha256('phase15-current-meta-import'),
+  p_mime_type => 'image/png',
+  p_byte_size => 2048,
+  p_width => 1200,
+  p_height => 1200,
+  p_metadata => '{"contract_version":1,"source_kind":"IMAGE_URL"}'::jsonb
+);
+
+insert into creative_test_ids (key, id)
+select 'imported_meta_asset_replay', public.import_meta_brand_asset_from_creative(
+  p_user_id => '10000000-0000-4000-8000-000000000001',
+  p_platform_account_id => '20000000-0000-4000-8000-000000000001',
+  p_brand_profile_id => (
+    select id from creative_test_ids where key = 'owner_profile_v2'
+  ),
+  p_source_meta_asset_id => '111000000001',
+  p_source_marketing_sync_id => '30000000-0000-4000-8000-000000000001',
+  p_storage_bucket => 'creative-assets',
+  p_storage_path => '10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/aa/'
+    || public.meta_sha256('phase15-current-meta-import') || '.png',
+  p_original_filename => 'meta-creative-111000000001.png',
+  p_sha256 => public.meta_sha256('phase15-current-meta-import'),
+  p_mime_type => 'image/png',
+  p_byte_size => 2048,
+  p_width => 1200,
+  p_height => 1200,
+  p_metadata => '{"contract_version":1,"source_kind":"IMAGE_URL"}'::jsonb
+);
+
+do $$
+declare
+  v_failed boolean := false;
+begin
+  if (select id from creative_test_ids where key = 'imported_meta_asset')
+      <> (select id from creative_test_ids where key = 'imported_meta_asset_replay')
+    or (select count(*) from public.brand_assets
+        where source_meta_asset_id = '111000000001') <> 1
+    or (select count(*) from public.mutation_audit_events
+        where event_type = 'BRAND_ASSET_IMPORTED_FROM_META') <> 1 then
+    raise exception 'Current Meta Creative import was not idempotent or audited';
+  end if;
+
+  begin
+    perform public.import_meta_brand_asset_from_creative(
+      p_user_id => '10000000-0000-4000-8000-000000000001',
+      p_platform_account_id => '20000000-0000-4000-8000-000000000001',
+      p_brand_profile_id => (
+        select id from creative_test_ids where key = 'owner_profile_v2'
+      ),
+      p_source_meta_asset_id => '111000000002',
+      p_source_marketing_sync_id => '30000000-0000-4000-8000-000000000001',
+      p_storage_bucket => 'creative-assets',
+      p_storage_path => '10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/bb/'
+        || public.meta_sha256('phase15-stale-meta-import') || '.png',
+      p_original_filename => 'meta-creative-111000000002.png',
+      p_sha256 => public.meta_sha256('phase15-stale-meta-import'),
+      p_mime_type => 'image/png',
+      p_byte_size => 2048,
+      p_width => 1200,
+      p_height => 1200,
+      p_metadata => '{"contract_version":1,"source_kind":"IMAGE_URL"}'::jsonb
+    );
+  exception when others then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'Stale Meta Creative import was accepted';
+  end if;
+
+  v_failed := false;
+  begin
+    perform public.import_meta_brand_asset_from_creative(
+      p_user_id => '10000000-0000-4000-8000-000000000001',
+      p_platform_account_id => '20000000-0000-4000-8000-000000000001',
+      p_brand_profile_id => (
+        select id from creative_test_ids where key = 'owner_profile_v2'
+      ),
+      p_source_meta_asset_id => '111000000001',
+      p_source_marketing_sync_id => '30000000-0000-4000-8000-000000000099',
+      p_storage_bucket => 'creative-assets',
+      p_storage_path => '10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/cc/'
+        || public.meta_sha256('phase15-raced-meta-import') || '.png',
+      p_original_filename => 'meta-creative-111000000001-raced.png',
+      p_sha256 => public.meta_sha256('phase15-raced-meta-import'),
+      p_mime_type => 'image/png',
+      p_byte_size => 2048,
+      p_width => 1200,
+      p_height => 1200,
+      p_metadata => '{"contract_version":1,"source_kind":"IMAGE_URL"}'::jsonb
+    );
+  exception when others then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'Creative import accepted a mismatched source sync identity';
   end if;
 end;
 $$;
@@ -309,8 +444,20 @@ declare
   v_failed boolean := false;
 begin
   if (select count(*) from public.brand_profiles) <> 3
-    or (select count(*) from public.creative_asset_jobs) <> 1 then
-    raise exception 'Owner cannot read own creative control rows';
+    or (select count(*) from public.creative_asset_jobs) <> 1
+    or (select count(*) from public.list_current_meta_creatives_for_import(
+          '20000000-0000-4000-8000-000000000001'
+        )) <> 1
+    or not exists (
+      select 1
+      from public.list_current_meta_creatives_for_import(
+        '20000000-0000-4000-8000-000000000001'
+      ) candidate
+      where candidate.creative_id = '111000000001'
+        and candidate.creative_name = 'Current imported creative'
+        and candidate.has_importable_image
+    ) then
+    raise exception 'Owner cannot read the current importable creative contract';
   end if;
 
   begin
@@ -329,7 +476,10 @@ set local request.jwt.claim.sub = '10000000-0000-4000-8000-000000000002';
 do $$
 begin
   if (select count(*) from public.brand_profiles) <> 1
-    or (select count(*) from public.creative_asset_jobs) <> 1 then
+    or (select count(*) from public.creative_asset_jobs) <> 1
+    or (select count(*) from public.list_current_meta_creatives_for_import(
+          '20000000-0000-4000-8000-000000000001'
+        )) <> 0 then
     raise exception 'Cross-tenant creative rows are visible';
   end if;
 end;
@@ -364,6 +514,26 @@ begin
   end if;
 
   if not has_function_privilege(
+      'authenticated',
+      'public.list_current_meta_creatives_for_import(uuid)',
+      'EXECUTE'
+    )
+    or has_function_privilege(
+      'anon',
+      'public.list_current_meta_creatives_for_import(uuid)',
+      'EXECUTE'
+    )
+    or has_function_privilege(
+      'service_role',
+      'public.list_current_meta_creatives_for_import(uuid)',
+      'EXECUTE'
+    )
+    or has_function_privilege(
+      'authenticated',
+      'public.import_meta_brand_asset_from_creative(uuid,uuid,uuid,text,uuid,text,text,text,text,text,bigint,integer,integer,text,jsonb)',
+      'EXECUTE'
+    )
+    or not has_function_privilege(
       'service_role',
       'public.claim_creative_asset_job(text,integer)',
       'EXECUTE'
@@ -373,7 +543,7 @@ begin
       'public.meta_jsonb_has_sensitive_key(jsonb)',
       'EXECUTE'
     ) then
-    raise exception 'Creative service-role grants are incorrect';
+    raise exception 'Creative read or service-role grants are incorrect';
   end if;
 end;
 $$;

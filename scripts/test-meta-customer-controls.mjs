@@ -19,9 +19,13 @@ const inputModuleUrl = `data:text/javascript;base64,${Buffer.from(
 ).toString("base64")}`;
 const {
   CustomerControlInputError,
+  parseAssetImportCommand,
+  parseBlueprintCommand,
   parseBrandCommand,
+  parseDomainCommand,
   parseEuroAmountToMinor,
   parseKillSwitchCommand,
+  parseLaunchCommand,
   parsePolicyCommand,
 } = await import(inputModuleUrl);
 
@@ -148,23 +152,216 @@ expectInputError(
   "invalid_approval_mode",
 );
 
+const domainDraft = parseDomainCommand({
+  action: "register",
+  hostname: "WWW.Example.DE.",
+  registrableDomain: "example.de",
+  verificationMethod: "CUSTOMER_CONFIRMATION",
+});
+assert.deepEqual(domainDraft, {
+  action: "register",
+  hostname: "www.example.de",
+  registrableDomain: "example.de",
+  verificationMethod: "CUSTOMER_CONFIRMATION",
+  verificationEvidence: {
+    contractVersion: 1,
+    confirmation: "customer_entered_domain",
+  },
+});
+assert.deepEqual(
+  parseDomainCommand({
+    action: "confirm",
+    domainId: "11111111-1111-4111-8111-111111111111",
+  }),
+  {
+    action: "confirm",
+    domainId: "11111111-1111-4111-8111-111111111111",
+  },
+);
+expectInputError(
+  () =>
+    parseDomainCommand({
+      action: "register",
+      hostname: "www.example.de",
+      registrableDomain: "other.de",
+      verificationMethod: "CUSTOMER_CONFIRMATION",
+    }),
+  "domain_scope_mismatch",
+);
+expectInputError(
+  () =>
+    parseDomainCommand({
+      action: "confirm",
+      domainId: "11111111-1111-4111-8111-111111111111",
+      platformAccountId: "22222222-2222-4222-8222-222222222222",
+    }),
+  "unknown_field",
+);
+
+const blueprintPayload = {
+  campaign: { special_ad_categories: [] },
+  ad_set: {
+    billing_event: "IMPRESSIONS",
+    optimization_goal: "LINK_CLICKS",
+    targeting: { geo_locations: { countries: ["DE"] } },
+  },
+  creative: { object_story_spec: { link_data: { message: "Mehr erfahren" } } },
+  ad: {},
+};
+assert.deepEqual(
+  parseBlueprintCommand({
+    action: "save",
+    objective: "OUTCOME_TRAFFIC",
+    name: "Traffic Blueprint",
+    payloadTemplate: blueprintPayload,
+    requiredInputs: ["destination_url"],
+  }),
+  {
+    action: "save",
+    objective: "OUTCOME_TRAFFIC",
+    name: "Traffic Blueprint",
+    payloadTemplate: blueprintPayload,
+    requiredInputs: ["destination_url"],
+  },
+);
+assert.deepEqual(
+  parseBlueprintCommand({
+    action: "activate",
+    blueprintId: "22222222-2222-4222-8222-222222222222",
+  }),
+  {
+    action: "activate",
+    blueprintId: "22222222-2222-4222-8222-222222222222",
+  },
+);
+expectInputError(
+  () =>
+    parseBlueprintCommand({
+      action: "save",
+      objective: "OUTCOME_TRAFFIC",
+      name: "Unsafe",
+      payloadTemplate: {
+        ...blueprintPayload,
+        creative: { access_token: "never" },
+      },
+      requiredInputs: ["destination_url"],
+    }),
+  "secret_field_forbidden",
+);
+
+assert.deepEqual(
+  parseAssetImportCommand({
+    brandProfileId: "33333333-3333-4333-8333-333333333333",
+    sourceCreativeId: "120000000000001",
+  }),
+  {
+    brandProfileId: "33333333-3333-4333-8333-333333333333",
+    sourceCreativeId: "120000000000001",
+  },
+);
+expectInputError(
+  () =>
+    parseAssetImportCommand({
+      brandProfileId: "33333333-3333-4333-8333-333333333333",
+      sourceCreativeId: "https://example.test/image.jpg",
+    }),
+  "invalid_meta_creative_id",
+);
+expectInputError(
+  () =>
+    parseAssetImportCommand({
+      brandProfileId: "33333333-3333-4333-8333-333333333333",
+      sourceCreativeId: "120000000000001",
+      imageUrl: "https://scontent.example.test/forbidden.jpg",
+    }),
+  "unknown_field",
+);
+
+assert.deepEqual(
+  parseLaunchCommand({
+    blueprintId: "22222222-2222-4222-8222-222222222222",
+    brandProfileId: "33333333-3333-4333-8333-333333333333",
+    brandAssetId: "44444444-4444-4444-8444-444444444444",
+    allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    budgetOwnerType: "AD_SET",
+    dailyBudget: "20,50",
+    destinationUrl: "https://www.example.de/angebot",
+    campaignName: "Sommer",
+  }),
+  {
+    blueprintId: "22222222-2222-4222-8222-222222222222",
+    brandProfileId: "33333333-3333-4333-8333-333333333333",
+    brandAssetId: "44444444-4444-4444-8444-444444444444",
+    allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    budgetOwnerType: "AD_SET",
+    dailyBudgetMinor: "2050",
+    launchInputs: {
+      destination_url: "https://www.example.de/angebot",
+      campaign_name: "Sommer",
+      ad_set_name: undefined,
+      creative_name: undefined,
+      ad_name: undefined,
+    },
+  },
+);
+expectInputError(
+  () =>
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandProfileId: "33333333-3333-4333-8333-333333333333",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      budgetOwnerType: "AD_SET",
+      dailyBudget: "20",
+      destinationUrl: "http://www.example.de/angebot",
+    }),
+  "invalid_destination_url",
+);
+expectInputError(
+  () =>
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandProfileId: "33333333-3333-4333-8333-333333333333",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      budgetOwnerType: "AD_SET",
+      dailyBudget: "20",
+      destinationUrl: "https://www.example.de/angebot",
+      readLeaseToken: "55555555-5555-4555-8555-555555555555",
+    }),
+  "unknown_field",
+);
+
 const [
   componentSource,
+  onboardingSource,
   pageSource,
   serviceSource,
   routeHelperSource,
   policyRouteSource,
   brandRouteSource,
   killRouteSource,
+  domainRouteSource,
+  blueprintRouteSource,
+  assetImportRouteSource,
+  launchRouteSource,
   migrationSource,
+  onboardingMigrationSource,
+  metaImportSource,
+  storageSource,
 ] = await Promise.all([
   readFile(path.join(root, "src/components/AutomationControlCenter.tsx"), "utf8"),
+  readFile(path.join(root, "src/components/AutomationOnboardingControls.tsx"), "utf8"),
   readFile(path.join(root, "src/app/dashboard/page.tsx"), "utf8"),
   readFile(path.join(root, "src/lib/meta/customer-control-service.ts"), "utf8"),
   readFile(path.join(root, "src/lib/meta/customer-control-route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/policy/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/brand/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/kill-switch/route.ts"), "utf8"),
+  readFile(path.join(root, "src/app/api/meta/automation/domain/route.ts"), "utf8"),
+  readFile(path.join(root, "src/app/api/meta/automation/blueprint/route.ts"), "utf8"),
+  readFile(path.join(root, "src/app/api/meta/automation/asset-import/route.ts"), "utf8"),
+  readFile(path.join(root, "src/app/api/meta/automation/launch/route.ts"), "utf8"),
   readFile(
     path.join(
       root,
@@ -172,6 +369,15 @@ const [
     ),
     "utf8",
   ),
+  readFile(
+    path.join(
+      root,
+      "supabase/migrations/20260729250000_meta_customer_onboarding.sql",
+    ),
+    "utf8",
+  ),
+  readFile(path.join(root, "src/lib/creative-assets/meta-import.ts"), "utf8"),
+  readFile(path.join(root, "src/lib/creative-assets/storage.ts"), "utf8"),
 ]);
 
 assert.match(serviceSource, /import "server-only";/);
@@ -187,10 +393,27 @@ assert.match(routeHelperSource, /private, no-store/);
 assert.match(policyRouteSource, /parsePolicyCommand/);
 assert.match(brandRouteSource, /parseBrandCommand/);
 assert.match(killRouteSource, /parseKillSwitchCommand/);
+assert.match(domainRouteSource, /parseDomainCommand/);
+assert.match(domainRouteSource, /applyCustomerDomainCommand/);
+assert.match(blueprintRouteSource, /parseBlueprintCommand/);
+assert.match(blueprintRouteSource, /applyCustomerBlueprintCommand/);
+assert.match(assetImportRouteSource, /parseAssetImportCommand/);
+assert.match(assetImportRouteSource, /importCustomerBrandAsset/);
+assert.match(launchRouteSource, /parseLaunchCommand/);
+assert.match(launchRouteSource, /materializeCustomerLaunch/);
 assert.match(pageSource, /AutomationControlCenter/);
 assert.match(pageSource, /meta_scopes\.includes\("ads_management"\)/);
 assert.match(pageSource, /writeScopeGranted/);
 assert.match(pageSource, /\.eq\("is_current", true\)/);
+assert.match(pageSource, /daily_budget_exposure_snapshots/);
+assert.match(pageSource, /source_marketing_sync_id/);
+assert.match(pageSource, /\.eq\("user_id", user\.id\)/);
+assert.match(pageSource, /\.eq\("platform_account_id", metaAccount\.id\)/);
+assert.match(pageSource, /list_current_meta_creatives_for_import/);
+assert.doesNotMatch(
+  pageSource,
+  /\.from\("creatives"\)[\s\S]{0,200}\.select\([^)]*content/,
+);
 assert.match(componentSource, /\/api\/meta\/automation\/policy/);
 assert.match(componentSource, /\/api\/meta\/automation\/brand/);
 assert.match(componentSource, /\/api\/meta\/automation\/kill-switch/);
@@ -199,10 +422,39 @@ assert.match(componentSource, /12 h Cooldown/);
 assert.match(componentSource, /Minimaler Meta-Schreibscope fehlt/);
 assert.match(componentSource, /Meta sicher neu verbinden/);
 assert.match(componentSource, /mode === "ALLOW" && !readiness\.writeScopeGranted/);
+assert.match(onboardingSource, /\/api\/meta\/automation\/domain/);
+assert.match(onboardingSource, /\/api\/meta\/automation\/blueprint/);
+assert.match(onboardingSource, /\/api\/meta\/automation\/asset-import/);
+assert.match(onboardingSource, /\/api\/meta\/automation\/launch/);
+assert.match(onboardingSource, /Kill-Switch ALLOW/);
+assert.match(onboardingSource, /Aktueller Exposure-Snapshot/);
+assert.match(onboardingSource, /Ich autorisiere diesen Active Launch ausdrücklich/);
+assert.match(onboardingSource, /Plan bestätigt/);
 assert.doesNotMatch(
   componentSource,
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token/i,
 );
+assert.doesNotMatch(
+  onboardingSource,
+  /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease/i,
+);
+assert.match(serviceSource, /requireWriteReadyCustomer/);
+assert.match(serviceSource, /claimMetaReadOperation/);
+assert.match(serviceSource, /releaseMetaAccountOperation/);
+assert.match(serviceSource, /\.eq\("platform_creative_id", command\.sourceCreativeId\)/);
+assert.match(serviceSource, /\.eq\("source", "meta"\)/);
+assert.match(serviceSource, /\.eq\("last_seen_sync_id", customer\.marketingSyncId\)/);
+assert.match(serviceSource, /p_source_marketing_sync_id: customer\.marketingSyncId/);
+assert.match(serviceSource, /fresh_marketing_sync_required/);
+assert.match(serviceSource, /importMetaCreativeImage/);
+assert.doesNotMatch(serviceSource, /p_read_lease_token:\s*command/i);
+assert.match(metaImportSource, /META_CDN_SUFFIXES/);
+assert.match(metaImportSource, /redirect: "manual"/);
+assert.match(metaImportSource, /MAX_CREATIVE_IMAGE_BYTES/);
+assert.match(metaImportSource, /inspectCreativeImage/);
+assert.match(storageSource, /public: false/);
+assert.match(storageSource, /input\.userId/);
+assert.match(storageSource, /input\.platformAccountId/);
 assert.match(migrationSource, /budget_change_limit_bps[\s\S]*2000/);
 assert.match(migrationSource, /cooldown_seconds[\s\S]*43200/);
 assert.match(migrationSource, /marketing_currency = 'EUR'/);
@@ -225,6 +477,63 @@ assert.match(
 assert.doesNotMatch(
   migrationSource,
   /grant execute on function public\.(put_meta_customer_policy_version|set_meta_customer_kill_switch)[\s\S]*to authenticated/,
+);
+assert.match(onboardingMigrationSource, /register_meta_allowed_domain/);
+assert.match(onboardingMigrationSource, /confirm_meta_allowed_domain/);
+assert.match(onboardingMigrationSource, /put_meta_objective_blueprint/);
+assert.match(onboardingMigrationSource, /activate_meta_objective_blueprint/);
+assert.match(onboardingMigrationSource, /import_meta_brand_asset_from_creative/);
+assert.match(onboardingMigrationSource, /list_current_meta_creatives_for_import/);
+assert.match(onboardingMigrationSource, /materialize_meta_customer_launch_plan/);
+assert.match(
+  onboardingMigrationSource,
+  /pa\.marketing_sync_id = p_source_marketing_sync_id/,
+);
+assert.match(
+  onboardingMigrationSource,
+  /creative\.source = 'meta'[\s\S]*creative\.is_current[\s\S]*creative\.last_seen_sync_id = p_source_marketing_sync_id/,
+);
+assert.match(
+  onboardingMigrationSource,
+  /v_user_id uuid := auth\.uid\(\)[\s\S]*list_current_meta_creatives_for_import|list_current_meta_creatives_for_import[\s\S]*v_user_id uuid := auth\.uid\(\)/,
+);
+assert.match(
+  onboardingMigrationSource,
+  /marketing_currency = 'EUR'[\s\S]*'ads_management' = any\(pa\.meta_scopes\)/,
+);
+assert.match(
+  onboardingMigrationSource,
+  /source_marketing_sync_id = v_account\.marketing_sync_id/,
+);
+assert.match(
+  onboardingMigrationSource,
+  /v_destination_host is null or v_destination_host <> v_domain\.hostname/,
+);
+assert.match(
+  onboardingMigrationSource,
+  /public\.materialize_meta_launch_chain_plan/,
+);
+assert.match(onboardingMigrationSource, /CUSTOMER_LAUNCH_AUTHORIZED/);
+assert.match(onboardingMigrationSource, /BRAND_ASSET_IMPORTED_FROM_META/);
+assert.match(
+  onboardingMigrationSource,
+  /revoke all on function public\.materialize_meta_customer_launch_plan[\s\S]*from public, anon, authenticated/,
+);
+assert.match(
+  onboardingMigrationSource,
+  /grant execute on function public\.list_current_meta_creatives_for_import[\s\S]*to authenticated/,
+);
+assert.match(
+  onboardingMigrationSource,
+  /grant execute on function public\.materialize_meta_customer_launch_plan[\s\S]*to service_role/,
+);
+assert.doesNotMatch(
+  onboardingMigrationSource,
+  /grant execute on function public\.list_current_meta_creatives_for_import[\s\S]{0,80}to (?:anon|service_role)/,
+);
+assert.doesNotMatch(
+  onboardingMigrationSource,
+  /grant execute on function public\.(register_meta_allowed_domain|confirm_meta_allowed_domain|put_meta_objective_blueprint|activate_meta_objective_blueprint|import_meta_brand_asset_from_creative|materialize_meta_customer_launch_plan)\([^;]*\)\s*to authenticated;/,
 );
 
 console.log("Meta customer control validation, API boundary and dashboard checks passed");

@@ -235,6 +235,8 @@ function serializeCreatives(items: MetaAdCreative[]) {
     title: item.title,
     body: item.body,
     call_to_action_type: item.callToActionType,
+    image_hash: item.imageHash,
+    image_url: item.imageUrl,
     thumbnail_url: item.thumbnailUrl,
     effective_object_story_id: item.effectiveObjectStoryId,
     effective_instagram_media_id: item.effectiveInstagramMediaId,

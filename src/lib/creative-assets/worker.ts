@@ -14,12 +14,14 @@ import {
 } from "./types";
 import { getCreativeAssetRuntimeConfig } from "./env";
 import { createAdminClient } from "../supabase/admin";
+import {
+  storeCreativeAssetInSupabase,
+  type StoredCreativeAsset,
+} from "./storage";
 
 const CREATIVE_ASSET_LEASE_SECONDS = 180;
 const DEFAULT_BACKOFF_SECONDS = 5 * 60;
 const MAX_BACKOFF_SECONDS = 6 * 60 * 60;
-
-export const CREATIVE_ASSET_STORAGE_CACHE_CONTROL = "31536000";
 
 export type CreativeAssetWorkerResult = {
   outcome: "idle" | "completed" | "failed";
@@ -31,11 +33,6 @@ export type CreativeAssetWorkerResult = {
     | "FAILED"
     | "AMBIGUOUS";
   assetId: string | null;
-};
-
-export type StoredCreativeAsset = {
-  bucket: string;
-  path: string;
 };
 
 export type CreativeAssetCompletion = {
@@ -267,57 +264,6 @@ async function markDispatchedInSupabase(job: CreativeAssetJob): Promise<void> {
   }
 }
 
-async function ensurePrivateBucket(bucket: string): Promise<void> {
-  const admin = createAdminClient();
-  const { data, error } = await admin.storage.getBucket(bucket);
-  if (!error && data) {
-    if (data.public) {
-      throw new Error("Creative asset storage bucket must be private");
-    }
-    return;
-  }
-
-  const { error: createError } = await admin.storage.createBucket(bucket, {
-    public: false,
-    fileSizeLimit: 10 * 1024 * 1024,
-    allowedMimeTypes: ["image/png", "image/jpeg"],
-  });
-  if (createError && !/already exists|duplicate/i.test(createError.message)) {
-    throw new Error("Creative asset storage bucket provisioning failed");
-  }
-}
-
-async function storeInSupabase(input: {
-  job: CreativeAssetJob;
-  bytes: Uint8Array;
-  sha256: string;
-  mimeType: "image/png" | "image/jpeg";
-  bucket: string;
-}): Promise<StoredCreativeAsset> {
-  await ensurePrivateBucket(input.bucket);
-  const extension = input.mimeType === "image/png" ? "png" : "jpg";
-  const path = [
-    input.job.userId,
-    input.job.platformAccountId,
-    input.sha256.slice(0, 2),
-    `${input.sha256}.${extension}`,
-  ].join("/");
-  const admin = createAdminClient();
-  const { error } = await admin.storage.from(input.bucket).upload(
-    path,
-    input.bytes,
-    {
-      contentType: input.mimeType,
-      cacheControl: CREATIVE_ASSET_STORAGE_CACHE_CONTROL,
-      upsert: true,
-    },
-  );
-  if (error) {
-    throw new Error("Creative asset storage upload failed");
-  }
-  return { bucket: input.bucket, path };
-}
-
 async function completeInSupabase(
   input: CreativeAssetCompletion,
 ): Promise<string> {
@@ -375,7 +321,15 @@ export function createCreativeAssetWorkerDependencies(): CreativeAssetWorkerDepe
     providers: new Map([[provider.key, provider]]),
     claim: claimFromSupabase,
     markDispatched: markDispatchedInSupabase,
-    store: (input) => storeInSupabase({ ...input, bucket: runtime.storageBucket }),
+    store: (input) =>
+      storeCreativeAssetInSupabase({
+        userId: input.job.userId,
+        platformAccountId: input.job.platformAccountId,
+        bytes: input.bytes,
+        sha256: input.sha256,
+        mimeType: input.mimeType,
+        bucket: runtime.storageBucket,
+      }),
     complete: completeInSupabase,
     fail: failInSupabase,
   };

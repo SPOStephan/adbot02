@@ -227,25 +227,55 @@ try {
         title: "Headline",
         body: "Primary text",
         call_to_action_type: "LEARN_MORE",
+        image_hash: "ABCDEF0123456789ABCDEF0123456789",
+        image_url: "https://scontent-fra5-1.xx.fbcdn.net/creative.jpg",
         thumbnail_url: "https://cdn.example.test/creative.jpg",
         effective_object_story_id: "123_456",
         instagram_permalink_url: "javascript:alert(1)",
         object_type: "SHARE",
         status: "ACTIVE",
       },
+      "1000": {
+        id: "1000",
+        account_id: "123456789",
+        name: "Unsafe Creative",
+        image_hash: "not-a-hash",
+        image_url: "javascript:alert(1)",
+        thumbnail_url: "https://cdn.example.test/fallback.jpg",
+        status: "ACTIVE",
+      },
     });
   };
 
   const creativesResult = await client.getMetaAdCreatives({
-    creativeIds: ["999", "999", "invalid"],
+    creativeIds: ["999", "1000", "999", "invalid"],
     accessToken: "read-only-token",
     appSecret: "test-secret",
   });
-  assert.equal(creativesResult.items.length, 1);
-  assert.equal(creativesResult.items[0].thumbnailUrl, "https://cdn.example.test/creative.jpg");
-  assert.equal(creativesResult.items[0].instagramPermalinkUrl, null);
+  assert.equal(creativesResult.items.length, 2);
+  const creative999 = creativesResult.items.find((item) => item.id === "999");
+  const creative1000 = creativesResult.items.find((item) => item.id === "1000");
+  assert.ok(creative999);
+  assert.ok(creative1000);
+  assert.equal(creative999.thumbnailUrl, "https://cdn.example.test/creative.jpg");
+  assert.equal(
+    creative999.imageHash,
+    "abcdef0123456789abcdef0123456789",
+  );
+  assert.equal(
+    creative999.imageUrl,
+    "https://scontent-fra5-1.xx.fbcdn.net/creative.jpg",
+  );
+  assert.equal(creative999.instagramPermalinkUrl, null);
+  assert.equal(creative1000.imageHash, null);
+  assert.equal(creative1000.imageUrl, null);
   assert.equal(requests[0].url.pathname, "/v25.0/");
-  assert.equal(requests[0].url.searchParams.get("ids"), "999");
+  assert.deepEqual(
+    new Set(requests[0].url.searchParams.get("ids")?.split(",")),
+    new Set(["999", "1000"]),
+  );
+  assert.match(requests[0].url.searchParams.get("fields"), /image_hash/);
+  assert.match(requests[0].url.searchParams.get("fields"), /image_url/);
   assert.equal(requests[0].url.searchParams.get("thumbnail_width"), "640");
   assert.equal(requests[0].init.method, "GET");
 

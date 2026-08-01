@@ -999,6 +999,27 @@ begin
 
   v_failed := false;
   begin
+    perform public.materialize_meta_customer_launch_plan(
+      '12000000-0000-4000-8000-000000000001',
+      '22000000-0000-4000-8000-000000000001',
+      v_lease,
+      '92000000-0000-4000-8000-000000000001',
+      '94000000-0000-4000-8000-000000000001',
+      '93000000-0000-4000-8000-000000000001',
+      '91000000-0000-4000-8000-000000000001',
+      'AD_SET', 3000,
+      '{"destination_url":"https://sibling.example.test/path"}'::jsonb,
+      now()
+    );
+  exception when others then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'Customer launch accepted a non-confirmed sibling hostname';
+  end if;
+
+  v_failed := false;
+  begin
     perform public.materialize_meta_launch_chain_plan(
       '22000000-0000-4000-8000-000000000001',
       '12000000-0000-4000-8000-000000000001',

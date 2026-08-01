@@ -19,6 +19,10 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import {
+  AutomationOnboardingControls,
+  type AutomationOnboardingData,
+} from "@/components/AutomationOnboardingControls";
 
 export type AutomationPolicyView = {
   id: string;
@@ -68,6 +72,7 @@ type AutomationControlCenterProps = {
   brandProfile: BrandProfileView | null;
   killSwitch: KillSwitchView;
   auditEvents: AutomationAuditView[];
+  onboarding: AutomationOnboardingData;
   readiness: {
     writeScopeGranted: boolean;
     verifiedDomains: number;
@@ -120,6 +125,12 @@ const EVENT_LABELS: Record<string, string> = {
   MUTATION_EXECUTION_CLAIMED: "Ausführung gestartet",
   MUTATION_REMOTE_STEP_COMPLETED: "Meta-Schritt bestätigt",
   MUTATION_PLAN_RECONCILED: "Änderung mit Meta abgeglichen",
+  ALLOWED_DOMAIN_REGISTERED: "Ziel-Domain registriert",
+  ALLOWED_DOMAIN_CONFIRMED: "Ziel-Domain ausdrücklich bestätigt",
+  OBJECTIVE_BLUEPRINT_DRAFTED: "Objective-Blueprint versioniert",
+  OBJECTIVE_BLUEPRINT_ACTIVATED: "Objective-Blueprint aktiviert",
+  BRAND_ASSET_IMPORTED_FROM_META: "Vorhandenes Meta-Creative importiert",
+  CUSTOMER_LAUNCH_AUTHORIZED: "Active Launch kundenseitig autorisiert",
   LAUNCH_CHAIN_MATERIALIZED: "Active-Launch-Kette materialisiert",
   LAUNCH_CHAIN_RECONCILED: "Active-Launch vollständig bestätigt",
 };
@@ -222,6 +233,7 @@ export function AutomationControlCenter({
   brandProfile,
   currency,
   killSwitch,
+  onboarding,
   policy,
   readiness,
 }: AutomationControlCenterProps) {
@@ -790,6 +802,19 @@ export function AutomationControlCenter({
             </div>
           </form>
         </div>
+
+        <AutomationOnboardingControls
+          brandProfileId={brandProfile?.id ?? null}
+          currency={currency}
+          data={onboarding}
+          killSwitchMode={killSwitch?.mode ?? "FREEZE_WRITES"}
+          policyLaunchReady={Boolean(
+            policy?.status === "ACTIVE" &&
+              policy.allowNewLaunches &&
+              policy.allowStatusChanges,
+          )}
+          writeScopeGranted={readiness.writeScopeGranted}
+        />
 
         <div className="grid border-t border-slate-200 xl:grid-cols-[0.9fr_1.1fr] xl:divide-x xl:divide-slate-200">
           <form className="bg-slate-50 p-5 sm:p-7" onSubmit={submitKillSwitch}>

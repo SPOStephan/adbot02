@@ -37,6 +37,14 @@ import {
   type BrandProfileView,
   type KillSwitchView,
 } from "@/components/AutomationControlCenter";
+import type {
+  AllowedDomainView,
+  AutomationOnboardingData,
+  ObjectiveBlueprintView,
+  ReadyBrandAssetView,
+  RecentLaunchPlanView,
+  SyncedCreativeView,
+} from "@/components/AutomationOnboardingControls";
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
@@ -286,7 +294,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const { data: connectedAccounts } = await supabase
     .from("platform_accounts")
     .select(
-      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until",
+      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until",
     )
     .eq("user_id", user.id);
 
@@ -445,9 +453,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: activeBrandProfile },
     { data: latestKillSwitch },
     { data: controlAuditEvents },
-    { count: verifiedDomainCount },
-    { count: activeBlueprintCount },
-    { count: readyBrandAssetCount },
+    { data: customerDomains },
+    { data: customerBlueprints },
+    { data: readyBrandAssets },
+    { data: syncedCreatives },
+    { data: recentLaunchPlans },
+    { data: recentExposureSnapshots },
   ] = metaConnected && metaAccount
     ? await Promise.all([
         supabase
@@ -485,35 +496,70 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .order("event_sequence", { ascending: false })
-          .limit(12),
+          .limit(20),
         supabase
           .from("allowed_domains")
-          .select("id", { count: "exact", head: true })
+          .select(
+            "id,hostname,registrable_domain,status,customer_confirmed_at",
+          )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
-          .eq("status", "VERIFIED"),
+          .in("status", ["PENDING", "VERIFIED"])
+          .is("revoked_at", null)
+          .order("created_at", { ascending: false })
+          .limit(20),
         supabase
           .from("objective_blueprints")
-          .select("id", { count: "exact", head: true })
+          .select("id,objective,name,version,status,activated_at")
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
-          .eq("status", "ACTIVE"),
+          .in("status", ["DRAFT", "ACTIVE"])
+          .order("version", { ascending: false })
+          .limit(20),
         supabase
           .from("brand_assets")
-          .select("id", { count: "exact", head: true })
+          .select(
+            "id,original_filename,source_meta_asset_id,width,height,meta_image_hash",
+          )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .eq("status", "READY")
-          .eq("moderation_status", "APPROVED"),
+          .eq("moderation_status", "APPROVED")
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase.rpc("list_current_meta_creatives_for_import", {
+          p_platform_account_id: metaAccount.id,
+        }),
+        supabase
+          .from("mutation_plans")
+          .select("id,status,created_at")
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("action_type", "LAUNCH_CHAIN")
+          .order("created_at", { ascending: false })
+          .limit(5),
+        supabase
+          .from("daily_budget_exposure_snapshots")
+          .select(
+            "policy_id,source_marketing_sync_id,status,currency,completed_at",
+          )
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("status", "COMPLETE")
+          .order("completed_at", { ascending: false })
+          .limit(20),
       ])
     : [
         { data: null },
         { data: null },
         { data: null },
         { data: [] },
-        { count: 0 },
-        { count: 0 },
-        { count: 0 },
+        { data: [] },
+        { data: [] },
+        { data: [] },
+        { data: [] },
+        { data: [] },
+        { data: [] },
       ];
   const policyView: AutomationPolicyView | null = currentPolicy
     ? {
@@ -583,6 +629,102 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     errorClass: event.error_class ? String(event.error_class) : null,
     occurredAt: String(event.occurred_at),
   }));
+  const domainViews: AllowedDomainView[] = (customerDomains ?? []).flatMap(
+    (domain) => {
+      const status = String(domain.status);
+      if (status !== "PENDING" && status !== "VERIFIED") return [];
+      return [
+        {
+          id: String(domain.id),
+          hostname: String(domain.hostname),
+          registrableDomain: String(domain.registrable_domain),
+          status,
+          customerConfirmedAt: domain.customer_confirmed_at
+            ? String(domain.customer_confirmed_at)
+            : null,
+        },
+      ];
+    },
+  );
+  const blueprintViews: ObjectiveBlueprintView[] = (
+    customerBlueprints ?? []
+  ).flatMap((blueprint) => {
+    const status = String(blueprint.status);
+    if (status !== "DRAFT" && status !== "ACTIVE" && status !== "RETIRED") {
+      return [];
+    }
+    return [
+      {
+        id: String(blueprint.id),
+        objective: String(blueprint.objective),
+        name: String(blueprint.name),
+        version: toFiniteNumber(blueprint.version) ?? 1,
+        status,
+        activatedAt: blueprint.activated_at
+          ? String(blueprint.activated_at)
+          : null,
+      },
+    ];
+  });
+  const brandAssetViews: ReadyBrandAssetView[] = (readyBrandAssets ?? []).map(
+    (asset) => ({
+      id: String(asset.id),
+      originalFilename: String(asset.original_filename),
+      sourceMetaAssetId: asset.source_meta_asset_id
+        ? String(asset.source_meta_asset_id)
+        : null,
+      width: toFiniteNumber(asset.width),
+      height: toFiniteNumber(asset.height),
+      metaImageHashPresent:
+        typeof asset.meta_image_hash === "string" &&
+        asset.meta_image_hash.length > 0,
+    }),
+  );
+  const syncedCreativeViews: SyncedCreativeView[] = (syncedCreatives ?? []).map(
+    (creative: {
+      creative_id: unknown;
+      creative_name: unknown;
+      has_importable_image: unknown;
+    }) => ({
+      id: String(creative.creative_id),
+      name:
+        typeof creative.creative_name === "string" && creative.creative_name.trim()
+          ? creative.creative_name
+          : "Meta-Creative",
+      hasImportableImage: creative.has_importable_image === true,
+    }),
+  );
+  const recentLaunchPlanViews: RecentLaunchPlanView[] = (
+    recentLaunchPlans ?? []
+  ).map((plan) => ({
+    id: String(plan.id),
+    status: String(plan.status),
+    createdAt: String(plan.created_at),
+  }));
+  const currentMarketingSyncAt = Date.parse(
+    String(metaAccount?.marketing_last_success_at ?? ""),
+  );
+  const snapshotReady = (recentExposureSnapshots ?? []).some((snapshot) => {
+    const completedAt = Date.parse(String(snapshot.completed_at ?? ""));
+    return (
+      String(snapshot.policy_id) === String(currentPolicy?.id ?? "") &&
+      String(snapshot.source_marketing_sync_id) ===
+        String(metaAccount?.marketing_sync_id ?? "") &&
+      snapshot.status === "COMPLETE" &&
+      snapshot.currency === "EUR" &&
+      Number.isFinite(completedAt) &&
+      Number.isFinite(currentMarketingSyncAt) &&
+      completedAt >= currentMarketingSyncAt
+    );
+  });
+  const onboardingData: AutomationOnboardingData = {
+    domains: domainViews,
+    blueprints: blueprintViews,
+    brandAssets: brandAssetViews,
+    syncedCreatives: syncedCreativeViews,
+    recentLaunchPlans: recentLaunchPlanViews,
+    snapshotReady,
+  };
   const marketingCurrency = metaAccount?.marketing_currency ?? "EUR";
   const performanceRows = (campaignPerformance ?? []) as Record<string, unknown>[];
   const dailyRows = ((dailyPerformance ?? []) as Record<string, unknown>[]).reverse();
@@ -868,12 +1010,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               brandProfile={brandProfileView}
               currency={marketingCurrency}
               killSwitch={killSwitchView}
+              onboarding={onboardingData}
               policy={policyView}
               readiness={{
                 writeScopeGranted,
-                verifiedDomains: verifiedDomainCount ?? 0,
-                activeBlueprints: activeBlueprintCount ?? 0,
-                readyBrandAssets: readyBrandAssetCount ?? 0,
+                verifiedDomains: domainViews.filter(
+                  (domain) => domain.status === "VERIFIED",
+                ).length,
+                activeBlueprints: blueprintViews.filter(
+                  (blueprint) => blueprint.status === "ACTIVE",
+                ).length,
+                readyBrandAssets: brandAssetViews.length,
               }}
             />
           ) : null}

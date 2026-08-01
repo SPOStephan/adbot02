@@ -276,3 +276,458 @@ export function parseBrandCommand(value: unknown): BrandCommand {
       body.generatedAssetApprovalMode as GeneratedAssetApprovalMode,
   };
 }
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const META_OBJECT_ID_PATTERN = /^[0-9]{1,64}$/;
+const META_IMAGE_HASH_PATTERN = /^[0-9a-f]{16,128}$/i;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const MIME_TYPES = ["image/png", "image/jpeg"] as const;
+
+function requiredUuid(value: unknown, field: string): string {
+  const normalized = requiredText(value, field, 36, 36);
+  if (!UUID_PATTERN.test(normalized)) {
+    inputError("invalid_uuid", `${field} ist ungültig.`);
+  }
+  return normalized.toLowerCase();
+}
+
+function requiredEnum<const T extends readonly string[]>(
+  value: unknown,
+  field: string,
+  allowed: T,
+): T[number] {
+  if (typeof value !== "string" || !allowed.includes(value as T[number])) {
+    inputError("invalid_option", `${field} ist ungültig.`);
+  }
+  return value as T[number];
+}
+
+function assertExactKeys(
+  body: Record<string, unknown>,
+  allowedKeys: readonly string[],
+  field: string,
+): void {
+  const allowed = new Set(allowedKeys);
+  const unknownKeys = Object.keys(body).filter((key) => !allowed.has(key));
+  if (unknownKeys.length > 0) {
+    inputError(
+      "unknown_field",
+      `${field} enthält ein nicht erlaubtes Feld: ${unknownKeys[0]}.`,
+    );
+  }
+}
+
+function normalizedHostname(value: unknown, field: string): string {
+  const text = requiredText(value, field, 3, 253).toLowerCase().replace(/\.$/, "");
+  if (
+    !/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(text) ||
+    text.includes("..") ||
+    !text.includes(".") ||
+    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(text)
+  ) {
+    inputError("invalid_hostname", `${field} muss ein gültiger öffentlicher Hostname sein.`);
+  }
+
+  const labels = text.split(".");
+  if (
+    labels.some(
+      (label) =>
+        label.length < 1 ||
+        label.length > 63 ||
+        label.startsWith("-") ||
+        label.endsWith("-"),
+    )
+  ) {
+    inputError("invalid_hostname", `${field} muss ein gültiger öffentlicher Hostname sein.`);
+  }
+
+  return text;
+}
+
+const DOMAIN_ACTIONS = ["register", "confirm"] as const;
+const DOMAIN_VERIFICATION_METHODS = ["CUSTOMER_CONFIRMATION"] as const;
+
+export type DomainCommand =
+  | {
+      action: "register";
+      hostname: string;
+      registrableDomain: string;
+      verificationMethod: "CUSTOMER_CONFIRMATION";
+      verificationEvidence: Record<string, unknown>;
+    }
+  | { action: "confirm"; domainId: string };
+
+export function parseDomainCommand(value: unknown): DomainCommand {
+  const body = asJsonObject(value);
+  const action = requiredEnum(body.action, "Die Domain-Aktion", DOMAIN_ACTIONS);
+
+  if (action === "confirm") {
+    assertExactKeys(body, ["action", "domainId"], "Der Domain-Befehl");
+    return {
+      action,
+      domainId: requiredUuid(body.domainId, "Die Domain-ID"),
+    };
+  }
+
+  assertExactKeys(
+    body,
+    ["action", "hostname", "registrableDomain", "verificationMethod"],
+    "Der Domain-Befehl",
+  );
+  const hostname = normalizedHostname(body.hostname, "Der Hostname");
+  const registrableDomain = normalizedHostname(
+    body.registrableDomain,
+    "Die registrierbare Domain",
+  );
+  if (
+    hostname !== registrableDomain &&
+    !hostname.endsWith(`.${registrableDomain}`)
+  ) {
+    inputError(
+      "domain_scope_mismatch",
+      "Der Hostname gehört nicht zur angegebenen registrierbaren Domain.",
+    );
+  }
+
+  return {
+    action,
+    hostname,
+    registrableDomain,
+    verificationMethod: requiredEnum(
+      body.verificationMethod,
+      "Die Verifikationsmethode",
+      DOMAIN_VERIFICATION_METHODS,
+    ),
+    verificationEvidence: {
+      contractVersion: 1,
+      confirmation: "customer_entered_domain",
+    },
+  };
+}
+
+export const META_OBJECTIVES = [
+  "APP_INSTALLS",
+  "BRAND_AWARENESS",
+  "CONVERSIONS",
+  "EVENT_RESPONSES",
+  "LEAD_GENERATION",
+  "LINK_CLICKS",
+  "LOCAL_AWARENESS",
+  "MESSAGES",
+  "OFFER_CLAIMS",
+  "OUTCOME_APP_PROMOTION",
+  "OUTCOME_AWARENESS",
+  "OUTCOME_ENGAGEMENT",
+  "OUTCOME_LEADS",
+  "OUTCOME_SALES",
+  "OUTCOME_TRAFFIC",
+  "PAGE_LIKES",
+  "POST_ENGAGEMENT",
+  "PRODUCT_CATALOG_SALES",
+  "REACH",
+  "STORE_VISITS",
+  "VIDEO_VIEWS",
+] as const;
+export type MetaObjective = (typeof META_OBJECTIVES)[number];
+
+const BLUEPRINT_ACTIONS = ["save", "activate"] as const;
+const BLUEPRINT_REQUIRED_INPUTS = [
+  "destination_url",
+  "campaign_name",
+  "ad_set_name",
+  "creative_name",
+  "ad_name",
+] as const;
+type BlueprintRequiredInput = (typeof BLUEPRINT_REQUIRED_INPUTS)[number];
+
+function secretLikeKey(key: string): boolean {
+  return new Set([
+    "accesstoken",
+    "authorization",
+    "clientsecret",
+    "appsecret",
+    "refreshtoken",
+    "password",
+    "privatekey",
+    "apikey",
+  ]).has(key.toLowerCase().replace(/[^a-z0-9]/g, ""));
+}
+
+function assertSafeJson(value: unknown, field: string, depth = 0): void {
+  if (depth > 20) {
+    inputError("json_too_deep", `${field} ist zu tief verschachtelt.`);
+  }
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) {
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry) => assertSafeJson(entry, field, depth + 1));
+    return;
+  }
+  if (value && typeof value === "object") {
+    Object.entries(value).forEach(([key, nested]) => {
+      if (secretLikeKey(key)) {
+        inputError("secret_field_forbidden", `${field} enthält ein geheimes Feld.`);
+      }
+      assertSafeJson(nested, field, depth + 1);
+    });
+    return;
+  }
+  inputError("invalid_json", `${field} enthält einen ungültigen JSON-Wert.`);
+}
+
+function parseBlueprintPayload(value: unknown): Record<string, unknown> {
+  const payload = asJsonObject(value);
+  const exactSections = ["ad", "ad_set", "campaign", "creative"];
+  const keys = Object.keys(payload).sort();
+  if (
+    keys.length !== exactSections.length ||
+    keys.some((key, index) => key !== exactSections[index]) ||
+    exactSections.some(
+      (section) =>
+        !payload[section] ||
+        typeof payload[section] !== "object" ||
+        Array.isArray(payload[section]),
+    )
+  ) {
+    inputError(
+      "invalid_blueprint_payload",
+      "Das Blueprint benötigt genau die Objektbereiche campaign, ad_set, creative und ad.",
+    );
+  }
+
+  assertSafeJson(payload, "Das Blueprint");
+  if (Buffer.byteLength(JSON.stringify(payload), "utf8") > 256 * 1024) {
+    inputError("blueprint_too_large", "Das Blueprint überschreitet 256 KiB.");
+  }
+  return JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
+}
+
+function parseRequiredInputs(value: unknown): BlueprintRequiredInput[] {
+  if (!Array.isArray(value)) {
+    inputError("invalid_required_inputs", "Die erforderlichen Launch-Felder sind ungültig.");
+  }
+  const unique = [...new Set(value)];
+  if (
+    unique.length !== value.length ||
+    unique.length > BLUEPRINT_REQUIRED_INPUTS.length ||
+    unique.some(
+      (entry) =>
+        typeof entry !== "string" ||
+        !BLUEPRINT_REQUIRED_INPUTS.includes(entry as BlueprintRequiredInput),
+    )
+  ) {
+    inputError(
+      "invalid_required_inputs",
+      "Die erforderlichen Launch-Felder sind nicht erlaubt oder nicht eindeutig.",
+    );
+  }
+  return unique as BlueprintRequiredInput[];
+}
+
+export type BlueprintCommand =
+  | {
+      action: "save";
+      objective: MetaObjective;
+      name: string;
+      payloadTemplate: Record<string, unknown>;
+      requiredInputs: BlueprintRequiredInput[];
+    }
+  | { action: "activate"; blueprintId: string };
+
+export function parseBlueprintCommand(value: unknown): BlueprintCommand {
+  const body = asJsonObject(value);
+  const action = requiredEnum(body.action, "Die Blueprint-Aktion", BLUEPRINT_ACTIONS);
+  if (action === "activate") {
+    assertExactKeys(body, ["action", "blueprintId"], "Der Blueprint-Befehl");
+    return {
+      action,
+      blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
+    };
+  }
+
+  assertExactKeys(
+    body,
+    ["action", "objective", "name", "payloadTemplate", "requiredInputs"],
+    "Der Blueprint-Befehl",
+  );
+  const objective = requiredEnum(body.objective, "Das Kampagnenziel", META_OBJECTIVES);
+  const payloadTemplate = parseBlueprintPayload(body.payloadTemplate);
+  const campaign = payloadTemplate.campaign as Record<string, unknown>;
+  if (
+    campaign.objective !== undefined &&
+    campaign.objective !== objective
+  ) {
+    inputError(
+      "blueprint_objective_mismatch",
+      "Das Kampagnenziel im Blueprint stimmt nicht mit der Blueprint-ID überein.",
+    );
+  }
+
+  return {
+    action,
+    objective,
+    name: requiredText(body.name, "Der Blueprint-Name", 1, 255),
+    payloadTemplate,
+    requiredInputs: parseRequiredInputs(body.requiredInputs),
+  };
+}
+
+export type AssetImportCommand = {
+  brandProfileId: string;
+  sourceCreativeId: string;
+};
+
+export function parseAssetImportCommand(value: unknown): AssetImportCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    ["brandProfileId", "sourceCreativeId"],
+    "Der Asset-Import-Befehl",
+  );
+  const sourceCreativeId = requiredText(
+    body.sourceCreativeId,
+    "Die Meta-Creative-ID",
+    1,
+    64,
+  );
+  if (!META_OBJECT_ID_PATTERN.test(sourceCreativeId)) {
+    inputError("invalid_meta_creative_id", "Die Meta-Creative-ID ist ungültig.");
+  }
+  return {
+    brandProfileId: requiredUuid(body.brandProfileId, "Die Brand-Profil-ID"),
+    sourceCreativeId,
+  };
+}
+
+export type ValidatedImportedAsset = {
+  sha256: string;
+  mimeType: (typeof MIME_TYPES)[number];
+  byteSize: number;
+  width: number;
+  height: number;
+  metaImageHash: string | null;
+};
+
+export function assertValidatedImportedAsset(
+  value: ValidatedImportedAsset,
+): ValidatedImportedAsset {
+  if (!SHA256_PATTERN.test(value.sha256)) {
+    inputError("invalid_asset_sha256", "Der Asset-Hash ist ungültig.");
+  }
+  if (!MIME_TYPES.includes(value.mimeType)) {
+    inputError("invalid_asset_mime", "Der Asset-MIME-Typ ist ungültig.");
+  }
+  if (
+    !Number.isSafeInteger(value.byteSize) ||
+    value.byteSize <= 0 ||
+    value.byteSize > 10 * 1024 * 1024 ||
+    !Number.isSafeInteger(value.width) ||
+    value.width < 256 ||
+    value.width > 4096 ||
+    !Number.isSafeInteger(value.height) ||
+    value.height < 256 ||
+    value.height > 4096 ||
+    (value.metaImageHash !== null &&
+      !META_IMAGE_HASH_PATTERN.test(value.metaImageHash))
+  ) {
+    inputError("invalid_asset_metadata", "Die validierten Asset-Metadaten sind ungültig.");
+  }
+  return value;
+}
+
+const BUDGET_OWNER_TYPES = ["CAMPAIGN", "AD_SET"] as const;
+
+function optionalLaunchName(value: unknown, field: string): string | undefined {
+  const normalized = optionalText(value, field, 240);
+  return normalized || undefined;
+}
+
+function requiredHttpsUrl(value: unknown): string {
+  const text = requiredText(value, "Die Ziel-URL", 9, 2_048);
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    inputError("invalid_destination_url", "Die Ziel-URL ist ungültig.");
+  }
+  if (
+    url.protocol !== "https:" ||
+    !url.hostname.includes(".") ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.hash
+  ) {
+    inputError(
+      "invalid_destination_url",
+      "Die Ziel-URL muss eine öffentliche HTTPS-URL ohne Login, Port oder Fragment sein.",
+    );
+  }
+  return url.toString();
+}
+
+export type LaunchCommand = {
+  blueprintId: string;
+  brandProfileId: string;
+  brandAssetId: string;
+  allowedDomainId: string;
+  budgetOwnerType: (typeof BUDGET_OWNER_TYPES)[number];
+  dailyBudgetMinor: string;
+  launchInputs: {
+    destination_url: string;
+    campaign_name?: string;
+    ad_set_name?: string;
+    creative_name?: string;
+    ad_name?: string;
+  };
+};
+
+export function parseLaunchCommand(value: unknown): LaunchCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    [
+      "blueprintId",
+      "brandProfileId",
+      "brandAssetId",
+      "allowedDomainId",
+      "budgetOwnerType",
+      "dailyBudget",
+      "destinationUrl",
+      "campaignName",
+      "adSetName",
+      "creativeName",
+      "adName",
+    ],
+    "Der Launch-Befehl",
+  );
+  return {
+    blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
+    brandProfileId: requiredUuid(body.brandProfileId, "Die Brand-Profil-ID"),
+    brandAssetId: requiredUuid(body.brandAssetId, "Die Brand-Asset-ID"),
+    allowedDomainId: requiredUuid(body.allowedDomainId, "Die Domain-ID"),
+    budgetOwnerType: requiredEnum(
+      body.budgetOwnerType,
+      "Der Budgetträger",
+      BUDGET_OWNER_TYPES,
+    ),
+    dailyBudgetMinor: parseEuroAmountToMinor(
+      body.dailyBudget,
+      "Das Launch-Tagesbudget",
+    ),
+    launchInputs: {
+      destination_url: requiredHttpsUrl(body.destinationUrl),
+      campaign_name: optionalLaunchName(body.campaignName, "Der Kampagnenname"),
+      ad_set_name: optionalLaunchName(body.adSetName, "Der Ad-Set-Name"),
+      creative_name: optionalLaunchName(body.creativeName, "Der Creative-Name"),
+      ad_name: optionalLaunchName(body.adName, "Der Anzeigenname"),
+    },
+  };
+}
