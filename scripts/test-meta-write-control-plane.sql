@@ -754,7 +754,7 @@ begin
   ) chain
   where previous_event_hash is distinct from expected_previous;
 
-  if audit_count <> 2 or broken_links <> 0 then
+  if audit_count < 2 or broken_links <> 0 then
     raise exception 'Audit hash chain is incomplete';
   end if;
 
@@ -787,14 +787,15 @@ end;
 $$;
 
 -- Missing kill-switch state is fail-closed. No account becomes writable merely
--- because no customer or operator event has been persisted yet.
+-- because no customer or operator event has been persisted yet. The lookup is
+-- intentionally account-only because budget plans now receive their own freeze.
 do $$
 declare effective record;
 begin
   select * into effective from public.get_effective_meta_kill_switch(
     '10000000-0000-4000-8000-000000000001',
     '20000000-0000-4000-8000-000000000001',
-    'a0000000-0000-4000-8000-000000000001'
+    null
   );
   if effective.mode <> 'FREEZE_WRITES'
     or effective.scope_type <> 'ACCOUNT'

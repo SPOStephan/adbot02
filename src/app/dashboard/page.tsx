@@ -45,6 +45,7 @@ import type {
   RecentLaunchPlanView,
   SyncedCreativeView,
 } from "@/components/AutomationOnboardingControls";
+import type { BudgetCanaryPlanView } from "@/components/AutomationBudgetCanaryManager";
 import type { AutomationScopeCampaignView } from "@/components/AutomationScopeManager";
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
@@ -463,6 +464,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: recentLaunchPlans },
     { data: recentExposureSnapshots },
     { data: automationTargets },
+    { data: budgetCanaryPlans },
   ] = metaConnected && metaAccount
     ? await Promise.all([
         supabase
@@ -561,11 +563,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .in("status", ["MANAGED", "SUSPENDED"])
           .order("created_at", { ascending: true })
           .limit(1000),
+        supabase.rpc("list_meta_budget_canary_plans", {
+          p_platform_account_id: metaAccount.id,
+        }),
       ])
     : [
         { data: null },
         { data: null },
         { data: null },
+        { data: [] },
         { data: [] },
         { data: [] },
         { data: [] },
@@ -796,6 +802,74 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       effectiveStatus: String(campaign.effectiveStatus ?? campaign.status ?? "UNKNOWN"),
       budgetOwners: budgetOwnersByCampaign.get(String(campaign.id)) ?? [],
     }),
+  );
+  const budgetCanaryViews: BudgetCanaryPlanView[] = (
+    (budgetCanaryPlans ?? []) as Record<string, unknown>[]
+  ).flatMap((row) => {
+    const planId = String(row.plan_id ?? "");
+    const targetType = row.target_type;
+    const currentBudgetMinor = String(row.current_budget_minor ?? "");
+    const intendedBudgetMinor = String(row.intended_budget_minor ?? "");
+    const direction = row.direction;
+    const changeBps = toFiniteNumber(row.change_bps);
+    const payloadHash = String(row.payload_hash ?? "").toLowerCase();
+    const status = String(row.status ?? "");
+
+    if (
+      !/^[0-9a-f-]{36}$/i.test(planId) ||
+      (targetType !== "CAMPAIGN" && targetType !== "AD_SET") ||
+      !/^[1-9][0-9]*$/.test(currentBudgetMinor) ||
+      !/^[1-9][0-9]*$/.test(intendedBudgetMinor) ||
+      (direction !== "INCREASE" &&
+        direction !== "DECREASE" &&
+        direction !== "UNCHANGED") ||
+      changeBps === null ||
+      !Number.isSafeInteger(changeBps) ||
+      changeBps < 0 ||
+      !/^[0-9a-f]{64}$/.test(payloadHash) ||
+      status !== "PENDING"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        planId,
+        campaignName: String(row.campaign_name ?? "Meta-Kampagne"),
+        budgetOwnerLabel: String(row.budget_owner_label ?? "Budgetowner"),
+        targetType,
+        currentBudgetMinor,
+        intendedBudgetMinor,
+        direction,
+        changeBps,
+        payloadHash,
+        reason: row.source_rule_key ? String(row.source_rule_key) : null,
+        createdAt: String(row.created_at ?? ""),
+        expiresAt: row.expires_at ? String(row.expires_at) : null,
+        expired: row.is_expired === true,
+        freshSync: row.fresh_sync === true,
+        approvedAt: row.approved_at ? String(row.approved_at) : null,
+        status,
+      },
+    ];
+  });
+  const managedBudgetOwnerCount = automationScopeView.reduce(
+    (sum, campaign) =>
+      sum + campaign.budgetOwners.filter((owner) => owner.status === "MANAGED").length,
+    0,
+  );
+  const canConfirmBudgetCanary = Boolean(
+    writeScopeGranted &&
+      marketingCurrency === "EUR" &&
+      managedBudgetOwnerCount === 1 &&
+      policyView?.status === "ACTIVE" &&
+      policyView.allowBudgetChanges &&
+      !policyView.allowStatusChanges &&
+      !policyView.allowNewLaunches &&
+      killSwitchView?.mode === "ALLOW" &&
+      budgetCanaryViews.some(
+        (plan) => !plan.approvedAt && !plan.expired && plan.freshSync,
+      ),
   );
   const campaignNameById = new Map(
     campaignRows.map((campaign) => [campaign.id, campaign.name]),
@@ -1054,6 +1128,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               auditEvents={automationAuditViews}
               automationScope={automationScopeView}
               brandProfile={brandProfileView}
+              budgetCanaries={budgetCanaryViews}
+              canConfirmBudgetCanary={canConfirmBudgetCanary}
               currency={marketingCurrency}
               killSwitch={killSwitchView}
               onboarding={onboardingData}

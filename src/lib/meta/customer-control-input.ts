@@ -352,6 +352,71 @@ export function parseAutomationScopeCommand(value: unknown): AutomationScopeComm
   };
 }
 
+function requiredPositiveMinorUnits(value: unknown, field: string): string {
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) {
+    inputError("invalid_minor_units", `${field} ist ungültig.`);
+  }
+
+  const parsed = BigInt(value);
+  if (parsed > MAX_POSTGRES_BIGINT) {
+    inputError("invalid_minor_units", `${field} liegt außerhalb des zulässigen Wertebereichs.`);
+  }
+
+  return parsed.toString();
+}
+
+export type BudgetCanaryApprovalCommand = {
+  planId: string;
+  payloadHash: string;
+  currentBudgetMinor: string;
+  intendedBudgetMinor: string;
+  reason: string;
+};
+
+export function parseBudgetCanaryApprovalCommand(
+  value: unknown,
+): BudgetCanaryApprovalCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    [
+      "planId",
+      "payloadHash",
+      "currentBudgetMinor",
+      "intendedBudgetMinor",
+      "reason",
+      "confirmation",
+    ],
+    "Der Budget-Canary-Befehl",
+  );
+
+  const payloadHash = requiredText(body.payloadHash, "Der Plan-Fingerprint", 64, 64);
+  if (!SHA256_PATTERN.test(payloadHash)) {
+    inputError("invalid_hash", "Der Plan-Fingerprint ist ungültig.");
+  }
+
+  if (body.confirmation !== "BUDGET ÄNDERN") {
+    inputError(
+      "confirmation_required",
+      "Geben Sie zur Bestätigung exakt „BUDGET ÄNDERN“ ein.",
+    );
+  }
+
+  return {
+    planId: requiredUuid(body.planId, "Die Plan-ID"),
+    payloadHash,
+    currentBudgetMinor: requiredPositiveMinorUnits(
+      body.currentBudgetMinor,
+      "Das aktuelle Budget",
+    ),
+    intendedBudgetMinor: requiredPositiveMinorUnits(
+      body.intendedBudgetMinor,
+      "Das Zielbudget",
+    ),
+    reason: requiredText(body.reason, "Die Begründung", 12, 500),
+  };
+}
+
 function normalizedHostname(value: unknown, field: string): string {
   const text = requiredText(value, field, 3, 253).toLowerCase().replace(/\.$/, "");
   if (

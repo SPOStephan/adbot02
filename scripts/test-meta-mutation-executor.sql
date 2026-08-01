@@ -110,6 +110,23 @@ select public.append_meta_kill_switch_state(
   'ALLOW', 'Mutation executor regression fixture', 'OPERATOR', 'test'
 );
 
+-- This legacy executor fixture deliberately bypasses the customer-confirmed
+-- canary gate so it can remain focused on execution and reconciliation.
+insert into public.meta_account_write_modes (
+  user_id, platform_account_id, mode,
+  customer_confirmed_at, customer_confirmed_by
+) values
+  (
+    '12000000-0000-4000-8000-000000000001',
+    '22000000-0000-4000-8000-000000000001',
+    'AUTONOMOUS', now(), '12000000-0000-4000-8000-000000000001'
+  ),
+  (
+    '12000000-0000-4000-8000-000000000002',
+    '22000000-0000-4000-8000-000000000002',
+    'AUTONOMOUS', now(), '12000000-0000-4000-8000-000000000002'
+  );
+
 select * from public.set_meta_customer_automation_scope(
   '12000000-0000-4000-8000-000000000001',
   '22000000-0000-4000-8000-000000000001',

@@ -20,6 +20,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
+  AutomationBudgetCanaryManager,
+  type BudgetCanaryPlanView,
+} from "@/components/AutomationBudgetCanaryManager";
+import {
   AutomationOnboardingControls,
   type AutomationOnboardingData,
 } from "@/components/AutomationOnboardingControls";
@@ -77,6 +81,8 @@ type AutomationControlCenterProps = {
   killSwitch: KillSwitchView;
   auditEvents: AutomationAuditView[];
   automationScope: AutomationScopeCampaignView[];
+  budgetCanaries: BudgetCanaryPlanView[];
+  canConfirmBudgetCanary: boolean;
   onboarding: AutomationOnboardingData;
   readiness: {
     writeScopeGranted: boolean;
@@ -137,6 +143,8 @@ const EVENT_LABELS: Record<string, string> = {
   BRAND_ASSET_IMPORTED_FROM_META: "Vorhandenes Meta-Creative importiert",
   CUSTOMER_LAUNCH_AUTHORIZED: "Active Launch kundenseitig autorisiert",
   AUTOMATION_SCOPE_CHANGED: "Verwalteten Automationsbereich geändert",
+  BUDGET_CANARY_CONFIRMATION_REQUIRED: "Budgetplan wartet auf exakte Bestätigung",
+  BUDGET_CANARY_PLAN_APPROVED: "Einzelnen Budget-Canary freigegeben",
   LAUNCH_CHAIN_MATERIALIZED: "Active-Launch-Kette materialisiert",
   LAUNCH_CHAIN_RECONCILED: "Active-Launch vollständig bestätigt",
 };
@@ -238,6 +246,8 @@ export function AutomationControlCenter({
   auditEvents,
   automationScope,
   brandProfile,
+  budgetCanaries,
+  canConfirmBudgetCanary,
   currency,
   killSwitch,
   onboarding,
@@ -817,6 +827,12 @@ export function AutomationControlCenter({
               policy?.status === "ACTIVE" &&
               policy.allowBudgetChanges,
           )}
+        />
+
+        <AutomationBudgetCanaryManager
+          canConfirm={canConfirmBudgetCanary}
+          currency={currency}
+          plans={budgetCanaries}
         />
 
         <AutomationOnboardingControls

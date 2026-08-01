@@ -10,6 +10,7 @@ import {
   type AssetImportCommand,
   type AutomationScopeCommand,
   type BlueprintCommand,
+  type BudgetCanaryApprovalCommand,
   type BrandCommand,
   type DomainCommand,
   type KillSwitchCommand,
@@ -303,6 +304,65 @@ export async function setCustomerAutomationScope(
     selectionId: row.selection_id,
     affectedTargetCount,
     managedBudgetOwnerCount,
+  };
+}
+
+export async function approveCustomerBudgetCanary(
+  customer: MetaCustomer,
+  command: BudgetCanaryApprovalCommand,
+): Promise<{
+  approvalId: string;
+  planId: string;
+  planStatus: "PENDING";
+  executableAt: string;
+  approvedAt: string;
+}> {
+  requireWriteReadyCustomer(customer, "einen Budget-Canary bestätigst");
+
+  if (!customer.marketingSyncId) {
+    serviceError(
+      "fresh_sync_required",
+      409,
+      "Vor der Canary-Bestätigung ist ein aktueller erfolgreicher Meta-Abruf erforderlich.",
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("approve_meta_budget_canary_plan", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_plan_id: command.planId,
+    p_expected_payload_hash: command.payloadHash,
+    p_expected_before_minor: command.currentBudgetMinor,
+    p_intended_after_minor: command.intendedBudgetMinor,
+    p_reason: command.reason,
+  });
+  const row = Array.isArray(data) ? data[0] : null;
+
+  if (error) {
+    serviceError(
+      "canary_not_ready",
+      409,
+      "Der Budget-Canary ist nicht mehr exakt ausführbar. Bitte Sicherheitsmodus, Policy, Auswahl und aktuellen Meta-Abruf erneut prüfen.",
+    );
+  }
+
+  if (
+    typeof row?.approval_id !== "string" ||
+    row?.plan_id !== command.planId ||
+    row?.plan_status !== "PENDING" ||
+    typeof row?.executable_at !== "string" ||
+    typeof row?.approved_at !== "string"
+  ) {
+    rpcFailure("Die Budget-Canary-Bestätigung");
+  }
+
+  return {
+    approvalId: row.approval_id,
+    planId: row.plan_id,
+    planStatus: "PENDING",
+    executableAt: row.executable_at,
+    approvedAt: row.approved_at,
   };
 }
 
