@@ -2,7 +2,7 @@
 
 **Stand:** 1. August 2026
 
-**Status:** Ursache bestätigt; Korrektur in Umsetzung.
+**Status:** Behoben und im getrennten Staging-Produktionsbetrieb verifiziert.
 
 ## Beobachtung
 
@@ -79,3 +79,9 @@ Der erneute OAuth-Lauf über die kanonische Domain `https://staging.app.adbot.on
 Nach dem Reconnect wurde der offizielle Vercel-Sofortlauf für `/api/cron/meta-sync` im Projekt `adbot02-staging` über den autorisierten Vercel-Projektendpunkt ausgelöst. Supabase bestätigte anschließend `sync_status = success`, `sync_error_code = null`, `last_sync_started_at = 2026-08-01 06:15:35.795946+00`, `last_synced_at = 2026-08-01 06:16:28.463+00`, `next_sync_at = 2026-08-01 07:00:00+00`, `last_sync_seen_count = 100` und `last_sync_new_count = 0`. Damit sind Production-Cron, Cron-Authentifizierung, Staging-Verschlüsselungsschlüssel, frisch gespeichertes Meta-Token und Beitragsabruf gemeinsam nachgewiesen.
 
 Quellen: [Vercel-Staging-Projekt](https://vercel.com/fportal/adbot02-staging), [kanonische Staging-Anwendung](https://staging.app.adbot.one), Supabase-Projekt `Adbot Staging` (`jlxbjnjwqxaajbbtlyhz`) und der vom Benutzer am 1. August 2026 bereitgestellte Dashboard-Screenshot.
+
+## Finaler Deploymentnachweis
+
+Commit `82ade3e` (`fix: prevent stale meta callback notice`) wurde am 1. August 2026 ausschließlich auf `feature/meta-oauth-staging` veröffentlicht. Die GitHub-Deploymentchecks `Vercel – adbot02-staging` und `Vercel – adbot02` meldeten beide `success`; im bestehenden Projekt entstand dabei nur das reguläre Preview-Deployment, während `adbot02-staging` das getrennte Production-Deployment erhielt. Die kanonische Domain `https://staging.app.adbot.one` antwortete danach auf `/api/health` mit HTTP 200 und `Cache-Control: no-store`; der unauthentifizierte Dashboardzugriff wurde weiterhin korrekt per HTTP 307 auf `/login?next=%2Fdashboard` umgeleitet.
+
+Der Callback invalidiert nun nach erfolgreichem `replace_meta_connection` explizit den Dashboardpfad. Das Dashboard wird dynamisch ohne Revalidation gerendert und behandelt den nur nach erfolgreicher Persistenz gesetzten Queryzustand `meta=connected` stets als Erfolg. Falls die Accountprojektion im ersten Render noch nicht sichtbar ist, erscheint ausschließlich ein neutraler Aktualisierungshinweis; die falsche rote Meldung „kein aktiver Connector gefunden“ wurde entfernt.
