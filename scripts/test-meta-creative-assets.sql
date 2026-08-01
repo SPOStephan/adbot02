@@ -61,6 +61,22 @@ insert into public.automation_policies (
     '10000000-0000-4000-8000-000000000002', now()
   );
 
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  null,
+  'ALLOW', 'Creative regression fixture', 'OPERATOR', 'test'
+);
+
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '10000000-0000-4000-8000-000000000002',
+  '20000000-0000-4000-8000-000000000002',
+  null,
+  'ALLOW', 'Creative regression fixture', 'OPERATOR', 'test'
+);
+
 create temporary table creative_test_ids (
   key text primary key,
   id uuid not null

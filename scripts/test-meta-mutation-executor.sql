@@ -94,6 +94,22 @@ insert into public.automation_policies (
     '12000000-0000-4000-8000-000000000002', now()
   );
 
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  null,
+  'ALLOW', 'Mutation executor regression fixture', 'OPERATOR', 'test'
+);
+
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '12000000-0000-4000-8000-000000000002',
+  '22000000-0000-4000-8000-000000000002',
+  null,
+  'ALLOW', 'Mutation executor regression fixture', 'OPERATOR', 'test'
+);
+
 insert into public.campaign_recommendations (
   id, user_id, platform_account_id, campaign_id, rule_key, rule_version,
   severity, priority, title, summary, evidence, evidence_hash,

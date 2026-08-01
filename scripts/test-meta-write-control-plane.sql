@@ -786,6 +786,51 @@ begin
 end;
 $$;
 
+-- Missing kill-switch state is fail-closed. No account becomes writable merely
+-- because no customer or operator event has been persisted yet.
+do $$
+declare effective record;
+begin
+  select * into effective from public.get_effective_meta_kill_switch(
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001'
+  );
+  if effective.mode <> 'FREEZE_WRITES'
+    or effective.scope_type <> 'ACCOUNT'
+    or effective.event_id is not null
+  then
+    raise exception 'Missing kill-switch state did not fail closed';
+  end if;
+end;
+$$;
+
+-- A narrow plan-level ALLOW must not implicitly enable the whole account.
+select public.append_meta_kill_switch_state(
+  'PLAN',
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  'a0000000-0000-4000-8000-000000000001',
+  'ALLOW', 'Plan acknowledgement', 'OPERATOR', 'operator'
+);
+
+do $$
+declare effective record;
+begin
+  select * into effective from public.get_effective_meta_kill_switch(
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001'
+  );
+  if effective.mode <> 'FREEZE_WRITES'
+    or effective.scope_type <> 'ACCOUNT'
+    or effective.event_id is not null
+  then
+    raise exception 'Plan ALLOW implicitly enabled the account';
+  end if;
+end;
+$$;
+
 select public.append_meta_kill_switch_state(
   'ACCOUNT',
   '10000000-0000-4000-8000-000000000001',
@@ -813,6 +858,24 @@ select public.append_meta_kill_switch_state(
   '20000000-0000-4000-8000-000000000001', null,
   'ALLOW', 'Customer resume', 'CUSTOMER', 'owner'
 );
+
+do $$
+declare effective record;
+begin
+  select * into effective from public.get_effective_meta_kill_switch(
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000001',
+    'a0000000-0000-4000-8000-000000000001'
+  );
+  if effective.mode <> 'ALLOW'
+    or effective.scope_type <> 'ACCOUNT'
+    or effective.event_id is null
+  then
+    raise exception 'Explicit account ALLOW did not open the write gate';
+  end if;
+end;
+$$;
+
 select public.append_meta_kill_switch_state(
   'PLAN',
   '10000000-0000-4000-8000-000000000001',

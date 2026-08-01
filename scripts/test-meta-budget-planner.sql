@@ -88,6 +88,22 @@ insert into public.automation_policies (
     '11000000-0000-4000-8000-000000000002', now()
   );
 
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '11000000-0000-4000-8000-000000000001',
+  '21000000-0000-4000-8000-000000000001',
+  null,
+  'ALLOW', 'Budget planner regression fixture', 'OPERATOR', 'test'
+);
+
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '11000000-0000-4000-8000-000000000002',
+  '21000000-0000-4000-8000-000000000002',
+  null,
+  'ALLOW', 'Budget planner regression fixture', 'OPERATOR', 'test'
+);
+
 insert into public.campaign_recommendations (
   id, user_id, platform_account_id, campaign_id, rule_key, rule_version,
   severity, priority, title, summary, evidence, evidence_hash,
