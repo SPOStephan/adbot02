@@ -30,6 +30,10 @@ const canaryRegressionPath = join(
   scriptsDirectory,
   "test-meta-budget-canary.sql",
 );
+const operatorCanaryRegressionPath = join(
+  scriptsDirectory,
+  "test-meta-operator-budget-canary.sql",
+);
 const reconnectRegressionPath = join(
   scriptsDirectory,
   "test-meta-reconnect-persistence.sql",
@@ -181,6 +185,14 @@ try {
     throw new Error("Budget canary regression did not emit its success marker");
   }
 
+  const { stdout: operatorCanaryStdout } = await run(psqlPath, [
+    ...psqlBase,
+    "--file", operatorCanaryRegressionPath,
+  ]);
+  if (!operatorCanaryStdout.includes("Meta operator budget canary checks passed")) {
+    throw new Error("Operator budget canary regression did not emit its success marker");
+  }
+
   const { stdout: creativeStdout } = await run(psqlPath, [
     ...psqlBase,
     "--file", creativeRegressionPath,
@@ -223,7 +235,7 @@ try {
   }
 
   console.log(
-    "Meta Write Control Plane, Customer Campaign Scope, Budget Canary, Creative Asset, Budget Planner, Mutation Executor and reconnect persistence checks passed on a fresh PostgreSQL cluster",
+    "Meta Write Control Plane, Customer Campaign Scope, Budget Canary, Operator Budget Canary, Creative Asset, Budget Planner, Mutation Executor and reconnect persistence checks passed on a fresh PostgreSQL cluster",
   );
 } finally {
   if (serverStarted && pgCtlPath) {

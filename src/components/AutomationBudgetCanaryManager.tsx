@@ -34,14 +34,17 @@ export type BudgetCanaryPlanView = {
 type AutomationBudgetCanaryManagerProps = {
   plans: BudgetCanaryPlanView[];
   currency: string;
+  canPrepare: boolean;
   canConfirm: boolean;
 };
 
 type CanaryResponse = {
   ok?: boolean;
   message?: string;
+  outcome?: "CREATED" | "EXISTING";
   approvalId?: string;
   planId?: string;
+  status?: string;
   executableAt?: string;
 };
 
@@ -49,6 +52,22 @@ type Notice = {
   tone: "success" | "error";
   message: string;
 };
+
+async function postCanaryPreparation(body: {
+  reason: string;
+  confirmation: string;
+}): Promise<CanaryResponse> {
+  const response = await fetch("/api/meta/automation/budget-canary/prepare", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const result = (await response.json().catch(() => null)) as CanaryResponse | null;
+  if (!response.ok) {
+    throw new Error(result?.message ?? "Der Budget-Canary konnte nicht vorbereitet werden.");
+  }
+  return result ?? {};
+}
 
 async function postCanaryApproval(body: {
   planId: string;
@@ -99,13 +118,54 @@ function formatDate(value: string | null): string {
 export function AutomationBudgetCanaryManager({
   plans,
   currency,
+  canPrepare,
   canConfirm,
 }: AutomationBudgetCanaryManagerProps) {
   const router = useRouter();
+  const [preparePending, setPreparePending] = useState(false);
+  const [prepareReason, setPrepareReason] = useState("");
+  const [prepareConfirmation, setPrepareConfirmation] = useState("");
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  async function prepareCanary(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canPrepare || plans.length > 0) return;
+
+    const confirmed = window.confirm(
+      "Einen gehaltenen Einmal-Canary vorbereiten? Adbot berechnet exakt 10 % weniger Tagesbudget. Dieser Schritt sendet noch nichts an Meta.",
+    );
+    if (!confirmed) return;
+
+    setPreparePending(true);
+    setNotice(null);
+    try {
+      await postCanaryPreparation({
+        reason: prepareReason,
+        confirmation: prepareConfirmation,
+      });
+      setNotice({
+        tone: "success",
+        message:
+          "Der 10-%-Canary wurde ausschließlich als eingefrorener Plan vorbereitet. Prüfe Betrag und Fingerprint; erst eine separate Freigabe darf ihn ausführbar machen.",
+      });
+      setPrepareReason("");
+      setPrepareConfirmation("");
+      router.refresh();
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Der Budget-Canary konnte nicht vorbereitet werden.",
+      });
+    } finally {
+      setPreparePending(false);
+    }
+  }
 
   async function approvePlan(
     event: FormEvent<HTMLFormElement>,
@@ -185,7 +245,7 @@ export function AutomationBudgetCanaryManager({
         </p>
       </div>
 
-      {!canConfirm ? (
+      {!canConfirm && plans.length > 0 ? (
         <div className="mt-4 flex items-start gap-3 rounded-xl border border-slate-300 bg-white p-4 text-slate-700">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700" />
           <p className="text-xs leading-5">
@@ -212,10 +272,73 @@ export function AutomationBudgetCanaryManager({
 
       <div className="mt-5 grid gap-4">
         {plans.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm text-slate-500">
-            Noch kein bestätigungsfähiger Budgetplan vorhanden. Nach einem
-            frischen Meta-Abruf und Planner-Lauf erscheint hier höchstens der
-            ausgewählte Canary-Kandidat.
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5">
+            <div className="text-center">
+              <p className="font-extrabold text-slate-900">
+                Noch kein bestätigungsfähiger Budgetplan vorhanden
+              </p>
+              <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                Für den ersten Live-Nachweis kann Adbot einmalig einen
+                deterministischen Plan mit exakt <strong>10 % weniger</strong>
+                Tagesbudget erzeugen. Der Plan bleibt eingefroren und kann Meta
+                erst nach einer zweiten, fingerprintgebundenen Freigabe erreichen.
+              </p>
+            </div>
+
+            {!canPrepare ? (
+              <div className="mt-5 flex items-start gap-3 rounded-xl border border-slate-300 bg-slate-50 p-4 text-slate-700">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700" />
+                <p className="text-xs leading-5">
+                  Die Vorbereitung ist gesperrt. Erforderlich sind genau ein
+                  verwalteter Budgetowner, ein erfolgreicher aktueller Meta-Abruf,
+                  EUR, <strong>ALLOW</strong> und eine aktive Budget-only-Policy.
+                </p>
+              </div>
+            ) : null}
+
+            <form className="mx-auto mt-5 grid max-w-2xl gap-4" onSubmit={prepareCanary}>
+              <label className="grid gap-2 text-left text-sm font-bold text-slate-800">
+                Begründung der Vorbereitung
+                <textarea
+                  className="min-h-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-amber-600 focus:ring-4 focus:ring-amber-100"
+                  disabled={!canPrepare || preparePending}
+                  maxLength={500}
+                  minLength={12}
+                  onChange={(event) => setPrepareReason(event.target.value)}
+                  placeholder="Warum wird jetzt genau dieser einzelne, gehaltene 10-%-Canary vorbereitet?"
+                  required
+                  value={prepareReason}
+                />
+              </label>
+              <label className="grid gap-2 text-left text-sm font-bold text-slate-800">
+                Zur Vorbereitung exakt „CANARY VORBEREITEN“ eingeben
+                <input
+                  autoComplete="off"
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-amber-600 focus:ring-4 focus:ring-amber-100"
+                  disabled={!canPrepare || preparePending}
+                  onChange={(event) => setPrepareConfirmation(event.target.value)}
+                  required
+                  value={prepareConfirmation}
+                />
+              </label>
+              <button
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:justify-self-center"
+                disabled={
+                  !canPrepare ||
+                  preparePending ||
+                  prepareConfirmation !== "CANARY VORBEREITEN" ||
+                  prepareReason.trim().length < 12
+                }
+                type="submit"
+              >
+                {preparePending ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <BadgeEuro className="size-4" />
+                )}
+                Gehaltenen 10-%-Plan vorbereiten
+              </button>
+            </form>
           </div>
         ) : (
           plans.map((plan) => {

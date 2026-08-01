@@ -11,6 +11,7 @@ import {
   type AutomationScopeCommand,
   type BlueprintCommand,
   type BudgetCanaryApprovalCommand,
+  type BudgetCanaryMaterializationCommand,
   type BrandCommand,
   type DomainCommand,
   type KillSwitchCommand,
@@ -305,6 +306,105 @@ export async function setCustomerAutomationScope(
     affectedTargetCount,
     managedBudgetOwnerCount,
   };
+}
+
+type CustomerBudgetCanaryMaterializationResult = {
+  outcome: "CREATED" | "EXISTING";
+  planId: string;
+  status: string;
+};
+
+function parseCustomerBudgetCanaryMaterializationResult(
+  value: unknown,
+): CustomerBudgetCanaryMaterializationResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    rpcFailure("Die Budget-Canary-Vorbereitung");
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    (record.outcome !== "CREATED" && record.outcome !== "EXISTING") ||
+    typeof record.plan_id !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(record.plan_id) ||
+    typeof record.status !== "string"
+  ) {
+    rpcFailure("Die Budget-Canary-Vorbereitung");
+  }
+  return {
+    outcome: record.outcome,
+    planId: record.plan_id,
+    status: record.status,
+  };
+}
+
+export async function materializeCustomerBudgetCanary(
+  customer: MetaCustomer,
+  command: BudgetCanaryMaterializationCommand,
+): Promise<CustomerBudgetCanaryMaterializationResult> {
+  requireWriteReadyCustomer(customer, "einen Budget-Canary vorbereitest");
+  if (!customer.marketingSyncId) {
+    serviceError(
+      "fresh_sync_required",
+      409,
+      "Vor der Canary-Vorbereitung ist ein aktueller erfolgreicher Meta-Abruf erforderlich.",
+    );
+  }
+
+  const leaseToken = await claimMetaReadOperation({
+    platformAccountId: customer.platformAccountId,
+    userId: customer.userId,
+    ownerId: `customer-budget-canary:${randomUUID()}`,
+  });
+  if (!leaseToken) {
+    serviceError(
+      "read_snapshot_busy",
+      409,
+      "Ein Meta-Sync oder Planer-Lauf ist aktiv. Bitte versuche die Canary-Vorbereitung in wenigen Minuten erneut.",
+    );
+  }
+
+  let result: CustomerBudgetCanaryMaterializationResult | null = null;
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc(
+      "materialize_meta_customer_budget_canary_plan",
+      {
+        p_user_id: customer.userId,
+        p_platform_account_id: customer.platformAccountId,
+        p_read_lease_token: leaseToken,
+        p_reason: command.reason,
+        p_planned_at: new Date().toISOString(),
+      },
+    );
+    if (error) {
+      serviceError(
+        "canary_materialization_not_ready",
+        409,
+        "Der Canary wurde nicht vorbereitet: Genau ein aktiver Budgetowner, Budget-only-Policy, ALLOW, aktueller EUR-Snapshot, Caps und Cooldown müssen vollständig erfüllt sein.",
+      );
+    }
+    result = parseCustomerBudgetCanaryMaterializationResult(data);
+  } finally {
+    try {
+      await releaseMetaAccountOperation({
+        platformAccountId: customer.platformAccountId,
+        userId: customer.userId,
+        leaseToken,
+      });
+    } catch {
+      if (!result) {
+        serviceError(
+          "read_lease_release_failed",
+          500,
+          "Der Canary wurde nicht vorbereitet, weil die sichere Read-Lease nicht freigegeben werden konnte.",
+        );
+      }
+    }
+  }
+
+  if (!result) {
+    rpcFailure("Die Budget-Canary-Vorbereitung");
+  }
+  return result;
 }
 
 export async function approveCustomerBudgetCanary(

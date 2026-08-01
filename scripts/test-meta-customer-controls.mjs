@@ -24,6 +24,7 @@ const {
   parseBlueprintCommand,
   parseBrandCommand,
   parseBudgetCanaryApprovalCommand,
+  parseBudgetCanaryMaterializationCommand,
   parseDomainCommand,
   parseEuroAmountToMinor,
   parseKillSwitchCommand,
@@ -138,6 +139,31 @@ expectInputError(
       status: "MANAGED",
       reason: "Expliziter Budget-Canary für eine Kampagne",
       platformAccountId: "nicht erlaubt",
+    }),
+  "unknown_field",
+);
+
+const validBudgetCanaryMaterializationCommand = {
+  reason: "Kontrollierter erster gehaltener Budget-Canary",
+  confirmation: "CANARY VORBEREITEN",
+};
+assert.deepEqual(
+  parseBudgetCanaryMaterializationCommand(validBudgetCanaryMaterializationCommand),
+  { reason: "Kontrollierter erster gehaltener Budget-Canary" },
+);
+expectInputError(
+  () =>
+    parseBudgetCanaryMaterializationCommand({
+      ...validBudgetCanaryMaterializationCommand,
+      confirmation: "SOFORT AUSFÜHREN",
+    }),
+  "confirmation_required",
+);
+expectInputError(
+  () =>
+    parseBudgetCanaryMaterializationCommand({
+      ...validBudgetCanaryMaterializationCommand,
+      dailyBudgetMinor: "1000",
     }),
   "unknown_field",
 );
@@ -421,6 +447,7 @@ const [
   killRouteSource,
   scopeRouteSource,
   canaryRouteSource,
+  canaryPrepareRouteSource,
   domainRouteSource,
   blueprintRouteSource,
   assetImportRouteSource,
@@ -428,6 +455,7 @@ const [
   migrationSource,
   scopeMigrationSource,
   canaryMigrationSource,
+  operatorCanaryMigrationSource,
   onboardingMigrationSource,
   metaImportSource,
   storageSource,
@@ -448,6 +476,13 @@ const [
   readFile(path.join(root, "src/app/api/meta/automation/scope/route.ts"), "utf8"),
   readFile(
     path.join(root, "src/app/api/meta/automation/budget-canary/route.ts"),
+    "utf8",
+  ),
+  readFile(
+    path.join(
+      root,
+      "src/app/api/meta/automation/budget-canary/prepare/route.ts",
+    ),
     "utf8",
   ),
   readFile(path.join(root, "src/app/api/meta/automation/domain/route.ts"), "utf8"),
@@ -472,6 +507,13 @@ const [
     path.join(
       root,
       "supabase/migrations/20260801110000_meta_budget_canary_confirmation.sql",
+    ),
+    "utf8",
+  ),
+  readFile(
+    path.join(
+      root,
+      "supabase/migrations/20260801120000_meta_operator_budget_canary.sql",
     ),
     "utf8",
   ),
@@ -504,6 +546,9 @@ assert.match(scopeRouteSource, /setCustomerAutomationScope/);
 assert.match(canaryRouteSource, /parseBudgetCanaryApprovalCommand/);
 assert.match(canaryRouteSource, /approveCustomerBudgetCanary/);
 assert.match(canaryRouteSource, /readControlJson/);
+assert.match(canaryPrepareRouteSource, /parseBudgetCanaryMaterializationCommand/);
+assert.match(canaryPrepareRouteSource, /materializeCustomerBudgetCanary/);
+assert.match(canaryPrepareRouteSource, /readControlJson/);
 assert.match(domainRouteSource, /parseDomainCommand/);
 assert.match(domainRouteSource, /applyCustomerDomainCommand/);
 assert.match(blueprintRouteSource, /parseBlueprintCommand/);
@@ -521,6 +566,7 @@ assert.match(pageSource, /\.from\("automation_targets"\)/);
 assert.match(pageSource, /automationScope=\{automationScopeView\}/);
 assert.match(pageSource, /list_meta_budget_canary_plans/);
 assert.match(pageSource, /budgetCanaries=\{budgetCanaryViews\}/);
+assert.match(pageSource, /canPrepareBudgetCanary=\{canPrepareBudgetCanary\}/);
 assert.match(pageSource, /canConfirmBudgetCanary=\{canConfirmBudgetCanary\}/);
 assert.match(pageSource, /managedBudgetOwnerCount === 1/);
 assert.match(pageSource, /!policyView\.allowStatusChanges/);
@@ -545,8 +591,11 @@ assert.match(componentSource, /AutomationBudgetCanaryManager/);
 assert.match(scopeComponentSource, /\/api\/meta\/automation\/scope/);
 assert.match(scopeComponentSource, /window\.confirm/);
 assert.match(scopeComponentSource, /Bestehende Kampagnen sind standardmäßig suspendiert/);
+assert.match(canaryComponentSource, /\/api\/meta\/automation\/budget-canary\/prepare/);
 assert.match(canaryComponentSource, /\/api\/meta\/automation\/budget-canary/);
 assert.match(canaryComponentSource, /window\.confirm/);
+assert.match(canaryComponentSource, /CANARY VORBEREITEN/);
+assert.match(canaryComponentSource, /sendet noch nichts an Meta/);
 assert.match(canaryComponentSource, /BUDGET ÄNDERN/);
 assert.match(canaryComponentSource, /Reale Meta-Änderung/);
 assert.match(canaryComponentSource, /Exakt diesen Budgetplan freigeben/);
@@ -579,6 +628,9 @@ assert.doesNotMatch(
 assert.match(serviceSource, /requireWriteReadyCustomer/);
 assert.match(serviceSource, /set_meta_customer_automation_scope/);
 assert.match(serviceSource, /command\.status === "MANAGED"/);
+assert.match(serviceSource, /materialize_meta_customer_budget_canary_plan/);
+assert.match(serviceSource, /p_read_lease_token: leaseToken/);
+assert.match(serviceSource, /customer-budget-canary:/);
 assert.match(serviceSource, /approve_meta_budget_canary_plan/);
 assert.match(serviceSource, /p_expected_payload_hash: command\.payloadHash/);
 assert.match(serviceSource, /p_expected_before_minor: command\.currentBudgetMinor/);
@@ -637,6 +689,31 @@ assert.match(
 assert.doesNotMatch(
   scopeMigrationSource,
   /grant execute on function public\.set_meta_customer_automation_scope[\s\S]*to authenticated/,
+);
+assert.match(operatorCanaryMigrationSource, /materialize_meta_customer_budget_canary_plan/);
+assert.match(
+  operatorCanaryMigrationSource,
+  /v_intended_budget :=[\s\S]*\(v_current_budget \* 9000 \+ 9999\) \/ 10000/,
+);
+assert.match(operatorCanaryMigrationSource, /'change_bps', 1000/);
+assert.match(operatorCanaryMigrationSource, /'direction', 'DECREASE'/);
+assert.match(operatorCanaryMigrationSource, /v_managed_budget_owner_count <> 1/);
+assert.match(operatorCanaryMigrationSource, /lease_kind = 'READ_SYNC'/);
+assert.match(operatorCanaryMigrationSource, /snapshot\.status = 'COMPLETE'/);
+assert.match(
+  operatorCanaryMigrationSource,
+  /coalesce\(v_kill_mode, 'FREEZE_WRITES'\) <> 'ALLOW'/,
+);
+assert.match(operatorCanaryMigrationSource, /not_before[\s\S]*'infinity'::timestamptz/);
+assert.match(operatorCanaryMigrationSource, /max_attempts[\s\S]*1/);
+assert.match(operatorCanaryMigrationSource, /BUDGET_CANARY_PLAN_MATERIALIZED/);
+assert.match(
+  operatorCanaryMigrationSource,
+  /grant execute on function public\.materialize_meta_customer_budget_canary_plan[\s\S]*to service_role/,
+);
+assert.doesNotMatch(
+  operatorCanaryMigrationSource,
+  /grant execute on function public\.materialize_meta_customer_budget_canary_plan[\s\S]{0,160}to authenticated/,
 );
 assert.match(canaryMigrationSource, /create table public\.meta_budget_canary_approvals/);
 assert.match(canaryMigrationSource, /not_before = 'infinity'::timestamptz/);

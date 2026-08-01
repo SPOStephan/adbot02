@@ -365,6 +365,32 @@ function requiredPositiveMinorUnits(value: unknown, field: string): string {
   return parsed.toString();
 }
 
+export type BudgetCanaryMaterializationCommand = {
+  reason: string;
+};
+
+export function parseBudgetCanaryMaterializationCommand(
+  value: unknown,
+): BudgetCanaryMaterializationCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    ["reason", "confirmation"],
+    "Der Budget-Canary-Vorbereitungsbefehl",
+  );
+
+  if (body.confirmation !== "CANARY VORBEREITEN") {
+    inputError(
+      "confirmation_required",
+      "Geben Sie zur Vorbereitung exakt „CANARY VORBEREITEN“ ein.",
+    );
+  }
+
+  return {
+    reason: requiredText(body.reason, "Die Begründung", 12, 500),
+  };
+}
+
 export type BudgetCanaryApprovalCommand = {
   planId: string;
   payloadHash: string;

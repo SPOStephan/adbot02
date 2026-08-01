@@ -858,6 +858,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       sum + campaign.budgetOwners.filter((owner) => owner.status === "MANAGED").length,
     0,
   );
+  const canPrepareBudgetCanary = Boolean(
+    writeScopeGranted &&
+      marketingCurrency === "EUR" &&
+      metaAccount?.marketing_sync_status === "success" &&
+      Boolean(metaAccount?.marketing_sync_id) &&
+      managedBudgetOwnerCount === 1 &&
+      policyView?.status === "ACTIVE" &&
+      policyView.allowBudgetChanges &&
+      !policyView.allowStatusChanges &&
+      !policyView.allowNewLaunches &&
+      killSwitchView?.mode === "ALLOW" &&
+      budgetCanaryViews.length === 0,
+  );
   const canConfirmBudgetCanary = Boolean(
     writeScopeGranted &&
       marketingCurrency === "EUR" &&
@@ -1129,6 +1142,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               automationScope={automationScopeView}
               brandProfile={brandProfileView}
               budgetCanaries={budgetCanaryViews}
+              canPrepareBudgetCanary={canPrepareBudgetCanary}
               canConfirmBudgetCanary={canConfirmBudgetCanary}
               currency={marketingCurrency}
               killSwitch={killSwitchView}

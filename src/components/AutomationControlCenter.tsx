@@ -82,6 +82,7 @@ type AutomationControlCenterProps = {
   auditEvents: AutomationAuditView[];
   automationScope: AutomationScopeCampaignView[];
   budgetCanaries: BudgetCanaryPlanView[];
+  canPrepareBudgetCanary: boolean;
   canConfirmBudgetCanary: boolean;
   onboarding: AutomationOnboardingData;
   readiness: {
@@ -144,6 +145,7 @@ const EVENT_LABELS: Record<string, string> = {
   CUSTOMER_LAUNCH_AUTHORIZED: "Active Launch kundenseitig autorisiert",
   AUTOMATION_SCOPE_CHANGED: "Verwalteten Automationsbereich geändert",
   BUDGET_CANARY_CONFIRMATION_REQUIRED: "Budgetplan wartet auf exakte Bestätigung",
+  BUDGET_CANARY_PLAN_MATERIALIZED: "Gehaltenen 10-%-Budgetplan vorbereitet",
   BUDGET_CANARY_PLAN_APPROVED: "Einzelnen Budget-Canary freigegeben",
   LAUNCH_CHAIN_MATERIALIZED: "Active-Launch-Kette materialisiert",
   LAUNCH_CHAIN_RECONCILED: "Active-Launch vollständig bestätigt",
@@ -247,6 +249,7 @@ export function AutomationControlCenter({
   automationScope,
   brandProfile,
   budgetCanaries,
+  canPrepareBudgetCanary,
   canConfirmBudgetCanary,
   currency,
   killSwitch,
@@ -830,6 +833,7 @@ export function AutomationControlCenter({
         />
 
         <AutomationBudgetCanaryManager
+          canPrepare={canPrepareBudgetCanary}
           canConfirm={canConfirmBudgetCanary}
           currency={currency}
           plans={budgetCanaries}
