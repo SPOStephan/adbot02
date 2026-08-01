@@ -55,6 +55,9 @@ import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const navigation = [
   { label: "Übersicht", icon: LayoutDashboard, active: true },
   { label: "Kampagnen", icon: Megaphone },
@@ -99,22 +102,15 @@ function getMetaNotice(
   metaConnected: boolean,
   writeScopeGranted: boolean,
 ): MetaNotice | null {
-  if (meta === "connected" && metaConnected) {
+  if (meta === "connected") {
     return {
       tone: "success",
       title: "Meta wurde erfolgreich verbunden.",
-      message: writeScopeGranted
-        ? "Der minimale Meta-Schreibscope wurde bestätigt. Ausführung bleibt bis zu Kunden-Policy, EUR-Caps, Readiness-Gates und ausdrücklichem ALLOW fail-closed."
-        : "Der Connector ist verbunden, aber der minimale Schreibscope fehlt. Bitte führe den sicheren Reconnect aus.",
-    };
-  }
-
-  if (meta === "connected" && !metaConnected) {
-    return {
-      tone: "error",
-      title: "Meta-Verbindung noch nicht bestätigt.",
-      message:
-        "Die Rückleitung war erfolgreich, aber es wurde kein aktiver Connector gefunden. Bitte starte die Verbindung erneut.",
+      message: metaConnected
+        ? writeScopeGranted
+          ? "Der minimale Meta-Schreibscope wurde bestätigt. Ausführung bleibt bis zu Kunden-Policy, EUR-Caps, Readiness-Gates und ausdrücklichem ALLOW fail-closed."
+          : "Der Connector ist verbunden, aber der minimale Schreibscope fehlt. Bitte führe den sicheren Reconnect aus."
+        : "Die Meta-Berechtigungen wurden bestätigt. Die verbundenen Kontodaten werden gerade aktualisiert.",
     };
   }
 

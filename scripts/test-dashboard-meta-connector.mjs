@@ -50,9 +50,16 @@ assert.match(
   dashboardSource,
   /Keine Messaging- oder Beitrags-Publishing-Rechte\./,
 );
-assert.match(dashboardSource, /meta === "connected" && metaConnected/);
+assert.match(dashboardSource, /export const dynamic = "force-dynamic"/);
+assert.match(dashboardSource, /export const revalidate = 0/);
+assert.match(dashboardSource, /meta === "connected"/);
 assert.match(dashboardSource, /Meta wurde erfolgreich verbunden\./);
-assert.match(dashboardSource, /Meta-Verbindung noch nicht bestätigt\./);
+assert.match(
+  dashboardSource,
+  /Die verbundenen Kontodaten werden gerade aktualisiert\./,
+);
+assert.doesNotMatch(dashboardSource, /Meta-Verbindung noch nicht bestätigt\./);
+assert.doesNotMatch(dashboardSource, /kein aktiver Connector gefunden/);
 assert.match(dashboardSource, /Meta konnte nicht verbunden werden\./);
 assert.match(dashboardSource, /invalid_state/);
 assert.match(dashboardSource, /scope_validation/);
@@ -166,6 +173,7 @@ assert.doesNotMatch(
   /access_token_encrypted|token_iv|token_auth_tag|sync_usage/,
 );
 
+assert.match(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
 assert.match(callbackSource, /dashboardRedirect\("connected"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "storage"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "invalid_state"\)/);

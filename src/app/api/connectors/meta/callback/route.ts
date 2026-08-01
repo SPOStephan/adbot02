@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import {
@@ -249,6 +250,7 @@ export async function GET(request: Request) {
       return dashboardRedirect("error", "storage");
     }
 
+    revalidatePath("/dashboard", "page");
     return dashboardRedirect("connected");
   } catch (error) {
     console.error("[meta-oauth] Callback konnte nicht verarbeitet werden", {
