@@ -23,6 +23,10 @@ import {
   AutomationOnboardingControls,
   type AutomationOnboardingData,
 } from "@/components/AutomationOnboardingControls";
+import {
+  AutomationScopeManager,
+  type AutomationScopeCampaignView,
+} from "@/components/AutomationScopeManager";
 
 export type AutomationPolicyView = {
   id: string;
@@ -72,6 +76,7 @@ type AutomationControlCenterProps = {
   brandProfile: BrandProfileView | null;
   killSwitch: KillSwitchView;
   auditEvents: AutomationAuditView[];
+  automationScope: AutomationScopeCampaignView[];
   onboarding: AutomationOnboardingData;
   readiness: {
     writeScopeGranted: boolean;
@@ -131,6 +136,7 @@ const EVENT_LABELS: Record<string, string> = {
   OBJECTIVE_BLUEPRINT_ACTIVATED: "Objective-Blueprint aktiviert",
   BRAND_ASSET_IMPORTED_FROM_META: "Vorhandenes Meta-Creative importiert",
   CUSTOMER_LAUNCH_AUTHORIZED: "Active Launch kundenseitig autorisiert",
+  AUTOMATION_SCOPE_CHANGED: "Verwalteten Automationsbereich geändert",
   LAUNCH_CHAIN_MATERIALIZED: "Active-Launch-Kette materialisiert",
   LAUNCH_CHAIN_RECONCILED: "Active-Launch vollständig bestätigt",
 };
@@ -230,6 +236,7 @@ function ToggleField({
 export function AutomationControlCenter({
   accountName,
   auditEvents,
+  automationScope,
   brandProfile,
   currency,
   killSwitch,
@@ -802,6 +809,15 @@ export function AutomationControlCenter({
             </div>
           </form>
         </div>
+
+        <AutomationScopeManager
+          campaigns={automationScope}
+          canEnable={Boolean(
+            readiness.writeScopeGranted &&
+              policy?.status === "ACTIVE" &&
+              policy.allowBudgetChanges,
+          )}
+        />
 
         <AutomationOnboardingControls
           brandProfileId={brandProfile?.id ?? null}

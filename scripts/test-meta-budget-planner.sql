@@ -9,7 +9,7 @@ values
 
 insert into public.platform_accounts (
   id, user_id, platform, platform_account_id, account_name, access_token,
-  ad_account_ids, marketing_meta_ad_account_id, marketing_currency,
+  ad_account_ids, meta_scopes, marketing_meta_ad_account_id, marketing_currency,
   marketing_timezone_name, marketing_sync_status, marketing_sync_id,
   marketing_last_success_at, marketing_campaign_count,
   marketing_ad_set_count, marketing_ad_count, marketing_creative_count,
@@ -20,7 +20,8 @@ insert into public.platform_accounts (
     '21000000-0000-4000-8000-000000000001',
     '11000000-0000-4000-8000-000000000001',
     'meta', 'planner-owner', 'Planner Owner Meta', null,
-    '["act_111111111111"]'::jsonb, '111111111111', 'EUR',
+    '["act_111111111111"]'::jsonb, array['ads_read','ads_management']::text[],
+    '111111111111', 'EUR',
     'Europe/Berlin', 'success',
     '31000000-0000-4000-8000-000000000001', now(),
     1, 0, 0, 0, 0, 1, current_date - 13, current_date
@@ -29,7 +30,8 @@ insert into public.platform_accounts (
     '21000000-0000-4000-8000-000000000002',
     '11000000-0000-4000-8000-000000000002',
     'meta', 'planner-other', 'Planner Other Meta', null,
-    '["act_222222222222"]'::jsonb, '222222222222', 'EUR',
+    '["act_222222222222"]'::jsonb, array['ads_read','ads_management']::text[],
+    '222222222222', 'EUR',
     'Europe/Berlin', 'success',
     '31000000-0000-4000-8000-000000000002', now(),
     1, 0, 0, 0, 0, 0, current_date - 13, current_date
@@ -102,6 +104,24 @@ select public.append_meta_kill_switch_state(
   '21000000-0000-4000-8000-000000000002',
   null,
   'ALLOW', 'Budget planner regression fixture', 'OPERATOR', 'test'
+);
+
+select * from public.set_meta_customer_automation_scope(
+  '11000000-0000-4000-8000-000000000001',
+  '21000000-0000-4000-8000-000000000001',
+  'CAMPAIGN',
+  '41000000-0000-4000-8000-000000000001',
+  'MANAGED',
+  'Budget planner regression campaign selection'
+);
+
+select * from public.set_meta_customer_automation_scope(
+  '11000000-0000-4000-8000-000000000002',
+  '21000000-0000-4000-8000-000000000002',
+  'CAMPAIGN',
+  '41000000-0000-4000-8000-000000000002',
+  'MANAGED',
+  'Budget planner hard-cap campaign selection'
 );
 
 insert into public.campaign_recommendations (

@@ -22,6 +22,10 @@ const executorRegressionPath = join(
   scriptsDirectory,
   "test-meta-mutation-executor.sql",
 );
+const scopeRegressionPath = join(
+  scriptsDirectory,
+  "test-meta-customer-campaign-scope.sql",
+);
 const reconnectRegressionPath = join(
   scriptsDirectory,
   "test-meta-reconnect-persistence.sql",
@@ -157,6 +161,14 @@ try {
     throw new Error("Control Plane regression did not emit its success marker");
   }
 
+  const { stdout: scopeStdout } = await run(psqlPath, [
+    ...psqlBase,
+    "--file", scopeRegressionPath,
+  ]);
+  if (!scopeStdout.includes("Meta customer campaign scope checks passed")) {
+    throw new Error("Customer campaign scope regression did not emit its success marker");
+  }
+
   const { stdout: creativeStdout } = await run(psqlPath, [
     ...psqlBase,
     "--file", creativeRegressionPath,
@@ -199,7 +211,7 @@ try {
   }
 
   console.log(
-    "Meta Write Control Plane, Creative Asset, Budget Planner, Mutation Executor and reconnect persistence checks passed on a fresh PostgreSQL cluster",
+    "Meta Write Control Plane, Customer Campaign Scope, Creative Asset, Budget Planner, Mutation Executor and reconnect persistence checks passed on a fresh PostgreSQL cluster",
   );
 } finally {
   if (serverStarted && pgCtlPath) {

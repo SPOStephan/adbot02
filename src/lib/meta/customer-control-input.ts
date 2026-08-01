@@ -318,6 +318,40 @@ function assertExactKeys(
   }
 }
 
+const AUTOMATION_SCOPE_SELECTION_TYPES = ["CAMPAIGN", "TARGET"] as const;
+const AUTOMATION_SCOPE_STATUSES = ["MANAGED", "SUSPENDED"] as const;
+
+export type AutomationScopeCommand = {
+  selectionType: (typeof AUTOMATION_SCOPE_SELECTION_TYPES)[number];
+  selectionId: string;
+  status: (typeof AUTOMATION_SCOPE_STATUSES)[number];
+  reason: string;
+};
+
+export function parseAutomationScopeCommand(value: unknown): AutomationScopeCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    ["selectionType", "selectionId", "status", "reason"],
+    "Der Automationsbereich-Befehl",
+  );
+
+  return {
+    selectionType: requiredEnum(
+      body.selectionType,
+      "Der Auswahltyp",
+      AUTOMATION_SCOPE_SELECTION_TYPES,
+    ),
+    selectionId: requiredUuid(body.selectionId, "Die Auswahl-ID"),
+    status: requiredEnum(
+      body.status,
+      "Der Zielstatus",
+      AUTOMATION_SCOPE_STATUSES,
+    ),
+    reason: requiredText(body.reason, "Die Begründung", 8, 500),
+  };
+}
+
 function normalizedHostname(value: unknown, field: string): string {
   const text = requiredText(value, field, 3, 253).toLowerCase().replace(/\.$/, "");
   if (

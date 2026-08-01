@@ -20,6 +20,7 @@ const inputModuleUrl = `data:text/javascript;base64,${Buffer.from(
 const {
   CustomerControlInputError,
   parseAssetImportCommand,
+  parseAutomationScopeCommand,
   parseBlueprintCommand,
   parseBrandCommand,
   parseDomainCommand,
@@ -112,6 +113,32 @@ expectInputError(
 expectInputError(
   () => parseKillSwitchCommand({ mode: "ALLOW", reason: "kurz" }),
   "invalid_text",
+);
+
+assert.deepEqual(
+  parseAutomationScopeCommand({
+    selectionType: "CAMPAIGN",
+    selectionId: "11111111-1111-4111-8111-111111111111",
+    status: "MANAGED",
+    reason: "Expliziter Budget-Canary für eine Kampagne",
+  }),
+  {
+    selectionType: "CAMPAIGN",
+    selectionId: "11111111-1111-4111-8111-111111111111",
+    status: "MANAGED",
+    reason: "Expliziter Budget-Canary für eine Kampagne",
+  },
+);
+expectInputError(
+  () =>
+    parseAutomationScopeCommand({
+      selectionType: "CAMPAIGN",
+      selectionId: "11111111-1111-4111-8111-111111111111",
+      status: "MANAGED",
+      reason: "Expliziter Budget-Canary für eine Kampagne",
+      platformAccountId: "nicht erlaubt",
+    }),
+  "unknown_field",
 );
 
 assert.deepEqual(
@@ -334,6 +361,7 @@ expectInputError(
 
 const [
   componentSource,
+  scopeComponentSource,
   onboardingSource,
   pageSource,
   serviceSource,
@@ -341,16 +369,19 @@ const [
   policyRouteSource,
   brandRouteSource,
   killRouteSource,
+  scopeRouteSource,
   domainRouteSource,
   blueprintRouteSource,
   assetImportRouteSource,
   launchRouteSource,
   migrationSource,
+  scopeMigrationSource,
   onboardingMigrationSource,
   metaImportSource,
   storageSource,
 ] = await Promise.all([
   readFile(path.join(root, "src/components/AutomationControlCenter.tsx"), "utf8"),
+  readFile(path.join(root, "src/components/AutomationScopeManager.tsx"), "utf8"),
   readFile(path.join(root, "src/components/AutomationOnboardingControls.tsx"), "utf8"),
   readFile(path.join(root, "src/app/dashboard/page.tsx"), "utf8"),
   readFile(path.join(root, "src/lib/meta/customer-control-service.ts"), "utf8"),
@@ -358,6 +389,7 @@ const [
   readFile(path.join(root, "src/app/api/meta/automation/policy/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/brand/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/kill-switch/route.ts"), "utf8"),
+  readFile(path.join(root, "src/app/api/meta/automation/scope/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/domain/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/blueprint/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/asset-import/route.ts"), "utf8"),
@@ -366,6 +398,13 @@ const [
     path.join(
       root,
       "supabase/migrations/20260729240000_meta_customer_controls.sql",
+    ),
+    "utf8",
+  ),
+  readFile(
+    path.join(
+      root,
+      "supabase/migrations/20260801100000_meta_customer_campaign_scope.sql",
     ),
     "utf8",
   ),
@@ -393,6 +432,8 @@ assert.match(routeHelperSource, /private, no-store/);
 assert.match(policyRouteSource, /parsePolicyCommand/);
 assert.match(brandRouteSource, /parseBrandCommand/);
 assert.match(killRouteSource, /parseKillSwitchCommand/);
+assert.match(scopeRouteSource, /parseAutomationScopeCommand/);
+assert.match(scopeRouteSource, /setCustomerAutomationScope/);
 assert.match(domainRouteSource, /parseDomainCommand/);
 assert.match(domainRouteSource, /applyCustomerDomainCommand/);
 assert.match(blueprintRouteSource, /parseBlueprintCommand/);
@@ -406,6 +447,8 @@ assert.match(pageSource, /meta_scopes\.includes\("ads_management"\)/);
 assert.match(pageSource, /writeScopeGranted/);
 assert.match(pageSource, /\.eq\("is_current", true\)/);
 assert.match(pageSource, /daily_budget_exposure_snapshots/);
+assert.match(pageSource, /\.from\("automation_targets"\)/);
+assert.match(pageSource, /automationScope=\{automationScopeView\}/);
 assert.match(pageSource, /source_marketing_sync_id/);
 assert.match(pageSource, /\.eq\("user_id", user\.id\)/);
 assert.match(pageSource, /\.eq\("platform_account_id", metaAccount\.id\)/);
@@ -421,6 +464,10 @@ assert.match(componentSource, /Max\. 20 % \/ 24 h/);
 assert.match(componentSource, /12 h Cooldown/);
 assert.match(componentSource, /Minimaler Meta-Schreibscope fehlt/);
 assert.match(componentSource, /Meta sicher neu verbinden/);
+assert.match(componentSource, /AutomationScopeManager/);
+assert.match(scopeComponentSource, /\/api\/meta\/automation\/scope/);
+assert.match(scopeComponentSource, /window\.confirm/);
+assert.match(scopeComponentSource, /Bestehende Kampagnen sind standardmäßig suspendiert/);
 assert.match(componentSource, /mode === "ALLOW" && !readiness\.writeScopeGranted/);
 assert.match(onboardingSource, /\/api\/meta\/automation\/domain/);
 assert.match(onboardingSource, /\/api\/meta\/automation\/blueprint/);
@@ -438,7 +485,13 @@ assert.doesNotMatch(
   onboardingSource,
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease/i,
 );
+assert.doesNotMatch(
+  scopeComponentSource,
+  /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease/i,
+);
 assert.match(serviceSource, /requireWriteReadyCustomer/);
+assert.match(serviceSource, /set_meta_customer_automation_scope/);
+assert.match(serviceSource, /command\.status === "MANAGED"/);
 assert.match(serviceSource, /claimMetaReadOperation/);
 assert.match(serviceSource, /releaseMetaAccountOperation/);
 assert.match(serviceSource, /\.eq\("platform_creative_id", command\.sourceCreativeId\)/);
@@ -477,6 +530,22 @@ assert.match(
 assert.doesNotMatch(
   migrationSource,
   /grant execute on function public\.(put_meta_customer_policy_version|set_meta_customer_kill_switch)[\s\S]*to authenticated/,
+);
+assert.match(scopeMigrationSource, /create table public\.automation_scope_selections/);
+assert.match(scopeMigrationSource, /update public\.automation_targets[\s\S]*status = 'SUSPENDED'/);
+assert.match(scopeMigrationSource, /'ads_management' = any\(account\.meta_scopes\)/);
+assert.match(scopeMigrationSource, /AUTOMATION_SCOPE_CHANGED/);
+assert.match(
+  scopeMigrationSource,
+  /revoke all on function public\.set_meta_customer_automation_scope[\s\S]*from public, anon, authenticated/,
+);
+assert.match(
+  scopeMigrationSource,
+  /grant execute on function public\.set_meta_customer_automation_scope[\s\S]*to service_role/,
+);
+assert.doesNotMatch(
+  scopeMigrationSource,
+  /grant execute on function public\.set_meta_customer_automation_scope[\s\S]*to authenticated/,
 );
 assert.match(onboardingMigrationSource, /register_meta_allowed_domain/);
 assert.match(onboardingMigrationSource, /confirm_meta_allowed_domain/);

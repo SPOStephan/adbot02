@@ -110,6 +110,15 @@ select public.append_meta_kill_switch_state(
   'ALLOW', 'Mutation executor regression fixture', 'OPERATOR', 'test'
 );
 
+select * from public.set_meta_customer_automation_scope(
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  'CAMPAIGN',
+  '42000000-0000-4000-8000-000000000001',
+  'MANAGED',
+  'Mutation executor regression campaign selection'
+);
+
 insert into public.campaign_recommendations (
   id, user_id, platform_account_id, campaign_id, rule_key, rule_version,
   severity, priority, title, summary, evidence, evidence_hash,
@@ -314,6 +323,15 @@ insert into public.automation_targets (
   'campaign:111111111120', 'CAMPAIGN', 'campaign:111111111120',
   '42000000-0000-4000-8000-000000000020', 'MANAGED',
   now() - interval '13 hours', now() - interval '13 hours'
+);
+
+select * from public.set_meta_customer_automation_scope(
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  'TARGET',
+  '52000000-0000-4000-8000-000000000020',
+  'MANAGED',
+  'Executor movement-boundary target selection'
 );
 
 insert into public.mutation_plans (

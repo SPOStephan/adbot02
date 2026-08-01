@@ -45,6 +45,7 @@ import type {
   RecentLaunchPlanView,
   SyncedCreativeView,
 } from "@/components/AutomationOnboardingControls";
+import type { AutomationScopeCampaignView } from "@/components/AutomationScopeManager";
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
@@ -461,6 +462,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: syncedCreatives },
     { data: recentLaunchPlans },
     { data: recentExposureSnapshots },
+    { data: automationTargets },
   ] = metaConnected && metaAccount
     ? await Promise.all([
         supabase
@@ -550,11 +552,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .eq("status", "COMPLETE")
           .order("completed_at", { ascending: false })
           .limit(20),
+        supabase
+          .from("automation_targets")
+          .select("id,target_type,campaign_id,platform_object_id,status")
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .not("budget_owner_key", "is", null)
+          .in("status", ["MANAGED", "SUSPENDED"])
+          .order("created_at", { ascending: true })
+          .limit(1000),
       ])
     : [
         { data: null },
         { data: null },
         { data: null },
+        { data: [] },
         { data: [] },
         { data: [] },
         { data: [] },
@@ -754,6 +766,37 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       };
     })
     .sort((left, right) => (right.spend ?? -1) - (left.spend ?? -1));
+  const budgetOwnersByCampaign = new Map<
+    string,
+    AutomationScopeCampaignView["budgetOwners"]
+  >();
+  for (const row of (automationTargets ?? []) as Record<string, unknown>[]) {
+    const campaignId = String(row.campaign_id ?? "");
+    const targetType = row.target_type === "AD_SET" ? "AD_SET" : "CAMPAIGN";
+    const status = row.status === "MANAGED" ? "MANAGED" : "SUSPENDED";
+    const remoteObjectId = String(row.platform_object_id ?? "");
+    const remoteSuffix = remoteObjectId ? remoteObjectId.slice(-6) : "unbekannt";
+    const owners = budgetOwnersByCampaign.get(campaignId) ?? [];
+    owners.push({
+      id: String(row.id),
+      label:
+        targetType === "CAMPAIGN"
+          ? "Kampagnenbudget"
+          : `Anzeigengruppenbudget · …${remoteSuffix}`,
+      targetType,
+      status,
+    });
+    budgetOwnersByCampaign.set(campaignId, owners);
+  }
+  const automationScopeView: AutomationScopeCampaignView[] = campaignRows.map(
+    (campaign) => ({
+      id: String(campaign.id),
+      name: String(campaign.name),
+      objective: campaign.objective ? String(campaign.objective) : null,
+      effectiveStatus: String(campaign.effectiveStatus ?? campaign.status ?? "UNKNOWN"),
+      budgetOwners: budgetOwnersByCampaign.get(String(campaign.id)) ?? [],
+    }),
+  );
   const campaignNameById = new Map(
     campaignRows.map((campaign) => [campaign.id, campaign.name]),
   );
@@ -1009,6 +1052,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <AutomationControlCenter
               accountName={metaAccount.account_name ?? "Meta-Werbekonto"}
               auditEvents={automationAuditViews}
+              automationScope={automationScopeView}
               brandProfile={brandProfileView}
               currency={marketingCurrency}
               killSwitch={killSwitchView}

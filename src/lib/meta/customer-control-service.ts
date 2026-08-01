@@ -8,6 +8,7 @@ import {
 import {
   assertValidatedImportedAsset,
   type AssetImportCommand,
+  type AutomationScopeCommand,
   type BlueprintCommand,
   type BrandCommand,
   type DomainCommand,
@@ -260,6 +261,49 @@ function requireWriteReadyCustomer(customer: MetaCustomer, operation: string): v
       "Autonome Änderungen sind derzeit ausschließlich für Werbekonten in EUR freigegeben.",
     );
   }
+}
+
+export async function setCustomerAutomationScope(
+  customer: MetaCustomer,
+  command: AutomationScopeCommand,
+): Promise<{
+  selectionId: string;
+  affectedTargetCount: number;
+  managedBudgetOwnerCount: number;
+}> {
+  if (command.status === "MANAGED") {
+    requireWriteReadyCustomer(customer, "einen Automationsbereich freigibst");
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("set_meta_customer_automation_scope", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_selection_type: command.selectionType,
+    p_selection_id: command.selectionId,
+    p_status: command.status,
+    p_reason: command.reason,
+  });
+  const row = Array.isArray(data) ? data[0] : null;
+  const affectedTargetCount = Number(row?.affected_target_count);
+  const managedBudgetOwnerCount = Number(row?.managed_budget_owner_count);
+
+  if (
+    error ||
+    typeof row?.selection_id !== "string" ||
+    !Number.isSafeInteger(affectedTargetCount) ||
+    affectedTargetCount < 0 ||
+    !Number.isSafeInteger(managedBudgetOwnerCount) ||
+    managedBudgetOwnerCount < 0
+  ) {
+    rpcFailure("Der Automationsbereich");
+  }
+
+  return {
+    selectionId: row.selection_id,
+    affectedTargetCount,
+    managedBudgetOwnerCount,
+  };
 }
 
 export async function applyCustomerDomainCommand(
