@@ -52,6 +52,7 @@ import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { SignOutButton } from "@/components/SignOutButton";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
+import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
 
 const navigation = [
@@ -281,6 +282,7 @@ const platformVisuals = {
 };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const renderedAt = new Date();
   const query = await searchParams;
   const supabase = await createClient();
   const {
@@ -349,6 +351,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     (account) => account.platform === "meta" && !account.revoked_at,
   );
   const metaConnected = Boolean(metaAccount?.connected_at);
+  const customerNextSyncAt = resolveCustomerNextSyncAt(
+    metaAccount?.next_sync_at,
+    renderedAt,
+  );
   const writeScopeGranted =
     Array.isArray(metaAccount?.meta_scopes) &&
     metaAccount.meta_scopes.includes("ads_management");
@@ -1107,7 +1113,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         Nächster Abruf
                       </dt>
                       <dd className="mt-2 text-sm font-bold text-slate-900">
-                        {formatDateTime(metaAccount.next_sync_at)}
+                        {formatDateTime(customerNextSyncAt)}
                       </dd>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-4">

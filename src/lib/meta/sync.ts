@@ -25,6 +25,7 @@ import {
 import { decryptAccessToken } from "./crypto";
 import { getMetaSyncEnv } from "./env";
 import { createAdminClient } from "../supabase/admin";
+import { nextHourlyRun } from "./schedule";
 
 const SYNC_LOCK_SECONDS = 5 * 60;
 const MANUAL_SYNC_COOLDOWN_SECONDS = 60;
@@ -249,13 +250,6 @@ function parseDate(value: string | null): Date | null {
 function hasExpired(value: string | null, now = Date.now()): boolean {
   const date = parseDate(value);
   return date ? date.getTime() <= now : false;
-}
-
-function nextHourlyRun(now = new Date()): Date {
-  const next = new Date(now);
-  next.setUTCMinutes(0, 0, 0);
-  next.setUTCHours(next.getUTCHours() + 1);
-  return next;
 }
 
 export function calculateSyncBackoffSeconds(

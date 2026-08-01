@@ -165,6 +165,7 @@ function makeAdminHarness(input = {}) {
 }
 
 const syncSourcePath = join(projectRoot, "src/lib/meta/sync.ts");
+const scheduleSourcePath = join(projectRoot, "src/lib/meta/schedule.ts");
 const migrationPath = join(
   projectRoot,
   "supabase/migrations/20260727133000_meta_content_sync.sql",
@@ -196,7 +197,10 @@ try {
     .replace('from "./env";', 'from "./env.mjs";')
     .replace('from "./marketing-sync";', 'from "./marketing-sync.mjs";')
     .replace('from "./planner";', 'from "./planner.mjs";')
+    .replace('from "./schedule";', 'from "./schedule.mjs";')
     .replace('from "../supabase/admin";', 'from "./admin.mjs";');
+
+  const scheduleSource = await readFile(scheduleSourcePath, "utf8");
 
   const clientStub = `
 const emptyUsage = {
@@ -350,12 +354,56 @@ export function createAdminClient() {
   await writeFile(join(temporaryDirectory, "crypto.mjs"), cryptoStub, "utf8");
   await writeFile(join(temporaryDirectory, "env.mjs"), envStub, "utf8");
   await writeFile(join(temporaryDirectory, "admin.mjs"), adminStub, "utf8");
+  const scheduleModulePath = join(temporaryDirectory, "schedule.mjs");
+  await writeFile(scheduleModulePath, transpile(scheduleSource), "utf8");
   const syncModulePath = join(temporaryDirectory, "sync.mjs");
   await writeFile(syncModulePath, transpile(syncSource), "utf8");
 
   const syncModule = await import(pathToFileURL(syncModulePath).href);
+  const scheduleModule = await import(pathToFileURL(scheduleModulePath).href);
   const plannerModule = await import(
     pathToFileURL(join(temporaryDirectory, "planner.mjs")).href,
+  );
+
+  const referenceTime = new Date("2026-08-01T05:08:24.000Z");
+  assert.equal(
+    scheduleModule.nextHourlyRun(referenceTime).toISOString(),
+    "2026-08-01T06:00:00.000Z",
+  );
+  assert.equal(
+    scheduleModule.resolveCustomerNextSyncAt(
+      "2026-07-30T05:14:50.317Z",
+      referenceTime,
+    ),
+    "2026-08-01T06:00:00.000Z",
+  );
+  assert.equal(
+    scheduleModule.resolveCustomerNextSyncAt(
+      "2026-08-01T05:08:24.000Z",
+      referenceTime,
+    ),
+    "2026-08-01T06:00:00.000Z",
+  );
+  assert.equal(
+    scheduleModule.resolveCustomerNextSyncAt(
+      "2026-08-01T07:14:00.000Z",
+      referenceTime,
+    ),
+    "2026-08-01T07:14:00.000Z",
+  );
+  assert.equal(
+    scheduleModule.resolveCustomerNextSyncAt("not-a-date", referenceTime),
+    "2026-08-01T06:00:00.000Z",
+  );
+  assert.equal(
+    scheduleModule.nextHourlyRun(
+      new Date("2026-08-01T06:00:00.000Z"),
+    ).toISOString(),
+    "2026-08-01T07:00:00.000Z",
+  );
+  assert.throws(
+    () => scheduleModule.resolveCustomerNextSyncAt(null, new Date("invalid")),
+    /Invalid display reference time/,
   );
 
   assert.equal(syncModule.calculateSyncBackoffSeconds(0), 300);
