@@ -555,6 +555,103 @@ begin
 end;
 $$;
 
+-- A second successful marketing sync on the same account day must reuse the
+-- unique owner/day exposure row while relinking it to the new policy snapshot.
+update public.platform_accounts
+set marketing_sync_id = '31000000-0000-4000-8000-000000000003',
+    marketing_sync_status = 'success',
+    marketing_last_success_at = now(),
+    updated_at = now()
+where id = '21000000-0000-4000-8000-000000000001';
+
+update public.campaigns
+set last_seen_sync_id = '31000000-0000-4000-8000-000000000003',
+    budget_sharing_snapshot_sync_id = null,
+    last_seen_at = now(),
+    updated_at = now()
+where id = '41000000-0000-4000-8000-000000000001';
+
+select public.record_meta_campaign_budget_sharing_snapshot(
+  '21000000-0000-4000-8000-000000000001',
+  '11000000-0000-4000-8000-000000000001',
+  '31000000-0000-4000-8000-000000000003',
+  (select lease_token from planner_leases
+    where platform_account_id = '21000000-0000-4000-8000-000000000001'),
+  '[{"platform_campaign_id":"111111111111","is_adset_budget_sharing_enabled":false}]'::jsonb
+);
+
+create temporary table planner_owner_second_sync on commit drop as
+select *
+from public.run_meta_budget_planner(
+  '21000000-0000-4000-8000-000000000001',
+  '11000000-0000-4000-8000-000000000001',
+  '31000000-0000-4000-8000-000000000003',
+  (select lease_token from planner_leases
+    where platform_account_id = '21000000-0000-4000-8000-000000000001'),
+  now()
+);
+
+do $$
+declare
+  v_old_snapshot_id uuid;
+  v_new_snapshot_id uuid;
+begin
+  select snapshot.id into strict v_old_snapshot_id
+  from public.daily_budget_exposure_snapshots snapshot
+  where snapshot.platform_account_id = '21000000-0000-4000-8000-000000000001'
+    and snapshot.source_marketing_sync_id =
+      '31000000-0000-4000-8000-000000000001';
+
+  select snapshot.id into strict v_new_snapshot_id
+  from public.daily_budget_exposure_snapshots snapshot
+  where snapshot.platform_account_id = '21000000-0000-4000-8000-000000000001'
+    and snapshot.source_marketing_sync_id =
+      '31000000-0000-4000-8000-000000000003';
+
+  if (select planner_status from planner_owner_second_sync) <> 'PLANNED'
+    or (select snapshot_id from planner_owner_second_sync) <> v_new_snapshot_id
+    or (select count(*) from public.daily_budget_exposure_snapshots
+        where platform_account_id = '21000000-0000-4000-8000-000000000001') <> 2
+    or (select count(*) from public.daily_budget_exposures
+        where platform_account_id = '21000000-0000-4000-8000-000000000001') <> 1
+    or not exists (
+      select 1
+      from public.daily_budget_exposures exposure
+      where exposure.platform_account_id =
+        '21000000-0000-4000-8000-000000000001'
+        and exposure.snapshot_id = v_new_snapshot_id
+        and exposure.policy_id = '81000000-0000-4000-8000-000000000001'
+        and exposure.budget_owner_key = 'campaign:111111111111'
+        and exposure.max_daily_budget_minor = 2000
+    )
+    or exists (
+      select 1
+      from public.daily_budget_exposures exposure
+      where exposure.platform_account_id =
+        '21000000-0000-4000-8000-000000000001'
+        and exposure.snapshot_id = v_old_snapshot_id
+    ) then
+    raise exception 'Same-day exposure row was not relinked to the latest snapshot';
+  end if;
+
+  begin
+    update public.daily_budget_exposures exposure
+    set snapshot_id = v_old_snapshot_id
+    where exposure.platform_account_id =
+      '21000000-0000-4000-8000-000000000001';
+    raise exception 'Backward same-day snapshot relink was accepted';
+  exception
+    when others then
+      if sqlerrm = 'Backward same-day snapshot relink was accepted' then
+        raise;
+      end if;
+      if sqlerrm <> 'Daily budget exposure identity and maxima cannot decrease' then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
 -- Unknown sharing is explicitly captured and must use at least the 2.10 factor.
 -- The 2,000 budget therefore reserves 4,200, breaching both 3,000 hard caps and
 -- queues an autonomous campaign safety pause, never a budget increase.
@@ -671,7 +768,7 @@ begin
       select 1 from public.mutation_plans
       where platform_account_id = '21000000-0000-4000-8000-000000000002'
     )
-    or (select count(id) from public.daily_budget_exposure_snapshots) <> 1
+    or (select count(id) from public.daily_budget_exposure_snapshots) <> 2
     or (select count(id) from public.daily_budget_exposures) <> 1 then
     raise exception 'Planner tenant RLS is incorrect';
   end if;

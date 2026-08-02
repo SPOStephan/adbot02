@@ -28,6 +28,45 @@ const readLeaseToken = "10000000-0000-4000-8000-000000000004";
 const snapshotId = "10000000-0000-4000-8000-000000000005";
 
 try {
+  const exposureRelinkMigrationPath = join(
+    projectRoot,
+    "supabase/migrations/20260802073000_fix_exposure_snapshot_id_upsert.sql",
+  );
+  const exposureRelinkMigration = await readFile(
+    exposureRelinkMigrationPath,
+    "utf8",
+  );
+  assert.match(
+    exposureRelinkMigration,
+    /policy_id = excluded\.policy_id,/,
+  );
+  assert.match(
+    exposureRelinkMigration,
+    /snapshot_id = excluded\.snapshot_id,/,
+  );
+  assert.match(
+    exposureRelinkMigration,
+    /v_occurrences <> 2/,
+  );
+
+  const plannerRegressionPath = join(
+    projectRoot,
+    "scripts/test-meta-budget-planner.sql",
+  );
+  const plannerRegression = await readFile(plannerRegressionPath, "utf8");
+  assert.match(
+    plannerRegression,
+    /A second successful marketing sync on the same account day/,
+  );
+  assert.match(
+    plannerRegression,
+    /exposure\.snapshot_id = v_new_snapshot_id/,
+  );
+  assert.match(
+    plannerRegression,
+    /Same-day exposure row was not relinked to the latest snapshot/,
+  );
+
   const sourcePath = join(projectRoot, "src/lib/meta/planner.ts");
   const source = (await readFile(sourcePath, "utf8"))
     .replace('import "server-only";', "")
