@@ -379,7 +379,7 @@ export async function materializeCustomerBudgetCanary(
       serviceError(
         "canary_materialization_not_ready",
         409,
-        "Der Canary wurde nicht vorbereitet: Genau ein aktiver Budgetowner, Budget-only-Policy, ALLOW, aktueller EUR-Snapshot, Caps und Cooldown müssen vollständig erfüllt sein.",
+        "Der Canary wurde nicht vorbereitet: Genau ein aktiver Budgetowner, Budget-only-Policy, FREEZE_WRITES, aktueller EUR-Snapshot, Caps und Cooldown müssen vollständig erfüllt sein.",
       );
     }
     result = parseCustomerBudgetCanaryMaterializationResult(data);

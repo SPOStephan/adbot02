@@ -154,6 +154,37 @@ begin
 end;
 $$;
 
+-- Preparation itself must never require an account-wide write window.
+do $$
+begin
+  begin
+    perform public.materialize_meta_customer_budget_canary_plan(
+      '15000000-0000-4000-8000-000000000001',
+      '25000000-0000-4000-8000-000000000001',
+      '95000000-0000-4000-8000-000000000001',
+      'Regression must reject preparation while account writes are allowed',
+      now()
+    );
+    raise exception 'Canary preparation accepted account ALLOW';
+  exception
+    when others then
+      if sqlerrm = 'Canary preparation accepted account ALLOW' then raise; end if;
+      if sqlerrm <> 'Account writes must remain frozen while preparing the canary' then raise; end if;
+  end;
+end;
+$$;
+
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  null,
+  'FREEZE_WRITES',
+  'Operator canary preparation remains account-wide frozen',
+  'OPERATOR',
+  'test'
+);
+
 create temporary table operator_canary_materialization on commit drop as
 select public.materialize_meta_customer_budget_canary_plan(
   '15000000-0000-4000-8000-000000000001',
@@ -210,9 +241,19 @@ begin
   from public.get_effective_meta_kill_switch(
     v_plan.user_id, v_plan.platform_account_id, v_plan.id
   );
-  if v_effective.mode <> 'FREEZE_WRITES'
-    or v_effective.scope_type <> 'PLAN' then
-    raise exception 'Materialized operator canary is not held at plan scope';
+  if v_effective.mode <> 'FREEZE_WRITES' then
+    raise exception 'Materialized operator canary is not effectively frozen';
+  end if;
+
+  if not exists (
+    select 1
+    from public.kill_switch_state hold
+    where hold.scope_type = 'PLAN'
+      and hold.plan_id = v_plan.id
+      and hold.mode = 'FREEZE_WRITES'
+      and hold.actor_id = 'meta-budget-canary-gate'
+  ) then
+    raise exception 'Materialized operator canary has no immutable plan hold';
   end if;
 
   select count(*) into v_claim_count

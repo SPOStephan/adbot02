@@ -206,6 +206,8 @@ begin
         and ap.allow_status_changes
         and ap.allow_new_launches
         and ap.require_verified_domain
+        and ap.policy_payload #>> '{brand_assets,allow_generation}' = 'false'
+        and ap.policy_hash = public.meta_sha256(ap.policy_payload::text)
         and ap.customer_confirmed_by = '10000000-0000-4000-8000-000000000002'
     )
     or (select count(*) from public.automation_policies
