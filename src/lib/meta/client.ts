@@ -915,7 +915,9 @@ export async function getInstagramMedia(input: {
 
 
 const META_MARKETING_PAGE_SIZE = 100;
+const META_CAMPAIGN_PAGE_SIZE = 50;
 const META_MARKETING_MAX_PAGES = 50;
+const META_CAMPAIGN_MAX_PAGES = 100;
 const META_MARKETING_MAX_OBJECTS = 10_000;
 const META_CREATIVE_BATCH_SIZE = 50;
 const META_INSIGHTS_MAX_ROWS = 50_000;
@@ -1367,13 +1369,18 @@ export async function getMetaAdAccountSummary(input: {
   return { account, usage };
 }
 
-function marketingCollectionUrl(adAccountId: string, edge: string, fields: string): URL {
+function marketingCollectionUrl(
+  adAccountId: string,
+  edge: string,
+  fields: string,
+  pageSize = META_MARKETING_PAGE_SIZE,
+): URL {
   const url = new URL(
     `/${META_GRAPH_VERSION}/${encodeURIComponent(normalizeMetaAdAccountId(adAccountId))}/${edge}`,
     META_GRAPH_ORIGIN,
   );
   url.searchParams.set("fields", fields);
-  url.searchParams.set("limit", String(META_MARKETING_PAGE_SIZE));
+  url.searchParams.set("limit", String(pageSize));
   return url;
 }
 
@@ -1387,11 +1394,12 @@ export function getMetaCampaigns(input: {
       input.adAccountId,
       "campaigns",
       "id,account_id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,bid_strategy,is_adset_budget_sharing_enabled,special_ad_categories,start_time,stop_time,created_time,updated_time",
+      META_CAMPAIGN_PAGE_SIZE,
     ),
     accessToken: input.accessToken,
     appSecret: input.appSecret,
     parseItem: parseCampaign,
-    maxPages: META_MARKETING_MAX_PAGES,
+    maxPages: META_CAMPAIGN_MAX_PAGES,
     maxItems: META_MARKETING_MAX_OBJECTS,
     requireComplete: true,
   });

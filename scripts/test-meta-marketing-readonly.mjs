@@ -195,6 +195,7 @@ try {
   assert.deepEqual(campaignsResult.items[0].specialAdCategories, ["NONE"]);
   assert.equal(requests.length, 2);
   assert.ok(requests.every(({ init }) => init.method === "GET"));
+  assert.equal(requests[0].url.searchParams.get("limit"), "50");
   assert.equal(requests[1].url.searchParams.get("access_token"), null);
   assert.ok(requests[1].url.searchParams.get("appsecret_proof"));
 
