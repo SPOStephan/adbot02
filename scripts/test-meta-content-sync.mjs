@@ -937,6 +937,7 @@ export function createAdminClient() {
   assert.match(cronRouteSource, /getMetaCronEnv\(\)/);
   assert.match(cronRouteSource, /getDueMetaConnectorIds\(META_CRON_BATCH_SIZE\)/);
   assert.match(cronRouteSource, /mode: "cron"/);
+  assert.match(cronRouteSource, /export const maxDuration = 180/);
   assert.match(cronRouteSource, /private, no-store/);
   assert.match(manualRouteSource, /mode: "manual"/);
   assert.match(manualRouteSource, /userId: user\.id/);
