@@ -19,7 +19,7 @@ insert into public.platform_accounts (
   (
     '22000000-0000-4000-8000-000000000001',
     '12000000-0000-4000-8000-000000000001',
-    'meta', 'executor-owner', '111111111111', 'Executor Owner Meta',
+    'meta', 'executor-owner', '900000000001', 'Executor Owner Meta',
     null, 'ciphertext', 'iv', 'auth-tag',
     '["act_111111111111"]'::jsonb,
     array['ads_read','ads_management']::text[],
@@ -31,7 +31,7 @@ insert into public.platform_accounts (
   (
     '22000000-0000-4000-8000-000000000002',
     '12000000-0000-4000-8000-000000000002',
-    'meta', 'executor-other', '222222222222', 'Executor Other Meta',
+    'meta', 'executor-other', '900000000002', 'Executor Other Meta',
     null, 'ciphertext-2', 'iv-2', 'auth-tag-2',
     '["act_222222222222"]'::jsonb,
     array['ads_read','ads_management']::text[],
