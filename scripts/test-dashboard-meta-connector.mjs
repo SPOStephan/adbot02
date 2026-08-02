@@ -33,6 +33,23 @@ const marketingMigrationSource = await readFile(
   ),
   "utf8",
 );
+const dashboardReadGrantMigrationSource = await readFile(
+  join(
+    projectRoot,
+    "supabase/migrations/20260802060000_dashboard_authenticated_read_grants.sql",
+  ),
+  "utf8",
+);
+const dashboardReadGrantSql = dashboardReadGrantMigrationSource.replace(/--.*$/gm, "");
+const platformAccountPrivilegeHardeningSource = await readFile(
+  join(
+    projectRoot,
+    "supabase/migrations/20260802061000_platform_accounts_revoke_legacy_privileges.sql",
+  ),
+  "utf8",
+);
+const platformAccountPrivilegeHardeningSql =
+  platformAccountPrivilegeHardeningSource.replace(/--.*$/gm, "");
 const callbackSource = await readFile(
   join(projectRoot, "src/app/api/connectors/meta/callback/route.ts"),
   "utf8",
@@ -106,6 +123,55 @@ assert.match(dashboardSource, /recommendations=\{recommendationRows\}/);
 assert.match(dashboardSource, /Ausführung nur mit aktiver Kunden-Policy/);
 assert.match(dashboardSource, /writeScopeGranted/);
 assert.match(dashboardSource, /minimale Schreibscope muss bestätigt werden/);
+assert.match(dashboardSource, /error: connectedAccountsError/);
+assert.match(dashboardSource, /platformAccountReadFailed/);
+assert.match(dashboardSource, /Verbindungsdaten konnten nicht geladen werden\./);
+assert.match(dashboardSource, /Bestehende Verbindung bleibt unverändert/);
+assert.match(
+  dashboardSource,
+  /platform\.configured && !account && !platformAccountReadFailed/,
+);
+assert.doesNotMatch(
+  dashboardSource,
+  /connectedAccountsError[\s\S]{0,500}Noch keine Werbekonten verbunden/,
+);
+
+for (const table of [
+  "platform_accounts",
+  "meta_assets",
+  "meta_content_candidates",
+  "campaigns",
+  "campaign_recommendations",
+  "automation_policies",
+  "kill_switch_state",
+  "mutation_audit_events",
+  "allowed_domains",
+  "objective_blueprints",
+  "brand_assets",
+  "mutation_plans",
+]) {
+  assert.match(
+    dashboardReadGrantSql,
+    new RegExp(`on\\s+table\\s+public\\.${table}\\s+to\\s+authenticated`, "i"),
+  );
+}
+assert.doesNotMatch(
+  dashboardReadGrantSql,
+  /grant\s+(?:all|insert|update|delete|truncate|references|trigger)/i,
+);
+assert.doesNotMatch(
+  dashboardReadGrantSql,
+  /grant\s+select\s+on\s+table\s+public\.platform_accounts/i,
+);
+assert.doesNotMatch(
+  dashboardReadGrantSql,
+  /access_token|refresh_token|access_token_encrypted|token_iv|token_auth_tag/i,
+);
+assert.match(
+  platformAccountPrivilegeHardeningSql,
+  /revoke\s+truncate\s*,\s*references\s*,\s*trigger\s+on\s+table\s+public\.platform_accounts\s+from\s+anon\s*,\s*authenticated\s*;/i,
+);
+assert.doesNotMatch(platformAccountPrivilegeHardeningSql, /grant\s+/i);
 
 assert.match(cardSource, /href=\{actionHref!\}/);
 assert.match(cardSource, /prefetch=\{false\}/);

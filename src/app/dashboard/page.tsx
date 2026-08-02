@@ -291,12 +291,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     redirect("/login");
   }
 
-  const { data: connectedAccounts } = await supabase
+  const { data: connectedAccounts, error: connectedAccountsError } = await supabase
     .from("platform_accounts")
     .select(
       "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until",
     )
     .eq("user_id", user.id);
+  const platformAccountReadFailed = Boolean(connectedAccountsError);
 
   const platforms = getPlatformCatalog().map((platform) => {
     const account = connectedAccounts?.find(
@@ -313,33 +314,41 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       id: platform.id,
       name: platform.name,
       description: platform.description,
-      status: account
-        ? isMeta
-          ? "Verbunden"
-          : account.account_name
-            ? `Verbunden: ${account.account_name}`
-            : "Verbunden"
-        : platform.configured
-          ? "Bereit zur Verbindung"
-          : "API-Zugang noch nicht hinterlegt",
+      status: platformAccountReadFailed && isMeta
+        ? "Verbindungsstatus vorübergehend nicht verfügbar"
+        : account
+          ? isMeta
+            ? "Verbunden"
+            : account.account_name
+              ? `Verbunden: ${account.account_name}`
+              : "Verbunden"
+          : platform.configured
+            ? "Bereit zur Verbindung"
+            : "API-Zugang noch nicht hinterlegt",
       connected: Boolean(account),
       badge:
         isMeta && platform.configured
-          ? metaWriteScopeGranted
-            ? "Minimaler Schreibscope bestätigt"
-            : "Reconnect für Autonomie"
+          ? platformAccountReadFailed
+            ? "Lesestatus prüfen"
+            : metaWriteScopeGranted
+              ? "Minimaler Schreibscope bestätigt"
+              : "Reconnect für Autonomie"
           : undefined,
       helperText: isMeta
-        ? metaWriteScopeGranted
-          ? "Liest Werbedaten und erlaubt ausschließlich policy-gedeckte Budget-, Status- und Active-Launch-Schritte. Keine Messaging- oder Beitrags-Publishing-Rechte."
-          : "Liest Kampagnen, Insights sowie Seiten- und Instagram-Beiträge. Schreibvorgänge bleiben bis zum expliziten Scope-Reconnect blockiert."
+        ? platformAccountReadFailed
+          ? "Die vorhandene Verbindung konnte nicht gelesen werden und bleibt unverändert. Bitte keinen Reconnect starten."
+          : metaWriteScopeGranted
+            ? "Liest Werbedaten und erlaubt ausschließlich policy-gedeckte Budget-, Status- und Active-Launch-Schritte. Keine Messaging- oder Beitrags-Publishing-Rechte."
+            : "Liest Kampagnen, Insights sowie Seiten- und Instagram-Beiträge. Schreibvorgänge bleiben bis zum expliziten Scope-Reconnect blockiert."
         : undefined,
       actionHref:
-        isMeta && platform.configured && !account
+        isMeta && platform.configured && !account && !platformAccountReadFailed
           ? "/api/connectors/meta/start"
           : undefined,
       actionLabel:
-        isMeta && platform.configured && !account ? "Meta verbinden" : undefined,
+        isMeta && platform.configured && !account && !platformAccountReadFailed
+          ? "Meta verbinden"
+          : undefined,
       ...platformVisuals[platform.id],
     };
   });
@@ -1030,17 +1039,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   className={`rounded-full px-3 py-1 text-xs font-bold ${
                     metaAccount?.marketing_sync_status === "success"
                       ? "bg-emerald-100 text-emerald-800"
-                      : "bg-blue-100 text-blue-800"
+                      : platformAccountReadFailed
+                        ? "bg-amber-100 text-amber-900"
+                        : "bg-blue-100 text-blue-800"
                   }`}
                 >
                   {metaAccount?.marketing_sync_status === "success"
                     ? "Meta Live"
-                    : "Live-Daten noch nicht verfügbar"}
+                    : platformAccountReadFailed
+                      ? "Live-Daten konnten nicht geladen werden"
+                      : "Live-Daten noch nicht verfügbar"}
                 </span>
                 <span className="text-xs text-slate-400">
-                  {hasConnectedPlatform
-                    ? `Datenstand ${formatDateTime(metaAccount?.marketing_last_success_at)}`
-                    : "Noch keine Werbekonten verbunden"}
+                  {platformAccountReadFailed
+                    ? "Bestehende Verbindung bleibt unverändert"
+                    : hasConnectedPlatform
+                      ? `Datenstand ${formatDateTime(metaAccount?.marketing_last_success_at)}`
+                      : "Noch keine Werbekonten verbunden"}
                 </span>
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Marketing-Übersicht</h1>
@@ -1081,6 +1096,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <div>
                 <p className="font-bold">{metaNotice.title}</p>
                 <p className="mt-1 text-sm leading-6 opacity-80">{metaNotice.message}</p>
+              </div>
+            </section>
+          ) : null}
+
+          {platformAccountReadFailed ? (
+            <section
+              aria-live="assertive"
+              className="mt-8 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950 sm:p-5"
+              role="alert"
+            >
+              <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-700" />
+              <div>
+                <p className="font-bold">Verbindungsdaten konnten nicht geladen werden.</p>
+                <p className="mt-1 text-sm leading-6 opacity-80">
+                  Die bestehende Meta-Verbindung bleibt unverändert. Bitte keinen Reconnect starten;
+                  der Lesezugriff muss zuerst geprüft werden.
+                </p>
               </div>
             </section>
           ) : null}
