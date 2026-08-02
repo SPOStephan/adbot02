@@ -27,6 +27,12 @@ function jsonResponse(body, headers = {}) {
   });
 }
 
+function timeoutError() {
+  const error = new Error("Meta read timed out");
+  error.name = "TimeoutError";
+  return error;
+}
+
 const temporaryDirectory = await mkdtemp(join(tmpdir(), "adbot-meta-marketing-"));
 const originalFetch = globalThis.fetch;
 
@@ -86,6 +92,54 @@ try {
   assert.equal(requests[0].init.method, "GET");
   assert.equal(requests[0].init.headers.Authorization, "Bearer read-only-token");
   assert.ok(requests[0].url.searchParams.get("appsecret_proof"));
+
+  requests.length = 0;
+  let timeoutAttempts = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+    timeoutAttempts += 1;
+
+    if (timeoutAttempts === 1) {
+      throw timeoutError();
+    }
+
+    return jsonResponse({
+      id: "act_123456789",
+      name: "Staging Werbekonto",
+      currency: "eur",
+      timezone_name: "Europe/Berlin",
+      timezone_offset_hours_utc: 2,
+      account_status: 1,
+    });
+  };
+
+  const retriedAccountResult = await client.getMetaAdAccountSummary({
+    adAccountId: "123456789",
+    accessToken: "read-only-token",
+    appSecret: "test-secret",
+  });
+
+  assert.equal(retriedAccountResult.account.id, "123456789");
+  assert.equal(timeoutAttempts, 2);
+  assert.equal(requests.length, 2);
+  assert.notEqual(requests[0].init.signal, requests[1].init.signal);
+
+  let exhaustedTimeoutAttempts = 0;
+  globalThis.fetch = async () => {
+    exhaustedTimeoutAttempts += 1;
+    throw timeoutError();
+  };
+
+  await assert.rejects(
+    client.getMetaAdAccountSummary({
+      adAccountId: "123456789",
+      accessToken: "read-only-token",
+      appSecret: "test-secret",
+    }),
+    (error) => error instanceof Error && error.name === "TimeoutError",
+  );
+  assert.equal(exhaustedTimeoutAttempts, 2);
 
   requests.length = 0;
   globalThis.fetch = async (input, init) => {

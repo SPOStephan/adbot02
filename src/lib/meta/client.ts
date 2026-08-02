@@ -17,6 +17,7 @@ const META_COLLECTION_PAGE_SIZE = 25;
 const META_MAX_COLLECTION_PAGES = 2;
 const META_ABSOLUTE_MAX_COLLECTION_PAGES = 100;
 const META_REQUEST_TIMEOUT_MS = 15_000;
+const META_REQUEST_TIMEOUT_RETRY_LIMIT = 1;
 const META_CAPTION_MAX_LENGTH = 500;
 
 export type MetaUsageSnapshot = {
@@ -329,19 +330,38 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+async function fetchMetaResponse(
+  url: URL,
+  headers: Record<string, string>,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        signal: AbortSignal.timeout(META_REQUEST_TIMEOUT_MS),
+        headers: {
+          Accept: "application/json",
+          ...headers,
+        },
+      });
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        error.name !== "TimeoutError" ||
+        attempt >= META_REQUEST_TIMEOUT_RETRY_LIMIT
+      ) {
+        throw error;
+      }
+    }
+  }
+}
+
 async function fetchMetaJson(
   url: URL,
   headers: Record<string, string> = {},
 ): Promise<MetaJsonResponse> {
-  const response = await fetch(url, {
-    method: "GET",
-    cache: "no-store",
-    signal: AbortSignal.timeout(META_REQUEST_TIMEOUT_MS),
-    headers: {
-      Accept: "application/json",
-      ...headers,
-    },
-  });
+  const response = await fetchMetaResponse(url, headers);
   const body = await readJson(response);
   const usage = metaUsageFromHeaders(response.headers);
 
