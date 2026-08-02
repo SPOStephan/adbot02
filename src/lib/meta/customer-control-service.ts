@@ -15,6 +15,7 @@ import {
   type BrandCommand,
   type DomainCommand,
   type KillSwitchCommand,
+  type LaunchApprovalCommand,
   type LaunchCommand,
   type PolicyCommand,
 } from "@/lib/meta/customer-control-input";
@@ -668,33 +669,75 @@ export async function importCustomerBrandAsset(
   return { brandAssetId: data };
 }
 
-type CustomerLaunchResult = {
+export type CustomerLaunchResult = {
   outcome: "CREATED" | "EXISTING";
   planId: string;
-  status: string;
+  status: "HELD";
+  payloadHash: string;
+  objective: string;
+  destinationUrl: string;
+  targetStatus: "ACTIVE";
+  budgetOwnerType: "CAMPAIGN" | "AD_SET";
+  dailyBudgetMinor: string;
+  campaignName: string;
+  adSetName: string;
+  creativeName: string;
+  adName: string;
+  brandAssetIds: string[];
+  preparedAt: string;
 };
 
 function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    rpcFailure("Der sichere Launch-Plan");
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    rpcFailure("Die Aktiv-Launch-Vorbereitung");
   }
-  const record = value as Record<string, unknown>;
+  const record = raw as Record<string, unknown>;
+  const dailyBudgetMinor = String(record.daily_budget_minor ?? "");
+  const brandAssetIds = Array.isArray(record.brand_asset_ids)
+    ? record.brand_asset_ids.filter(
+        (assetId): assetId is string =>
+          typeof assetId === "string" && /^[0-9a-f-]{36}$/i.test(assetId),
+      )
+    : [];
   if (
     (record.outcome !== "CREATED" && record.outcome !== "EXISTING") ||
     typeof record.plan_id !== "string" ||
-    !/^[0-9a-f-]{36}$/i.test(record.plan_id)
+    !/^[0-9a-f-]{36}$/i.test(record.plan_id) ||
+    record.status !== "HELD" ||
+    typeof record.payload_hash !== "string" ||
+    !/^[0-9a-f]{64}$/.test(record.payload_hash) ||
+    typeof record.objective !== "string" ||
+    typeof record.destination_url !== "string" ||
+    record.target_status !== "ACTIVE" ||
+    (record.budget_owner_type !== "CAMPAIGN" &&
+      record.budget_owner_type !== "AD_SET") ||
+    !/^[1-9][0-9]*$/.test(dailyBudgetMinor) ||
+    typeof record.campaign_name !== "string" ||
+    typeof record.ad_set_name !== "string" ||
+    typeof record.creative_name !== "string" ||
+    typeof record.ad_name !== "string" ||
+    brandAssetIds.length < 1 ||
+    typeof record.prepared_at !== "string"
   ) {
-    rpcFailure("Der sichere Launch-Plan");
+    rpcFailure("Die Aktiv-Launch-Vorbereitung");
   }
   return {
     outcome: record.outcome,
     planId: record.plan_id,
-    status:
-      typeof record.status === "string"
-        ? record.status
-        : record.outcome === "CREATED"
-          ? "PENDING"
-          : "UNKNOWN",
+    status: "HELD",
+    payloadHash: record.payload_hash,
+    objective: record.objective,
+    destinationUrl: record.destination_url,
+    targetStatus: "ACTIVE",
+    budgetOwnerType: record.budget_owner_type,
+    dailyBudgetMinor,
+    campaignName: record.campaign_name,
+    adSetName: record.ad_set_name,
+    creativeName: record.creative_name,
+    adName: record.ad_name,
+    brandAssetIds,
+    preparedAt: record.prepared_at,
   };
 }
 
@@ -702,17 +745,25 @@ export async function materializeCustomerLaunch(
   customer: MetaCustomer,
   command: LaunchCommand,
 ): Promise<CustomerLaunchResult> {
-  requireWriteReadyCustomer(customer, "einen aktiven Launch autorisierst");
+  requireWriteReadyCustomer(customer, "einen Aktiv-Launch vorbereitest");
+  if (!customer.marketingSyncId) {
+    serviceError(
+      "fresh_sync_required",
+      409,
+      "Vor der Aktiv-Launch-Vorbereitung ist ein aktueller erfolgreicher Meta-Abruf erforderlich.",
+    );
+  }
+
   const leaseToken = await claimMetaReadOperation({
     platformAccountId: customer.platformAccountId,
     userId: customer.userId,
-    ownerId: `customer-launch:${randomUUID()}`,
+    ownerId: `customer-launch-prepare:${randomUUID()}`,
   });
   if (!leaseToken) {
     serviceError(
       "read_snapshot_busy",
       409,
-      "Ein Meta-Sync oder Planer-Lauf ist aktiv. Bitte versuche den Launch in wenigen Minuten erneut.",
+      "Ein Meta-Sync oder Planer-Lauf ist aktiv. Bitte versuche die Aktiv-Launch-Vorbereitung in wenigen Minuten erneut.",
     );
   }
 
@@ -731,15 +782,18 @@ export async function materializeCustomerLaunch(
         p_allowed_domain_id: command.allowedDomainId,
         p_budget_owner_type: command.budgetOwnerType,
         p_daily_budget_minor: command.dailyBudgetMinor,
-        p_launch_inputs: command.launchInputs,
+        p_launch_inputs: {
+          ...command.launchInputs,
+          preparation_reason: command.reason,
+        },
         p_planned_at: new Date().toISOString(),
       },
     );
     if (error) {
       serviceError(
-        "launch_readiness_failed",
+        "launch_preparation_not_ready",
         409,
-        "Der Launch wurde nicht geplant: Policy, ALLOW, aktueller EUR-Snapshot, Budgetgrenzen oder Readiness-Gates sind noch nicht vollständig erfüllt.",
+        "Der Aktiv-Launch wurde nicht vorbereitet: FREEZE_WRITES, aktueller EUR-Snapshot, Launch-Policy, Budgetgrenzen, Domain, Brand und Creative müssen vollständig erfüllt sein.",
       );
     }
     result = parseCustomerLaunchResult(data);
@@ -755,14 +809,78 @@ export async function materializeCustomerLaunch(
         serviceError(
           "read_lease_release_failed",
           500,
-          "Der Launch wurde nicht ausgeführt, weil die sichere Read-Lease nicht freigegeben werden konnte.",
+          "Der Aktiv-Launch wurde nicht vorbereitet, weil die sichere Read-Lease nicht freigegeben werden konnte.",
         );
       }
     }
   }
 
   if (!result) {
-    rpcFailure("Der sichere Launch-Plan");
+    rpcFailure("Die Aktiv-Launch-Vorbereitung");
   }
   return result;
+}
+
+export async function approveCustomerLaunch(
+  customer: MetaCustomer,
+  command: LaunchApprovalCommand,
+): Promise<{
+  approvalId: string;
+  planId: string;
+  planStatus: "PENDING";
+  executableAt: string;
+  approvedAt: string;
+}> {
+  requireWriteReadyCustomer(customer, "einen Aktiv-Launch freigibst");
+  if (!customer.marketingSyncId) {
+    serviceError(
+      "fresh_sync_required",
+      409,
+      "Vor der Aktiv-Launch-Freigabe ist ein aktueller erfolgreicher Meta-Abruf erforderlich.",
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("approve_meta_launch_canary_plan", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_plan_id: command.planId,
+    p_expected_payload_hash: command.payloadHash,
+    p_expected_objective: command.objective,
+    p_expected_destination_url: command.destinationUrl,
+    p_expected_target_status: command.targetStatus,
+    p_expected_budget_owner_type: command.budgetOwnerType,
+    p_expected_daily_budget_minor: command.dailyBudgetMinor,
+    p_expected_campaign_name: command.campaignName,
+    p_expected_ad_set_name: command.adSetName,
+    p_expected_creative_name: command.creativeName,
+    p_expected_ad_name: command.adName,
+    p_reason: command.reason,
+  });
+  const row = Array.isArray(data) ? data[0] : null;
+
+  if (error) {
+    serviceError(
+      "launch_approval_not_ready",
+      409,
+      "Der Aktiv-Launch ist nicht mehr exakt ausführbar. Bitte Plan, Fingerprint, FREEZE_WRITES, Policy und aktuellen Meta-Abruf erneut prüfen.",
+    );
+  }
+  if (
+    typeof row?.approval_id !== "string" ||
+    row?.plan_id !== command.planId ||
+    row?.plan_status !== "PENDING" ||
+    typeof row?.executable_at !== "string" ||
+    typeof row?.approved_at !== "string"
+  ) {
+    rpcFailure("Die Aktiv-Launch-Freigabe");
+  }
+
+  return {
+    approvalId: row.approval_id,
+    planId: row.plan_id,
+    planStatus: "PENDING",
+    executableAt: row.executable_at,
+    approvedAt: row.approved_at,
+  };
 }

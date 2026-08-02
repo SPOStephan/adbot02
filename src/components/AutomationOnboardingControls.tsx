@@ -50,7 +50,70 @@ export type RecentLaunchPlanView = {
   id: string;
   status: string;
   createdAt: string;
+  payloadHash: string | null;
+  objective: string | null;
+  destinationUrl: string | null;
+  targetStatus: "ACTIVE" | null;
+  budgetOwnerType: "CAMPAIGN" | "AD_SET" | null;
+  dailyBudgetMinor: string | null;
+  campaignName: string | null;
+  adSetName: string | null;
+  creativeName: string | null;
+  adName: string | null;
+  brandAssetIds: string[];
 };
+
+type HeldLaunchPlan = {
+  id: string;
+  status: "HELD";
+  outcome: "CREATED" | "EXISTING" | null;
+  createdAt: string;
+  payloadHash: string;
+  objective: string;
+  destinationUrl: string;
+  targetStatus: "ACTIVE";
+  budgetOwnerType: "CAMPAIGN" | "AD_SET";
+  dailyBudgetMinor: string;
+  campaignName: string;
+  adSetName: string;
+  creativeName: string;
+  adName: string;
+  brandAssetIds: string[];
+};
+
+function toHeldLaunchPlan(plan: RecentLaunchPlanView): HeldLaunchPlan | null {
+  if (
+    plan.status !== "HELD" ||
+    !plan.payloadHash ||
+    !plan.objective ||
+    !plan.destinationUrl ||
+    plan.targetStatus !== "ACTIVE" ||
+    !plan.budgetOwnerType ||
+    !plan.dailyBudgetMinor ||
+    !plan.campaignName ||
+    !plan.adSetName ||
+    !plan.creativeName ||
+    !plan.adName ||
+    plan.brandAssetIds.length < 1
+  ) {
+    return null;
+  }
+  return {
+    ...plan,
+    status: "HELD",
+    outcome: null,
+    payloadHash: plan.payloadHash,
+    objective: plan.objective,
+    destinationUrl: plan.destinationUrl,
+    targetStatus: "ACTIVE",
+    budgetOwnerType: plan.budgetOwnerType,
+    dailyBudgetMinor: plan.dailyBudgetMinor,
+    campaignName: plan.campaignName,
+    adSetName: plan.adSetName,
+    creativeName: plan.creativeName,
+    adName: plan.adName,
+  };
+}
 
 export type AutomationOnboardingData = {
   domains: AllowedDomainView[];
@@ -121,12 +184,19 @@ function displayDate(value: string | null | undefined): string {
       }).format(date);
 }
 
-async function postAutomationControl<T extends ApiPayload>(
+function displayMinorUnits(value: string): string {
+  if (!/^[0-9]+$/.test(value)) return "—";
+  const padded = value.padStart(3, "0");
+  return `${padded.slice(0, -2)},${padded.slice(-2)} €`;
+}
+
+async function requestAutomationControl<T extends ApiPayload>(
+  method: "POST" | "PUT",
   url: string,
   body: Record<string, unknown>,
 ): Promise<T> {
   const response = await fetch(url, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -139,6 +209,20 @@ async function postAutomationControl<T extends ApiPayload>(
     );
   }
   return result;
+}
+
+function postAutomationControl<T extends ApiPayload>(
+  url: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  return requestAutomationControl<T>("POST", url, body);
+}
+
+function putAutomationControl<T extends ApiPayload>(
+  url: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  return requestAutomationControl<T>("PUT", url, body);
 }
 
 function NoticeBox({ notice }: { notice: Notice }) {
@@ -229,19 +313,30 @@ export function AutomationOnboardingControls({
   const [adSetName, setAdSetName] = useState("");
   const [creativeName, setCreativeName] = useState("");
   const [adName, setAdName] = useState("");
-  const [launchConfirmed, setLaunchConfirmed] = useState(false);
-  const [materializedPlan, setMaterializedPlan] = useState<{
-    id: string;
-    status: string;
-    outcome: string;
-  } | null>(null);
+  const [launchReason, setLaunchReason] = useState("");
+  const [launchPreparationConfirmation, setLaunchPreparationConfirmation] =
+    useState("");
+  const [launchApprovalReason, setLaunchApprovalReason] = useState("");
+  const [launchApprovalConfirmation, setLaunchApprovalConfirmation] =
+    useState("");
+  const [materializedPlan, setMaterializedPlan] = useState<HeldLaunchPlan | null>(
+    () => {
+      const held = data.recentLaunchPlans
+        .map(toHeldLaunchPlan)
+        .find((plan): plan is HeldLaunchPlan => Boolean(plan));
+      return held ?? null;
+    },
+  );
 
   const gateItems = useMemo(
     () => [
       { label: "ads_management", ready: writeScopeGranted },
       { label: "EUR-Werbekonto", ready: currency === "EUR" },
       { label: "Aktive Launch-Policy", ready: policyLaunchReady },
-      { label: "Kill-Switch ALLOW", ready: killSwitchMode === "ALLOW" },
+      {
+        label: "Kill-Switch FREEZE_WRITES",
+        ready: killSwitchMode === "FREEZE_WRITES",
+      },
       { label: "Aktueller Exposure-Snapshot", ready: data.snapshotReady },
       { label: "Verifizierte Domain", ready: verifiedDomains.length > 0 },
       { label: "Aktiver Blueprint", ready: activeBlueprints.length > 0 },
@@ -403,18 +498,40 @@ export function AutomationOnboardingControls({
 
   async function launch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!allLaunchGatesReady || !launchConfirmed || !brandProfileId) {
+    if (
+      !allLaunchGatesReady ||
+      !brandProfileId ||
+      launchPreparationConfirmation !== "AKTIV-LAUNCH VORBEREITEN" ||
+      launchReason.trim().length < 12
+    ) {
       setLaunchNotice({
         tone: "error",
-        message: "Der Launch bleibt blockiert, bis alle Gates grün und ausdrücklich bestätigt sind.",
+        message:
+          "Die Vorbereitung bleibt blockiert, bis alle Gates grün sowie Begründung und exakte Vorbereitungsklausel vollständig sind.",
       });
       return;
     }
-    setPendingAction("launch");
+    setPendingAction("launch-prepare");
     setLaunchNotice(null);
     try {
       const result = await postAutomationControl<
-        ApiPayload & { planId?: string; status?: string; outcome?: string }
+        ApiPayload & {
+          planId?: string;
+          status?: string;
+          outcome?: string;
+          payloadHash?: string;
+          objective?: string;
+          destinationUrl?: string;
+          targetStatus?: string;
+          budgetOwnerType?: string;
+          dailyBudgetMinor?: string;
+          campaignName?: string;
+          adSetName?: string;
+          creativeName?: string;
+          adName?: string;
+          brandAssetIds?: string[];
+          preparedAt?: string;
+        }
       >("/api/meta/automation/launch", {
         blueprintId: launchBlueprintId,
         brandProfileId,
@@ -427,28 +544,135 @@ export function AutomationOnboardingControls({
         adSetName,
         creativeName,
         adName,
+        reason: launchReason,
+        confirmation: launchPreparationConfirmation,
       });
-      if (!result.planId || !result.status || !result.outcome) {
-        throw new Error("Der Server lieferte keine gültige Planbestätigung.");
+      if (
+        !result.planId ||
+        result.status !== "HELD" ||
+        (result.outcome !== "CREATED" && result.outcome !== "EXISTING") ||
+        !result.payloadHash ||
+        !result.objective ||
+        !result.destinationUrl ||
+        result.targetStatus !== "ACTIVE" ||
+        (result.budgetOwnerType !== "CAMPAIGN" &&
+          result.budgetOwnerType !== "AD_SET") ||
+        !result.dailyBudgetMinor ||
+        !result.campaignName ||
+        !result.adSetName ||
+        !result.creativeName ||
+        !result.adName ||
+        !result.brandAssetIds?.length ||
+        !result.preparedAt
+      ) {
+        throw new Error("Der Server lieferte keine vollständige HELD-Plan-Vorschau.");
       }
       setMaterializedPlan({
         id: result.planId,
-        status: result.status,
+        status: "HELD",
         outcome: result.outcome,
+        createdAt: result.preparedAt,
+        payloadHash: result.payloadHash,
+        objective: result.objective,
+        destinationUrl: result.destinationUrl,
+        targetStatus: "ACTIVE",
+        budgetOwnerType: result.budgetOwnerType,
+        dailyBudgetMinor: result.dailyBudgetMinor,
+        campaignName: result.campaignName,
+        adSetName: result.adSetName,
+        creativeName: result.creativeName,
+        adName: result.adName,
+        brandAssetIds: result.brandAssetIds,
       });
-      setLaunchConfirmed(false);
+      setLaunchPreparationConfirmation("");
+      setLaunchApprovalReason(launchReason);
       setLaunchNotice({
         tone: "success",
         message:
           result.outcome === "EXISTING"
-            ? "Der idempotente bestehende Launch-Plan wurde wiedergefunden."
-            : "Der Launch wurde als überprüfbare PAUSED-Shadow-Kette geplant.",
+            ? "Der identische HELD-Plan wurde wiedergefunden. Es wurde nichts an Meta gesendet."
+            : "Der Aktiv-Launch wurde als unveränderlicher HELD-Plan vorbereitet. Es wurde nichts an Meta gesendet.",
       });
       refresh();
     } catch (error) {
       setLaunchNotice({
         tone: "error",
-        message: error instanceof Error ? error.message : "Der Launch konnte nicht sicher geplant werden.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Der Aktiv-Launch konnte nicht sicher vorbereitet werden.",
+      });
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  async function approveLaunch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (
+      !materializedPlan ||
+      killSwitchMode !== "FREEZE_WRITES" ||
+      launchApprovalConfirmation !== "AKTIV-LAUNCH FREIGEBEN" ||
+      launchApprovalReason.trim().length < 12
+    ) {
+      setLaunchNotice({
+        tone: "error",
+        message:
+          "Die Freigabe bleibt blockiert, bis der HELD-Plan unverändert, FREEZE_WRITES aktiv und die exakte Freigabeklausel vollständig ist.",
+      });
+      return;
+    }
+
+    setPendingAction("launch-approve");
+    setLaunchNotice(null);
+    try {
+      const result = await putAutomationControl<
+        ApiPayload & {
+          approvalId?: string;
+          planId?: string;
+          planStatus?: string;
+          executableAt?: string;
+          approvedAt?: string;
+        }
+      >("/api/meta/automation/launch", {
+        planId: materializedPlan.id,
+        payloadHash: materializedPlan.payloadHash,
+        objective: materializedPlan.objective,
+        destinationUrl: materializedPlan.destinationUrl,
+        targetStatus: materializedPlan.targetStatus,
+        budgetOwnerType: materializedPlan.budgetOwnerType,
+        dailyBudgetMinor: materializedPlan.dailyBudgetMinor,
+        campaignName: materializedPlan.campaignName,
+        adSetName: materializedPlan.adSetName,
+        creativeName: materializedPlan.creativeName,
+        adName: materializedPlan.adName,
+        reason: launchApprovalReason,
+        confirmation: launchApprovalConfirmation,
+      });
+      if (
+        !result.approvalId ||
+        result.planId !== materializedPlan.id ||
+        result.planStatus !== "PENDING" ||
+        !result.executableAt ||
+        !result.approvedAt
+      ) {
+        throw new Error("Der Server lieferte keine gültige Aktiv-Launch-Freigabe.");
+      }
+      setLaunchApprovalConfirmation("");
+      setMaterializedPlan(null);
+      setLaunchNotice({
+        tone: "success",
+        message:
+          "Der exakt gebundene Aktiv-Launch ist einmalig freigegeben. Alle Objekte entstehen zunächst PAUSED und werden erst nach vollständigem Read-back aktiviert.",
+      });
+      refresh();
+    } catch (error) {
+      setLaunchNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Der Aktiv-Launch konnte nicht sicher freigegeben werden.",
       });
     } finally {
       setPendingAction(null);
@@ -700,7 +924,7 @@ export function AutomationOnboardingControls({
 
         <section className="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
           <ModuleHeader
-            description="Materialisiert nur bei vollständiger Readiness eine idempotente PAUSED-Shadow-Kette; der Executor reconciled jeden Remote-Schritt."
+            description="Bereitet unter FREEZE_WRITES einen unveränderlichen HELD-Plan vor. Erst eine separate Fingerprint-Freigabe erstellt alle Objekte PAUSED, prüft sie vollständig und aktiviert sie atomar."
             icon={PlayCircle}
             title="4. Active Launch"
           />
@@ -774,43 +998,177 @@ export function AutomationOnboardingControls({
                 Anzeigenname · optional
                 <input className={inputClass} maxLength={240} onChange={(event) => setAdName(event.target.value)} value={adName} />
               </label>
+              <label className="text-sm font-bold text-slate-800 sm:col-span-2">
+                Begründung für die Vorbereitung
+                <textarea
+                  className={inputClass}
+                  maxLength={500}
+                  minLength={12}
+                  onChange={(event) => setLaunchReason(event.target.value)}
+                  required
+                  rows={3}
+                  value={launchReason}
+                />
+              </label>
+              <label className="text-sm font-bold text-slate-800 sm:col-span-2">
+                Exakte Vorbereitungsklausel
+                <input
+                  autoComplete="off"
+                  className={inputClass}
+                  onChange={(event) =>
+                    setLaunchPreparationConfirmation(event.target.value)
+                  }
+                  placeholder="AKTIV-LAUNCH VORBEREITEN"
+                  required
+                  value={launchPreparationConfirmation}
+                />
+              </label>
             </div>
 
-            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
-              <input
-                checked={launchConfirmed}
-                className="mt-1"
-                onChange={(event) => setLaunchConfirmed(event.target.checked)}
-                type="checkbox"
-              />
-              <span className="text-sm font-semibold leading-6">
-                Ich autorisiere diesen Active Launch ausdrücklich innerhalb der aktiven EUR-Caps.
-                Remote-Objekte werden zunächst PAUSED angelegt; ACTIVE folgt erst nach Read-back.
-              </span>
-            </label>
+            <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold leading-6 text-blue-950">
+              Dieser Schritt erstellt ausschließlich einen unveränderlichen HELD-Plan mit
+              Fingerprint. Es werden noch keine Kampagne, kein Ad Set, kein Creative und
+              keine Ad an Meta gesendet.
+            </div>
             <button
               className={`${buttonClass} mt-4 w-full bg-slate-950 hover:bg-slate-800`}
               disabled={
                 Boolean(pendingAction) ||
                 !allLaunchGatesReady ||
-                !launchConfirmed ||
+                launchPreparationConfirmation !== "AKTIV-LAUNCH VORBEREITEN" ||
+                launchReason.trim().length < 12 ||
                 !launchBlueprintId ||
                 !launchDomainId ||
                 !launchAssetId
               }
               type="submit"
             >
-              {pendingAction === "launch" ? <LoaderCircle className="size-4 animate-spin" /> : <CircleDot className="size-4" />}
-              {pendingAction === "launch" ? "Launch wird fail-closed geprüft …" : "Active Launch planen"}
+              {pendingAction === "launch-prepare" ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <CircleDot className="size-4" />
+              )}
+              {pendingAction === "launch-prepare"
+                ? "HELD-Plan wird fail-closed geprüft …"
+                : "Aktiv-Launch sicher vorbereiten"}
             </button>
           </form>
           <NoticeBox notice={launchNotice} />
 
           {materializedPlan ? (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
-              <p className="text-xs font-extrabold uppercase tracking-[0.14em]">Plan bestätigt</p>
-              <p className="mt-2 break-all font-mono text-sm">{materializedPlan.id}</p>
-              <p className="mt-1 text-xs font-bold">{materializedPlan.outcome} · {materializedPlan.status}</p>
+            <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-extrabold uppercase tracking-[0.14em]">
+                  Unveränderlicher Aktiv-Launch · HELD
+                </p>
+                <span className="rounded-full bg-amber-200 px-3 py-1 text-xs font-extrabold">
+                  Noch 0 Meta-Writes
+                </span>
+              </div>
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="font-extrabold">Plan-ID</dt>
+                  <dd className="mt-1 break-all font-mono text-xs">{materializedPlan.id}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold">Vorbereitet</dt>
+                  <dd className="mt-1">{displayDate(materializedPlan.createdAt)}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="font-extrabold">SHA-256-Fingerprint</dt>
+                  <dd className="mt-1 break-all font-mono text-xs">
+                    {materializedPlan.payloadHash}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold">Kampagnenziel</dt>
+                  <dd className="mt-1">{materializedPlan.objective}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold">Tagesbudget</dt>
+                  <dd className="mt-1">
+                    {displayMinorUnits(materializedPlan.dailyBudgetMinor)} · {materializedPlan.budgetOwnerType}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold">Zielstatus nach vollständigem Read-back</dt>
+                  <dd className="mt-1 font-extrabold text-red-800">{materializedPlan.targetStatus}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="font-extrabold">Ziel-URL</dt>
+                  <dd className="mt-1 break-all">{materializedPlan.destinationUrl}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold">Kampagne</dt>
+                  <dd className="mt-1">{materializedPlan.campaignName}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold">Ad Set</dt>
+                  <dd className="mt-1">{materializedPlan.adSetName}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold">Creative</dt>
+                  <dd className="mt-1">{materializedPlan.creativeName}</dd>
+                </div>
+                <div>
+                  <dt className="font-extrabold">Ad</dt>
+                  <dd className="mt-1">{materializedPlan.adName}</dd>
+                </div>
+              </dl>
+
+              <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold leading-6 text-red-950">
+                Die folgende Freigabe kann Spend auslösen. Adbot erstellt alle vier Meta-Objekte
+                zunächst PAUSED, prüft Remote-IDs, Status, Budget und Bindings und aktiviert sie
+                erst danach innerhalb derselben Saga. Bei jeder Abweichung wird gestoppt und
+                wieder auf FREEZE_WRITES gesetzt.
+              </div>
+
+              <form className="mt-4" onSubmit={approveLaunch}>
+                <label className="text-sm font-bold">
+                  Begründung für die reale Aktiv-Freigabe
+                  <textarea
+                    className={inputClass}
+                    maxLength={500}
+                    minLength={12}
+                    onChange={(event) => setLaunchApprovalReason(event.target.value)}
+                    required
+                    rows={3}
+                    value={launchApprovalReason}
+                  />
+                </label>
+                <label className="mt-4 block text-sm font-bold">
+                  Exakte Freigabeklausel
+                  <input
+                    autoComplete="off"
+                    className={inputClass}
+                    onChange={(event) =>
+                      setLaunchApprovalConfirmation(event.target.value)
+                    }
+                    placeholder="AKTIV-LAUNCH FREIGEBEN"
+                    required
+                    value={launchApprovalConfirmation}
+                  />
+                </label>
+                <button
+                  className={`${buttonClass} mt-4 w-full bg-red-700 hover:bg-red-800`}
+                  disabled={
+                    Boolean(pendingAction) ||
+                    killSwitchMode !== "FREEZE_WRITES" ||
+                    launchApprovalReason.trim().length < 12 ||
+                    launchApprovalConfirmation !== "AKTIV-LAUNCH FREIGEBEN"
+                  }
+                  type="submit"
+                >
+                  {pendingAction === "launch-approve" ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="size-4" />
+                  )}
+                  {pendingAction === "launch-approve"
+                    ? "Fingerprint und alle Gates werden geprüft …"
+                    : "Exakt diesen Aktiv-Launch freigeben"}
+                </button>
+              </form>
             </div>
           ) : null}
 

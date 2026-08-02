@@ -547,7 +547,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }),
         supabase
           .from("mutation_plans")
-          .select("id,status,created_at")
+          .select("id,status,created_at,payload_hash,planned_payload")
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .eq("action_type", "LAUNCH_CHAIN")
@@ -725,11 +725,59 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   );
   const recentLaunchPlanViews: RecentLaunchPlanView[] = (
     recentLaunchPlans ?? []
-  ).map((plan) => ({
-    id: String(plan.id),
-    status: String(plan.status),
-    createdAt: String(plan.created_at),
-  }));
+  ).map((plan) => {
+    const payload =
+      plan.planned_payload &&
+      typeof plan.planned_payload === "object" &&
+      !Array.isArray(plan.planned_payload)
+        ? (plan.planned_payload as Record<string, unknown>)
+        : {};
+    const nestedName = (key: string): string | null => {
+      const value = payload[key];
+      if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+      const name = (value as Record<string, unknown>).name;
+      return typeof name === "string" && name.trim() ? name : null;
+    };
+    const brandAssetIds = Array.isArray(payload.brand_asset_ids)
+      ? payload.brand_asset_ids.filter(
+          (assetId): assetId is string =>
+            typeof assetId === "string" && /^[0-9a-f-]{36}$/i.test(assetId),
+        )
+      : [];
+
+    return {
+      id: String(plan.id),
+      status: String(plan.status),
+      createdAt: String(plan.created_at),
+      payloadHash:
+        typeof plan.payload_hash === "string" &&
+        /^[0-9a-f]{64}$/.test(plan.payload_hash)
+          ? plan.payload_hash
+          : null,
+      objective:
+        typeof payload.objective === "string" ? payload.objective : null,
+      destinationUrl:
+        typeof payload.destination_url === "string"
+          ? payload.destination_url
+          : null,
+      targetStatus: payload.target_status === "ACTIVE" ? "ACTIVE" : null,
+      budgetOwnerType:
+        payload.budget_owner_type === "CAMPAIGN" ||
+        payload.budget_owner_type === "AD_SET"
+          ? payload.budget_owner_type
+          : null,
+      dailyBudgetMinor:
+        typeof payload.daily_budget_minor === "number" ||
+        typeof payload.daily_budget_minor === "string"
+          ? String(payload.daily_budget_minor)
+          : null,
+      campaignName: nestedName("campaign"),
+      adSetName: nestedName("ad_set"),
+      creativeName: nestedName("creative"),
+      adName: nestedName("ad"),
+      brandAssetIds,
+    };
+  });
   const currentMarketingSyncAt = Date.parse(
     String(metaAccount?.marketing_last_success_at ?? ""),
   );

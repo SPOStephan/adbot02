@@ -28,6 +28,7 @@ const {
   parseDomainCommand,
   parseEuroAmountToMinor,
   parseKillSwitchCommand,
+  parseLaunchApprovalCommand,
   parseLaunchCommand,
   parsePolicyCommand,
 } = await import(inputModuleUrl);
@@ -389,6 +390,8 @@ assert.deepEqual(
     dailyBudget: "20,50",
     destinationUrl: "https://www.example.de/angebot",
     campaignName: "Sommer",
+    reason: "Kontrollierter Staging-Aktiv-Launch.",
+    confirmation: "AKTIV-LAUNCH VORBEREITEN",
   }),
   {
     blueprintId: "22222222-2222-4222-8222-222222222222",
@@ -397,6 +400,7 @@ assert.deepEqual(
     allowedDomainId: "11111111-1111-4111-8111-111111111111",
     budgetOwnerType: "AD_SET",
     dailyBudgetMinor: "2050",
+    reason: "Kontrollierter Staging-Aktiv-Launch.",
     launchInputs: {
       destination_url: "https://www.example.de/angebot",
       campaign_name: "Sommer",
@@ -415,7 +419,24 @@ expectInputError(
       allowedDomainId: "11111111-1111-4111-8111-111111111111",
       budgetOwnerType: "AD_SET",
       dailyBudget: "20",
+      destinationUrl: "https://www.example.de/angebot",
+      reason: "Kontrollierter Staging-Aktiv-Launch.",
+      confirmation: "AKTIV-LAUNCH STARTEN",
+    }),
+  "confirmation_required",
+);
+expectInputError(
+  () =>
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandProfileId: "33333333-3333-4333-8333-333333333333",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      budgetOwnerType: "AD_SET",
+      dailyBudget: "20",
       destinationUrl: "http://www.example.de/angebot",
+      reason: "Kontrollierter Staging-Aktiv-Launch.",
+      confirmation: "AKTIV-LAUNCH VORBEREITEN",
     }),
   "invalid_destination_url",
 );
@@ -429,9 +450,81 @@ expectInputError(
       budgetOwnerType: "AD_SET",
       dailyBudget: "20",
       destinationUrl: "https://www.example.de/angebot",
+      reason: "Kontrollierter Staging-Aktiv-Launch.",
+      confirmation: "AKTIV-LAUNCH VORBEREITEN",
       readLeaseToken: "55555555-5555-4555-8555-555555555555",
     }),
   "unknown_field",
+);
+
+assert.deepEqual(
+  parseLaunchApprovalCommand({
+    planId: "66666666-6666-4666-8666-666666666666",
+    payloadHash: "a".repeat(64),
+    objective: "OUTCOME_TRAFFIC",
+    destinationUrl: "https://www.example.de/angebot",
+    targetStatus: "ACTIVE",
+    budgetOwnerType: "AD_SET",
+    dailyBudgetMinor: "2050",
+    campaignName: "Sommer",
+    adSetName: "Sommer Ad Set",
+    creativeName: "Sommer Creative",
+    adName: "Sommer Ad",
+    reason: "Exakt geprüfter Staging-Aktiv-Launch.",
+    confirmation: "AKTIV-LAUNCH FREIGEBEN",
+  }),
+  {
+    planId: "66666666-6666-4666-8666-666666666666",
+    payloadHash: "a".repeat(64),
+    objective: "OUTCOME_TRAFFIC",
+    destinationUrl: "https://www.example.de/angebot",
+    targetStatus: "ACTIVE",
+    budgetOwnerType: "AD_SET",
+    dailyBudgetMinor: "2050",
+    campaignName: "Sommer",
+    adSetName: "Sommer Ad Set",
+    creativeName: "Sommer Creative",
+    adName: "Sommer Ad",
+    reason: "Exakt geprüfter Staging-Aktiv-Launch.",
+  },
+);
+expectInputError(
+  () =>
+    parseLaunchApprovalCommand({
+      planId: "66666666-6666-4666-8666-666666666666",
+      payloadHash: "a".repeat(64),
+      objective: "OUTCOME_TRAFFIC",
+      destinationUrl: "https://www.example.de/angebot",
+      targetStatus: "ACTIVE",
+      budgetOwnerType: "AD_SET",
+      dailyBudgetMinor: "2050",
+      campaignName: "Sommer",
+      adSetName: "Sommer Ad Set",
+      creativeName: "Sommer Creative",
+      adName: "Sommer Ad",
+      reason: "Exakt geprüfter Staging-Aktiv-Launch.",
+      confirmation: "AKTIV-LAUNCH STARTEN",
+    }),
+  "confirmation_required",
+);
+expectInputError(
+  () =>
+    parseLaunchApprovalCommand({
+      planId: "66666666-6666-4666-8666-666666666666",
+      payloadHash: "a".repeat(64),
+      objective: "OUTCOME_TRAFFIC",
+      destinationUrl: "https://www.example.de/angebot",
+      targetStatus: "PAUSED",
+      budgetOwnerType: "AD_SET",
+      dailyBudgetMinor: "2050",
+      campaignName: "Sommer",
+      adSetName: "Sommer Ad Set",
+      creativeName: "Sommer Creative",
+      adName: "Sommer Ad",
+      reason: "Exakt geprüfter Staging-Aktiv-Launch.",
+      confirmation: "AKTIV-LAUNCH FREIGEBEN",
+    }),
+  "invalid_option",
 );
 
 const [
@@ -457,6 +550,7 @@ const [
   canaryMigrationSource,
   operatorCanaryMigrationSource,
   onboardingMigrationSource,
+  atomicLaunchMigrationSource,
   metaImportSource,
   storageSource,
 ] = await Promise.all([
@@ -524,6 +618,13 @@ const [
     ),
     "utf8",
   ),
+  readFile(
+    path.join(
+      root,
+      "supabase/migrations/20260802150000_meta_atomic_launch_canary.sql",
+    ),
+    "utf8",
+  ),
   readFile(path.join(root, "src/lib/creative-assets/meta-import.ts"), "utf8"),
   readFile(path.join(root, "src/lib/creative-assets/storage.ts"), "utf8"),
 ]);
@@ -555,8 +656,12 @@ assert.match(blueprintRouteSource, /parseBlueprintCommand/);
 assert.match(blueprintRouteSource, /applyCustomerBlueprintCommand/);
 assert.match(assetImportRouteSource, /parseAssetImportCommand/);
 assert.match(assetImportRouteSource, /importCustomerBrandAsset/);
+assert.match(launchRouteSource, /export async function POST/);
 assert.match(launchRouteSource, /parseLaunchCommand/);
 assert.match(launchRouteSource, /materializeCustomerLaunch/);
+assert.match(launchRouteSource, /export async function PUT/);
+assert.match(launchRouteSource, /parseLaunchApprovalCommand/);
+assert.match(launchRouteSource, /approveCustomerLaunch/);
 assert.match(pageSource, /AutomationControlCenter/);
 assert.match(pageSource, /meta_scopes\.includes\("ads_management"\)/);
 assert.match(pageSource, /writeScopeGranted/);
@@ -583,6 +688,9 @@ assert.match(pageSource, /source_marketing_sync_id/);
 assert.match(pageSource, /\.eq\("user_id", user\.id\)/);
 assert.match(pageSource, /\.eq\("platform_account_id", metaAccount\.id\)/);
 assert.match(pageSource, /list_current_meta_creatives_for_import/);
+assert.match(pageSource, /id,status,created_at,payload_hash,planned_payload/);
+assert.match(pageSource, /payloadHash/);
+assert.match(pageSource, /brandAssetIds/);
 assert.doesNotMatch(
   pageSource,
   /\.from\("creatives"\)[\s\S]{0,200}\.select\([^)]*content/,
@@ -613,10 +721,15 @@ assert.match(onboardingSource, /\/api\/meta\/automation\/domain/);
 assert.match(onboardingSource, /\/api\/meta\/automation\/blueprint/);
 assert.match(onboardingSource, /\/api\/meta\/automation\/asset-import/);
 assert.match(onboardingSource, /\/api\/meta\/automation\/launch/);
-assert.match(onboardingSource, /Kill-Switch ALLOW/);
+assert.match(onboardingSource, /Kill-Switch FREEZE_WRITES/);
 assert.match(onboardingSource, /Aktueller Exposure-Snapshot/);
-assert.match(onboardingSource, /Ich autorisiere diesen Active Launch ausdrücklich/);
-assert.match(onboardingSource, /Plan bestätigt/);
+assert.match(onboardingSource, /AKTIV-LAUNCH VORBEREITEN/);
+assert.match(onboardingSource, /AKTIV-LAUNCH FREIGEBEN/);
+assert.match(onboardingSource, /Unveränderlicher Aktiv-Launch · HELD/);
+assert.match(onboardingSource, /Noch 0 Meta-Writes/);
+assert.match(onboardingSource, /SHA-256-Fingerprint/);
+assert.match(onboardingSource, /Exakt diesen Aktiv-Launch freigeben/);
+assert.doesNotMatch(onboardingSource, /\/api\/cron\/meta-executor|Date\.now/);
 assert.doesNotMatch(
   componentSource,
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token/i,
@@ -634,6 +747,10 @@ assert.doesNotMatch(
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease|accessToken/i,
 );
 assert.match(serviceSource, /requireWriteReadyCustomer/);
+assert.match(serviceSource, /materialize_meta_customer_launch_plan/);
+assert.match(serviceSource, /customer-launch-prepare:/);
+assert.match(serviceSource, /approve_meta_launch_canary_plan/);
+assert.match(serviceSource, /p_expected_payload_hash: command\.payloadHash/);
 assert.match(serviceSource, /set_meta_customer_automation_scope/);
 assert.match(serviceSource, /command\.status === "MANAGED"/);
 assert.match(serviceSource, /materialize_meta_customer_budget_canary_plan/);
@@ -778,7 +895,8 @@ assert.match(
   onboardingMigrationSource,
   /public\.materialize_meta_launch_chain_plan/,
 );
-assert.match(onboardingMigrationSource, /CUSTOMER_LAUNCH_AUTHORIZED/);
+assert.match(atomicLaunchMigrationSource, /CUSTOMER_LAUNCH_PREPARED/);
+assert.match(atomicLaunchMigrationSource, /LAUNCH_CANARY_PLAN_APPROVED/);
 assert.match(onboardingMigrationSource, /BRAND_ASSET_IMPORTED_FROM_META/);
 assert.match(
   onboardingMigrationSource,
@@ -799,6 +917,30 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   onboardingMigrationSource,
   /grant execute on function public\.(register_meta_allowed_domain|confirm_meta_allowed_domain|put_meta_objective_blueprint|activate_meta_objective_blueprint|import_meta_brand_asset_from_creative|materialize_meta_customer_launch_plan)\([^;]*\)\s*to authenticated;/,
+);
+assert.match(atomicLaunchMigrationSource, /create table public\.meta_launch_canary_approvals/);
+assert.match(atomicLaunchMigrationSource, /not_before\s*:=\s*'infinity'::timestamptz/);
+assert.match(atomicLaunchMigrationSource, /max_attempts\s*:=\s*1/);
+assert.match(atomicLaunchMigrationSource, /p_expected_payload_hash/);
+assert.match(atomicLaunchMigrationSource, /p_expected_destination_url/);
+assert.match(atomicLaunchMigrationSource, /p_expected_daily_budget_minor/);
+assert.match(atomicLaunchMigrationSource, /account\.marketing_sync_id = plan\.source_marketing_sync_id/);
+assert.match(atomicLaunchMigrationSource, /public\.meta_sha256\(plan\.planned_payload::text\) = plan\.payload_hash/);
+assert.match(atomicLaunchMigrationSource, /meta_launch_canary_preflight_ok/);
+assert.match(atomicLaunchMigrationSource, /meta_launch_activation_barrier_ok/);
+assert.match(atomicLaunchMigrationSource, /dispatch_state = 'REMOTE_UNKNOWN'/);
+assert.match(atomicLaunchMigrationSource, /COMPENSATION_REQUIRED/);
+assert.match(atomicLaunchMigrationSource, /append_meta_kill_switch_state\([\s\S]*?'ACCOUNT'[\s\S]*?'FREEZE_WRITES'/);
+assert.match(atomicLaunchMigrationSource, /append_meta_kill_switch_state\([\s\S]*?'PLAN'[\s\S]*?'FREEZE_WRITES'/);
+assert.match(atomicLaunchMigrationSource, /'status', 'PAUSED'/);
+assert.match(atomicLaunchMigrationSource, /'status', 'ACTIVE'/);
+assert.match(
+  atomicLaunchMigrationSource,
+  /grant execute on function public\.approve_meta_launch_canary_plan[\s\S]*to service_role/,
+);
+assert.doesNotMatch(
+  atomicLaunchMigrationSource,
+  /grant execute on function public\.approve_meta_launch_canary_plan[\s\S]{0,160}to authenticated/,
 );
 
 console.log("Meta customer control validation, API boundary and dashboard checks passed");

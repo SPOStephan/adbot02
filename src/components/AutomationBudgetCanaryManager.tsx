@@ -291,7 +291,7 @@ export function AutomationBudgetCanaryManager({
                 <p className="text-xs leading-5">
                   Die Vorbereitung ist gesperrt. Erforderlich sind genau ein
                   verwalteter Budgetowner, ein erfolgreicher aktueller Meta-Abruf,
-                  EUR, <strong>ALLOW</strong> und eine aktive Budget-only-Policy.
+                  EUR, <strong>FREEZE_WRITES</strong> und eine aktive Budget-only-Policy.
                 </p>
               </div>
             ) : null}

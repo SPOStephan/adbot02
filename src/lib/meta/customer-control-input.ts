@@ -805,6 +805,7 @@ export type LaunchCommand = {
   allowedDomainId: string;
   budgetOwnerType: (typeof BUDGET_OWNER_TYPES)[number];
   dailyBudgetMinor: string;
+  reason: string;
   launchInputs: {
     destination_url: string;
     campaign_name?: string;
@@ -830,9 +831,19 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       "adSetName",
       "creativeName",
       "adName",
+      "reason",
+      "confirmation",
     ],
-    "Der Launch-Befehl",
+    "Der Aktiv-Launch-Vorbereitungsbefehl",
   );
+
+  if (body.confirmation !== "AKTIV-LAUNCH VORBEREITEN") {
+    inputError(
+      "confirmation_required",
+      "Geben Sie zur Vorbereitung exakt „AKTIV-LAUNCH VORBEREITEN“ ein.",
+    );
+  }
+
   return {
     blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
     brandProfileId: requiredUuid(body.brandProfileId, "Die Brand-Profil-ID"),
@@ -847,6 +858,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       body.dailyBudget,
       "Das Launch-Tagesbudget",
     ),
+    reason: requiredText(body.reason, "Die Begründung", 12, 500),
     launchInputs: {
       destination_url: requiredHttpsUrl(body.destinationUrl),
       campaign_name: optionalLaunchName(body.campaignName, "Der Kampagnenname"),
@@ -854,5 +866,81 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       creative_name: optionalLaunchName(body.creativeName, "Der Creative-Name"),
       ad_name: optionalLaunchName(body.adName, "Der Anzeigenname"),
     },
+  };
+}
+
+export type LaunchApprovalCommand = {
+  planId: string;
+  payloadHash: string;
+  objective: string;
+  destinationUrl: string;
+  targetStatus: "ACTIVE";
+  budgetOwnerType: (typeof BUDGET_OWNER_TYPES)[number];
+  dailyBudgetMinor: string;
+  campaignName: string;
+  adSetName: string;
+  creativeName: string;
+  adName: string;
+  reason: string;
+};
+
+export function parseLaunchApprovalCommand(value: unknown): LaunchApprovalCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    [
+      "planId",
+      "payloadHash",
+      "objective",
+      "destinationUrl",
+      "targetStatus",
+      "budgetOwnerType",
+      "dailyBudgetMinor",
+      "campaignName",
+      "adSetName",
+      "creativeName",
+      "adName",
+      "reason",
+      "confirmation",
+    ],
+    "Der Aktiv-Launch-Freigabebefehl",
+  );
+
+  const payloadHash = requiredText(body.payloadHash, "Der Plan-Fingerprint", 64, 64);
+  if (!SHA256_PATTERN.test(payloadHash)) {
+    inputError("invalid_hash", "Der Plan-Fingerprint ist ungültig.");
+  }
+  if (body.confirmation !== "AKTIV-LAUNCH FREIGEBEN") {
+    inputError(
+      "confirmation_required",
+      "Geben Sie zur Freigabe exakt „AKTIV-LAUNCH FREIGEBEN“ ein.",
+    );
+  }
+
+  const objective = requiredText(body.objective, "Das Kampagnenziel", 3, 64);
+  if (!/^[A-Z0-9_]+$/.test(objective)) {
+    inputError("invalid_objective", "Das Kampagnenziel ist ungültig.");
+  }
+
+  return {
+    planId: requiredUuid(body.planId, "Die Plan-ID"),
+    payloadHash,
+    objective,
+    destinationUrl: requiredHttpsUrl(body.destinationUrl),
+    targetStatus: requiredEnum(body.targetStatus, "Der Launch-Zielstatus", ["ACTIVE"] as const),
+    budgetOwnerType: requiredEnum(
+      body.budgetOwnerType,
+      "Der Budgetträger",
+      BUDGET_OWNER_TYPES,
+    ),
+    dailyBudgetMinor: requiredPositiveMinorUnits(
+      body.dailyBudgetMinor,
+      "Das Launch-Tagesbudget",
+    ),
+    campaignName: requiredText(body.campaignName, "Der Kampagnenname", 1, 240),
+    adSetName: requiredText(body.adSetName, "Der Ad-Set-Name", 1, 240),
+    creativeName: requiredText(body.creativeName, "Der Creative-Name", 1, 240),
+    adName: requiredText(body.adName, "Der Anzeigenname", 1, 240),
+    reason: requiredText(body.reason, "Die Begründung", 12, 500),
   };
 }

@@ -813,7 +813,18 @@ begin
 end;
 $$;
 
--- Active Launch Chain: materialization, idempotency, execution and projection.
+-- Atomic Active Launch Chain: materialization is held under FREEZE_WRITES.
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  null,
+  'FREEZE_WRITES',
+  'Atomic launch preparation regression fixture',
+  'OPERATOR',
+  'test'
+);
+
 insert into public.allowed_domains (
   id, user_id, platform_account_id, hostname, registrable_domain,
   expected_redirect_hostname, observed_redirect_hostname, status,
@@ -990,7 +1001,15 @@ begin
   where exposure.plan_id = v_plan_id;
 
   if (select result->>'outcome' from launch_materialized) <> 'CREATED'
+    or (select result->>'status' from launch_materialized) <> 'HELD'
     or (select result->>'outcome' from launch_replayed) <> 'EXISTING'
+    or (select result->>'status' from launch_replayed) <> 'HELD'
+    or (select status from public.mutation_plans where id = v_plan_id) <> 'PENDING'
+    or (select max_attempts from public.mutation_plans where id = v_plan_id) <> 1
+    or not (select not_before = 'infinity'::timestamptz
+            from public.mutation_plans where id = v_plan_id)
+    or (select count(*) from public.meta_launch_canary_approvals
+        where plan_id = v_plan_id) <> 0
     or (select (result->>'plan_id')::uuid from launch_replayed) <> v_plan_id
     or (select count(*) from public.mutation_plans
         where action_type = 'LAUNCH_CHAIN'
@@ -1001,11 +1020,10 @@ begin
       'read-campaign-paused', 'validate-ad-set',
       'create-ad-set-paused', 'read-ad-set-paused', 'upload-image',
       'validate-creative', 'create-creative', 'read-creative',
-      'validate-ad-active', 'create-ad-active-shadow',
-      'read-ad-active-shadow', 'activate-ad-set',
-      'read-ad-set-active', 'activate-campaign', 'assert-ad-active',
-      'read-campaign-active', 'read-ad-active',
-      'reconcile-launch-chain'
+      'validate-ad-paused', 'create-ad-paused', 'read-ad-paused',
+      'activate-ad-set', 'read-ad-set-active', 'activate-campaign',
+      'activate-ad', 'read-campaign-active', 'read-ad-active',
+      'read-ad-set-active-final', 'reconcile-launch-chain'
     ]::text[]
     or exists (
       select 1 from public.mutation_plan_steps
@@ -1022,8 +1040,8 @@ begin
        <> 'PAUSED'
     or (select planned_request#>>'{payload,status}'
         from public.mutation_plan_steps
-        where plan_id = v_plan_id and step_key = 'create-ad-active-shadow')
-       <> 'ACTIVE'
+        where plan_id = v_plan_id and step_key = 'create-ad-paused')
+       <> 'PAUSED'
     or v_provisional_exposure.id is null
     or v_provisional_exposure.source <> 'PLAN'
     or v_provisional_exposure.max_daily_budget_minor <> 3000
@@ -1124,10 +1142,199 @@ begin
 end;
 $$;
 
+create temporary table launch_unapproved_claim on commit drop as
+select * from public.claim_next_meta_mutation_execution(
+  'launch-unapproved-worker', 900
+);
+
+do $$
+declare
+  v_plan_id uuid := (select plan_id from launch_ids);
+  v_failed boolean := false;
+begin
+  if (select count(*) from launch_unapproved_claim) <> 0
+    or (select mode from public.kill_switch_state
+        where scope_type = 'ACCOUNT'
+          and user_id = '12000000-0000-4000-8000-000000000001'
+          and platform_account_id = '22000000-0000-4000-8000-000000000001'
+        order by sequence desc limit 1) <> 'FREEZE_WRITES'
+    or (select mode from public.kill_switch_state
+        where scope_type = 'PLAN' and plan_id = v_plan_id
+        order by sequence desc limit 1) <> 'FREEZE_WRITES' then
+    raise exception 'Unapproved launch was claimable or not held fail-closed';
+  end if;
+
+  begin
+    perform public.approve_meta_launch_canary_plan(
+      '12000000-0000-4000-8000-000000000001',
+      '22000000-0000-4000-8000-000000000001',
+      v_plan_id,
+      repeat('0', 64),
+      (select result->>'objective' from launch_materialized),
+      (select result->>'destination_url' from launch_materialized),
+      (select result->>'budget_owner_type' from launch_materialized),
+      (select (result->>'daily_budget_minor')::bigint from launch_materialized),
+      (select result->>'campaign_name' from launch_materialized),
+      (select result->>'ad_set_name' from launch_materialized),
+      (select result->>'creative_name' from launch_materialized),
+      (select result->>'ad_name' from launch_materialized),
+      'ACTIVE',
+      'Negative fingerprint regression.'
+    );
+  exception when others then
+    v_failed := true;
+  end;
+
+  if not v_failed
+    or (select count(*) from public.meta_launch_canary_approvals
+        where plan_id = v_plan_id) <> 0
+    or (select mode from public.kill_switch_state
+        where scope_type = 'ACCOUNT'
+          and user_id = '12000000-0000-4000-8000-000000000001'
+          and platform_account_id = '22000000-0000-4000-8000-000000000001'
+        order by sequence desc limit 1) <> 'FREEZE_WRITES'
+    or (select mode from public.kill_switch_state
+        where scope_type = 'PLAN' and plan_id = v_plan_id
+        order by sequence desc limit 1) <> 'FREEZE_WRITES' then
+    raise exception 'Mismatched launch fingerprint changed approval or gates';
+  end if;
+end;
+$$;
+
+create temporary table launch_approval on commit drop as
+select * from public.approve_meta_launch_canary_plan(
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  (select plan_id from launch_ids),
+  (select result->>'payload_hash' from launch_materialized),
+  (select result->>'objective' from launch_materialized),
+  (select result->>'destination_url' from launch_materialized),
+  (select result->>'budget_owner_type' from launch_materialized),
+  (select (result->>'daily_budget_minor')::bigint from launch_materialized),
+  (select result->>'campaign_name' from launch_materialized),
+  (select result->>'ad_set_name' from launch_materialized),
+  (select result->>'creative_name' from launch_materialized),
+  (select result->>'ad_name' from launch_materialized),
+  'ACTIVE',
+  'Exact atomic launch regression approval.'
+);
+
+create temporary table launch_approval_replayed on commit drop as
+select * from public.approve_meta_launch_canary_plan(
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  (select plan_id from launch_ids),
+  (select result->>'payload_hash' from launch_materialized),
+  (select result->>'objective' from launch_materialized),
+  (select result->>'destination_url' from launch_materialized),
+  (select result->>'budget_owner_type' from launch_materialized),
+  (select (result->>'daily_budget_minor')::bigint from launch_materialized),
+  (select result->>'campaign_name' from launch_materialized),
+  (select result->>'ad_set_name' from launch_materialized),
+  (select result->>'creative_name' from launch_materialized),
+  (select result->>'ad_name' from launch_materialized),
+  'ACTIVE',
+  'Exact atomic launch regression approval.'
+);
+
+do $$
+declare
+  v_plan_id uuid := (select plan_id from launch_ids);
+begin
+  if (select plan_status from launch_approval) <> 'PENDING'
+    or (select plan_id from launch_approval) <> v_plan_id
+    or (select approval_id from launch_approval_replayed)
+       <> (select approval_id from launch_approval)
+    or (select count(*) from public.meta_launch_canary_approvals
+        where plan_id = v_plan_id) <> 1
+    or (select status from public.mutation_plans where id = v_plan_id) <> 'PENDING'
+    or (select max_attempts from public.mutation_plans where id = v_plan_id) <> 1
+    or (select not_before from public.mutation_plans where id = v_plan_id)
+       = 'infinity'::timestamptz
+    or (select mode from public.kill_switch_state
+        where scope_type = 'ACCOUNT'
+          and user_id = '12000000-0000-4000-8000-000000000001'
+          and platform_account_id = '22000000-0000-4000-8000-000000000001'
+        order by sequence desc limit 1) <> 'ALLOW'
+    or (select mode from public.kill_switch_state
+        where scope_type = 'PLAN' and plan_id = v_plan_id
+        order by sequence desc limit 1) <> 'ALLOW' then
+    raise exception 'Exact launch approval did not atomically open one plan';
+  end if;
+end;
+$$;
+
 create temporary table launch_claim on commit drop as
 select * from public.claim_next_meta_mutation_execution(
   'launch-executor-worker', 900
 );
+
+create temporary table launch_preflight_diag on commit drop as
+select
+  public.meta_launch_canary_preflight_ok(plan.id) as preflight_ok,
+  plan.status as plan_status,
+  plan.attempt_count,
+  plan.max_attempts,
+  public.meta_sha256(plan.planned_payload::text) = plan.payload_hash as payload_hash_ok,
+  (select mode from public.get_effective_meta_kill_switch(
+     plan.user_id, plan.platform_account_id, plan.id
+   )) as effective_mode,
+  exists (
+    select 1 from public.platform_accounts account
+    where account.id = plan.platform_account_id
+      and account.marketing_sync_id = plan.source_marketing_sync_id
+      and account.marketing_sync_status = 'success'
+      and account.marketing_last_success_at >= now() - interval '2 hours'
+  ) as account_ok,
+  exists (
+    select 1 from public.automation_policies policy
+    where policy.id = plan.policy_id
+      and policy.is_current and policy.status = 'ACTIVE'
+      and policy.allow_new_launches and policy.allow_status_changes
+      and policy.policy_hash = plan.expected_before->>'policy_hash'
+  ) as policy_ok,
+  exists (
+    select 1 from public.meta_launch_canary_approvals approval
+    where approval.plan_id = plan.id
+      and approval.payload_hash = plan.payload_hash
+      and approval.target_status = plan.intended_after->>'status'
+  ) as approval_ok,
+  exists (
+    select 1 from public.daily_budget_exposure_snapshots snapshot
+    where snapshot.id = (plan.expected_before->>'exposure_snapshot_id')::uuid
+      and snapshot.source_marketing_sync_id = plan.source_marketing_sync_id
+      and snapshot.status = 'COMPLETE' and snapshot.currency = 'EUR'
+  ) as snapshot_ok,
+  exists (
+    select 1 from public.daily_budget_exposures exposure
+    where exposure.plan_id = plan.id
+      and exposure.snapshot_id = (plan.expected_before->>'exposure_snapshot_id')::uuid
+      and exposure.source in ('PLAN', 'RECONCILIATION')
+      and exposure.budget_owner_type = plan.planned_payload->>'budget_owner_type'
+      and exposure.max_daily_budget_minor
+          = (plan.planned_payload->>'daily_budget_minor')::bigint
+  ) as exposure_ok,
+  not exists (
+    select 1 from public.mutation_plan_steps step
+    where step.plan_id = plan.id
+      and (
+        public.meta_sha256(step.planned_request::text) <> step.request_hash
+        or step.dispatch_state = 'REMOTE_UNKNOWN'
+        or step.status in ('COMPENSATION_REQUIRED', 'FAILED')
+      )
+  ) as steps_ok
+from public.mutation_plans plan
+where plan.id = (select plan_id from launch_ids);
+
+do $$
+declare
+  v_diag jsonb := (select to_jsonb(diag) from launch_preflight_diag diag);
+begin
+  if coalesce((v_diag->>'preflight_ok')::boolean, false) is not true then
+    raise exception 'Launch preflight changed after claim: %', v_diag;
+  end if;
+end;
+$$;
 
 create temporary table launch_reconcile_result (
   outcome text,
@@ -1229,9 +1436,10 @@ begin
           'campaign_id', '333333333301',
           'adset_id', '333333333302',
           'name', 'Launch Regression Ad',
-          'status', 'ACTIVE',
-          'effective_status', case when v_step_key = 'read-ad-active-shadow'
-                                   then 'CAMPAIGN_PAUSED' else 'ACTIVE' end,
+          'status', case when v_step_key = 'read-ad-paused'
+                         then 'PAUSED' else 'ACTIVE' end,
+          'effective_status', case when v_step_key = 'read-ad-paused'
+                                   then 'PAUSED' else 'ACTIVE' end,
           'creative', jsonb_build_object('id', '333333333303'),
           'conversion_domain', 'example.test',
           'updated_time', '2026-07-29T12:00:03+0000'
@@ -1246,6 +1454,71 @@ begin
         'launch-read-' || v_step_key
       );
     else
+      if not public.meta_launch_canary_preflight_ok(v_expected_plan_id) then
+        raise exception 'Launch preflight drift at step %: %',
+          v_step_key,
+          jsonb_build_object(
+            'plan_status', (select status from public.mutation_plans where id = v_expected_plan_id),
+            'attempt_count', (select attempt_count from public.mutation_plans where id = v_expected_plan_id),
+            'effective_mode', (
+              select mode from public.get_effective_meta_kill_switch(
+                '12000000-0000-4000-8000-000000000001',
+                '22000000-0000-4000-8000-000000000001',
+                v_expected_plan_id
+              )
+            ),
+            'latest_account_gate', (
+              select jsonb_build_object(
+                'mode', state.mode,
+                'reason', state.reason,
+                'actor_type', state.actor_type,
+                'actor_id', state.actor_id,
+                'sequence', state.sequence
+              )
+              from public.kill_switch_state state
+              where state.scope_type = 'ACCOUNT'
+                and state.user_id = '12000000-0000-4000-8000-000000000001'
+                and state.platform_account_id = '22000000-0000-4000-8000-000000000001'
+              order by state.sequence desc limit 1
+            ),
+            'latest_plan_gate', (
+              select jsonb_build_object(
+                'mode', state.mode,
+                'reason', state.reason,
+                'actor_type', state.actor_type,
+                'actor_id', state.actor_id,
+                'sequence', state.sequence
+              )
+              from public.kill_switch_state state
+              where state.scope_type = 'PLAN'
+                and state.plan_id = v_expected_plan_id
+              order by state.sequence desc limit 1
+            ),
+            'account_sync_status', (
+              select marketing_sync_status from public.platform_accounts
+              where id = '22000000-0000-4000-8000-000000000001'
+            ),
+            'approval_count', (
+              select count(*) from public.meta_launch_canary_approvals
+              where plan_id = v_expected_plan_id
+            ),
+            'exposure_count', (
+              select count(*) from public.daily_budget_exposures
+              where plan_id = v_expected_plan_id
+                and source in ('PLAN', 'RECONCILIATION')
+            ),
+            'bad_step_count', (
+              select count(*) from public.mutation_plan_steps
+              where plan_id = v_expected_plan_id
+                and (
+                  public.meta_sha256(planned_request::text) <> request_hash
+                  or dispatch_state = 'REMOTE_UNKNOWN'
+                  or status in ('COMPENSATION_REQUIRED', 'FAILED')
+                )
+            )
+          );
+      end if;
+
       perform public.begin_meta_mutation_step_dispatch(
         v_execution_id, v_step_id, v_lease_token
       );
@@ -1314,7 +1587,7 @@ begin
     or (select status from public.mutation_plans where id = v_plan_id)
        <> 'SUCCEEDED'
     or (select count(*) from public.mutation_plan_steps
-        where plan_id = v_plan_id) <> 20
+        where plan_id = v_plan_id) <> 21
     or exists (
       select 1 from public.mutation_plan_steps
       where plan_id = v_plan_id
@@ -1384,8 +1657,187 @@ begin
       select 1 from public.meta_account_operation_leases
       where platform_account_id = '22000000-0000-4000-8000-000000000001'
         and lease_token is not null
+    )
+    or (select count(*) from public.mutation_executions
+        where plan_id = v_plan_id) <> 1
+    or (select count(*) from public.meta_launch_canary_approvals
+        where plan_id = v_plan_id) <> 1
+    or (select mode from public.kill_switch_state
+        where scope_type = 'ACCOUNT'
+          and user_id = '12000000-0000-4000-8000-000000000001'
+          and platform_account_id = '22000000-0000-4000-8000-000000000001'
+        order by sequence desc limit 1) <> 'FREEZE_WRITES'
+    or (select mode from public.kill_switch_state
+        where scope_type = 'PLAN' and plan_id = v_plan_id
+        order by sequence desc limit 1) <> 'FREEZE_WRITES' then
+    raise exception 'Launch reconciliation projection, one-shot execution or refreeze failed';
+  end if;
+end;
+$$;
+
+-- An ambiguous Create result is terminal, never retried blindly, and refreezes immediately.
+do $$
+declare
+  v_read_lease uuid;
+  v_materialized jsonb;
+  v_plan_id uuid;
+  v_approval record;
+  v_claim record;
+  v_next record;
+  v_step_key text;
+  v_failure_status text;
+begin
+  v_read_lease := public.claim_meta_account_operation(
+    '22000000-0000-4000-8000-000000000001',
+    '12000000-0000-4000-8000-000000000001',
+    'READ_SYNC', 'launch-ambiguous-create-regression', 900
+  );
+
+  if v_read_lease is null then
+    raise exception 'Ambiguous Create regression could not claim its read lease';
+  end if;
+
+  v_materialized := public.materialize_meta_launch_chain_plan(
+    '22000000-0000-4000-8000-000000000001',
+    '12000000-0000-4000-8000-000000000001',
+    '82000000-0000-4000-8000-000000000001',
+    (select snapshot_id from executor_planner_result),
+    '32000000-0000-4000-8000-000000000001',
+    v_read_lease,
+    '92000000-0000-4000-8000-000000000001',
+    '94000000-0000-4000-8000-000000000001',
+    array['93000000-0000-4000-8000-000000000001'::uuid],
+    '91000000-0000-4000-8000-000000000001',
+    'AD_SET',
+    500,
+    jsonb_build_object(
+      'destination_url',
+        'https://shop.launch.example.test/products/ambiguous-create',
+      'campaign_name', 'Ambiguous Create Campaign',
+      'ad_set_name', 'Ambiguous Create Ad Set',
+      'creative_name', 'Ambiguous Create Creative',
+      'ad_name', 'Ambiguous Create Ad'
+    ),
+    now()
+  );
+
+  perform public.release_meta_account_operation(
+    '22000000-0000-4000-8000-000000000001',
+    '12000000-0000-4000-8000-000000000001',
+    v_read_lease
+  );
+
+  v_plan_id := (v_materialized->>'plan_id')::uuid;
+  if v_materialized->>'outcome' <> 'CREATED'
+    or v_materialized->>'status' <> 'HELD' then
+    raise exception 'Ambiguous Create regression did not create a held plan';
+  end if;
+
+  select * into v_approval
+  from public.approve_meta_launch_canary_plan(
+    '12000000-0000-4000-8000-000000000001',
+    '22000000-0000-4000-8000-000000000001',
+    v_plan_id,
+    v_materialized->>'payload_hash',
+    v_materialized->>'objective',
+    v_materialized->>'destination_url',
+    v_materialized->>'budget_owner_type',
+    (v_materialized->>'daily_budget_minor')::bigint,
+    v_materialized->>'campaign_name',
+    v_materialized->>'ad_set_name',
+    v_materialized->>'creative_name',
+    v_materialized->>'ad_name',
+    'ACTIVE',
+    'Ambiguous Create terminal-stop regression approval.'
+  );
+
+  select * into v_claim
+  from public.claim_next_meta_mutation_execution(
+    'launch-ambiguous-create-worker', 900
+  );
+
+  if v_claim.plan_id is distinct from v_plan_id then
+    raise exception 'Ambiguous Create plan was not claimed';
+  end if;
+
+  perform public.begin_meta_mutation_step_dispatch(
+    v_claim.execution_id, v_claim.first_step_id, v_claim.lease_token
+  );
+  perform public.complete_meta_mutation_remote_step(
+    v_claim.execution_id, v_claim.first_step_id, v_claim.lease_token,
+    public.meta_sha256('ambiguous-validate-request'),
+    public.meta_sha256('ambiguous-validate-response'),
+    null,
+    'ambiguous-validate-campaign',
+    true,
+    '{"account_util_pct":1}'::jsonb
+  );
+
+  select claimed.* into v_next
+  from public.claim_next_meta_mutation_step(
+    v_claim.execution_id, v_claim.lease_token
+  ) claimed;
+
+  select step_key into v_step_key
+  from public.mutation_plan_steps
+  where id = v_next.step_id and plan_id = v_plan_id;
+
+  if v_step_key <> 'create-campaign-paused'
+    or v_next.operation <> 'CREATE'
+    or v_next.object_type <> 'CAMPAIGN' then
+    raise exception 'Ambiguous Create regression did not reach Campaign Create';
+  end if;
+
+  perform public.begin_meta_mutation_step_dispatch(
+    v_claim.execution_id, v_next.step_id, v_claim.lease_token
+  );
+
+  v_failure_status := public.fail_meta_mutation_execution(
+    v_claim.execution_id,
+    v_next.step_id,
+    v_claim.lease_token,
+    'TRANSPORT',
+    'AMBIGUOUS_CREATE_TIMEOUT',
+    'UNKNOWN',
+    120
+  );
+
+  if v_failure_status <> 'COMPENSATION_REQUIRED'
+    or (select status from public.mutation_plans where id = v_plan_id)
+       <> 'COMPENSATION_REQUIRED'
+    or (select attempt_count from public.mutation_plans where id = v_plan_id) <> 1
+    or (select status from public.mutation_plan_steps where id = v_next.step_id)
+       <> 'COMPENSATION_REQUIRED'
+    or (select dispatch_state from public.mutation_plan_steps where id = v_next.step_id)
+       <> 'REMOTE_UNKNOWN'
+    or exists (
+      select 1 from public.mutation_plan_steps
+      where plan_id = v_plan_id
+        and step_index > (select step_index from public.mutation_plan_steps
+                          where id = v_next.step_id)
+        and status <> 'PENDING'
+    )
+    or exists (
+      select 1 from public.meta_account_operation_leases
+      where platform_account_id = '22000000-0000-4000-8000-000000000001'
+        and lease_token is not null
+    )
+    or (select mode from public.kill_switch_state
+        where scope_type = 'ACCOUNT'
+          and user_id = '12000000-0000-4000-8000-000000000001'
+          and platform_account_id = '22000000-0000-4000-8000-000000000001'
+        order by sequence desc limit 1) <> 'FREEZE_WRITES'
+    or (select mode from public.kill_switch_state
+        where scope_type = 'PLAN' and plan_id = v_plan_id
+        order by sequence desc limit 1) <> 'FREEZE_WRITES'
+    or not exists (
+      select 1 from public.automation_alerts
+      where plan_id = v_plan_id
+        and alert_type = 'REMOTE_OUTCOME_AMBIGUOUS'
+        and severity = 'CRITICAL'
+        and status = 'OPEN'
     ) then
-    raise exception 'Launch reconciliation projection or canonicalization failed';
+    raise exception 'Ambiguous Create was retried, advanced, left a lease, lacked an alert, or failed to refreeze';
   end if;
 end;
 $$;
