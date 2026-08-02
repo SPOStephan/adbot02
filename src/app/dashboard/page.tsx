@@ -877,7 +877,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       policyView.allowBudgetChanges &&
       !policyView.allowStatusChanges &&
       !policyView.allowNewLaunches &&
-      killSwitchView?.mode === "ALLOW" &&
+      killSwitchView?.mode === "FREEZE_WRITES" &&
       budgetCanaryViews.length === 0,
   );
   const canConfirmBudgetCanary = Boolean(

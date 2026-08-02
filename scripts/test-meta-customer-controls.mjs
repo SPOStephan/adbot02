@@ -568,6 +568,14 @@ assert.match(pageSource, /list_meta_budget_canary_plans/);
 assert.match(pageSource, /budgetCanaries=\{budgetCanaryViews\}/);
 assert.match(pageSource, /canPrepareBudgetCanary=\{canPrepareBudgetCanary\}/);
 assert.match(pageSource, /canConfirmBudgetCanary=\{canConfirmBudgetCanary\}/);
+assert.match(
+  pageSource,
+  /const canPrepareBudgetCanary[\s\S]*?killSwitchView\?\.mode === "FREEZE_WRITES"[\s\S]*?const canConfirmBudgetCanary/,
+);
+assert.match(
+  pageSource,
+  /const canConfirmBudgetCanary[\s\S]*?killSwitchView\?\.mode === "ALLOW"[\s\S]*?const campaignNameById/,
+);
 assert.match(pageSource, /managedBudgetOwnerCount === 1/);
 assert.match(pageSource, /!policyView\.allowStatusChanges/);
 assert.match(pageSource, /!policyView\.allowNewLaunches/);
