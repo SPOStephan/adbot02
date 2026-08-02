@@ -9,9 +9,13 @@ const UUID_PATTERN =
 
 export type MetaBudgetPlannerStatus =
   | "READ_LEASE_REQUIRED"
+  | "ACCOUNT_UNAVAILABLE"
+  | "STALE_OR_INVALID_SNAPSHOT"
+  | "INVALID_PLANNER_TIME"
   | "NO_ACTIVE_POLICY"
   | "NO_BUDGET_OWNERS"
   | "HARD_CAP_SAFETY"
+  | "KILL_SWITCH_BLOCKED"
   | "PLANNED";
 
 export type MetaBudgetPlannerResult = {
@@ -61,9 +65,13 @@ function parsePlannerResult(value: unknown): MetaBudgetPlannerResult {
   const record = row as Record<string, unknown>;
   const allowedStatuses = new Set<MetaBudgetPlannerStatus>([
     "READ_LEASE_REQUIRED",
+    "ACCOUNT_UNAVAILABLE",
+    "STALE_OR_INVALID_SNAPSHOT",
+    "INVALID_PLANNER_TIME",
     "NO_ACTIVE_POLICY",
     "NO_BUDGET_OWNERS",
     "HARD_CAP_SAFETY",
+    "KILL_SWITCH_BLOCKED",
     "PLANNED",
   ]);
   const status = record.planner_status;

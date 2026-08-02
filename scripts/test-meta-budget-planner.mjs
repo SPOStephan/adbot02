@@ -179,6 +179,43 @@ export function createAdminClient() {
     readLeaseToken,
   );
 
+  for (const plannerStatus of [
+    "ACCOUNT_UNAVAILABLE",
+    "STALE_OR_INVALID_SNAPSHOT",
+    "INVALID_PLANNER_TIME",
+    "KILL_SWITCH_BLOCKED",
+  ]) {
+    configure({
+      record_meta_campaign_budget_sharing_snapshot: { data: 2, error: null },
+      run_meta_budget_planner: {
+        data: [
+          {
+            planner_status: plannerStatus,
+            snapshot_id: snapshotId,
+            account_day: "2026-07-29",
+            observed_budget_owner_count: 2,
+            reserved_exposure_minor: 26250,
+            plans_created: 0,
+            plans_existing: 0,
+            candidates_blocked: 0,
+            hard_cap_breach: false,
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const statusResult = await planner.runMetaBudgetPlannerAfterSnapshot({
+      platformAccountId,
+      userId,
+      marketingSyncId,
+      readLeaseToken,
+      campaignBudgetSharingSnapshot,
+      plannedAt: "2026-07-29T12:00:00.000Z",
+    });
+    assert.equal(statusResult.status, plannerStatus);
+  }
+
   configure({
     record_meta_campaign_budget_sharing_snapshot: {
       data: null,
