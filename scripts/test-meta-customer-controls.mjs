@@ -398,6 +398,7 @@ assert.deepEqual(
     brandProfileId: "33333333-3333-4333-8333-333333333333",
     brandAssetId: "44444444-4444-4444-8444-444444444444",
     allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    budgetType: "DAILY",
     budgetOwnerType: "AD_SET",
     dailyBudgetMinor: "2050",
     reason: "Kontrollierter Staging-Aktiv-Launch.",
@@ -409,6 +410,98 @@ assert.deepEqual(
       ad_name: undefined,
     },
   },
+);
+
+assert.deepEqual(
+  parseLaunchCommand({
+    blueprintId: "22222222-2222-4222-8222-222222222222",
+    brandProfileId: "33333333-3333-4333-8333-333333333333",
+    brandAssetId: "44444444-4444-4444-8444-444444444444",
+    allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    budgetType: "LIFETIME",
+    budgetOwnerType: "CAMPAIGN",
+    lifetimeBudget: "15,00",
+    startTime: "2026-08-03T10:00:00Z",
+    endTime: "2026-08-10T10:00:00Z",
+    destinationUrl: "https://www.example.de/angebot",
+    campaignName: "Lifetime Sommer",
+    reason: "Kontrollierter Staging-Lifetime-Launch.",
+    confirmation: "AKTIV-LAUNCH VORBEREITEN",
+  }),
+  {
+    blueprintId: "22222222-2222-4222-8222-222222222222",
+    brandProfileId: "33333333-3333-4333-8333-333333333333",
+    brandAssetId: "44444444-4444-4444-8444-444444444444",
+    allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    budgetType: "LIFETIME",
+    budgetOwnerType: "CAMPAIGN",
+    lifetimeBudgetMinor: "1500",
+    startTime: "2026-08-03T10:00:00.000Z",
+    endTime: "2026-08-10T10:00:00.000Z",
+    reason: "Kontrollierter Staging-Lifetime-Launch.",
+    launchInputs: {
+      destination_url: "https://www.example.de/angebot",
+      campaign_name: "Lifetime Sommer",
+      ad_set_name: undefined,
+      creative_name: undefined,
+      ad_name: undefined,
+    },
+  },
+);
+expectInputError(
+  () =>
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandProfileId: "33333333-3333-4333-8333-333333333333",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      budgetType: "LIFETIME",
+      budgetOwnerType: "CAMPAIGN",
+      lifetimeBudget: "15,00",
+      dailyBudget: "5,00",
+      startTime: "2026-08-03T10:00:00Z",
+      endTime: "2026-08-10T10:00:00Z",
+      destinationUrl: "https://www.example.de/angebot",
+      reason: "Mischbudget darf nicht vorbereitet werden.",
+      confirmation: "AKTIV-LAUNCH VORBEREITEN",
+    }),
+  "unknown_field",
+);
+expectInputError(
+  () =>
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandProfileId: "33333333-3333-4333-8333-333333333333",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      budgetType: "LIFETIME",
+      budgetOwnerType: "AD_SET",
+      lifetimeBudget: "15,00",
+      startTime: "2026-08-03T10:00:00Z",
+      endTime: "2026-08-10T10:00:00Z",
+      destinationUrl: "https://www.example.de/angebot",
+      reason: "Falscher Lifetime-Budgetträger.",
+      confirmation: "AKTIV-LAUNCH VORBEREITEN",
+    }),
+  "invalid_budget_owner",
+);
+expectInputError(
+  () =>
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandProfileId: "33333333-3333-4333-8333-333333333333",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      budgetType: "LIFETIME",
+      budgetOwnerType: "CAMPAIGN",
+      lifetimeBudget: "15,00",
+      startTime: "2026-08-03T10:00:00Z",
+      endTime: "2026-08-03T10:30:00Z",
+      destinationUrl: "https://www.example.de/angebot",
+      reason: "Ungültiges Lifetime-Zeitfenster.",
+      confirmation: "AKTIV-LAUNCH VORBEREITEN",
+    }),
+  "invalid_lifetime_window",
 );
 expectInputError(
   () =>
@@ -479,6 +572,7 @@ assert.deepEqual(
     objective: "OUTCOME_TRAFFIC",
     destinationUrl: "https://www.example.de/angebot",
     targetStatus: "ACTIVE",
+    budgetType: "DAILY",
     budgetOwnerType: "AD_SET",
     dailyBudgetMinor: "2050",
     campaignName: "Sommer",
@@ -487,6 +581,67 @@ assert.deepEqual(
     adName: "Sommer Ad",
     reason: "Exakt geprüfter Staging-Aktiv-Launch.",
   },
+);
+
+assert.deepEqual(
+  parseLaunchApprovalCommand({
+    planId: "77777777-7777-4777-8777-777777777777",
+    payloadHash: "b".repeat(64),
+    objective: "OUTCOME_TRAFFIC",
+    destinationUrl: "https://www.example.de/angebot",
+    targetStatus: "ACTIVE",
+    budgetType: "LIFETIME",
+    budgetOwnerType: "CAMPAIGN",
+    lifetimeBudgetMinor: "1500",
+    startTime: "2026-08-03T10:00:00Z",
+    endTime: "2026-08-10T10:00:00Z",
+    campaignName: "Lifetime Sommer",
+    adSetName: "Lifetime Sommer Ad Set",
+    creativeName: "Lifetime Sommer Creative",
+    adName: "Lifetime Sommer Ad",
+    reason: "Exakt geprüfter Lifetime-Staging-Launch.",
+    confirmation: "AKTIV-LAUNCH FREIGEBEN",
+  }),
+  {
+    planId: "77777777-7777-4777-8777-777777777777",
+    payloadHash: "b".repeat(64),
+    objective: "OUTCOME_TRAFFIC",
+    destinationUrl: "https://www.example.de/angebot",
+    targetStatus: "ACTIVE",
+    budgetType: "LIFETIME",
+    budgetOwnerType: "CAMPAIGN",
+    lifetimeBudgetMinor: "1500",
+    startTime: "2026-08-03T10:00:00.000Z",
+    endTime: "2026-08-10T10:00:00.000Z",
+    campaignName: "Lifetime Sommer",
+    adSetName: "Lifetime Sommer Ad Set",
+    creativeName: "Lifetime Sommer Creative",
+    adName: "Lifetime Sommer Ad",
+    reason: "Exakt geprüfter Lifetime-Staging-Launch.",
+  },
+);
+expectInputError(
+  () =>
+    parseLaunchApprovalCommand({
+      planId: "77777777-7777-4777-8777-777777777777",
+      payloadHash: "b".repeat(64),
+      objective: "OUTCOME_TRAFFIC",
+      destinationUrl: "https://www.example.de/angebot",
+      targetStatus: "ACTIVE",
+      budgetType: "LIFETIME",
+      budgetOwnerType: "CAMPAIGN",
+      lifetimeBudgetMinor: "1500",
+      dailyBudgetMinor: "500",
+      startTime: "2026-08-03T10:00:00Z",
+      endTime: "2026-08-10T10:00:00Z",
+      campaignName: "Lifetime Sommer",
+      adSetName: "Lifetime Sommer Ad Set",
+      creativeName: "Lifetime Sommer Creative",
+      adName: "Lifetime Sommer Ad",
+      reason: "Mischbudget darf nicht freigegeben werden.",
+      confirmation: "AKTIV-LAUNCH FREIGEBEN",
+    }),
+  "unknown_field",
 );
 expectInputError(
   () =>

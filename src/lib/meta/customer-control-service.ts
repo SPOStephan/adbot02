@@ -669,7 +669,7 @@ export async function importCustomerBrandAsset(
   return { brandAssetId: data };
 }
 
-export type CustomerLaunchResult = {
+type CustomerLaunchCommonResult = {
   outcome: "CREATED" | "EXISTING";
   planId: string;
   status: "HELD";
@@ -677,8 +677,6 @@ export type CustomerLaunchResult = {
   objective: string;
   destinationUrl: string;
   targetStatus: "ACTIVE";
-  budgetOwnerType: "CAMPAIGN" | "AD_SET";
-  dailyBudgetMinor: string;
   campaignName: string;
   adSetName: string;
   creativeName: string;
@@ -687,13 +685,29 @@ export type CustomerLaunchResult = {
   preparedAt: string;
 };
 
+export type CustomerLaunchResult = CustomerLaunchCommonResult &
+  (
+    | {
+        budgetType: "DAILY";
+        budgetOwnerType: "CAMPAIGN" | "AD_SET";
+        dailyBudgetMinor: string;
+      }
+    | {
+        budgetType: "LIFETIME";
+        budgetOwnerType: "CAMPAIGN";
+        lifetimeBudgetMinor: string;
+        startTime: string;
+        endTime: string;
+      }
+  );
+
 function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
   const raw = Array.isArray(value) ? value[0] : value;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     rpcFailure("Die Aktiv-Launch-Vorbereitung");
   }
   const record = raw as Record<string, unknown>;
-  const dailyBudgetMinor = String(record.daily_budget_minor ?? "");
+  const budgetType = record.budget_type === "LIFETIME" ? "LIFETIME" : "DAILY";
   const brandAssetIds = Array.isArray(record.brand_asset_ids)
     ? record.brand_asset_ids.filter(
         (assetId): assetId is string =>
@@ -701,6 +715,9 @@ function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
       )
     : [];
   if (
+    (record.budget_type !== undefined &&
+      record.budget_type !== "DAILY" &&
+      record.budget_type !== "LIFETIME") ||
     (record.outcome !== "CREATED" && record.outcome !== "EXISTING") ||
     typeof record.plan_id !== "string" ||
     !/^[0-9a-f-]{36}$/i.test(record.plan_id) ||
@@ -712,7 +729,6 @@ function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
     record.target_status !== "ACTIVE" ||
     (record.budget_owner_type !== "CAMPAIGN" &&
       record.budget_owner_type !== "AD_SET") ||
-    !/^[1-9][0-9]*$/.test(dailyBudgetMinor) ||
     typeof record.campaign_name !== "string" ||
     typeof record.ad_set_name !== "string" ||
     typeof record.creative_name !== "string" ||
@@ -722,7 +738,7 @@ function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
   ) {
     rpcFailure("Die Aktiv-Launch-Vorbereitung");
   }
-  return {
+  const common: CustomerLaunchCommonResult = {
     outcome: record.outcome,
     planId: record.plan_id,
     status: "HELD",
@@ -730,14 +746,46 @@ function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
     objective: record.objective,
     destinationUrl: record.destination_url,
     targetStatus: "ACTIVE",
-    budgetOwnerType: record.budget_owner_type,
-    dailyBudgetMinor,
     campaignName: record.campaign_name,
     adSetName: record.ad_set_name,
     creativeName: record.creative_name,
     adName: record.ad_name,
     brandAssetIds,
     preparedAt: record.prepared_at,
+  };
+
+  if (budgetType === "DAILY") {
+    const dailyBudgetMinor = String(record.daily_budget_minor ?? "");
+    if (!/^[1-9][0-9]*$/.test(dailyBudgetMinor)) {
+      rpcFailure("Die Aktiv-Launch-Vorbereitung");
+    }
+    return {
+      ...common,
+      budgetType,
+      budgetOwnerType: record.budget_owner_type,
+      dailyBudgetMinor,
+    };
+  }
+
+  const lifetimeBudgetMinor = String(record.lifetime_budget_minor ?? "");
+  if (
+    record.budget_owner_type !== "CAMPAIGN" ||
+    !/^[1-9][0-9]*$/.test(lifetimeBudgetMinor) ||
+    typeof record.start_time !== "string" ||
+    typeof record.end_time !== "string" ||
+    !Number.isFinite(Date.parse(record.start_time)) ||
+    !Number.isFinite(Date.parse(record.end_time)) ||
+    Date.parse(record.end_time) <= Date.parse(record.start_time)
+  ) {
+    rpcFailure("Die Aktiv-Launch-Vorbereitung");
+  }
+  return {
+    ...common,
+    budgetType,
+    budgetOwnerType: "CAMPAIGN",
+    lifetimeBudgetMinor,
+    startTime: new Date(record.start_time).toISOString(),
+    endTime: new Date(record.end_time).toISOString(),
   };
 }
 
@@ -770,25 +818,33 @@ export async function materializeCustomerLaunch(
   let result: CustomerLaunchResult | null = null;
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin.rpc(
-      "materialize_meta_customer_launch_plan",
-      {
-        p_user_id: customer.userId,
-        p_platform_account_id: customer.platformAccountId,
-        p_read_lease_token: leaseToken,
-        p_blueprint_id: command.blueprintId,
-        p_brand_profile_id: command.brandProfileId,
-        p_brand_asset_id: command.brandAssetId,
-        p_allowed_domain_id: command.allowedDomainId,
-        p_budget_owner_type: command.budgetOwnerType,
-        p_daily_budget_minor: command.dailyBudgetMinor,
-        p_launch_inputs: {
-          ...command.launchInputs,
-          preparation_reason: command.reason,
-        },
-        p_planned_at: new Date().toISOString(),
+    const commonRpcArguments = {
+      p_user_id: customer.userId,
+      p_platform_account_id: customer.platformAccountId,
+      p_read_lease_token: leaseToken,
+      p_blueprint_id: command.blueprintId,
+      p_brand_profile_id: command.brandProfileId,
+      p_brand_asset_id: command.brandAssetId,
+      p_allowed_domain_id: command.allowedDomainId,
+      p_budget_owner_type: command.budgetOwnerType,
+      p_launch_inputs: {
+        ...command.launchInputs,
+        preparation_reason: command.reason,
       },
-    );
+      p_planned_at: new Date().toISOString(),
+    };
+    const { data, error } =
+      command.budgetType === "DAILY"
+        ? await admin.rpc("materialize_meta_customer_launch_plan", {
+            ...commonRpcArguments,
+            p_daily_budget_minor: command.dailyBudgetMinor,
+          })
+        : await admin.rpc("materialize_meta_customer_lifetime_launch_plan_v3", {
+            ...commonRpcArguments,
+            p_lifetime_budget_minor: command.lifetimeBudgetMinor,
+            p_start_time: command.startTime,
+            p_end_time: command.endTime,
+          });
     if (error) {
       serviceError(
         "launch_preparation_not_ready",
@@ -841,7 +897,7 @@ export async function approveCustomerLaunch(
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("approve_meta_launch_canary_plan", {
+  const commonRpcArguments = {
     p_user_id: customer.userId,
     p_platform_account_id: customer.platformAccountId,
     p_plan_id: command.planId,
@@ -850,13 +906,24 @@ export async function approveCustomerLaunch(
     p_expected_destination_url: command.destinationUrl,
     p_expected_target_status: command.targetStatus,
     p_expected_budget_owner_type: command.budgetOwnerType,
-    p_expected_daily_budget_minor: command.dailyBudgetMinor,
     p_expected_campaign_name: command.campaignName,
     p_expected_ad_set_name: command.adSetName,
     p_expected_creative_name: command.creativeName,
     p_expected_ad_name: command.adName,
     p_reason: command.reason,
-  });
+  };
+  const { data, error } =
+    command.budgetType === "DAILY"
+      ? await admin.rpc("approve_meta_launch_canary_plan", {
+          ...commonRpcArguments,
+          p_expected_daily_budget_minor: command.dailyBudgetMinor,
+        })
+      : await admin.rpc("approve_meta_lifetime_launch_canary_plan_v3", {
+          ...commonRpcArguments,
+          p_expected_lifetime_budget_minor: command.lifetimeBudgetMinor,
+          p_expected_start_time: command.startTime,
+          p_expected_end_time: command.endTime,
+        });
   const row = Array.isArray(data) ? data[0] : null;
 
   if (error) {

@@ -54,8 +54,12 @@ export type RecentLaunchPlanView = {
   objective: string | null;
   destinationUrl: string | null;
   targetStatus: "ACTIVE" | null;
+  budgetType: "DAILY" | "LIFETIME" | null;
   budgetOwnerType: "CAMPAIGN" | "AD_SET" | null;
   dailyBudgetMinor: string | null;
+  lifetimeBudgetMinor: string | null;
+  startTime: string | null;
+  endTime: string | null;
   campaignName: string | null;
   adSetName: string | null;
   creativeName: string | null;
@@ -63,7 +67,7 @@ export type RecentLaunchPlanView = {
   brandAssetIds: string[];
 };
 
-type HeldLaunchPlan = {
+type HeldLaunchPlanCommon = {
   id: string;
   status: "HELD";
   outcome: "CREATED" | "EXISTING" | null;
@@ -72,14 +76,28 @@ type HeldLaunchPlan = {
   objective: string;
   destinationUrl: string;
   targetStatus: "ACTIVE";
-  budgetOwnerType: "CAMPAIGN" | "AD_SET";
-  dailyBudgetMinor: string;
   campaignName: string;
   adSetName: string;
   creativeName: string;
   adName: string;
   brandAssetIds: string[];
 };
+
+type HeldLaunchPlan = HeldLaunchPlanCommon &
+  (
+    | {
+        budgetType: "DAILY";
+        budgetOwnerType: "CAMPAIGN" | "AD_SET";
+        dailyBudgetMinor: string;
+      }
+    | {
+        budgetType: "LIFETIME";
+        budgetOwnerType: "CAMPAIGN";
+        lifetimeBudgetMinor: string;
+        startTime: string;
+        endTime: string;
+      }
+  );
 
 function toHeldLaunchPlan(plan: RecentLaunchPlanView): HeldLaunchPlan | null {
   if (
@@ -88,8 +106,6 @@ function toHeldLaunchPlan(plan: RecentLaunchPlanView): HeldLaunchPlan | null {
     !plan.objective ||
     !plan.destinationUrl ||
     plan.targetStatus !== "ACTIVE" ||
-    !plan.budgetOwnerType ||
-    !plan.dailyBudgetMinor ||
     !plan.campaignName ||
     !plan.adSetName ||
     !plan.creativeName ||
@@ -98,21 +114,54 @@ function toHeldLaunchPlan(plan: RecentLaunchPlanView): HeldLaunchPlan | null {
   ) {
     return null;
   }
-  return {
-    ...plan,
+
+  const common: HeldLaunchPlanCommon = {
+    id: plan.id,
     status: "HELD",
     outcome: null,
+    createdAt: plan.createdAt,
     payloadHash: plan.payloadHash,
     objective: plan.objective,
     destinationUrl: plan.destinationUrl,
     targetStatus: "ACTIVE",
-    budgetOwnerType: plan.budgetOwnerType,
-    dailyBudgetMinor: plan.dailyBudgetMinor,
     campaignName: plan.campaignName,
     adSetName: plan.adSetName,
     creativeName: plan.creativeName,
     adName: plan.adName,
+    brandAssetIds: plan.brandAssetIds,
   };
+
+  if (
+    plan.budgetType === "DAILY" &&
+    (plan.budgetOwnerType === "CAMPAIGN" || plan.budgetOwnerType === "AD_SET") &&
+    plan.dailyBudgetMinor
+  ) {
+    return {
+      ...common,
+      budgetType: "DAILY",
+      budgetOwnerType: plan.budgetOwnerType,
+      dailyBudgetMinor: plan.dailyBudgetMinor,
+    };
+  }
+
+  if (
+    plan.budgetType === "LIFETIME" &&
+    plan.budgetOwnerType === "CAMPAIGN" &&
+    plan.lifetimeBudgetMinor &&
+    plan.startTime &&
+    plan.endTime
+  ) {
+    return {
+      ...common,
+      budgetType: "LIFETIME",
+      budgetOwnerType: "CAMPAIGN",
+      lifetimeBudgetMinor: plan.lifetimeBudgetMinor,
+      startTime: plan.startTime,
+      endTime: plan.endTime,
+    };
+  }
+
+  return null;
 }
 
 export type AutomationOnboardingData = {
@@ -304,10 +353,14 @@ export function AutomationOnboardingControls({
   const [launchAssetId, setLaunchAssetId] = useState(
     data.brandAssets[0]?.id ?? "",
   );
+  const [budgetType, setBudgetType] = useState<"DAILY" | "LIFETIME">("DAILY");
   const [budgetOwnerType, setBudgetOwnerType] = useState<"CAMPAIGN" | "AD_SET">(
     "AD_SET",
   );
   const [dailyBudget, setDailyBudget] = useState("20.00");
+  const [lifetimeBudget, setLifetimeBudget] = useState("15.00");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [destinationUrl, setDestinationUrl] = useState("");
   const [campaignName, setCampaignName] = useState("");
   const [adSetName, setAdSetName] = useState("");
@@ -356,6 +409,18 @@ export function AutomationOnboardingControls({
     ],
   );
   const allLaunchGatesReady = gateItems.every((gate) => gate.ready);
+  const lifetimeStartMs = Date.parse(startTime);
+  const lifetimeEndMs = Date.parse(endTime);
+  const lifetimeDurationMs = lifetimeEndMs - lifetimeStartMs;
+  const launchBudgetReady =
+    budgetType === "DAILY"
+      ? dailyBudget.trim().length > 0
+      : budgetOwnerType === "CAMPAIGN" &&
+        lifetimeBudget.trim().length > 0 &&
+        Number.isFinite(lifetimeStartMs) &&
+        Number.isFinite(lifetimeEndMs) &&
+        lifetimeDurationMs >= 60 * 60 * 1000 &&
+        lifetimeDurationMs <= 90 * 24 * 60 * 60 * 1000;
 
   function refresh() {
     router.refresh();
@@ -500,6 +565,7 @@ export function AutomationOnboardingControls({
     event.preventDefault();
     if (
       !allLaunchGatesReady ||
+      !launchBudgetReady ||
       !brandProfileId ||
       launchPreparationConfirmation !== "AKTIV-LAUNCH VORBEREITEN" ||
       launchReason.trim().length < 12
@@ -514,17 +580,31 @@ export function AutomationOnboardingControls({
     setPendingAction("launch-prepare");
     setLaunchNotice(null);
     try {
+      const launchBudgetPayload =
+        budgetType === "DAILY"
+          ? { budgetType, budgetOwnerType, dailyBudget }
+          : {
+              budgetType,
+              budgetOwnerType: "CAMPAIGN" as const,
+              lifetimeBudget,
+              startTime: new Date(startTime).toISOString(),
+              endTime: new Date(endTime).toISOString(),
+            };
       const result = await postAutomationControl<
         ApiPayload & {
           planId?: string;
           status?: string;
-          outcome?: string;
+          outcome?: "CREATED" | "EXISTING";
           payloadHash?: string;
           objective?: string;
           destinationUrl?: string;
           targetStatus?: string;
+          budgetType?: string;
           budgetOwnerType?: string;
           dailyBudgetMinor?: string;
+          lifetimeBudgetMinor?: string;
+          startTime?: string;
+          endTime?: string;
           campaignName?: string;
           adSetName?: string;
           creativeName?: string;
@@ -537,8 +617,7 @@ export function AutomationOnboardingControls({
         brandProfileId,
         brandAssetId: launchAssetId,
         allowedDomainId: launchDomainId,
-        budgetOwnerType,
-        dailyBudget,
+        ...launchBudgetPayload,
         destinationUrl,
         campaignName,
         adSetName,
@@ -555,9 +634,6 @@ export function AutomationOnboardingControls({
         !result.objective ||
         !result.destinationUrl ||
         result.targetStatus !== "ACTIVE" ||
-        (result.budgetOwnerType !== "CAMPAIGN" &&
-          result.budgetOwnerType !== "AD_SET") ||
-        !result.dailyBudgetMinor ||
         !result.campaignName ||
         !result.adSetName ||
         !result.creativeName ||
@@ -567,7 +643,7 @@ export function AutomationOnboardingControls({
       ) {
         throw new Error("Der Server lieferte keine vollständige HELD-Plan-Vorschau.");
       }
-      setMaterializedPlan({
+      const commonPlan: HeldLaunchPlanCommon = {
         id: result.planId,
         status: "HELD",
         outcome: result.outcome,
@@ -576,14 +652,46 @@ export function AutomationOnboardingControls({
         objective: result.objective,
         destinationUrl: result.destinationUrl,
         targetStatus: "ACTIVE",
-        budgetOwnerType: result.budgetOwnerType,
-        dailyBudgetMinor: result.dailyBudgetMinor,
         campaignName: result.campaignName,
         adSetName: result.adSetName,
         creativeName: result.creativeName,
         adName: result.adName,
         brandAssetIds: result.brandAssetIds,
-      });
+      };
+      if (result.budgetType === "DAILY") {
+        if (
+          (result.budgetOwnerType !== "CAMPAIGN" &&
+            result.budgetOwnerType !== "AD_SET") ||
+          !result.dailyBudgetMinor
+        ) {
+          throw new Error("Der Server lieferte keine vollständige Daily-HELD-Vorschau.");
+        }
+        setMaterializedPlan({
+          ...commonPlan,
+          budgetType: "DAILY",
+          budgetOwnerType: result.budgetOwnerType,
+          dailyBudgetMinor: result.dailyBudgetMinor,
+        });
+      } else if (result.budgetType === "LIFETIME") {
+        if (
+          result.budgetOwnerType !== "CAMPAIGN" ||
+          !result.lifetimeBudgetMinor ||
+          !result.startTime ||
+          !result.endTime
+        ) {
+          throw new Error("Der Server lieferte keine vollständige Lifetime-HELD-Vorschau.");
+        }
+        setMaterializedPlan({
+          ...commonPlan,
+          budgetType: "LIFETIME",
+          budgetOwnerType: "CAMPAIGN",
+          lifetimeBudgetMinor: result.lifetimeBudgetMinor,
+          startTime: result.startTime,
+          endTime: result.endTime,
+        });
+      } else {
+        throw new Error("Der Server lieferte keinen gültigen Budgettyp.");
+      }
       setLaunchPreparationConfirmation("");
       setLaunchApprovalReason(launchReason);
       setLaunchNotice({
@@ -626,6 +734,20 @@ export function AutomationOnboardingControls({
     setPendingAction("launch-approve");
     setLaunchNotice(null);
     try {
+      const approvalBudgetPayload =
+        materializedPlan.budgetType === "DAILY"
+          ? {
+              budgetType: "DAILY" as const,
+              budgetOwnerType: materializedPlan.budgetOwnerType,
+              dailyBudgetMinor: materializedPlan.dailyBudgetMinor,
+            }
+          : {
+              budgetType: "LIFETIME" as const,
+              budgetOwnerType: "CAMPAIGN" as const,
+              lifetimeBudgetMinor: materializedPlan.lifetimeBudgetMinor,
+              startTime: materializedPlan.startTime,
+              endTime: materializedPlan.endTime,
+            };
       const result = await putAutomationControl<
         ApiPayload & {
           approvalId?: string;
@@ -640,8 +762,7 @@ export function AutomationOnboardingControls({
         objective: materializedPlan.objective,
         destinationUrl: materializedPlan.destinationUrl,
         targetStatus: materializedPlan.targetStatus,
-        budgetOwnerType: materializedPlan.budgetOwnerType,
-        dailyBudgetMinor: materializedPlan.dailyBudgetMinor,
+        ...approvalBudgetPayload,
         campaignName: materializedPlan.campaignName,
         adSetName: materializedPlan.adSetName,
         creativeName: materializedPlan.creativeName,
@@ -968,16 +1089,93 @@ export function AutomationOnboardingControls({
                 </select>
               </label>
               <label className="text-sm font-bold text-slate-800">
-                Budgetträger
-                <select className={inputClass} onChange={(event) => setBudgetOwnerType(event.target.value as "CAMPAIGN" | "AD_SET")} value={budgetOwnerType}>
-                  <option value="AD_SET">Ad Set</option>
-                  <option value="CAMPAIGN">Kampagne</option>
+                Budgetart
+                <select
+                  className={inputClass}
+                  onChange={(event) => {
+                    const nextBudgetType = event.target.value as "DAILY" | "LIFETIME";
+                    setBudgetType(nextBudgetType);
+                    if (nextBudgetType === "LIFETIME") {
+                      setBudgetOwnerType("CAMPAIGN");
+                    }
+                  }}
+                  value={budgetType}
+                >
+                  <option value="DAILY">Tagesbudget · Daily v2</option>
+                  <option value="LIFETIME">Laufzeitbudget · Lifetime v3</option>
                 </select>
               </label>
               <label className="text-sm font-bold text-slate-800">
-                Tagesbudget · EUR
-                <input className={inputClass} inputMode="decimal" onChange={(event) => setDailyBudget(event.target.value)} required value={dailyBudget} />
+                Budgetträger
+                <select
+                  className={inputClass}
+                  disabled={budgetType === "LIFETIME"}
+                  onChange={(event) =>
+                    setBudgetOwnerType(event.target.value as "CAMPAIGN" | "AD_SET")
+                  }
+                  value={budgetOwnerType}
+                >
+                  <option value="AD_SET">Ad Set</option>
+                  <option value="CAMPAIGN">Kampagne</option>
+                </select>
+                {budgetType === "LIFETIME" ? (
+                  <span className="mt-2 block text-xs font-medium leading-5 text-slate-500">
+                    Laufzeitbudgets sind ausschließlich auf Kampagnenebene zulässig.
+                  </span>
+                ) : null}
               </label>
+              {budgetType === "DAILY" ? (
+                <label className="text-sm font-bold text-slate-800">
+                  Tagesbudget · EUR
+                  <input
+                    className={inputClass}
+                    inputMode="decimal"
+                    onChange={(event) => setDailyBudget(event.target.value)}
+                    required
+                    value={dailyBudget}
+                  />
+                </label>
+              ) : (
+                <>
+                  <label className="text-sm font-bold text-slate-800">
+                    Laufzeitbudget gesamt · EUR
+                    <input
+                      className={inputClass}
+                      inputMode="decimal"
+                      onChange={(event) => setLifetimeBudget(event.target.value)}
+                      required
+                      value={lifetimeBudget}
+                    />
+                  </label>
+                  <label className="text-sm font-bold text-slate-800">
+                    Startzeit
+                    <input
+                      className={inputClass}
+                      onChange={(event) => setStartTime(event.target.value)}
+                      required
+                      step={60}
+                      type="datetime-local"
+                      value={startTime}
+                    />
+                  </label>
+                  <label className="text-sm font-bold text-slate-800">
+                    Endzeit
+                    <input
+                      className={inputClass}
+                      onChange={(event) => setEndTime(event.target.value)}
+                      required
+                      step={60}
+                      type="datetime-local"
+                      value={endTime}
+                    />
+                  </label>
+                  <p className="text-xs font-medium leading-5 text-slate-500 sm:col-span-2">
+                    Die lokal eingegebenen Zeitpunkte werden vor der Fingerprint-Bildung in UTC
+                    normalisiert. Zulässig sind mindestens 1 Stunde und höchstens 90 Tage; das
+                    Gesamtbudget wird nicht in ein Tagesbudget umgerechnet.
+                  </p>
+                </>
+              )}
               <label className="text-sm font-bold text-slate-800">
                 HTTPS-Ziel
                 <input className={inputClass} onChange={(event) => setDestinationUrl(event.target.value)} placeholder="https://www.example.de/angebot" required type="url" value={destinationUrl} />
@@ -1035,6 +1233,7 @@ export function AutomationOnboardingControls({
               disabled={
                 Boolean(pendingAction) ||
                 !allLaunchGatesReady ||
+                !launchBudgetReady ||
                 launchPreparationConfirmation !== "AKTIV-LAUNCH VORBEREITEN" ||
                 launchReason.trim().length < 12 ||
                 !launchBlueprintId ||
@@ -1085,11 +1284,39 @@ export function AutomationOnboardingControls({
                   <dd className="mt-1">{materializedPlan.objective}</dd>
                 </div>
                 <div>
-                  <dt className="font-extrabold">Tagesbudget</dt>
+                  <dt className="font-extrabold">Budgetart</dt>
                   <dd className="mt-1">
-                    {displayMinorUnits(materializedPlan.dailyBudgetMinor)} · {materializedPlan.budgetOwnerType}
+                    {materializedPlan.budgetType === "DAILY"
+                      ? "Tagesbudget · Daily v2"
+                      : "Laufzeitbudget · Lifetime v3"}
                   </dd>
                 </div>
+                {materializedPlan.budgetType === "DAILY" ? (
+                  <div>
+                    <dt className="font-extrabold">Tagesbudget</dt>
+                    <dd className="mt-1">
+                      {displayMinorUnits(materializedPlan.dailyBudgetMinor)} · {materializedPlan.budgetOwnerType}
+                    </dd>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <dt className="font-extrabold">Laufzeitbudget gesamt</dt>
+                      <dd className="mt-1">
+                        {displayMinorUnits(materializedPlan.lifetimeBudgetMinor)} · CAMPAIGN
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="font-extrabold">Feste Laufzeit</dt>
+                      <dd className="mt-1">
+                        {displayDate(materializedPlan.startTime)} bis {displayDate(materializedPlan.endTime)} · Europe/Berlin
+                      </dd>
+                      <dd className="mt-1 break-all font-mono text-xs">
+                        {materializedPlan.startTime} → {materializedPlan.endTime} · UTC
+                      </dd>
+                    </div>
+                  </>
+                )}
                 <div>
                   <dt className="font-extrabold">Zielstatus nach vollständigem Read-back</dt>
                   <dd className="mt-1 font-extrabold text-red-800">{materializedPlan.targetStatus}</dd>
@@ -1118,8 +1345,8 @@ export function AutomationOnboardingControls({
 
               <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold leading-6 text-red-950">
                 Die folgende Freigabe kann Spend auslösen. Adbot erstellt alle vier Meta-Objekte
-                zunächst PAUSED, prüft Remote-IDs, Status, Budget und Bindings und aktiviert sie
-                erst danach innerhalb derselben Saga. Bei jeder Abweichung wird gestoppt und
+                zunächst PAUSED, prüft Remote-IDs, Status, Budget, Laufzeit und Bindings und aktiviert
+                sie erst danach innerhalb derselben Saga. Bei jeder Abweichung wird gestoppt und
                 wieder auf FREEZE_WRITES gesetzt.
               </div>
 

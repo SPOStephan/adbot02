@@ -798,13 +798,13 @@ function requiredHttpsUrl(value: unknown): string {
   return url.toString();
 }
 
-export type LaunchCommand = {
+const LAUNCH_BUDGET_TYPES = ["DAILY", "LIFETIME"] as const;
+
+type LaunchCommon = {
   blueprintId: string;
   brandProfileId: string;
   brandAssetId: string;
   allowedDomainId: string;
-  budgetOwnerType: (typeof BUDGET_OWNER_TYPES)[number];
-  dailyBudgetMinor: string;
   reason: string;
   launchInputs: {
     destination_url: string;
@@ -815,25 +815,70 @@ export type LaunchCommand = {
   };
 };
 
+export type LaunchCommand = LaunchCommon &
+  (
+    | {
+        budgetType: "DAILY";
+        budgetOwnerType: (typeof BUDGET_OWNER_TYPES)[number];
+        dailyBudgetMinor: string;
+      }
+    | {
+        budgetType: "LIFETIME";
+        budgetOwnerType: "CAMPAIGN";
+        lifetimeBudgetMinor: string;
+        startTime: string;
+        endTime: string;
+      }
+  );
+
+function requiredUtcTimestamp(value: unknown, field: string): string {
+  const text = requiredText(value, field, 20, 30);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(text)) {
+    inputError("invalid_timestamp", `${field} muss ein UTC-Zeitpunkt im ISO-8601-Format sein.`);
+  }
+  const parsed = Date.parse(text);
+  if (!Number.isFinite(parsed)) {
+    inputError("invalid_timestamp", `${field} ist kein gültiger Zeitpunkt.`);
+  }
+  return new Date(parsed).toISOString();
+}
+
+function assertLifetimeWindow(startTime: string, endTime: string): void {
+  const durationMs = Date.parse(endTime) - Date.parse(startTime);
+  if (durationMs <= 60 * 60 * 1000 || durationMs > 90 * 24 * 60 * 60 * 1000) {
+    inputError(
+      "invalid_lifetime_window",
+      "Die Laufzeit muss länger als eine Stunde und höchstens 90 Tage sein.",
+    );
+  }
+}
+
 export function parseLaunchCommand(value: unknown): LaunchCommand {
   const body = asJsonObject(value);
+  const budgetType =
+    body.budgetType === undefined
+      ? "DAILY"
+      : requiredEnum(body.budgetType, "Die Budgetart", LAUNCH_BUDGET_TYPES);
+  const commonKeys = [
+    "blueprintId",
+    "brandProfileId",
+    "brandAssetId",
+    "allowedDomainId",
+    "budgetOwnerType",
+    "budgetType",
+    "destinationUrl",
+    "campaignName",
+    "adSetName",
+    "creativeName",
+    "adName",
+    "reason",
+    "confirmation",
+  ];
   assertExactKeys(
     body,
-    [
-      "blueprintId",
-      "brandProfileId",
-      "brandAssetId",
-      "allowedDomainId",
-      "budgetOwnerType",
-      "dailyBudget",
-      "destinationUrl",
-      "campaignName",
-      "adSetName",
-      "creativeName",
-      "adName",
-      "reason",
-      "confirmation",
-    ],
+    budgetType === "DAILY"
+      ? [...commonKeys, "dailyBudget"]
+      : [...commonKeys, "lifetimeBudget", "startTime", "endTime"],
     "Der Aktiv-Launch-Vorbereitungsbefehl",
   );
 
@@ -844,20 +889,11 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     );
   }
 
-  return {
+  const common: LaunchCommon = {
     blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
     brandProfileId: requiredUuid(body.brandProfileId, "Die Brand-Profil-ID"),
     brandAssetId: requiredUuid(body.brandAssetId, "Die Brand-Asset-ID"),
     allowedDomainId: requiredUuid(body.allowedDomainId, "Die Domain-ID"),
-    budgetOwnerType: requiredEnum(
-      body.budgetOwnerType,
-      "Der Budgetträger",
-      BUDGET_OWNER_TYPES,
-    ),
-    dailyBudgetMinor: parseEuroAmountToMinor(
-      body.dailyBudget,
-      "Das Launch-Tagesbudget",
-    ),
     reason: requiredText(body.reason, "Die Begründung", 12, 500),
     launchInputs: {
       destination_url: requiredHttpsUrl(body.destinationUrl),
@@ -867,16 +903,53 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       ad_name: optionalLaunchName(body.adName, "Der Anzeigenname"),
     },
   };
+  const budgetOwnerType = requiredEnum(
+    body.budgetOwnerType,
+    "Der Budgetträger",
+    BUDGET_OWNER_TYPES,
+  );
+
+  if (budgetType === "DAILY") {
+    return {
+      ...common,
+      budgetType,
+      budgetOwnerType,
+      dailyBudgetMinor: parseEuroAmountToMinor(
+        body.dailyBudget,
+        "Das Launch-Tagesbudget",
+      ),
+    };
+  }
+
+  if (budgetOwnerType !== "CAMPAIGN") {
+    inputError(
+      "invalid_budget_owner",
+      "Ein Laufzeitbudget muss für diesen Canary auf Kampagnenebene liegen.",
+    );
+  }
+  const startTime = requiredUtcTimestamp(body.startTime, "Der Laufzeitbeginn");
+  const endTime = requiredUtcTimestamp(body.endTime, "Das Laufzeitende");
+  assertLifetimeWindow(startTime, endTime);
+
+  return {
+    ...common,
+    budgetType,
+    budgetOwnerType: "CAMPAIGN",
+    lifetimeBudgetMinor: parseEuroAmountToMinor(
+      body.lifetimeBudget,
+      "Das Launch-Laufzeitbudget",
+    ),
+    startTime,
+    endTime,
+  };
 }
 
-export type LaunchApprovalCommand = {
+type LaunchApprovalCommon = {
   planId: string;
   payloadHash: string;
   objective: string;
   destinationUrl: string;
   targetStatus: "ACTIVE";
-  budgetOwnerType: (typeof BUDGET_OWNER_TYPES)[number];
-  dailyBudgetMinor: string;
   campaignName: string;
   adSetName: string;
   creativeName: string;
@@ -884,25 +957,48 @@ export type LaunchApprovalCommand = {
   reason: string;
 };
 
+export type LaunchApprovalCommand = LaunchApprovalCommon &
+  (
+    | {
+        budgetType: "DAILY";
+        budgetOwnerType: (typeof BUDGET_OWNER_TYPES)[number];
+        dailyBudgetMinor: string;
+      }
+    | {
+        budgetType: "LIFETIME";
+        budgetOwnerType: "CAMPAIGN";
+        lifetimeBudgetMinor: string;
+        startTime: string;
+        endTime: string;
+      }
+  );
+
 export function parseLaunchApprovalCommand(value: unknown): LaunchApprovalCommand {
   const body = asJsonObject(value);
+  const budgetType =
+    body.budgetType === undefined
+      ? "DAILY"
+      : requiredEnum(body.budgetType, "Die Budgetart", LAUNCH_BUDGET_TYPES);
+  const commonKeys = [
+    "planId",
+    "payloadHash",
+    "objective",
+    "destinationUrl",
+    "targetStatus",
+    "budgetOwnerType",
+    "budgetType",
+    "campaignName",
+    "adSetName",
+    "creativeName",
+    "adName",
+    "reason",
+    "confirmation",
+  ];
   assertExactKeys(
     body,
-    [
-      "planId",
-      "payloadHash",
-      "objective",
-      "destinationUrl",
-      "targetStatus",
-      "budgetOwnerType",
-      "dailyBudgetMinor",
-      "campaignName",
-      "adSetName",
-      "creativeName",
-      "adName",
-      "reason",
-      "confirmation",
-    ],
+    budgetType === "DAILY"
+      ? [...commonKeys, "dailyBudgetMinor"]
+      : [...commonKeys, "lifetimeBudgetMinor", "startTime", "endTime"],
     "Der Aktiv-Launch-Freigabebefehl",
   );
 
@@ -921,26 +1017,55 @@ export function parseLaunchApprovalCommand(value: unknown): LaunchApprovalComman
   if (!/^[A-Z0-9_]+$/.test(objective)) {
     inputError("invalid_objective", "Das Kampagnenziel ist ungültig.");
   }
-
-  return {
+  const common: LaunchApprovalCommon = {
     planId: requiredUuid(body.planId, "Die Plan-ID"),
     payloadHash,
     objective,
     destinationUrl: requiredHttpsUrl(body.destinationUrl),
     targetStatus: requiredEnum(body.targetStatus, "Der Launch-Zielstatus", ["ACTIVE"] as const),
-    budgetOwnerType: requiredEnum(
-      body.budgetOwnerType,
-      "Der Budgetträger",
-      BUDGET_OWNER_TYPES,
-    ),
-    dailyBudgetMinor: requiredPositiveMinorUnits(
-      body.dailyBudgetMinor,
-      "Das Launch-Tagesbudget",
-    ),
     campaignName: requiredText(body.campaignName, "Der Kampagnenname", 1, 240),
     adSetName: requiredText(body.adSetName, "Der Ad-Set-Name", 1, 240),
     creativeName: requiredText(body.creativeName, "Der Creative-Name", 1, 240),
     adName: requiredText(body.adName, "Der Anzeigenname", 1, 240),
     reason: requiredText(body.reason, "Die Begründung", 12, 500),
+  };
+  const budgetOwnerType = requiredEnum(
+    body.budgetOwnerType,
+    "Der Budgetträger",
+    BUDGET_OWNER_TYPES,
+  );
+
+  if (budgetType === "DAILY") {
+    return {
+      ...common,
+      budgetType,
+      budgetOwnerType,
+      dailyBudgetMinor: requiredPositiveMinorUnits(
+        body.dailyBudgetMinor,
+        "Das Launch-Tagesbudget",
+      ),
+    };
+  }
+
+  if (budgetOwnerType !== "CAMPAIGN") {
+    inputError(
+      "invalid_budget_owner",
+      "Ein Laufzeitbudget muss für diesen Canary auf Kampagnenebene liegen.",
+    );
+  }
+  const startTime = requiredUtcTimestamp(body.startTime, "Der Laufzeitbeginn");
+  const endTime = requiredUtcTimestamp(body.endTime, "Das Laufzeitende");
+  assertLifetimeWindow(startTime, endTime);
+
+  return {
+    ...common,
+    budgetType,
+    budgetOwnerType: "CAMPAIGN",
+    lifetimeBudgetMinor: requiredPositiveMinorUnits(
+      body.lifetimeBudgetMinor,
+      "Das Launch-Laufzeitbudget",
+    ),
+    startTime,
+    endTime,
   };
 }

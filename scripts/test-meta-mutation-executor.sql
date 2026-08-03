@@ -1675,6 +1675,667 @@ begin
 end;
 $$;
 
+-- Lifetime-v3 Active Launch Chain: EUR 15.00 over exactly seven days.
+-- This fixture owns its asset and proves independent account-cap headroom before
+-- creating the conservative 1:1 lifetime exposure reservation.
+insert into public.brand_assets (
+  id, user_id, platform_account_id, brand_profile_id, source_type,
+  storage_bucket, storage_path, original_filename, sha256, mime_type,
+  byte_size, width, height, brand_policy_version, moderation_status,
+  status, metadata, reviewed_at, reviewed_by
+) values (
+  '93000000-0000-4000-8000-000000000002',
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  '94000000-0000-4000-8000-000000000001',
+  'UPLOADED', 'creative-assets',
+  '12000000-0000-4000-8000-000000000001/22000000-0000-4000-8000-000000000001/99/'
+    || repeat('9', 64) || '.png',
+  'lifetime-v3-regression.png', repeat('9', 64), 'image/png',
+  2048, 1200, 1200, 1, 'APPROVED', 'READY',
+  '{"purpose":"lifetime_v3_launch_regression"}'::jsonb, now(),
+  '12000000-0000-4000-8000-000000000001'
+);
+
+create temporary table lifetime_v3_contract (
+  start_time timestamptz not null,
+  end_time timestamptz not null,
+  materialized jsonb,
+  replayed jsonb
+) on commit drop;
+
+insert into lifetime_v3_contract (start_time, end_time)
+select fixture_start, fixture_start + interval '7 days'
+from (
+  select date_trunc('second', now()) + interval '10 minutes' as fixture_start
+) fixture;
+
+create temporary table lifetime_v3_read_lease (
+  lease_token uuid not null
+) on commit drop;
+
+insert into lifetime_v3_read_lease
+select public.claim_meta_account_operation(
+  '22000000-0000-4000-8000-000000000001',
+  '12000000-0000-4000-8000-000000000001',
+  'READ_SYNC', 'lifetime-v3-materializer-regression', 900
+);
+
+do $$
+declare
+  v_reserved_before bigint;
+  v_existing_lifetime bigint;
+  v_required_cap bigint;
+  v_policy_payload jsonb;
+begin
+  select coalesce(sum(exposure.reserved_exposure_minor), 0)::bigint
+    into v_reserved_before
+  from public.daily_budget_exposures exposure
+  where exposure.platform_account_id = '22000000-0000-4000-8000-000000000001'
+    and exposure.account_day = (
+      now() at time zone (
+        select marketing_timezone_name
+        from public.platform_accounts
+        where id = '22000000-0000-4000-8000-000000000001'
+      )
+    )::date;
+
+  v_existing_lifetime := public.meta_active_lifetime_budget_exposure_minor(
+    '12000000-0000-4000-8000-000000000001',
+    '22000000-0000-4000-8000-000000000001',
+    '32000000-0000-4000-8000-000000000001',
+    now()
+  );
+  v_required_cap := v_reserved_before + v_existing_lifetime + 1500 + 875;
+  v_policy_payload := jsonb_build_object(
+    'campaign_objectives', 'ALL',
+    'regions', 'ALL',
+    'domains', 'ALL',
+    'fixture', 'lifetime_v3',
+    'reserved_before_minor', v_reserved_before,
+    'existing_lifetime_minor', v_existing_lifetime,
+    'dedicated_lifetime_headroom_minor', 1500,
+    'followup_daily_headroom_minor', 875
+  );
+
+  update public.automation_policies
+  set status = 'SUSPENDED',
+      is_current = false,
+      suspended_at = now(),
+      suspension_reason = 'Superseded by lifetime-v3 regression policy',
+      updated_at = now()
+  where id = '82000000-0000-4000-8000-000000000001'
+    and is_current
+    and status = 'ACTIVE';
+
+  if not found then
+    raise exception 'Lifetime-v3 fixture could not supersede policy version 1';
+  end if;
+
+  insert into public.automation_policies (
+    id, user_id, platform_account_id, previous_policy_id, version,
+    status, currency, account_daily_hard_cap_minor,
+    default_campaign_daily_hard_cap_minor, budget_change_limit_bps,
+    cooldown_seconds, standard_flex_spend_multiplier_bps,
+    shared_budget_flex_spend_multiplier_bps, allow_budget_changes,
+    allow_status_changes, allow_new_launches, require_verified_domain,
+    policy_payload, policy_hash, is_current, customer_confirmed_at,
+    customer_confirmed_by, activated_at
+  ) values (
+    '82000000-0000-4000-8000-000000000003',
+    '12000000-0000-4000-8000-000000000001',
+    '22000000-0000-4000-8000-000000000001',
+    '82000000-0000-4000-8000-000000000001',
+    2, 'ACTIVE', 'EUR', v_required_cap, 6000, 2000, 43200,
+    17500, 21000, true, true, true, true,
+    v_policy_payload, public.meta_sha256(v_policy_payload::text), true,
+    now(), '12000000-0000-4000-8000-000000000001', now()
+  );
+
+  update public.daily_budget_exposure_snapshots
+  set policy_id = '82000000-0000-4000-8000-000000000003',
+      updated_at = now()
+  where id = (select snapshot_id from executor_planner_result)
+    and status = 'COMPLETE';
+
+  if not found
+    or (select account_daily_hard_cap_minor
+        from public.automation_policies
+        where id = '82000000-0000-4000-8000-000000000003')
+       - v_reserved_before - v_existing_lifetime <> 2375
+    or (select policy_id from public.daily_budget_exposure_snapshots
+        where id = (select snapshot_id from executor_planner_result))
+       <> '82000000-0000-4000-8000-000000000003'::uuid then
+    raise exception 'Lifetime-v3 fixture did not isolate its 1500-unit reservation and 875-unit follow-up Daily headroom';
+  end if;
+end;
+$$;
+
+update lifetime_v3_contract fixture
+set materialized = public.materialize_meta_customer_lifetime_launch_plan_v3(
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  (select lease_token from lifetime_v3_read_lease),
+  '92000000-0000-4000-8000-000000000001',
+  '94000000-0000-4000-8000-000000000001',
+  '93000000-0000-4000-8000-000000000002',
+  '91000000-0000-4000-8000-000000000001',
+  'CAMPAIGN',
+  1500,
+  fixture.start_time,
+  fixture.end_time,
+  jsonb_build_object(
+    'destination_url',
+      'https://shop.launch.example.test/products/lifetime-v3',
+    'campaign_name', 'Lifetime v3 Regression Campaign',
+    'ad_set_name', 'Lifetime v3 Regression Ad Set',
+    'creative_name', 'Lifetime v3 Regression Creative',
+    'ad_name', 'Lifetime v3 Regression Ad'
+  ),
+  now()
+);
+
+update lifetime_v3_contract fixture
+set replayed = public.materialize_meta_customer_lifetime_launch_plan_v3(
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  (select lease_token from lifetime_v3_read_lease),
+  '92000000-0000-4000-8000-000000000001',
+  '94000000-0000-4000-8000-000000000001',
+  '93000000-0000-4000-8000-000000000002',
+  '91000000-0000-4000-8000-000000000001',
+  'CAMPAIGN',
+  1500,
+  fixture.start_time,
+  fixture.end_time,
+  jsonb_build_object(
+    'destination_url',
+      'https://shop.launch.example.test/products/lifetime-v3',
+    'campaign_name', 'Lifetime v3 Regression Campaign',
+    'ad_set_name', 'Lifetime v3 Regression Ad Set',
+    'creative_name', 'Lifetime v3 Regression Creative',
+    'ad_name', 'Lifetime v3 Regression Ad'
+  ),
+  now()
+);
+
+select public.release_meta_account_operation(
+  '22000000-0000-4000-8000-000000000001',
+  '12000000-0000-4000-8000-000000000001',
+  (select lease_token from lifetime_v3_read_lease)
+);
+
+create temporary table lifetime_v3_ids on commit drop as
+select (materialized->>'plan_id')::uuid as plan_id
+from lifetime_v3_contract;
+
+do $$
+declare
+  v_plan_id uuid := (select plan_id from lifetime_v3_ids);
+  v_plan public.mutation_plans%rowtype;
+  v_exposure public.daily_budget_exposures%rowtype;
+  v_start timestamptz := (select start_time from lifetime_v3_contract);
+  v_end timestamptz := (select end_time from lifetime_v3_contract);
+  v_step_keys text[];
+begin
+  select plan.* into v_plan
+  from public.mutation_plans plan
+  where plan.id = v_plan_id;
+
+  select exposure.* into v_exposure
+  from public.daily_budget_exposures exposure
+  where exposure.plan_id = v_plan_id;
+
+  select array_agg(step_key order by step_index) into v_step_keys
+  from public.mutation_plan_steps
+  where plan_id = v_plan_id;
+
+  if (select materialized->>'outcome' from lifetime_v3_contract) <> 'CREATED'
+    or (select materialized->>'status' from lifetime_v3_contract) <> 'HELD'
+    or (select replayed->>'outcome' from lifetime_v3_contract) <> 'EXISTING'
+    or (select replayed->>'status' from lifetime_v3_contract) <> 'HELD'
+    or (select replayed->>'plan_id' from lifetime_v3_contract)
+       <> (select materialized->>'plan_id' from lifetime_v3_contract)
+    or (select materialized->>'budget_type' from lifetime_v3_contract) <> 'LIFETIME'
+    or (select materialized->>'budget_owner_type' from lifetime_v3_contract) <> 'CAMPAIGN'
+    or (select (materialized->>'lifetime_budget_minor')::bigint
+        from lifetime_v3_contract) <> 1500
+    or (select materialized ? 'daily_budget_minor'
+        from lifetime_v3_contract)
+    or v_end <> v_start + interval '7 days'
+    or v_plan.status <> 'PENDING'
+    or v_plan.not_before <> 'infinity'::timestamptz
+    or v_plan.max_attempts <> 1
+    or (v_plan.planned_payload->>'contract_version')::integer <> 3
+    or v_plan.planned_payload->>'budget_type' <> 'LIFETIME'
+    or v_plan.planned_payload->>'budget_owner_type' <> 'CAMPAIGN'
+    or (v_plan.planned_payload->>'lifetime_budget_minor')::bigint <> 1500
+    or (v_plan.planned_payload->>'start_time')::timestamptz <> v_start
+    or (v_plan.planned_payload->>'end_time')::timestamptz <> v_end
+    or (v_plan.planned_payload#>>'{campaign,lifetime_budget}')::bigint <> 1500
+    or v_plan.planned_payload#>>'{campaign,daily_budget}' is not null
+    or v_plan.planned_payload#>>'{ad_set,daily_budget}' is not null
+    or v_plan.planned_payload#>>'{ad_set,lifetime_budget}' is not null
+    or (v_plan.planned_payload#>>'{ad_set,start_time}')::timestamptz <> v_start
+    or (v_plan.planned_payload#>>'{ad_set,end_time}')::timestamptz <> v_end
+    or v_exposure.id is null
+    or v_exposure.source <> 'PLAN'
+    or v_exposure.max_daily_budget_minor <> 1500
+    or v_exposure.flex_spend_multiplier_bps <> 10000
+    or v_exposure.budget_owner_type <> 'CAMPAIGN'
+    or v_exposure.automation_target_id is not null
+    or v_step_keys <> array[
+      'validate-campaign', 'create-campaign-paused',
+      'read-campaign-paused', 'validate-ad-set',
+      'create-ad-set-paused', 'read-ad-set-paused', 'upload-image',
+      'validate-creative', 'create-creative', 'read-creative',
+      'validate-ad-paused', 'create-ad-paused', 'read-ad-paused',
+      'activate-ad-set', 'read-ad-set-active', 'activate-campaign',
+      'activate-ad', 'read-campaign-active', 'read-ad-active',
+      'read-ad-set-active-final', 'reconcile-launch-chain'
+    ]::text[]
+    or (select planned_request#>>'{payload,lifetime_budget}'
+        from public.mutation_plan_steps
+        where plan_id = v_plan_id and step_key = 'create-campaign-paused') <> '1500'
+    or (select planned_request#>>'{payload,daily_budget}'
+        from public.mutation_plan_steps
+        where plan_id = v_plan_id and step_key = 'create-campaign-paused') is not null
+    or (select planned_request#>>'{payload,start_time}'
+        from public.mutation_plan_steps
+        where plan_id = v_plan_id and step_key = 'create-ad-set-paused')::timestamptz <> v_start
+    or (select planned_request#>>'{payload,end_time}'
+        from public.mutation_plan_steps
+        where plan_id = v_plan_id and step_key = 'create-ad-set-paused')::timestamptz <> v_end
+    or exists (
+      select 1 from public.mutation_plan_steps
+      where plan_id = v_plan_id
+        and public.meta_jsonb_has_sensitive_key(planned_request)
+    ) then
+    raise exception 'Lifetime-v3 materialization, replay, payload, steps, or reservation is incorrect';
+  end if;
+end;
+$$;
+
+-- Any lifetime or time drift must fail closed without opening gates or writing approval.
+do $$
+declare
+  v_failed boolean := false;
+  v_materialized jsonb := (select materialized from lifetime_v3_contract);
+  v_plan_id uuid := (select plan_id from lifetime_v3_ids);
+  v_start timestamptz := (select start_time from lifetime_v3_contract);
+  v_end timestamptz := (select end_time from lifetime_v3_contract);
+begin
+  begin
+    perform public.approve_meta_lifetime_launch_canary_plan_v3(
+      '12000000-0000-4000-8000-000000000001',
+      '22000000-0000-4000-8000-000000000001',
+      v_plan_id,
+      v_materialized->>'payload_hash',
+      v_materialized->>'objective',
+      v_materialized->>'destination_url',
+      v_materialized->>'budget_owner_type',
+      1500,
+      v_start,
+      v_end + interval '1 second',
+      v_materialized->>'campaign_name',
+      v_materialized->>'ad_set_name',
+      v_materialized->>'creative_name',
+      v_materialized->>'ad_name',
+      'ACTIVE',
+      'Negative lifetime end-time fingerprint regression.'
+    );
+  exception when others then
+    v_failed := true;
+  end;
+
+  if not v_failed
+    or (select count(*) from public.meta_launch_canary_approvals
+        where plan_id = v_plan_id) <> 0
+    or (select not_before from public.mutation_plans where id = v_plan_id)
+       <> 'infinity'::timestamptz
+    or (select mode from public.kill_switch_state
+        where scope_type = 'PLAN' and plan_id = v_plan_id
+        order by sequence desc limit 1) <> 'FREEZE_WRITES' then
+    raise exception 'Lifetime-v3 approval drift did not remain fail-closed';
+  end if;
+end;
+$$;
+
+create temporary table lifetime_v3_approval on commit drop as
+select * from public.approve_meta_lifetime_launch_canary_plan_v3(
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  (select plan_id from lifetime_v3_ids),
+  (select materialized->>'payload_hash' from lifetime_v3_contract),
+  (select materialized->>'objective' from lifetime_v3_contract),
+  (select materialized->>'destination_url' from lifetime_v3_contract),
+  'CAMPAIGN',
+  1500,
+  (select start_time from lifetime_v3_contract),
+  (select end_time from lifetime_v3_contract),
+  (select materialized->>'campaign_name' from lifetime_v3_contract),
+  (select materialized->>'ad_set_name' from lifetime_v3_contract),
+  (select materialized->>'creative_name' from lifetime_v3_contract),
+  (select materialized->>'ad_name' from lifetime_v3_contract),
+  'ACTIVE',
+  'Exact lifetime-v3 launch regression approval.'
+);
+
+create temporary table lifetime_v3_approval_replayed on commit drop as
+select * from public.approve_meta_lifetime_launch_canary_plan_v3(
+  '12000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  (select plan_id from lifetime_v3_ids),
+  (select materialized->>'payload_hash' from lifetime_v3_contract),
+  (select materialized->>'objective' from lifetime_v3_contract),
+  (select materialized->>'destination_url' from lifetime_v3_contract),
+  'CAMPAIGN',
+  1500,
+  (select start_time from lifetime_v3_contract),
+  (select end_time from lifetime_v3_contract),
+  (select materialized->>'campaign_name' from lifetime_v3_contract),
+  (select materialized->>'ad_set_name' from lifetime_v3_contract),
+  (select materialized->>'creative_name' from lifetime_v3_contract),
+  (select materialized->>'ad_name' from lifetime_v3_contract),
+  'ACTIVE',
+  'Exact lifetime-v3 launch regression approval.'
+);
+
+do $$
+declare
+  v_plan_id uuid := (select plan_id from lifetime_v3_ids);
+  v_approval public.meta_launch_canary_approvals%rowtype;
+begin
+  select approval.* into v_approval
+  from public.meta_launch_canary_approvals approval
+  where approval.plan_id = v_plan_id;
+
+  if (select plan_status from lifetime_v3_approval) <> 'PENDING'
+    or (select approval_id from lifetime_v3_approval_replayed)
+       <> (select approval_id from lifetime_v3_approval)
+    or v_approval.id is null
+    or v_approval.budget_type <> 'LIFETIME'
+    or v_approval.budget_owner_type <> 'CAMPAIGN'
+    or v_approval.daily_budget_minor is not null
+    or v_approval.lifetime_budget_minor <> 1500
+    or v_approval.start_time <> (select start_time from lifetime_v3_contract)
+    or v_approval.end_time <> (select end_time from lifetime_v3_contract)
+    or not public.meta_launch_canary_preflight_ok(v_plan_id)
+    or (select not_before from public.mutation_plans where id = v_plan_id)
+       = 'infinity'::timestamptz
+    or (select mode from public.kill_switch_state
+        where scope_type = 'ACCOUNT'
+          and user_id = '12000000-0000-4000-8000-000000000001'
+          and platform_account_id = '22000000-0000-4000-8000-000000000001'
+        order by sequence desc limit 1) <> 'ALLOW'
+    or (select mode from public.kill_switch_state
+        where scope_type = 'PLAN' and plan_id = v_plan_id
+        order by sequence desc limit 1) <> 'ALLOW' then
+    raise exception 'Lifetime-v3 exact approval did not atomically open the plan';
+  end if;
+end;
+$$;
+
+create temporary table lifetime_v3_claim on commit drop as
+select * from public.claim_next_meta_mutation_execution(
+  'lifetime-v3-executor-worker', 900
+);
+
+create temporary table lifetime_v3_reconcile_result (
+  outcome text,
+  plan_id uuid,
+  ledger_id uuid,
+  snapshot_id uuid
+) on commit drop;
+
+do $$
+declare
+  v_execution_id uuid := (select execution_id from lifetime_v3_claim);
+  v_lease_token uuid := (select lease_token from lifetime_v3_claim);
+  v_expected_plan_id uuid := (select plan_id from lifetime_v3_ids);
+  v_step_id uuid := (select first_step_id from lifetime_v3_claim);
+  v_operation text := (select first_step_operation from lifetime_v3_claim);
+  v_object_type text := (select first_step_object_type from lifetime_v3_claim);
+  v_step_key text;
+  v_remote_id text;
+  v_snapshot jsonb;
+  v_start timestamptz := (select start_time from lifetime_v3_contract);
+  v_end timestamptz := (select end_time from lifetime_v3_contract);
+  v_iterations integer := 0;
+begin
+  if (select plan_id from lifetime_v3_claim) is distinct from v_expected_plan_id then
+    raise exception 'Lifetime-v3 plan was not claimed by the executor';
+  end if;
+
+  loop
+    v_iterations := v_iterations + 1;
+    if v_iterations > 25 then
+      raise exception 'Lifetime-v3 executor loop did not terminate';
+    end if;
+
+    select step_key into v_step_key
+    from public.mutation_plan_steps
+    where id = v_step_id and plan_id = v_expected_plan_id;
+
+    if v_operation = 'RECONCILE' then
+      insert into lifetime_v3_reconcile_result
+      select * from public.reconcile_meta_mutation_plan(
+        v_execution_id, v_step_id, v_lease_token
+      );
+      exit;
+    elsif v_operation = 'READ' then
+      v_remote_id := case v_object_type
+        when 'CAMPAIGN' then '444444444401'
+        when 'AD_SET' then '444444444402'
+        when 'CREATIVE' then '444444444403'
+        when 'AD' then '444444444404'
+        else null
+      end;
+
+      v_snapshot := case v_object_type
+        when 'CAMPAIGN' then jsonb_build_object(
+          'id', v_remote_id,
+          'account_id', '111111111111',
+          'name', 'Lifetime v3 Regression Campaign',
+          'objective', 'OUTCOME_SALES',
+          'status', case when v_step_key = 'read-campaign-paused'
+                         then 'PAUSED' else 'ACTIVE' end,
+          'effective_status', case when v_step_key = 'read-campaign-paused'
+                                   then 'PAUSED' else 'ACTIVE' end,
+          'daily_budget', null,
+          'lifetime_budget', '1500',
+          'buying_type', 'AUCTION',
+          'special_ad_categories', '[]'::jsonb,
+          'updated_time', '2026-08-02T12:00:00+0000'
+        )
+        when 'AD_SET' then jsonb_build_object(
+          'id', v_remote_id,
+          'account_id', '111111111111',
+          'campaign_id', '444444444401',
+          'name', 'Lifetime v3 Regression Ad Set',
+          'status', case when v_step_key = 'read-ad-set-paused'
+                         then 'PAUSED' else 'ACTIVE' end,
+          'effective_status', case when v_step_key = 'read-ad-set-paused'
+                                   then 'PAUSED' else 'ACTIVE' end,
+          'daily_budget', null,
+          'lifetime_budget', null,
+          'start_time', v_start,
+          'end_time', v_end,
+          'billing_event', 'IMPRESSIONS',
+          'optimization_goal', 'OFFSITE_CONVERSIONS',
+          'targeting', jsonb_build_object(
+            'geo_locations', jsonb_build_object(
+              'countries', jsonb_build_array('DE')
+            )
+          ),
+          'updated_time', '2026-08-02T12:00:01+0000'
+        )
+        when 'CREATIVE' then jsonb_build_object(
+          'id', v_remote_id,
+          'account_id', '111111111111',
+          'name', 'Lifetime v3 Regression Creative',
+          'object_type', 'IMAGE',
+          'object_story_id', '333333333390_444444444499',
+          'image_hash', repeat('b', 32),
+          'object_story_spec', jsonb_build_object(
+            'page_id', '333333333390'
+          ),
+          'updated_time', '2026-08-02T12:00:02+0000'
+        )
+        when 'AD' then jsonb_build_object(
+          'id', v_remote_id,
+          'account_id', '111111111111',
+          'campaign_id', '444444444401',
+          'adset_id', '444444444402',
+          'name', 'Lifetime v3 Regression Ad',
+          'status', case when v_step_key = 'read-ad-paused'
+                         then 'PAUSED' else 'ACTIVE' end,
+          'effective_status', case when v_step_key = 'read-ad-paused'
+                                   then 'PAUSED' else 'ACTIVE' end,
+          'creative', jsonb_build_object('id', '444444444403'),
+          'conversion_domain', 'example.test',
+          'updated_time', '2026-08-02T12:00:03+0000'
+        )
+        else null
+      end;
+
+      perform public.record_meta_mutation_remote_snapshot(
+        v_execution_id, v_step_id, v_lease_token,
+        'READ_AFTER_WRITE', v_remote_id, v_snapshot,
+        public.meta_sha256('lifetime-v3-read-response|' || v_step_id::text),
+        'lifetime-v3-read-' || v_step_key
+      );
+    else
+      if not public.meta_launch_canary_preflight_ok(v_expected_plan_id) then
+        raise exception 'Lifetime-v3 launch preflight drift at step %', v_step_key;
+      end if;
+
+      perform public.begin_meta_mutation_step_dispatch(
+        v_execution_id, v_step_id, v_lease_token
+      );
+
+      v_remote_id := case
+        when v_operation <> 'CREATE' then null
+        when v_object_type = 'CAMPAIGN' then '444444444401'
+        when v_object_type = 'AD_SET' then '444444444402'
+        when v_object_type = 'CREATIVE' then '444444444403'
+        when v_object_type = 'IMAGE' then repeat('b', 32)
+        when v_object_type = 'AD' then '444444444404'
+        else null
+      end;
+
+      perform public.complete_meta_mutation_remote_step(
+        v_execution_id, v_step_id, v_lease_token,
+        public.meta_sha256('lifetime-v3-request|' || v_step_id::text),
+        public.meta_sha256('lifetime-v3-response|' || v_step_id::text),
+        v_remote_id,
+        'lifetime-v3-remote-' || v_step_key,
+        v_operation = 'VALIDATE',
+        '{"account_util_pct":1}'::jsonb
+      );
+    end if;
+
+    select claimed.step_id, claimed.operation, claimed.object_type
+      into v_step_id, v_operation, v_object_type
+    from public.claim_next_meta_mutation_step(
+      v_execution_id, v_lease_token
+    ) claimed;
+
+    if not found then
+      raise exception 'Lifetime-v3 saga ended before reconciliation';
+    end if;
+  end loop;
+end;
+$$;
+
+do $$
+declare
+  v_plan_id uuid := (select plan_id from lifetime_v3_ids);
+  v_start timestamptz := (select start_time from lifetime_v3_contract);
+  v_end timestamptz := (select end_time from lifetime_v3_contract);
+  v_campaign public.campaigns%rowtype;
+  v_ad_set public.ad_groups%rowtype;
+  v_exposure public.daily_budget_exposures%rowtype;
+begin
+  select campaign.* into v_campaign
+  from public.campaigns campaign
+  where campaign.platform_account_id = '22000000-0000-4000-8000-000000000001'
+    and campaign.platform_campaign_id = '444444444401';
+
+  select ad_set.* into v_ad_set
+  from public.ad_groups ad_set
+  where ad_set.platform_account_id = '22000000-0000-4000-8000-000000000001'
+    and ad_set.platform_ad_group_id = '444444444402';
+
+  select exposure.* into v_exposure
+  from public.daily_budget_exposures exposure
+  where exposure.plan_id = v_plan_id;
+
+  if (select outcome from lifetime_v3_reconcile_result) <> 'SUCCEEDED'
+    or (select status from public.mutation_plans where id = v_plan_id) <> 'SUCCEEDED'
+    or (select count(*) from public.mutation_plan_steps
+        where plan_id = v_plan_id) <> 21
+    or exists (
+      select 1 from public.mutation_plan_steps
+      where plan_id = v_plan_id
+        and status not in ('VALIDATED', 'REMOTE_APPLIED', 'RECONCILED')
+    )
+    or v_campaign.id is null
+    or v_campaign.status <> 'ACTIVE'
+    or v_campaign.daily_budget_minor is not null
+    or v_campaign.lifetime_budget_minor <> 1500
+    or v_ad_set.id is null
+    or v_ad_set.status <> 'ACTIVE'
+    or v_ad_set.campaign_id <> v_campaign.id
+    or v_ad_set.daily_budget_minor is not null
+    or v_ad_set.lifetime_budget_minor is not null
+    or v_ad_set.start_time <> v_start
+    or v_ad_set.end_time <> v_end
+    or v_exposure.id is null
+    or v_exposure.source <> 'RECONCILIATION'
+    or v_exposure.max_daily_budget_minor <> 1500
+    or v_exposure.flex_spend_multiplier_bps <> 10000
+    or v_exposure.campaign_scope_key <> 'campaign:444444444401'
+    or v_exposure.budget_owner_key <> 'campaign:444444444401'
+    or v_exposure.budget_owner_type <> 'CAMPAIGN'
+    or v_exposure.automation_target_id is null
+    or (select count(*) from public.daily_budget_exposures
+        where plan_id = v_plan_id) <> 1
+    or (select count(*) from public.remote_object_bindings
+        where plan_id = v_plan_id and reconciled_at is not null) <> 5
+    or (select count(*) from public.meta_launch_canary_approvals
+        where plan_id = v_plan_id
+          and budget_type = 'LIFETIME'
+          and daily_budget_minor is null
+          and lifetime_budget_minor = 1500
+          and start_time = v_start
+          and end_time = v_end) <> 1
+    or public.meta_active_lifetime_budget_exposure_minor(
+         '12000000-0000-4000-8000-000000000001',
+         '22000000-0000-4000-8000-000000000001',
+         '32000000-0000-4000-8000-000000000001',
+         now()
+       ) < 1500
+    or exists (
+      select 1 from public.meta_account_operation_leases
+      where platform_account_id = '22000000-0000-4000-8000-000000000001'
+        and lease_token is not null
+    )
+    or (select count(*) from public.mutation_executions
+        where plan_id = v_plan_id) <> 1
+    or (select mode from public.kill_switch_state
+        where scope_type = 'ACCOUNT'
+          and user_id = '12000000-0000-4000-8000-000000000001'
+          and platform_account_id = '22000000-0000-4000-8000-000000000001'
+        order by sequence desc limit 1) <> 'FREEZE_WRITES'
+    or (select mode from public.kill_switch_state
+        where scope_type = 'PLAN' and plan_id = v_plan_id
+        order by sequence desc limit 1) <> 'FREEZE_WRITES' then
+    raise exception 'Lifetime-v3 reconciliation, projection, exposure, or refreeze failed';
+  end if;
+end;
+$$;
+
 -- An ambiguous Create result is terminal, never retried blindly, and refreezes immediately.
 do $$
 declare
@@ -1700,7 +2361,7 @@ begin
   v_materialized := public.materialize_meta_launch_chain_plan(
     '22000000-0000-4000-8000-000000000001',
     '12000000-0000-4000-8000-000000000001',
-    '82000000-0000-4000-8000-000000000001',
+    '82000000-0000-4000-8000-000000000003',
     (select snapshot_id from executor_planner_result),
     '32000000-0000-4000-8000-000000000001',
     v_read_lease,
@@ -1848,6 +2509,21 @@ begin
   if has_function_privilege(
        'authenticated',
        'public.materialize_meta_launch_chain_plan(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid[],uuid,text,bigint,jsonb,timestamptz)',
+       'EXECUTE'
+     )
+    or has_function_privilege(
+       'authenticated',
+       'public.materialize_meta_launch_chain_plan_v3(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid[],uuid,text,bigint,timestamptz,timestamptz,jsonb,timestamptz)',
+       'EXECUTE'
+     )
+    or has_function_privilege(
+       'authenticated',
+       'public.materialize_meta_customer_lifetime_launch_plan_v3(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,bigint,timestamptz,timestamptz,jsonb,timestamptz)',
+       'EXECUTE'
+     )
+    or has_function_privilege(
+       'authenticated',
+       'public.approve_meta_lifetime_launch_canary_plan_v3(uuid,uuid,uuid,text,text,text,text,bigint,timestamptz,timestamptz,text,text,text,text,text,text)',
        'EXECUTE'
      )
     or has_function_privilege(

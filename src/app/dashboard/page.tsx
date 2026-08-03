@@ -738,6 +738,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       const name = (value as Record<string, unknown>).name;
       return typeof name === "string" && name.trim() ? name : null;
     };
+    const timestamp = (key: string): string | null => {
+      const value = payload[key];
+      return typeof value === "string" && Number.isFinite(Date.parse(value))
+        ? new Date(value).toISOString()
+        : null;
+    };
+    const hasDailyBudget =
+      typeof payload.daily_budget_minor === "number" ||
+      typeof payload.daily_budget_minor === "string";
+    const budgetType =
+      payload.budget_type === "LIFETIME"
+        ? "LIFETIME"
+        : payload.budget_type === "DAILY" ||
+            (payload.budget_type === undefined && hasDailyBudget)
+          ? "DAILY"
+          : null;
     const brandAssetIds = Array.isArray(payload.brand_asset_ids)
       ? payload.brand_asset_ids.filter(
           (assetId): assetId is string =>
@@ -761,16 +777,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ? payload.destination_url
           : null,
       targetStatus: payload.target_status === "ACTIVE" ? "ACTIVE" : null,
+      budgetType,
       budgetOwnerType:
         payload.budget_owner_type === "CAMPAIGN" ||
         payload.budget_owner_type === "AD_SET"
           ? payload.budget_owner_type
           : null,
-      dailyBudgetMinor:
-        typeof payload.daily_budget_minor === "number" ||
-        typeof payload.daily_budget_minor === "string"
-          ? String(payload.daily_budget_minor)
+      dailyBudgetMinor: hasDailyBudget
+        ? String(payload.daily_budget_minor)
+        : null,
+      lifetimeBudgetMinor:
+        typeof payload.lifetime_budget_minor === "number" ||
+        typeof payload.lifetime_budget_minor === "string"
+          ? String(payload.lifetime_budget_minor)
           : null,
+      startTime: timestamp("start_time"),
+      endTime: timestamp("end_time"),
       campaignName: nestedName("campaign"),
       adSetName: nestedName("ad_set"),
       creativeName: nestedName("creative"),
