@@ -143,6 +143,62 @@ begin
 end;
 $$;
 
+update public.platform_accounts
+set marketing_sync_status = 'error',
+    marketing_sync_error_code = 'marketing_api_error'
+where id = '26000000-0000-4000-8000-000000000001';
+
+do $$
+begin
+  begin
+    perform public.materialize_meta_customer_lifetime_budget_canary_plan(
+      '16000000-0000-4000-8000-000000000001',
+      '26000000-0000-4000-8000-000000000001',
+      '46000000-0000-4000-8000-000000000001',
+      (select lease_token from lifetime_budget_read_lease),
+      1500, 1800,
+      'A non-timeout sync error must remain fail closed',
+      now()
+    );
+    raise exception 'Non-timeout sync error was accepted';
+  exception
+    when others then
+      if sqlerrm = 'Non-timeout sync error was accepted' then raise; end if;
+      if sqlerrm <> 'Fresh write-ready EUR Meta account is required' then raise; end if;
+  end;
+end;
+$$;
+
+update public.platform_accounts
+set marketing_sync_error_code = 'marketing_timeout',
+    marketing_last_success_at = now() - interval '2 hours 1 minute'
+where id = '26000000-0000-4000-8000-000000000001';
+
+do $$
+begin
+  begin
+    perform public.materialize_meta_customer_lifetime_budget_canary_plan(
+      '16000000-0000-4000-8000-000000000001',
+      '26000000-0000-4000-8000-000000000001',
+      '46000000-0000-4000-8000-000000000001',
+      (select lease_token from lifetime_budget_read_lease),
+      1500, 1800,
+      'An expired last-success snapshot must remain fail closed',
+      now()
+    );
+    raise exception 'Expired timeout fallback snapshot was accepted';
+  exception
+    when others then
+      if sqlerrm = 'Expired timeout fallback snapshot was accepted' then raise; end if;
+      if sqlerrm <> 'Fresh write-ready EUR Meta account is required' then raise; end if;
+  end;
+end;
+$$;
+
+update public.platform_accounts
+set marketing_last_success_at = now()
+where id = '26000000-0000-4000-8000-000000000001';
+
 create temporary table lifetime_budget_materialization on commit drop as
 select public.materialize_meta_customer_lifetime_budget_canary_plan(
   '16000000-0000-4000-8000-000000000001',
@@ -194,6 +250,24 @@ begin
     or v_plan.not_before <> 'infinity'::timestamptz then
     raise exception 'Lifetime budget plan does not match the fixed contract';
   end if;
+
+  perform set_config(
+    'request.jwt.claim.sub',
+    '16000000-0000-4000-8000-000000000001',
+    true
+  );
+  if not exists (
+    select 1
+    from public.list_meta_budget_canary_plans(
+      '26000000-0000-4000-8000-000000000001'
+    ) listed
+    where listed.plan_id = v_plan.id
+      and listed.fresh_sync
+      and not listed.is_expired
+  ) then
+    raise exception 'Fresh marketing_timeout fallback plan was not listed as fresh';
+  end if;
+  perform set_config('request.jwt.claim.sub', '', true);
 
   if (select count(*) from public.mutation_plan_steps step
       where step.plan_id = v_plan.id) <> 4
@@ -294,6 +368,36 @@ begin
   end;
 end;
 $$;
+
+update public.platform_accounts
+set marketing_last_success_at = now() - interval '2 hours 1 minute'
+where id = '26000000-0000-4000-8000-000000000001';
+
+do $$
+declare
+  v_result jsonb := (select result from lifetime_budget_materialization);
+begin
+  begin
+    perform public.approve_meta_budget_canary_plan(
+      '16000000-0000-4000-8000-000000000001',
+      '26000000-0000-4000-8000-000000000001',
+      (v_result->>'plan_id')::uuid,
+      v_result->>'payload_hash',
+      1500, 1800,
+      'An expired timeout fallback must fail again at approval'
+    );
+    raise exception 'Expired timeout fallback approval was accepted';
+  exception
+    when others then
+      if sqlerrm = 'Expired timeout fallback approval was accepted' then raise; end if;
+      if sqlerrm <> 'Fresh write-ready EUR Meta account is required' then raise; end if;
+  end;
+end;
+$$;
+
+update public.platform_accounts
+set marketing_last_success_at = now()
+where id = '26000000-0000-4000-8000-000000000001';
 
 create temporary table lifetime_budget_approval on commit drop as
 select * from public.approve_meta_budget_canary_plan(
