@@ -178,6 +178,58 @@ export async function runMetaBudgetPlannerAfterSnapshot(input: {
   return parsePlannerResult(planner.data);
 }
 
+export type MetaOrganicBoostPlannerResult = {
+  status: string;
+  plansCreated: number;
+  plansExisting: number;
+  candidatesSkipped: number;
+  candidatesFailed: number;
+};
+
+export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
+  platformAccountId: string;
+  userId: string;
+  marketingSyncId: string;
+  readLeaseToken: string;
+  plannedAt: string;
+}): Promise<MetaOrganicBoostPlannerResult> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("run_meta_organic_boost_planner", {
+    p_platform_account_id: input.platformAccountId,
+    p_user_id: input.userId,
+    p_source_marketing_sync_id: input.marketingSyncId,
+    p_read_lease_token: input.readLeaseToken,
+    p_planned_at: input.plannedAt,
+  });
+
+  if (error) {
+    throw new MetaBudgetPlannerError("planner_failed");
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") {
+    throw new MetaBudgetPlannerError("planner_result_invalid");
+  }
+
+  const record = row as Record<string, unknown>;
+  const plansCreated = integer(record.plans_created) ?? 0;
+  const plansExisting = integer(record.plans_existing) ?? 0;
+  const candidatesSkipped = integer(record.candidates_skipped) ?? 0;
+  const candidatesFailed = integer(record.candidates_failed) ?? 0;
+
+  if (typeof record.status !== "string") {
+    throw new MetaBudgetPlannerError("planner_result_invalid");
+  }
+
+  return {
+    status: record.status,
+    plansCreated,
+    plansExisting,
+    candidatesSkipped,
+    candidatesFailed,
+  };
+}
+
 export async function releaseMetaAccountOperation(input: {
   platformAccountId: string;
   userId: string;

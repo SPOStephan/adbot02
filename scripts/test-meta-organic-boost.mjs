@@ -1,0 +1,65 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+function read(path) {
+  return readFileSync(join(root, path), "utf8");
+}
+
+const settingsMigration = read(
+  "supabase/migrations/20260803180000_meta_organic_post_boost.sql",
+);
+const materializerMigration = read(
+  "supabase/migrations/20260803180100_meta_organic_boost_materializer.sql",
+);
+const inputSource = read("src/lib/meta/customer-control-input.ts");
+const serviceSource = read("src/lib/meta/customer-control-service.ts");
+const plannerSource = read("src/lib/meta/planner.ts");
+const syncSource = read("src/lib/meta/sync.ts");
+
+assert.match(settingsMigration, /create table if not exists public\.meta_boost_settings/);
+assert.match(settingsMigration, /create table if not exists public\.meta_content_boost_overrides/);
+assert.match(settingsMigration, /put_meta_boost_settings_version/);
+assert.match(settingsMigration, /upsert_meta_content_boost_override/);
+assert.match(settingsMigration, /source_rule_key = 'organic-boost'/);
+
+assert.match(materializerMigration, /materialize_meta_organic_boost_plan/);
+assert.match(materializerMigration, /object_story_id/);
+assert.match(materializerMigration, /run_meta_organic_boost_planner/);
+assert.match(materializerMigration, /approve_meta_organic_boost_canary_plan/);
+assert.match(materializerMigration, /unsupported_object_story_id/);
+assert.match(materializerMigration, /call_to_action_type/);
+
+assert.match(inputSource, /parseBoostSettingsCommand/);
+assert.match(inputSource, /parseBoostOverrideCommand/);
+assert.match(inputSource, /parseOrganicBoostApprovalCommand/);
+assert.match(inputSource, /BEITRAG BEWERBEN/);
+
+assert.match(serviceSource, /saveCustomerBoostSettings/);
+assert.match(serviceSource, /materializeCustomerOrganicBoost/);
+assert.match(serviceSource, /approveCustomerOrganicBoost/);
+
+assert.match(plannerSource, /runMetaOrganicBoostPlannerAfterSnapshot/);
+assert.match(syncSource, /runMetaOrganicBoostPlannerAfterSnapshot/);
+
+assert.match(
+  read("src/app/api/meta/automation/boost-settings/route.ts"),
+  /parseBoostSettingsCommand/,
+);
+assert.match(
+  read("src/app/api/meta/automation/boost/route.ts"),
+  /materializeCustomerOrganicBoost/,
+);
+assert.match(
+  read("src/components/AutomationBoostSettings.tsx"),
+  /Beitrag-Push/,
+);
+assert.match(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Boost vorbereiten/,
+);
+
+console.log("test-meta-organic-boost: ok");
