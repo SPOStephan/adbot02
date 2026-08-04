@@ -1,40 +1,47 @@
 # Organic Post Boost (Beitrag-Push)
 
 **Stand:** 4. August 2026  
-**Scope:** Meta Facebook page posts (Phase 1)
+**Scope:** Meta Facebook-Seitenbeiträge und Instagram-Medien (an eine Page gekoppelt)
 
-## Kundenmodi
+## Kundenmodi (Auswahl)
 
 | Modus | Verhalten |
 |---|---|
 | `OFF` | Beiträge werden erkannt, aber nicht beworben |
-| `REVIEW` | Neue Beiträge werden automatisch als Boost-Plan vorbereitet; Kunde gibt jeden Beitrag einzeln frei (`BEITRAG BEWERBEN`) |
-| `AUTO` | Jeder neue Facebook-Beitrag wird mit Tagesbudget × Laufzeit automatisch beworben |
+| `REVIEW` | Neue Beiträge werden als Boost-Plan vorbereitet; Kunde gibt jeden Beitrag einzeln frei (`BEITRAG BEWERBEN`) |
+| `AUTO` | Jeder neue Beitrag (laut Quellenfilter) wird mit Tagesbudget × Laufzeit automatisch beworben |
 
 Standard-Werbeziel in beiden aktiven Modi: **Interaktionen/Likes**  
 (`OUTCOME_ENGAGEMENT` / Optimierung `POST_ENGAGEMENT`).
 
-`AUTO` verlangt bewusst ein **Tagesbudget** plus **Laufzeit in Tagen** (Start/Ende am Ad Set).
+`AUTO` verlangt ein **Tagesbudget** plus **Laufzeit in Tagen** (Start/Ende am Ad Set).
+
+## Quellenfilter (Auswahl)
+
+| Filter | Verhalten |
+|---|---|
+| `facebook` | Nur Facebook-Seitenbeiträge (`object_story_id`) |
+| `instagram` | Nur Instagram-Medien (`source_instagram_media_id` + Page + IG-User) |
+| `both` | Beides |
+
+Instagram-Boost setzt voraus, dass das IG-Konto als Business-Account an eine Facebook-Page gekoppelt ist (`parent_meta_asset_id`).
 
 ## Multi-Tenant
 
 Alle Tabellen/RPCs sind an `(user_id, platform_account_id)` gebunden. Neue Konten erhalten dieselben Modi isoliert.
 
-## Live-Test (verbundenes Werbekonto)
+## Live-Test
 
-1. Drei Migrationen anwenden:
-   - `20260803180000_meta_organic_post_boost.sql`
-   - `20260803180100_meta_organic_boost_materializer.sql`
-   - `20260804090000_meta_boost_mode_selection.sql`
-2. Deploy des PR-Branches / Merge nach Staging oder Preview
-3. Meta mit `ads_management`, EUR-Konto, erfolgreicher Sync
-4. Policy aktiv mit `allow_new_launches`
-5. Beitrag-Push-Modus wählen:
-   - **REVIEW:** Kill-Switch `FREEZE_WRITES` → Sync → Freigabe im Dashboard
-   - **AUTO:** Tagesbudget + Tage speichern → Kill-Switch `ALLOW` → Sync → Executor schreibt
-6. Neuen Facebook-Seitenbeitrag veröffentlichen oder manuellen Sync auslösen
+Siehe `ORGANIC_POST_BOOST_LIVE_TEST.md`.
 
-## Grenzen Phase 1
+## Migrationen
 
-- Instagram wird erkannt, Auto-Boost läuft über Facebook-`object_story_id`
+1. `20260803180000_meta_organic_post_boost.sql`
+2. `20260803180100_meta_organic_boost_materializer.sql`
+3. `20260804090000_meta_boost_mode_selection.sql`
+4. `20260804100000_meta_organic_boost_instagram.sql`
+
+## Grenzen
+
 - Optionaler CTA kann von Meta je Posttyp per `validate_only` abgelehnt werden
+- Boost nutzt den organischen Beitrag selbst — keine neuen Creatives/Assets

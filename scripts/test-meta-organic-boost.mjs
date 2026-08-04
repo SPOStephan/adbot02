@@ -40,6 +40,13 @@ assert.match(materializerMigration, /approve_meta_organic_boost_canary_plan/);
 assert.match(materializerMigration, /unsupported_object_story_id/);
 assert.match(materializerMigration, /call_to_action_type/);
 
+const instagramMigration = read(
+  "supabase/migrations/20260804100000_meta_organic_boost_instagram.sql",
+);
+assert.match(instagramMigration, /source_instagram_media_id/);
+assert.match(instagramMigration, /unsupported_instagram_media_id/);
+assert.match(instagramMigration, /v_boost_source = 'instagram'/);
+
 assert.match(inputSource, /parseBoostSettingsCommand/);
 assert.match(inputSource, /parseBoostOverrideCommand/);
 assert.match(inputSource, /parseOrganicBoostApprovalCommand/);
@@ -68,10 +75,30 @@ assert.match(
   read("src/components/AutomationBoostSettings.tsx"),
   /Einzeln freigeben/,
 );
+assert.match(
+  read("src/components/AutomationBoostSettings.tsx"),
+  /Facebook und Instagram/,
+);
+assert.match(
+  read("src/components/AutomationBoostSettings.tsx"),
+  /sourceFilter/,
+);
 assert.match(inputSource, /boostMode/);
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
   /Boost vorbereiten/,
+);
+
+const writeClient = read("src/lib/meta/write-client.ts");
+assert.match(writeClient, /isInstagramOrganicMediaCreative/);
+assert.match(writeClient, /source_instagram_media_id/);
+
+const executor = read("src/lib/meta/executor.ts");
+assert.match(executor, /step\.operation === "VALIDATE" \? "validate_only"/);
+
+assert.match(
+  read("docs/meta-automation/ORGANIC_POST_BOOST_LIVE_TEST.md"),
+  /Vollautomatisch/,
 );
 
 console.log("test-meta-organic-boost: ok");

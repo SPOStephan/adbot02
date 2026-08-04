@@ -67,8 +67,17 @@ const MODE_OPTIONS: Array<{
     mode: "AUTO",
     title: "Vollautomatisch",
     description:
-      "Jeder neue Facebook-Beitrag wird mit dem festgelegten Tagesbudget und Zeitraum automatisch beworben.",
+      "Jeder neue Beitrag (laut Quellenfilter) wird mit dem festgelegten Tagesbudget und Zeitraum automatisch beworben.",
   },
+];
+
+const SOURCE_OPTIONS: Array<{
+  value: BoostSettingsView["sourceFilter"];
+  title: string;
+}> = [
+  { value: "facebook", title: "Nur Facebook" },
+  { value: "instagram", title: "Nur Instagram" },
+  { value: "both", title: "Facebook und Instagram" },
 ];
 
 export function AutomationBoostSettings({
@@ -95,6 +104,9 @@ export function AutomationBoostSettings({
   const [ctaType, setCtaType] = useState(settings?.defaultCtaType ?? "");
   const [destinationUrl, setDestinationUrl] = useState(
     settings?.defaultDestinationUrl ?? "",
+  );
+  const [sourceFilter, setSourceFilter] = useState<BoostSettingsView["sourceFilter"]>(
+    settings?.sourceFilter ?? "both",
   );
 
   const effectiveBudgetMode = boostMode === "AUTO" ? "DAILY" : budgetMode;
@@ -127,7 +139,7 @@ export function AutomationBoostSettings({
           durationDays: days,
           budgetOwnerType: effectiveBudgetMode === "LIFETIME" ? "CAMPAIGN" : "AD_SET",
           objective: "OUTCOME_ENGAGEMENT",
-          sourceFilter: "facebook",
+          sourceFilter,
           defaultCountries: ["DE"],
           defaultCtaType: ctaType.trim() ? ctaType.trim().toUpperCase() : null,
           defaultDestinationUrl: destinationUrl.trim() || null,
@@ -146,7 +158,7 @@ export function AutomationBoostSettings({
         tone: "success",
         message:
           boostMode === "AUTO"
-            ? "Vollautomatik gespeichert: Neue Facebook-Beiträge werden mit Interaktionsziel geplant und ausgeführt."
+            ? "Vollautomatik gespeichert: Neue Beiträge werden mit Interaktionsziel geplant und ausgeführt."
             : boostMode === "REVIEW"
               ? "Freigabe-Modus gespeichert: Neue Beiträge werden zur einzelnen Freigabe vorbereitet."
               : "Beitrag-Push ist ausgeschaltet.",
@@ -172,10 +184,11 @@ export function AutomationBoostSettings({
           <Megaphone className="size-5" />
         </span>
         <div>
-          <h3 className="font-extrabold">Beitrag-Push (Facebook)</h3>
+          <h3 className="font-extrabold">Beitrag-Push</h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             Neue organische Beiträge erkennen und mit Fixed Budget bewerben. Standard-Werbeziel:
-            Interaktionen/Likes. Keine neuen Werbemittel nötig.
+            Interaktionen/Likes. Keine neuen Werbemittel nötig — der organische Beitrag selbst wird
+            beworben.
           </p>
         </div>
       </div>
@@ -222,6 +235,31 @@ export function AutomationBoostSettings({
 
       {boostMode !== "OFF" ? (
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <fieldset className="sm:col-span-2">
+            <legend className="text-sm font-bold text-slate-800">Quellen</legend>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {SOURCE_OPTIONS.map((option) => (
+                <label
+                  className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${
+                    sourceFilter === option.value
+                      ? "border-blue-300 bg-blue-50 text-slate-900"
+                      : "border-slate-200 bg-slate-50 text-slate-700"
+                  }`}
+                  key={option.value}
+                >
+                  <input
+                    checked={sourceFilter === option.value}
+                    name="sourceFilter"
+                    onChange={() => setSourceFilter(option.value)}
+                    type="radio"
+                    value={option.value}
+                  />
+                  {option.title}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
           {boostMode === "REVIEW" ? (
             <label className="text-sm font-bold text-slate-800">
               Budgetart

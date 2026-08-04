@@ -591,7 +591,7 @@ async function dispatchRemoteMutation(input: {
   }
 
   const mode = operation === "CREATE_CREATIVE"
-    ? "execute"
+    ? (step.operation === "VALIDATE" ? "validate_only" : "execute")
     : parseMode(request.mode);
   const payload = resolvedPayload(request, bindings);
   const base = {
@@ -609,11 +609,11 @@ async function dispatchRemoteMutation(input: {
     return completionFromMutation(await createMetaAdSet({ ...base, mode }));
   }
   if (operation === "CREATE_CREATIVE" && step.objectType === "CREATIVE") {
-    if (step.operation !== "CREATE") {
-      throw new TypeError("Creative creation cannot be validation-only");
+    if (step.operation !== "CREATE" && step.operation !== "VALIDATE") {
+      throw new TypeError("Creative steps must be CREATE or VALIDATE");
     }
     await input.beforeRemote();
-    return completionFromMutation(await createMetaAdCreative(base));
+    return completionFromMutation(await createMetaAdCreative({ ...base, mode }));
   }
   if (operation === "CREATE_AD" && step.objectType === "AD") {
     await input.beforeRemote();
