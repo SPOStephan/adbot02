@@ -118,6 +118,38 @@ function assertUnique<T extends { id: string }>(items: T[]) {
   }
 }
 
+export function classifyMetaInsightSnapshot(input: {
+  ads: Pick<MetaAd, "id">[];
+  insights: Pick<MetaAdInsight, "adId" | "dateStart" | "dateStop">[];
+  since: string;
+  until: string;
+}): {
+  missingAdReferences: number;
+  nonDailyRows: number;
+  outOfRangeRows: number;
+} {
+  const adIds = new Set(input.ads.map((ad) => ad.id));
+  let missingAdReferences = 0;
+  let nonDailyRows = 0;
+  let outOfRangeRows = 0;
+
+  for (const insight of input.insights) {
+    if (!adIds.has(insight.adId)) {
+      missingAdReferences += 1;
+    }
+
+    if (insight.dateStart !== insight.dateStop) {
+      nonDailyRows += 1;
+    }
+
+    if (insight.dateStart < input.since || insight.dateStart > input.until) {
+      outOfRangeRows += 1;
+    }
+  }
+
+  return { missingAdReferences, nonDailyRows, outOfRangeRows };
+}
+
 function validateHierarchy(input: {
   accountId: string;
   campaigns: MetaCampaign[];
@@ -362,6 +394,22 @@ export async function syncMetaMarketingSnapshot(input: {
     creatives: creativesResult.items,
     insights: insightsResult.items,
   });
+
+  const insightSnapshotDiagnostic = classifyMetaInsightSnapshot({
+    ads: adsResult.items,
+    insights: insightsResult.items,
+    since: dateRange.since,
+    until: dateRange.until,
+  });
+
+  if (Object.values(insightSnapshotDiagnostic).some((count) => count > 0)) {
+    console.error("Meta Marketing insight snapshot preflight rejected", {
+      ...insightSnapshotDiagnostic,
+      adsCount: adsResult.items.length,
+      insightsCount: insightsResult.items.length,
+    });
+    throw new MetaMarketingDataError("invalid_hierarchy");
+  }
 
   const syncId = randomUUID();
   const serializedCampaigns = serializeCampaigns(campaignsResult.items);

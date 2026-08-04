@@ -180,7 +180,6 @@ export async function getMetaAdInsights() {
     adId: "ad-1",
     adName: "Ad 1",
     accountId: "123",
-    dateStop: "2026-07-28",
     impressions: "1000",
     reach: "800",
     frequency: "1.25",
@@ -198,6 +197,7 @@ export async function getMetaAdInsights() {
       {
         ...base,
         dateStart: "2026-07-27",
+        dateStop: "2026-07-27",
         actions: [
           { actionType: "link_click", value: "30" },
           { actionType: "purchase", value: "2" },
@@ -208,6 +208,7 @@ export async function getMetaAdInsights() {
       {
         ...base,
         dateStart: "2026-07-28",
+        dateStop: "2026-07-28",
         actions: [],
         actionValues: [],
         costPerActionType: [],
@@ -283,6 +284,36 @@ export function createAdminClient() {
   assert.deepEqual(call.args.p_insights[1].cost_per_action_type, {});
   assert.equal(Array.isArray(call.args.p_insights[0].actions), false);
   assert.doesNotMatch(JSON.stringify(call.args), /test-user-token|test-app-secret/);
+
+  assert.deepEqual(
+    marketingModule.classifyMetaInsightSnapshot({
+      ads: [{ id: "ad-1" }],
+      insights: [
+        {
+          adId: "ad-1",
+          dateStart: "2026-07-27",
+          dateStop: "2026-07-27",
+        },
+        {
+          adId: "historical-ad",
+          dateStart: "2026-07-28",
+          dateStop: "2026-07-29",
+        },
+        {
+          adId: "ad-1",
+          dateStart: "2026-06-01",
+          dateStop: "2026-06-01",
+        },
+      ],
+      since: "2026-06-21",
+      until: "2026-07-28",
+    }),
+    {
+      missingAdReferences: 1,
+      nonDailyRows: 1,
+      outOfRangeRows: 1,
+    },
+  );
 
   console.log("Meta Marketing snapshot payload tests passed.");
 } finally {
