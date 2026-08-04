@@ -114,6 +114,8 @@ export async function GET(request: Request) {
     return dashboardRedirect("error", "missing_response");
   }
 
+  let stage = "environment";
+
   try {
     const {
       appId,
@@ -122,30 +124,36 @@ export async function GET(request: Request) {
       tokenEncryptionKey,
     } = getMetaCallbackEnv();
 
+    stage = "state_validation";
     if (!verifyOAuthState(state, stateSecret, user.id)) {
       return dashboardRedirect("error", "invalid_state");
     }
 
+    stage = "code_exchange";
     const shortLivedToken = await exchangeCodeForAccessToken({
       appId,
       appSecret,
       code,
       redirectUri: createPortalUrl("/api/connectors/meta/callback").toString(),
     });
+    stage = "long_lived_token_exchange";
     const longLivedToken = await exchangeForLongLivedAccessToken({
       appId,
       appSecret,
       shortLivedAccessToken: shortLivedToken.accessToken,
     });
+    stage = "token_debug";
     const tokenDebug = await debugMetaAccessToken({
       appId,
       appSecret,
       accessToken: longLivedToken.accessToken,
     });
+    stage = "identity";
     const identity = await getMetaIdentity({
       accessToken: longLivedToken.accessToken,
       appSecret,
     });
+    stage = "scope_validation";
     const {
       missingScopes,
       compatibleSystemUserScopes,
@@ -182,6 +190,7 @@ export async function GET(request: Request) {
       ...getGranularTargetIds(tokenDebug, "ads_read"),
       ...getGranularTargetIds(tokenDebug, "ads_management"),
     ]);
+    stage = "asset_discovery";
     const assets = await getMetaConnectionAssets({
       accessToken: longLivedToken.accessToken,
       appSecret,
@@ -235,6 +244,7 @@ export async function GET(request: Request) {
         username: null,
       })),
     ];
+    stage = "token_encryption";
     const encryptedToken = encryptAccessToken(
       longLivedToken.accessToken,
       tokenEncryptionKey,
@@ -243,6 +253,7 @@ export async function GET(request: Request) {
       expiresAt: tokenDebug.expiresAt,
       expiresInSeconds: longLivedToken.expiresInSeconds,
     });
+    stage = "storage";
     const admin = createAdminClient();
     const { error } = await admin.rpc("replace_meta_connection", {
       p_user_id: user.id,
@@ -269,12 +280,15 @@ export async function GET(request: Request) {
       return dashboardRedirect("error", "storage");
     }
 
+    stage = "revalidation";
     revalidatePath("/dashboard", "page");
     return dashboardRedirect("connected");
   } catch (error) {
     console.error("[meta-oauth] Callback konnte nicht verarbeitet werden", {
+      stage,
       kind: error instanceof MetaGraphError ? "meta_graph" : "internal",
       code: error instanceof MetaGraphError ? error.code : null,
+      name: error instanceof Error ? error.name : "unknown",
     });
     return dashboardRedirect("error", "callback");
   }
