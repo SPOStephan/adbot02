@@ -1,5 +1,7 @@
 import "server-only";
 
+import { assertValidMetaTokenEncryptionKey } from "./crypto";
+
 function required(name: string, value: string | undefined): string {
   const normalized = value?.trim();
 
@@ -43,13 +45,16 @@ export function getMetaLoginStartEnv() {
 }
 
 export function getMetaSyncEnv() {
+  const tokenEncryptionKey = required(
+    "META_TOKEN_ENCRYPTION_KEY",
+    process.env.META_TOKEN_ENCRYPTION_KEY,
+  );
+  assertValidMetaTokenEncryptionKey(tokenEncryptionKey);
+
   return {
     appId: required("META_APP_ID", process.env.META_APP_ID),
     appSecret: required("META_APP_SECRET", process.env.META_APP_SECRET),
-    tokenEncryptionKey: required(
-      "META_TOKEN_ENCRYPTION_KEY",
-      process.env.META_TOKEN_ENCRYPTION_KEY,
-    ),
+    tokenEncryptionKey,
   };
 }
 

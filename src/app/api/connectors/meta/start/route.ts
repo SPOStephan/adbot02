@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createMetaLoginUrl } from "@/lib/meta/client";
 import { createOAuthState } from "@/lib/meta/crypto";
-import { getMetaLoginStartEnv } from "@/lib/meta/env";
+import { getMetaCallbackEnv } from "@/lib/meta/env";
 import { APP_SITE_URL, createPortalUrl } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +29,7 @@ export async function GET() {
   }
 
   try {
-    const { appId, loginConfigId, stateSecret } = getMetaLoginStartEnv();
+    const { appId, loginConfigId, stateSecret } = getMetaCallbackEnv();
     const redirectUri = `${APP_SITE_URL}${META_CALLBACK_PATH}`;
     const state = createOAuthState(user.id, stateSecret);
     const metaLoginUrl = createMetaLoginUrl({

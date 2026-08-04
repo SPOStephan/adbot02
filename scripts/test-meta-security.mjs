@@ -56,6 +56,23 @@ try {
   );
 
   const encryptionKey = Buffer.alloc(32, 7).toString("base64");
+  assert.doesNotThrow(() =>
+    cryptoModule.assertValidMetaTokenEncryptionKey(encryptionKey),
+  );
+  assert.throws(() =>
+    cryptoModule.assertValidMetaTokenEncryptionKey("invalid-key"),
+  );
+  assert.throws(() =>
+    cryptoModule.assertValidMetaTokenEncryptionKey(
+      Buffer.alloc(31, 7).toString("base64"),
+    ),
+  );
+  assert.throws(() =>
+    cryptoModule.assertValidMetaTokenEncryptionKey(
+      Buffer.alloc(33, 7).toString("base64"),
+    ),
+  );
+
   const plaintextToken = "test-token-that-must-never-be-stored-in-plaintext";
   const encryptedOne = cryptoModule.encryptAccessToken(
     plaintextToken,

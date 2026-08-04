@@ -171,6 +171,10 @@ function decodeEncryptionKey(encodedKey: string): Buffer {
   return key;
 }
 
+export function assertValidMetaTokenEncryptionKey(encodedKey: string): void {
+  decodeEncryptionKey(encodedKey);
+}
+
 export function encryptAccessToken(
   accessToken: string,
   encodedKey: string,
