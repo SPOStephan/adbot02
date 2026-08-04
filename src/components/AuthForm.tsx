@@ -97,9 +97,19 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-semibold text-slate-700" htmlFor="password">
-          Passwort
-        </label>
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-sm font-semibold text-slate-700" htmlFor="password">
+            Passwort
+          </label>
+          {isLogin ? (
+            <Link
+              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+              href="/passwort-vergessen"
+            >
+              Passwort vergessen?
+            </Link>
+          ) : null}
+        </div>
         <div className="relative">
           <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400" />
           <input

@@ -5,11 +5,11 @@ import { AuthForm } from "@/components/AuthForm";
 import { MARKETING_SITE_URL } from "@/lib/site-urls";
 
 type LoginPageProps = {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -55,6 +55,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <p className="mb-8 mt-3 text-slate-500">
               Nutze das Konto, das in deinem Supabase-Projekt verwaltet wird.
             </p>
+            {error ? (
+              <p className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                {error}
+              </p>
+            ) : null}
             <AuthForm mode="login" nextPath={next} />
           </div>
         </section>

@@ -43,6 +43,8 @@ export function isPortalPath(pathname: string) {
   return (
     normalizedPath === "/login" ||
     normalizedPath === "/registrieren" ||
+    normalizedPath === "/passwort-vergessen" ||
+    normalizedPath === "/passwort-neu" ||
     normalizedPath === "/auth/callback" ||
     normalizedPath === "/dashboard" ||
     normalizedPath.startsWith("/dashboard/")

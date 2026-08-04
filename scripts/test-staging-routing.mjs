@@ -76,6 +76,8 @@ try {
   assert.equal(separateHostUrls.isMarketingHostname("adbot.one"), true);
   assert.equal(separateHostUrls.isMarketingHostname("www.adbot.one"), true);
   assert.equal(separateHostUrls.isPortalHostname("app.adbot.one"), true);
+  assert.equal(separateHostUrls.isPortalPath("/passwort-vergessen"), true);
+  assert.equal(separateHostUrls.isPortalPath("/passwort-neu"), true);
 
   console.log("Staging-Routing-Regressionstests erfolgreich.");
 } finally {
