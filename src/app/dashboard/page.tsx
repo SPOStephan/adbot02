@@ -587,7 +587,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         supabase
           .from("meta_boost_settings")
           .select(
-            "id,version,enabled,auto_boost_new_candidates,require_manual_approval,budget_mode,daily_budget_minor,lifetime_budget_minor,duration_days,budget_owner_type,objective,source_filter,default_countries,default_cta_type,default_destination_url,customer_confirmed_at",
+            "id,version,boost_mode,enabled,auto_boost_new_candidates,require_manual_approval,budget_mode,daily_budget_minor,lifetime_budget_minor,duration_days,budget_owner_type,objective,source_filter,default_countries,default_cta_type,default_destination_url,customer_confirmed_at",
           )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
@@ -689,6 +689,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ? {
         id: String(boostSettingsRow.id),
         version: toFiniteNumber(boostSettingsRow.version) ?? 1,
+        boostMode:
+          boostSettingsRow.boost_mode === "AUTO"
+            ? "AUTO"
+            : boostSettingsRow.boost_mode === "REVIEW"
+              ? "REVIEW"
+              : boostSettingsRow.enabled
+                ? Boolean(boostSettingsRow.require_manual_approval)
+                  ? "REVIEW"
+                  : "AUTO"
+                : "OFF",
         enabled: Boolean(boostSettingsRow.enabled),
         autoBoostNewCandidates: Boolean(boostSettingsRow.auto_boost_new_candidates),
         requireManualApproval: Boolean(boostSettingsRow.require_manual_approval),

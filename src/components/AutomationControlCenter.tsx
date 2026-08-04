@@ -1013,6 +1013,7 @@ export function AutomationControlCenter({
         </div>
 
         <AutomationBoostSettings
+          killSwitchMode={killSwitch?.mode ?? null}
           settings={boostSettings}
           writeScopeGranted={readiness.writeScopeGranted}
         />

@@ -1072,16 +1072,17 @@ export function parseLaunchApprovalCommand(value: unknown): LaunchApprovalComman
 
 const BOOST_SOURCE_FILTERS = ["facebook", "instagram", "both"] as const;
 const BOOST_OBJECTIVES = ["OUTCOME_ENGAGEMENT", "POST_ENGAGEMENT"] as const;
+const BOOST_MODES = ["OFF", "REVIEW", "AUTO"] as const;
 const BOOST_OVERRIDE_MODES = ["INHERIT", "SKIP", "BOOST"] as const;
 const BOOST_COUNTRIES = [
   "DE", "AT", "CH", "NL", "BE", "FR", "IT", "ES", "PL", "US", "GB", "IE",
   "SE", "DK", "NO", "FI", "CZ", "PT", "LU",
 ] as const;
 
+export type BoostMode = (typeof BOOST_MODES)[number];
+
 export type BoostSettingsCommand = {
-  enabled: boolean;
-  autoBoostNewCandidates: boolean;
-  requireManualApproval: boolean;
+  boostMode: BoostMode;
   budgetMode: "DAILY" | "LIFETIME";
   dailyBudgetMinor: string | null;
   lifetimeBudgetMinor: string | null;
@@ -1145,9 +1146,7 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
   assertExactKeys(
     body,
     [
-      "enabled",
-      "autoBoostNewCandidates",
-      "requireManualApproval",
+      "boostMode",
       "budgetMode",
       "dailyBudgetMinor",
       "lifetimeBudgetMinor",
@@ -1162,15 +1161,7 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
     "Der Beitrag-Push-Befehl",
   );
 
-  const enabled = requiredBoolean(body.enabled, "Die Aktivierung");
-  const autoBoostNewCandidates = requiredBoolean(
-    body.autoBoostNewCandidates,
-    "Das automatische Bewerben",
-  );
-  const requireManualApproval = requiredBoolean(
-    body.requireManualApproval,
-    "Die manuelle Freigabe",
-  );
+  const boostMode = requiredEnum(body.boostMode, "Der Beitrag-Push-Modus", BOOST_MODES);
   const budgetMode = requiredEnum(
     body.budgetMode,
     "Der Budgetmodus",
@@ -1181,6 +1172,7 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
     "Der Budgetträger",
     BUDGET_OWNER_TYPES,
   );
+  // Contribution pushes optimize for post interactions / likes by default.
   const objective = requiredEnum(body.objective, "Das Werbeziel", BOOST_OBJECTIVES);
   const sourceFilter = requiredEnum(
     body.sourceFilter,
@@ -1188,6 +1180,13 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
     BOOST_SOURCE_FILTERS,
   );
   const durationDays = requiredDurationDays(body.durationDays);
+
+  if (boostMode === "AUTO" && budgetMode !== "DAILY") {
+    inputError(
+      "invalid_auto_budget",
+      "Der Automatik-Modus benötigt ein Tagesbudget und eine Laufzeit in Tagen.",
+    );
+  }
 
   if (!Array.isArray(body.defaultCountries) || body.defaultCountries.length < 1) {
     inputError("invalid_countries", "Mindestens ein Zielland ist erforderlich.");
@@ -1236,28 +1235,14 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
       "CTA-Typ und Linkziel müssen gemeinsam gesetzt oder gemeinsam leer sein.",
     );
   }
-  if (autoBoostNewCandidates && !enabled) {
-    inputError(
-      "invalid_auto_boost",
-      "Automatisches Bewerben erfordert aktivierte Beitrag-Push-Einstellungen.",
-    );
-  }
-  if (!requireManualApproval && !autoBoostNewCandidates) {
-    inputError(
-      "invalid_approval_mode",
-      "Ohne manuelle Freigabe muss Auto-Boost aktiv sein.",
-    );
-  }
 
   return {
-    enabled,
-    autoBoostNewCandidates,
-    requireManualApproval,
+    boostMode,
     budgetMode,
     dailyBudgetMinor,
     lifetimeBudgetMinor,
     durationDays,
-    budgetOwnerType,
+    budgetOwnerType: budgetMode === "LIFETIME" ? "CAMPAIGN" : budgetOwnerType,
     objective,
     sourceFilter,
     defaultCountries,

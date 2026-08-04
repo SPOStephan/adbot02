@@ -26,6 +26,13 @@ assert.match(settingsMigration, /put_meta_boost_settings_version/);
 assert.match(settingsMigration, /upsert_meta_content_boost_override/);
 assert.match(settingsMigration, /source_rule_key = 'organic-boost'/);
 
+const modeMigration = read(
+  "supabase/migrations/20260804090000_meta_boost_mode_selection.sql",
+);
+assert.match(modeMigration, /boost_mode in \('OFF', 'REVIEW', 'AUTO'\)/);
+assert.match(modeMigration, /p_boost_mode text/);
+assert.match(modeMigration, /Automatic boost mode requires a daily budget/);
+
 assert.match(materializerMigration, /materialize_meta_organic_boost_plan/);
 assert.match(materializerMigration, /object_story_id/);
 assert.match(materializerMigration, /run_meta_organic_boost_planner/);
@@ -55,8 +62,13 @@ assert.match(
 );
 assert.match(
   read("src/components/AutomationBoostSettings.tsx"),
-  /Beitrag-Push/,
+  /Vollautomatisch/,
 );
+assert.match(
+  read("src/components/AutomationBoostSettings.tsx"),
+  /Einzeln freigeben/,
+);
+assert.match(inputSource, /boostMode/);
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
   /Boost vorbereiten/,

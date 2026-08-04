@@ -1,43 +1,40 @@
 # Organic Post Boost (Beitrag-Push)
 
-**Stand:** 3. August 2026  
-**Scope:** Meta Facebook page posts (Phase 1); Instagram detection + overrides only
+**Stand:** 4. August 2026  
+**Scope:** Meta Facebook page posts (Phase 1)
 
-## Ziel
+## Kundenmodi
 
-Neue organische Beiträge automatisch erkennen und mit kundendefinierten Standards
-(Laufzeit in Tagen, Tages- oder Laufzeitbudget, optionaler CTA) als Engagement-Kampagne
-bewerben – ohne neue Werbemittel, über `object_story_id`.
+| Modus | Verhalten |
+|---|---|
+| `OFF` | Beiträge werden erkannt, aber nicht beworben |
+| `REVIEW` | Neue Beiträge werden automatisch als Boost-Plan vorbereitet; Kunde gibt jeden Beitrag einzeln frei (`BEITRAG BEWERBEN`) |
+| `AUTO` | Jeder neue Facebook-Beitrag wird mit Tagesbudget × Laufzeit automatisch beworben |
+
+Standard-Werbeziel in beiden aktiven Modi: **Interaktionen/Likes**  
+(`OUTCOME_ENGAGEMENT` / Optimierung `POST_ENGAGEMENT`).
+
+`AUTO` verlangt bewusst ein **Tagesbudget** plus **Laufzeit in Tagen** (Start/Ende am Ad Set).
 
 ## Multi-Tenant
 
-Alle Tabellen und RPCs sind an `(user_id, platform_account_id)` gebunden. RLS erlaubt
-Browserrollen nur SELECT auf eigene Zeilen; Mutationen laufen ausschließlich über
-service-role RPCs nach Dashboard-Auth.
+Alle Tabellen/RPCs sind an `(user_id, platform_account_id)` gebunden. Neue Konten erhalten dieselben Modi isoliert.
 
-## Komponenten
+## Live-Test (verbundenes Werbekonto)
 
-| Baustein | Zweck |
-|---|---|
-| `meta_boost_settings` | Versionierte Konto-Standards |
-| `meta_content_boost_overrides` | Pro-Beitrag Budget/Laufzeit/CTA/SKIP |
-| `meta_organic_boost_links` | Dedup: ein Plan pro Kandidat |
-| `run_meta_organic_boost_planner` | Nach Sync: neue Kandidaten → Pläne |
-| `materialize_meta_organic_boost_plan` | LAUNCH_CHAIN ohne Image-Upload |
-| `/api/meta/automation/boost-*` | Kunden-APIs |
-
-## Live-Testablauf
-
-1. Meta mit `ads_management` verbunden, EUR-Konto, aktiver Sync
-2. Policy mit `allow_new_launches` aktiv
-3. Kill-Switch `FREEZE_WRITES`
-4. Beitrag-Push-Standards speichern (manuelle Freigabe an)
-5. Optional Auto-Boost aktivieren → nächster Sync plant neue Facebook-Beiträge
-6. Im Dashboard Boost vorbereiten → „BEITRAG BEWERBEN“ freigeben
-7. Executor schreibt die Kette zu Meta und reconciliert
+1. Drei Migrationen anwenden:
+   - `20260803180000_meta_organic_post_boost.sql`
+   - `20260803180100_meta_organic_boost_materializer.sql`
+   - `20260804090000_meta_boost_mode_selection.sql`
+2. Deploy des PR-Branches / Merge nach Staging oder Preview
+3. Meta mit `ads_management`, EUR-Konto, erfolgreicher Sync
+4. Policy aktiv mit `allow_new_launches`
+5. Beitrag-Push-Modus wählen:
+   - **REVIEW:** Kill-Switch `FREEZE_WRITES` → Sync → Freigabe im Dashboard
+   - **AUTO:** Tagesbudget + Tage speichern → Kill-Switch `ALLOW` → Sync → Executor schreibt
+6. Neuen Facebook-Seitenbeitrag veröffentlichen oder manuellen Sync auslösen
 
 ## Grenzen Phase 1
 
-- Instagram-Media-IDs sind keine `page_post`-Story-IDs → kein Auto-Boost
-- CTA optional; Meta `validate_only` kann CTA+`object_story_id` je Posttyp ablehnen
-- Lifetime-Budget erfordert Canary/manuelle Freigabe
+- Instagram wird erkannt, Auto-Boost läuft über Facebook-`object_story_id`
+- Optionaler CTA kann von Meta je Posttyp per `validate_only` abgelehnt werden

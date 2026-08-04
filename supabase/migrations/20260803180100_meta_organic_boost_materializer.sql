@@ -818,11 +818,15 @@ begin
     v_object_story_id, v_settings.settings_hash
   );
 
-  update public.meta_content_candidates
-  set is_new = false, updated_at = now()
-  where id = p_content_candidate_id
-    and user_id = p_user_id
-    and platform_account_id = p_platform_account_id;
+  -- REVIEW keeps is_new so the dashboard still lists posts awaiting approval.
+  -- AUTO clears the candidate once an executable plan exists.
+  if not v_require_manual_approval then
+    update public.meta_content_candidates
+    set is_new = false, updated_at = now()
+    where id = p_content_candidate_id
+      and user_id = p_user_id
+      and platform_account_id = p_platform_account_id;
+  end if;
 
   return jsonb_build_object(
     'outcome', 'QUEUED',

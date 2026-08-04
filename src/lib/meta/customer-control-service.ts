@@ -972,9 +972,7 @@ export async function saveCustomerBoostSettings(
   const { data, error } = await admin.rpc("put_meta_boost_settings_version", {
     p_user_id: customer.userId,
     p_platform_account_id: customer.platformAccountId,
-    p_enabled: command.enabled,
-    p_auto_boost_new_candidates: command.autoBoostNewCandidates,
-    p_require_manual_approval: command.requireManualApproval,
+    p_boost_mode: command.boostMode,
     p_budget_mode: command.budgetMode,
     p_daily_budget_minor: command.dailyBudgetMinor,
     p_lifetime_budget_minor: command.lifetimeBudgetMinor,
