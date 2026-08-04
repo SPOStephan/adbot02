@@ -915,7 +915,13 @@ assert.match(componentSource, /AutomationScopeManager/);
 assert.match(componentSource, /AutomationBudgetCanaryManager/);
 assert.match(scopeComponentSource, /\/api\/meta\/automation\/scope/);
 assert.match(scopeComponentSource, /window\.confirm/);
-assert.match(scopeComponentSource, /aktive Budget-Policy verwaltet automatisch alle aktuellen und künftigen Budget-Owner/);
+assert.match(scopeComponentSource, /Sobald du die Budgetautomatik gestartet hast/);
+assert.match(scopeComponentSource, /Automatische Budgetanpassungen sind noch nicht aktiviert/);
+assert.match(scopeComponentSource, /Grenzen bestätigen und Autonomie starten/);
+assert.doesNotMatch(
+  scopeComponentSource,
+  /Budget-Autonomie ist deaktiviert|aktive EUR-Policy|ads_management|sicher suspendiert|Budgetowner|Budgetplanner/,
+);
 assert.match(canaryComponentSource, /\/api\/meta\/automation\/budget-canary\/prepare/);
 assert.match(canaryComponentSource, /\/api\/meta\/automation\/budget-canary/);
 assert.match(canaryComponentSource, /window\.confirm/);
