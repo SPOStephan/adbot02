@@ -41,8 +41,11 @@ try {
   getMetaAdCreatives,
   getMetaAdInsights,
   getMetaAds,
+  getMetaAdsByIds,
   getMetaAdSets,
+  getMetaAdSetsByIds,
   getMetaCampaigns,
+  getMetaCampaignsByIds,
   mergeMetaUsage,
   normalizeMetaAdAccountId,
 } from "./client.mjs";`,
@@ -151,22 +154,114 @@ export async function getMetaAds() {
   };
 }
 
-export async function getMetaAdCreatives() {
+export async function getMetaAdsByIds({ adIds }) {
+  globalThis.__marketingSyncTest.historicalRequests.ads.push([...adIds]);
   return {
-    items: [{
-      id: "creative-1",
+    items: (
+      globalThis.__marketingSyncTest.resolveHistoricalAds &&
+      adIds.includes("historical-ad")
+    ) ? [{
+      id: "historical-ad",
+      campaignId: "historical-campaign",
+      adSetId: "historical-ad-set",
+      creativeId: "historical-creative",
       accountId: "123",
-      name: "Creative 1",
-      title: null,
-      body: null,
-      callToActionType: null,
-      thumbnailUrl: null,
-      effectiveObjectStoryId: null,
-      effectiveInstagramMediaId: null,
-      instagramPermalinkUrl: null,
-      objectType: null,
-      status: "ACTIVE",
-    }],
+      name: "Historical Ad",
+      status: "ARCHIVED",
+      effectiveStatus: "ARCHIVED",
+      createdTime: null,
+      updatedTime: null,
+    }] : [],
+    usage,
+  };
+}
+
+export async function getMetaAdSetsByIds({ adSetIds }) {
+  globalThis.__marketingSyncTest.historicalRequests.adSets.push([...adSetIds]);
+  return {
+    items: adSetIds.includes("historical-ad-set") ? [{
+      id: "historical-ad-set",
+      campaignId: "historical-campaign",
+      accountId: "123",
+      name: "Historical Ad Set",
+      status: "ARCHIVED",
+      effectiveStatus: "ARCHIVED",
+      optimizationGoal: "LINK_CLICKS",
+      billingEvent: "IMPRESSIONS",
+      destinationType: "WEBSITE",
+      dailyBudgetMinor: null,
+      lifetimeBudgetMinor: null,
+      budgetRemainingMinor: null,
+      bidAmountMinor: null,
+      bidStrategy: null,
+      startTime: null,
+      endTime: null,
+      createdTime: null,
+      updatedTime: null,
+    }] : [],
+    usage,
+  };
+}
+
+export async function getMetaCampaignsByIds({ campaignIds }) {
+  globalThis.__marketingSyncTest.historicalRequests.campaigns.push([...campaignIds]);
+  return {
+    items: campaignIds.includes("historical-campaign") ? [{
+      id: "historical-campaign",
+      accountId: "123",
+      name: "Historical Campaign",
+      objective: "OUTCOME_TRAFFIC",
+      status: "ARCHIVED",
+      effectiveStatus: "ARCHIVED",
+      dailyBudgetMinor: null,
+      lifetimeBudgetMinor: null,
+      budgetRemainingMinor: null,
+      spendCapMinor: null,
+      bidStrategy: null,
+      isAdSetBudgetSharingEnabled: null,
+      specialAdCategories: [],
+      startTime: null,
+      stopTime: null,
+      createdTime: null,
+      updatedTime: null,
+    }] : [],
+    usage,
+  };
+}
+
+export async function getMetaAdCreatives({ creativeIds }) {
+  globalThis.__marketingSyncTest.creativeRequests.push([...creativeIds]);
+  return {
+    items: [
+      {
+        id: "creative-1",
+        accountId: "123",
+        name: "Creative 1",
+        title: null,
+        body: null,
+        callToActionType: null,
+        thumbnailUrl: null,
+        effectiveObjectStoryId: null,
+        effectiveInstagramMediaId: null,
+        instagramPermalinkUrl: null,
+        objectType: null,
+        status: "ACTIVE",
+      },
+      {
+        id: "historical-creative",
+        accountId: "123",
+        name: "Historical Creative",
+        title: null,
+        body: null,
+        callToActionType: null,
+        thumbnailUrl: null,
+        effectiveObjectStoryId: null,
+        effectiveInstagramMediaId: null,
+        instagramPermalinkUrl: null,
+        objectType: null,
+        status: "ARCHIVED",
+      },
+    ].filter((creative) => creativeIds.includes(creative.id)),
     usage,
   };
 }
@@ -213,6 +308,20 @@ export async function getMetaAdInsights() {
         actionValues: [],
         costPerActionType: [],
       },
+      {
+        ...base,
+        campaignId: "historical-campaign",
+        campaignName: "Historical Campaign",
+        adSetId: "historical-ad-set",
+        adSetName: "Historical Ad Set",
+        adId: "historical-ad",
+        adName: "Historical Ad",
+        dateStart: "2026-07-28",
+        dateStop: "2026-07-28",
+        actions: [],
+        actionValues: [],
+        costPerActionType: [],
+      },
     ],
     usage,
   };
@@ -226,11 +335,11 @@ export function createAdminClient() {
       globalThis.__marketingSyncTest.rpcCalls.push({ name, args });
       return {
         data: [{
-          campaigns_count: 1,
-          ad_sets_count: 1,
-          ads_count: 1,
-          creatives_count: 1,
-          insights_count: 2,
+          campaigns_count: 2,
+          ad_sets_count: 2,
+          ads_count: 2,
+          creatives_count: 2,
+          insights_count: 3,
           recommendations_count: 0,
         }],
         error: null,
@@ -245,7 +354,12 @@ export function createAdminClient() {
   const modulePath = join(temporaryDirectory, "marketing-sync.mjs");
   await writeFile(modulePath, transpile(source), "utf8");
 
-  globalThis.__marketingSyncTest = { rpcCalls: [] };
+  globalThis.__marketingSyncTest = {
+    rpcCalls: [],
+    historicalRequests: { ads: [], adSets: [], campaigns: [] },
+    creativeRequests: [],
+    resolveHistoricalAds: true,
+  };
   const marketingModule = await import(pathToFileURL(modulePath).href);
   const result = await marketingModule.syncMetaMarketingSnapshot({
     platformAccountId: "00000000-0000-4000-8000-000000000001",
@@ -256,11 +370,30 @@ export function createAdminClient() {
     now: new Date("2026-07-29T12:00:00.000Z"),
   });
 
-  assert.equal(result.insightsCount, 2);
-  assert.deepEqual(result.campaignBudgetSharingSnapshot, [{
-    platform_campaign_id: "campaign-1",
-    is_adset_budget_sharing_enabled: false,
-  }]);
+  assert.equal(result.campaignsCount, 2);
+  assert.equal(result.adSetsCount, 2);
+  assert.equal(result.adsCount, 2);
+  assert.equal(result.creativesCount, 2);
+  assert.equal(result.insightsCount, 3);
+  assert.deepEqual(result.campaignBudgetSharingSnapshot, [
+    {
+      platform_campaign_id: "campaign-1",
+      is_adset_budget_sharing_enabled: false,
+    },
+    {
+      platform_campaign_id: "historical-campaign",
+      is_adset_budget_sharing_enabled: null,
+    },
+  ]);
+  assert.deepEqual(globalThis.__marketingSyncTest.historicalRequests, {
+    ads: [["historical-ad"]],
+    adSets: [["historical-ad-set"]],
+    campaigns: [["historical-campaign"]],
+  });
+  assert.deepEqual(globalThis.__marketingSyncTest.creativeRequests, [[
+    "creative-1",
+    "historical-creative",
+  ]]);
   assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 1);
   const call = globalThis.__marketingSyncTest.rpcCalls[0];
   assert.equal(call.name, "replace_meta_marketing_snapshot");
@@ -268,7 +401,20 @@ export function createAdminClient() {
     call.args.p_campaigns[0].is_adset_budget_sharing_enabled,
     false,
   );
-  assert.equal(call.args.p_insights.length, 2);
+  assert.equal(call.args.p_campaigns.length, 2);
+  assert.equal(call.args.p_ad_sets.length, 2);
+  assert.equal(call.args.p_ads.length, 2);
+  assert.equal(call.args.p_creatives.length, 2);
+  assert.equal(call.args.p_insights.length, 3);
+  assert.equal(call.args.p_ads[1].platform_ad_id, "historical-ad");
+  assert.equal(
+    call.args.p_ads[1].platform_ad_set_id,
+    "historical-ad-set",
+  );
+  assert.equal(
+    call.args.p_ads[1].platform_campaign_id,
+    "historical-campaign",
+  );
   assert.deepEqual(call.args.p_insights[0].actions, {
     link_click: "30",
     purchase: "2",
@@ -285,34 +431,71 @@ export function createAdminClient() {
   assert.equal(Array.isArray(call.args.p_insights[0].actions), false);
   assert.doesNotMatch(JSON.stringify(call.args), /test-user-token|test-app-secret/);
 
-  assert.deepEqual(
-    marketingModule.classifyMetaInsightSnapshot({
-      ads: [{ id: "ad-1" }],
+  const diagnostic = marketingModule.classifyMetaInsightSnapshot({
+      ads: [{
+        id: "ad-1",
+        campaignId: "campaign-1",
+        adSetId: "ad-set-1",
+      }],
       insights: [
         {
           adId: "ad-1",
+          campaignId: "wrong-campaign",
+          adSetId: "ad-set-1",
           dateStart: "2026-07-27",
           dateStop: "2026-07-27",
         },
         {
           adId: "historical-ad",
+          campaignId: "historical-campaign",
+          adSetId: "historical-ad-set",
           dateStart: "2026-07-28",
           dateStop: "2026-07-29",
         },
         {
           adId: "ad-1",
+          campaignId: "campaign-1",
+          adSetId: "ad-set-1",
           dateStart: "2026-06-01",
           dateStop: "2026-06-01",
         },
       ],
       since: "2026-06-21",
       until: "2026-07-28",
+    });
+  assert.deepEqual(diagnostic, {
+    missingAdReferences: 1,
+    parentMismatches: 1,
+    nonDailyRows: 1,
+    outOfRangeRows: 1,
+  });
+
+  globalThis.__marketingSyncTest.resolveHistoricalAds = false;
+  const persistedRpcCount = globalThis.__marketingSyncTest.rpcCalls.length;
+  const creativeRequestCount =
+    globalThis.__marketingSyncTest.creativeRequests.length;
+
+  await assert.rejects(
+    marketingModule.syncMetaMarketingSnapshot({
+      platformAccountId: "00000000-0000-4000-8000-000000000001",
+      userId: "00000000-0000-4000-8000-000000000002",
+      adAccountId: "act_123",
+      accessToken: "test-user-token",
+      appSecret: "test-app-secret",
+      now: new Date("2026-07-29T12:00:00.000Z"),
     }),
-    {
-      missingAdReferences: 1,
-      nonDailyRows: 1,
-      outOfRangeRows: 1,
-    },
+    (error) => (
+      error instanceof marketingModule.MetaMarketingDataError &&
+      error.code === "invalid_hierarchy"
+    ),
+  );
+  assert.equal(
+    globalThis.__marketingSyncTest.rpcCalls.length,
+    persistedRpcCount,
+  );
+  assert.equal(
+    globalThis.__marketingSyncTest.creativeRequests.length,
+    creativeRequestCount,
   );
 
   console.log("Meta Marketing snapshot payload tests passed.");

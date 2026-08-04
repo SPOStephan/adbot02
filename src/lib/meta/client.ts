@@ -919,8 +919,12 @@ const META_CAMPAIGN_PAGE_SIZE = 50;
 const META_MARKETING_MAX_PAGES = 50;
 const META_CAMPAIGN_MAX_PAGES = 100;
 const META_MARKETING_MAX_OBJECTS = 10_000;
-const META_CREATIVE_BATCH_SIZE = 50;
+const META_OBJECT_BATCH_SIZE = 50;
 const META_INSIGHTS_MAX_ROWS = 50_000;
+const META_CAMPAIGN_FIELDS = "id,account_id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,bid_strategy,is_adset_budget_sharing_enabled,special_ad_categories,start_time,stop_time,created_time,updated_time";
+const META_AD_SET_FIELDS = "id,account_id,campaign_id,name,status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,budget_remaining,bid_amount,bid_strategy,start_time,end_time,created_time,updated_time";
+const META_AD_FIELDS = "id,account_id,campaign_id,adset_id,creative{id},name,status,effective_status,created_time,updated_time";
+const META_CREATIVE_FIELDS = "id,account_id,name,title,body,call_to_action_type,image_hash,image_url,thumbnail_url,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url,object_type,status";
 const META_MARKETING_NAME_MAX_LENGTH = 500;
 const META_CREATIVE_TEXT_MAX_LENGTH = 5_000;
 
@@ -1393,7 +1397,7 @@ export function getMetaCampaigns(input: {
     initialUrl: marketingCollectionUrl(
       input.adAccountId,
       "campaigns",
-      "id,account_id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,bid_strategy,is_adset_budget_sharing_enabled,special_ad_categories,start_time,stop_time,created_time,updated_time",
+      META_CAMPAIGN_FIELDS,
       META_CAMPAIGN_PAGE_SIZE,
     ),
     accessToken: input.accessToken,
@@ -1414,7 +1418,7 @@ export function getMetaAdSets(input: {
     initialUrl: marketingCollectionUrl(
       input.adAccountId,
       "adsets",
-      "id,account_id,campaign_id,name,status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,budget_remaining,bid_amount,bid_strategy,start_time,end_time,created_time,updated_time",
+      META_AD_SET_FIELDS,
     ),
     accessToken: input.accessToken,
     appSecret: input.appSecret,
@@ -1434,7 +1438,7 @@ export function getMetaAds(input: {
     initialUrl: marketingCollectionUrl(
       input.adAccountId,
       "ads",
-      "id,account_id,campaign_id,adset_id,creative{id},name,status,effective_status,created_time,updated_time",
+      META_AD_FIELDS,
     ),
     accessToken: input.accessToken,
     appSecret: input.appSecret,
@@ -1445,33 +1449,36 @@ export function getMetaAds(input: {
   });
 }
 
-export async function getMetaAdCreatives(input: {
-  creativeIds: string[];
+async function getMetaObjectsByIds<T extends { id: string }>(input: {
+  ids: string[];
+  fields: string;
   accessToken: string;
   appSecret: string;
-}): Promise<MetaMarketingCollection<MetaAdCreative>> {
-  const creativeIds = [...new Set(input.creativeIds.flatMap((value) => {
+  parseItem: (value: unknown) => T | null;
+  searchParams?: Record<string, string>;
+}): Promise<MetaMarketingCollection<T>> {
+  const objectIds = [...new Set(input.ids.flatMap((value) => {
     const id = metaObjectId(value);
     return id ? [id] : [];
   }))].sort();
 
-  if (creativeIds.length > META_MARKETING_MAX_OBJECTS) {
+  if (objectIds.length > META_MARKETING_MAX_OBJECTS) {
     throw new MetaCollectionLimitError("items", EMPTY_USAGE);
   }
 
-  const items: MetaAdCreative[] = [];
+  const items: T[] = [];
   let usage = EMPTY_USAGE;
 
-  for (let index = 0; index < creativeIds.length; index += META_CREATIVE_BATCH_SIZE) {
-    const ids = creativeIds.slice(index, index + META_CREATIVE_BATCH_SIZE);
+  for (let index = 0; index < objectIds.length; index += META_OBJECT_BATCH_SIZE) {
+    const ids = objectIds.slice(index, index + META_OBJECT_BATCH_SIZE);
     const url = new URL(`/${META_GRAPH_VERSION}/`, META_GRAPH_ORIGIN);
     url.searchParams.set("ids", ids.join(","));
-    url.searchParams.set(
-      "fields",
-      "id,account_id,name,title,body,call_to_action_type,image_hash,image_url,thumbnail_url,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url,object_type,status",
-    );
-    url.searchParams.set("thumbnail_width", "640");
-    url.searchParams.set("thumbnail_height", "360");
+    url.searchParams.set("fields", input.fields);
+
+    for (const [key, value] of Object.entries(input.searchParams ?? {})) {
+      url.searchParams.set(key, value);
+    }
+
     const response = await fetchMetaJson(
       url,
       addTokenProtection(url, input.accessToken, input.appSecret),
@@ -1483,15 +1490,79 @@ export async function getMetaAdCreatives(input: {
     }
 
     for (const id of ids) {
-      const creative = parseAdCreative(response.body[id]);
+      const item = input.parseItem(response.body[id]);
 
-      if (creative) {
-        items.push(creative);
+      if (item && item.id !== id) {
+        throw new MetaGraphError(502, {}, usage);
+      }
+
+      if (item) {
+        items.push(item);
       }
     }
   }
 
   return { items, usage };
+}
+
+export function getMetaCampaignsByIds(input: {
+  campaignIds: string[];
+  accessToken: string;
+  appSecret: string;
+}): Promise<MetaMarketingCollection<MetaCampaign>> {
+  return getMetaObjectsByIds({
+    ids: input.campaignIds,
+    fields: META_CAMPAIGN_FIELDS,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseCampaign,
+  });
+}
+
+export function getMetaAdSetsByIds(input: {
+  adSetIds: string[];
+  accessToken: string;
+  appSecret: string;
+}): Promise<MetaMarketingCollection<MetaAdSet>> {
+  return getMetaObjectsByIds({
+    ids: input.adSetIds,
+    fields: META_AD_SET_FIELDS,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseAdSet,
+  });
+}
+
+export function getMetaAdsByIds(input: {
+  adIds: string[];
+  accessToken: string;
+  appSecret: string;
+}): Promise<MetaMarketingCollection<MetaAd>> {
+  return getMetaObjectsByIds({
+    ids: input.adIds,
+    fields: META_AD_FIELDS,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseAd,
+  });
+}
+
+export function getMetaAdCreatives(input: {
+  creativeIds: string[];
+  accessToken: string;
+  appSecret: string;
+}): Promise<MetaMarketingCollection<MetaAdCreative>> {
+  return getMetaObjectsByIds({
+    ids: input.creativeIds,
+    fields: META_CREATIVE_FIELDS,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseAdCreative,
+    searchParams: {
+      thumbnail_width: "640",
+      thumbnail_height: "360",
+    },
+  });
 }
 
 export function getMetaAdInsights(input: {

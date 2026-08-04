@@ -338,6 +338,85 @@ try {
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
     requests.push({ url, init });
+    const ids = url.searchParams.get("ids")?.split(",") ?? [];
+    const fields = url.searchParams.get("fields") ?? "";
+
+    if (fields.includes("creative{id}")) {
+      return jsonResponse(Object.fromEntries(ids.map((id) => [id, {
+        id,
+        account_id: "123456789",
+        campaign_id: "1",
+        adset_id: "11",
+        creative: { id: `${id}9` },
+        name: `Historical Ad ${id}`,
+        status: "ARCHIVED",
+        effective_status: "ARCHIVED",
+      }])));
+    }
+
+    if (fields.includes("optimization_goal")) {
+      return jsonResponse(Object.fromEntries(ids.map((id) => [id, {
+        id,
+        account_id: "123456789",
+        campaign_id: "1",
+        name: `Historical Ad Set ${id}`,
+        status: "ARCHIVED",
+        effective_status: "ARCHIVED",
+        optimization_goal: "LINK_CLICKS",
+        billing_event: "IMPRESSIONS",
+        destination_type: "WEBSITE",
+      }])));
+    }
+
+    return jsonResponse(Object.fromEntries(ids.map((id) => [id, {
+      id,
+      account_id: "123456789",
+      name: `Historical Campaign ${id}`,
+      objective: "OUTCOME_TRAFFIC",
+      status: "ARCHIVED",
+      effective_status: "ARCHIVED",
+      is_adset_budget_sharing_enabled: false,
+      special_ad_categories: [],
+    }])));
+  };
+
+  const adsByIdResult = await client.getMetaAdsByIds({
+    adIds: ["111", "222", "111", "invalid"],
+    accessToken: "read-only-token",
+    appSecret: "test-secret",
+  });
+  const adSetsByIdResult = await client.getMetaAdSetsByIds({
+    adSetIds: ["11"],
+    accessToken: "read-only-token",
+    appSecret: "test-secret",
+  });
+  const campaignsByIdResult = await client.getMetaCampaignsByIds({
+    campaignIds: ["1"],
+    accessToken: "read-only-token",
+    appSecret: "test-secret",
+  });
+
+  assert.deepEqual(adsByIdResult.items.map((item) => item.id), ["111", "222"]);
+  assert.equal(adsByIdResult.items[0].creativeId, "1119");
+  assert.deepEqual(adSetsByIdResult.items.map((item) => item.id), ["11"]);
+  assert.equal(adSetsByIdResult.items[0].campaignId, "1");
+  assert.deepEqual(campaignsByIdResult.items.map((item) => item.id), ["1"]);
+  assert.equal(campaignsByIdResult.items[0].objective, "OUTCOME_TRAFFIC");
+  assert.equal(requests.length, 3);
+  assert.ok(requests.every((request) => request.url.pathname === "/v25.0/"));
+  assert.ok(requests.every((request) => request.init.method === "GET"));
+  assert.deepEqual(
+    new Set(requests[0].url.searchParams.get("ids")?.split(",")),
+    new Set(["111", "222"]),
+  );
+  assert.match(requests[0].url.searchParams.get("fields"), /creative\{id\}/);
+  assert.match(requests[1].url.searchParams.get("fields"), /optimization_goal/);
+  assert.match(requests[2].url.searchParams.get("fields"), /objective/);
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
     return jsonResponse({
       data: [{
         account_id: "123456789",
