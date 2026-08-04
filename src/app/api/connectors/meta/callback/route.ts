@@ -31,12 +31,27 @@ function noStoreRedirect(url: URL) {
   return response;
 }
 
-function dashboardRedirect(status: "connected" | "error", reason?: string) {
+function dashboardRedirect(
+  status: "connected" | "error",
+  reason?: string,
+  details?: { missingScopes?: string[]; unexpectedScopes?: string[] },
+) {
   const url = createPortalUrl("/dashboard");
   url.searchParams.set("meta", status);
 
   if (reason) {
     url.searchParams.set("meta_error", reason);
+  }
+
+  if (details?.missingScopes?.length) {
+    url.searchParams.set("meta_missing_scopes", details.missingScopes.join(","));
+  }
+
+  if (details?.unexpectedScopes?.length) {
+    url.searchParams.set(
+      "meta_unexpected_scopes",
+      details.unexpectedScopes.join(","),
+    );
   }
 
   return noStoreRedirect(url);
@@ -152,7 +167,10 @@ export async function GET(request: Request) {
     }
 
     if (missingScopes.length || unexpectedScopes.length) {
-      return dashboardRedirect("error", "scope_validation");
+      return dashboardRedirect("error", "scope_validation", {
+        missingScopes,
+        unexpectedScopes,
+      });
     }
 
     const allowedPageIds = new Set([
