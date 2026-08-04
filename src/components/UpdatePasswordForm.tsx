@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, LoaderCircle, LockKeyhole } from "lucide-react";
+import { ArrowRight, LoaderCircle } from "lucide-react";
 
+import { PasswordInput } from "@/components/PasswordInput";
 import { createClient } from "@/lib/supabase/client";
 
 export function UpdatePasswordForm() {
@@ -91,47 +92,23 @@ export function UpdatePasswordForm() {
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-      <div className="space-y-2">
-        <label className="text-sm font-semibold text-slate-700" htmlFor="password">
-          Neues Passwort
-        </label>
-        <div className="relative">
-          <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400" />
-          <input
-            autoComplete="new-password"
-            className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-            id="password"
-            minLength={8}
-            name="password"
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Mindestens 8 Zeichen"
-            required
-            type="password"
-            value={password}
-          />
-        </div>
-      </div>
+      <PasswordInput
+        autoComplete="new-password"
+        id="password"
+        label="Neues Passwort"
+        onChange={setPassword}
+        value={password}
+      />
 
-      <div className="space-y-2">
-        <label className="text-sm font-semibold text-slate-700" htmlFor="passwordConfirm">
-          Neues Passwort wiederholen
-        </label>
-        <div className="relative">
-          <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400" />
-          <input
-            autoComplete="new-password"
-            className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-            id="passwordConfirm"
-            minLength={8}
-            name="passwordConfirm"
-            onChange={(event) => setPasswordConfirm(event.target.value)}
-            placeholder="Passwort wiederholen"
-            required
-            type="password"
-            value={passwordConfirm}
-          />
-        </div>
-      </div>
+      <PasswordInput
+        autoComplete="new-password"
+        id="passwordConfirm"
+        label="Neues Passwort wiederholen"
+        name="passwordConfirm"
+        onChange={setPasswordConfirm}
+        placeholder="Passwort wiederholen"
+        value={passwordConfirm}
+      />
 
       {error ? (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">

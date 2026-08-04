@@ -10,9 +10,13 @@ function read(path) {
 }
 
 assert.match(read("src/components/AuthForm.tsx"), /Passwort vergessen\?/);
+assert.match(read("src/components/AuthForm.tsx"), /PasswordInput/);
 assert.match(read("src/components/ForgotPasswordForm.tsx"), /resetPasswordForEmail/);
 assert.match(read("src/components/ForgotPasswordForm.tsx"), /\/passwort-neu/);
 assert.match(read("src/components/UpdatePasswordForm.tsx"), /updateUser\(\{\s*password/);
+assert.match(read("src/components/UpdatePasswordForm.tsx"), /PasswordInput/);
+assert.match(read("src/components/PasswordInput.tsx"), /Passwort anzeigen/);
+assert.match(read("src/components/PasswordInput.tsx"), /EyeOff/);
 assert.match(read("src/lib/site-urls.ts"), /\/passwort-vergessen/);
 assert.match(read("src/lib/site-urls.ts"), /\/passwort-neu/);
 assert.match(read("src/lib/supabase/proxy.ts"), /\/passwort-vergessen/);

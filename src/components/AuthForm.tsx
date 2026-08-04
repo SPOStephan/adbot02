@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ArrowRight, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
+import { ArrowRight, LoaderCircle, Mail } from "lucide-react";
 
+import { PasswordInput } from "@/components/PasswordInput";
 import { APP_SITE_URL } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/client";
 
@@ -96,36 +97,23 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <label className="text-sm font-semibold text-slate-700" htmlFor="password">
-            Passwort
-          </label>
-          {isLogin ? (
+      <PasswordInput
+        autoComplete={isLogin ? "current-password" : "new-password"}
+        id="password"
+        label="Passwort"
+        labelAside={
+          isLogin ? (
             <Link
               className="text-sm font-semibold text-blue-600 hover:text-blue-700"
               href="/passwort-vergessen"
             >
               Passwort vergessen?
             </Link>
-          ) : null}
-        </div>
-        <div className="relative">
-          <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400" />
-          <input
-            autoComplete={isLogin ? "current-password" : "new-password"}
-            className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-            id="password"
-            minLength={8}
-            name="password"
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Mindestens 8 Zeichen"
-            required
-            type="password"
-            value={password}
-          />
-        </div>
-      </div>
+          ) : null
+        }
+        onChange={setPassword}
+        value={password}
+      />
 
       {error ? (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
