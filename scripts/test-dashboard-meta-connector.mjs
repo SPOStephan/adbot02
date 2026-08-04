@@ -87,7 +87,7 @@ assert.match(dashboardSource, /meta_scopes\.includes\("ads_management"\)/);
 assert.doesNotMatch(dashboardSource, /business_management/);
 assert.match(
   dashboardSource,
-  /Instagram wird automatisch über die ausgewählte Facebook-Seite erkannt/,
+  /das Instagram-Konto jeweils ausdrücklich aus/,
 );
 assert.doesNotMatch(
   dashboardSource,
