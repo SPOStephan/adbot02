@@ -10,6 +10,8 @@ import {
   type AssetImportCommand,
   type AutomationScopeCommand,
   type BlueprintCommand,
+  type BoostOverrideCommand,
+  type BoostSettingsCommand,
   type BudgetCanaryApprovalCommand,
   type BudgetCanaryMaterializationCommand,
   type BrandCommand,
@@ -17,6 +19,8 @@ import {
   type KillSwitchCommand,
   type LaunchApprovalCommand,
   type LaunchCommand,
+  type OrganicBoostApprovalCommand,
+  type OrganicBoostPrepareCommand,
   type PolicyCommand,
 } from "@/lib/meta/customer-control-input";
 import {
@@ -941,6 +945,266 @@ export async function approveCustomerLaunch(
     typeof row?.approved_at !== "string"
   ) {
     rpcFailure("Die Aktiv-Launch-Freigabe");
+  }
+
+  return {
+    approvalId: row.approval_id,
+    planId: row.plan_id,
+    planStatus: "PENDING",
+    executableAt: row.executable_at,
+    approvedAt: row.approved_at,
+  };
+}
+
+export async function saveCustomerBoostSettings(
+  customer: MetaCustomer,
+  command: BoostSettingsCommand,
+): Promise<{ settingsId: string }> {
+  if (customer.currency !== "EUR") {
+    serviceError(
+      "eur_account_required",
+      409,
+      "Beitrag-Push-Einstellungen sind derzeit ausschließlich für Werbekonten in EUR freigegeben.",
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("put_meta_boost_settings_version", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_boost_mode: command.boostMode,
+    p_budget_mode: command.budgetMode,
+    p_daily_budget_minor: command.dailyBudgetMinor,
+    p_lifetime_budget_minor: command.lifetimeBudgetMinor,
+    p_duration_days: command.durationDays,
+    p_budget_owner_type: command.budgetOwnerType,
+    p_objective: command.objective,
+    p_source_filter: command.sourceFilter,
+    p_default_countries: command.defaultCountries,
+    p_default_cta_type: command.defaultCtaType,
+    p_default_destination_url: command.defaultDestinationUrl,
+  });
+
+  if (error || typeof data !== "string") {
+    rpcFailure("Die Beitrag-Push-Einstellungen");
+  }
+
+  return { settingsId: data };
+}
+
+export async function saveCustomerBoostOverride(
+  customer: MetaCustomer,
+  command: BoostOverrideCommand,
+): Promise<{ overrideId: string }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("upsert_meta_content_boost_override", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_content_candidate_id: command.contentCandidateId,
+    p_mode: command.mode,
+    p_budget_mode: command.budgetMode,
+    p_daily_budget_minor: command.dailyBudgetMinor,
+    p_lifetime_budget_minor: command.lifetimeBudgetMinor,
+    p_duration_days: command.durationDays,
+    p_cta_type: command.ctaType,
+    p_destination_url: command.destinationUrl,
+    p_clear_cta: command.clearCta,
+    p_notes: command.notes || null,
+  });
+
+  if (error || typeof data !== "string") {
+    rpcFailure("Der Beitrags-Override");
+  }
+
+  return { overrideId: data };
+}
+
+export type CustomerOrganicBoostResult = {
+  outcome: string;
+  planId?: string;
+  status?: string;
+  payloadHash?: string;
+  contentCandidateId: string;
+  objectStoryId?: string;
+  budgetMode?: string;
+  dailyBudgetMinor?: string | null;
+  lifetimeBudgetMinor?: string | null;
+  durationDays?: number;
+  destinationUrl?: string | null;
+  requireManualApproval?: boolean;
+  campaignName?: string;
+  adSetName?: string;
+  creativeName?: string;
+  adName?: string;
+  objective?: string;
+  reason?: string;
+};
+
+function parseOrganicBoostResult(value: unknown): CustomerOrganicBoostResult {
+  const row = Array.isArray(value) ? value[0] : value;
+  if (!row || typeof row !== "object") {
+    rpcFailure("Die Beitrag-Push-Vorbereitung");
+  }
+  const record = row as Record<string, unknown>;
+  if (typeof record.outcome !== "string" || typeof record.content_candidate_id !== "string") {
+    rpcFailure("Die Beitrag-Push-Vorbereitung");
+  }
+
+  return {
+    outcome: record.outcome,
+    planId: typeof record.plan_id === "string" ? record.plan_id : undefined,
+    status: typeof record.status === "string" ? record.status : undefined,
+    payloadHash:
+      typeof record.payload_hash === "string" ? record.payload_hash : undefined,
+    contentCandidateId: record.content_candidate_id,
+    objectStoryId:
+      typeof record.object_story_id === "string" ? record.object_story_id : undefined,
+    budgetMode: typeof record.budget_mode === "string" ? record.budget_mode : undefined,
+    dailyBudgetMinor:
+      record.daily_budget_minor === null || record.daily_budget_minor === undefined
+        ? null
+        : String(record.daily_budget_minor),
+    lifetimeBudgetMinor:
+      record.lifetime_budget_minor === null || record.lifetime_budget_minor === undefined
+        ? null
+        : String(record.lifetime_budget_minor),
+    durationDays:
+      typeof record.duration_days === "number" ? record.duration_days : undefined,
+    destinationUrl:
+      record.destination_url === null || record.destination_url === undefined
+        ? null
+        : typeof record.destination_url === "string"
+          ? record.destination_url
+          : null,
+    requireManualApproval:
+      typeof record.require_manual_approval === "boolean"
+        ? record.require_manual_approval
+        : undefined,
+    campaignName:
+      typeof record.campaign_name === "string" ? record.campaign_name : undefined,
+    adSetName: typeof record.ad_set_name === "string" ? record.ad_set_name : undefined,
+    creativeName:
+      typeof record.creative_name === "string" ? record.creative_name : undefined,
+    adName: typeof record.ad_name === "string" ? record.ad_name : undefined,
+    objective: typeof record.objective === "string" ? record.objective : undefined,
+    reason: typeof record.reason === "string" ? record.reason : undefined,
+  };
+}
+
+export async function materializeCustomerOrganicBoost(
+  customer: MetaCustomer,
+  command: OrganicBoostPrepareCommand,
+): Promise<CustomerOrganicBoostResult> {
+  requireWriteReadyCustomer(customer, "einen Beitrag-Push vorbereitest");
+  if (!customer.marketingSyncId) {
+    serviceError(
+      "fresh_sync_required",
+      409,
+      "Vor der Beitrag-Push-Vorbereitung ist ein aktueller erfolgreicher Meta-Abruf erforderlich.",
+    );
+  }
+
+  const leaseToken = await claimMetaReadOperation({
+    platformAccountId: customer.platformAccountId,
+    userId: customer.userId,
+    ownerId: `customer-organic-boost-prepare:${randomUUID()}`,
+  });
+  if (!leaseToken) {
+    serviceError(
+      "read_snapshot_busy",
+      409,
+      "Ein Meta-Sync oder Planer-Lauf ist aktiv. Bitte versuche die Vorbereitung in wenigen Minuten erneut.",
+    );
+  }
+
+  let result: CustomerOrganicBoostResult | null = null;
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc(
+      "materialize_meta_customer_organic_boost_plan",
+      {
+        p_user_id: customer.userId,
+        p_platform_account_id: customer.platformAccountId,
+        p_read_lease_token: leaseToken,
+        p_content_candidate_id: command.contentCandidateId,
+        p_planned_at: new Date().toISOString(),
+      },
+    );
+    if (error) {
+      serviceError(
+        "organic_boost_preparation_not_ready",
+        409,
+        "Der Beitrag-Push wurde nicht vorbereitet: FREEZE_WRITES, Boost-Einstellungen, Policy, Snapshot und Facebook-Beitrags-ID müssen erfüllt sein.",
+      );
+    }
+    result = parseOrganicBoostResult(data);
+  } finally {
+    try {
+      await releaseMetaAccountOperation({
+        platformAccountId: customer.platformAccountId,
+        userId: customer.userId,
+        leaseToken,
+      });
+    } catch {
+      if (!result) {
+        serviceError(
+          "read_lease_release_failed",
+          500,
+          "Der Beitrag-Push wurde nicht vorbereitet, weil die sichere Read-Lease nicht freigegeben werden konnte.",
+        );
+      }
+    }
+  }
+
+  if (!result) {
+    rpcFailure("Die Beitrag-Push-Vorbereitung");
+  }
+  return result;
+}
+
+export async function approveCustomerOrganicBoost(
+  customer: MetaCustomer,
+  command: OrganicBoostApprovalCommand,
+): Promise<{
+  approvalId: string;
+  planId: string;
+  planStatus: "PENDING";
+  executableAt: string;
+  approvedAt: string;
+}> {
+  requireWriteReadyCustomer(customer, "einen Beitrag-Push freigibst");
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("approve_meta_organic_boost_canary_plan", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_plan_id: command.planId,
+    p_expected_payload_hash: command.payloadHash,
+    p_expected_object_story_id: command.objectStoryId,
+    p_expected_budget_mode: command.budgetMode,
+    p_expected_daily_budget_minor: command.dailyBudgetMinor,
+    p_expected_lifetime_budget_minor: command.lifetimeBudgetMinor,
+    p_expected_duration_days: command.durationDays,
+    p_expected_destination_url: command.destinationUrl,
+    p_reason: command.reason,
+  });
+  const row = Array.isArray(data) ? data[0] : null;
+
+  if (error) {
+    serviceError(
+      "organic_boost_approval_not_ready",
+      409,
+      "Der Beitrag-Push ist nicht mehr exakt freigebbar. Bitte Fingerprint, FREEZE_WRITES und Plan erneut prüfen.",
+    );
+  }
+  if (
+    typeof row?.approval_id !== "string" ||
+    row?.plan_id !== command.planId ||
+    row?.plan_status !== "PENDING" ||
+    typeof row?.executable_at !== "string" ||
+    typeof row?.approved_at !== "string"
+  ) {
+    rpcFailure("Die Beitrag-Push-Freigabe");
   }
 
   return {

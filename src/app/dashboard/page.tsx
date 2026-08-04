@@ -47,6 +47,12 @@ import type {
 } from "@/components/AutomationOnboardingControls";
 import type { BudgetCanaryPlanView } from "@/components/AutomationBudgetCanaryManager";
 import type { AutomationScopeCampaignView } from "@/components/AutomationScopeManager";
+import type { BoostSettingsView } from "@/components/AutomationBoostSettings";
+import {
+  ContentCandidateBoostControls,
+  type ContentBoostOverrideView,
+  type HeldOrganicBoostPlanView,
+} from "@/components/ContentCandidateBoostControls";
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
@@ -474,6 +480,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: recentExposureSnapshots },
     { data: automationTargets },
     { data: budgetCanaryPlans },
+    { data: boostSettingsRow },
+    { data: boostOverrideRows },
+    { data: organicBoostLinks },
   ] = metaConnected && metaAccount
     ? await Promise.all([
         supabase
@@ -575,6 +584,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         supabase.rpc("list_meta_budget_canary_plans", {
           p_platform_account_id: metaAccount.id,
         }),
+        supabase
+          .from("meta_boost_settings")
+          .select(
+            "id,version,boost_mode,enabled,auto_boost_new_candidates,require_manual_approval,budget_mode,daily_budget_minor,lifetime_budget_minor,duration_days,budget_owner_type,objective,source_filter,default_countries,default_cta_type,default_destination_url,customer_confirmed_at",
+          )
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("is_current", true)
+          .maybeSingle(),
+        supabase
+          .from("meta_content_boost_overrides")
+          .select(
+            "content_candidate_id,mode,budget_mode,daily_budget_minor,lifetime_budget_minor,duration_days,cta_type,destination_url,clear_cta",
+          )
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .limit(50),
+        supabase
+          .from("meta_organic_boost_links")
+          .select("content_candidate_id,plan_id,object_story_id")
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .order("created_at", { ascending: false })
+          .limit(20),
       ])
     : [
         { data: null },
@@ -587,6 +620,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         { data: [] },
         { data: [] },
         { data: [] },
+        { data: [] },
+        { data: [] },
+        { data: null },
         { data: [] },
         { data: [] },
       ];
@@ -649,6 +685,103 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         createdAt: String(latestKillSwitch.created_at),
       }
     : null;
+  const boostSettingsView: BoostSettingsView | null = boostSettingsRow
+    ? {
+        id: String(boostSettingsRow.id),
+        version: toFiniteNumber(boostSettingsRow.version) ?? 1,
+        boostMode:
+          boostSettingsRow.boost_mode === "AUTO"
+            ? "AUTO"
+            : boostSettingsRow.boost_mode === "REVIEW"
+              ? "REVIEW"
+              : boostSettingsRow.enabled
+                ? Boolean(boostSettingsRow.require_manual_approval)
+                  ? "REVIEW"
+                  : "AUTO"
+                : "OFF",
+        enabled: Boolean(boostSettingsRow.enabled),
+        autoBoostNewCandidates: Boolean(boostSettingsRow.auto_boost_new_candidates),
+        requireManualApproval: Boolean(boostSettingsRow.require_manual_approval),
+        budgetMode:
+          boostSettingsRow.budget_mode === "LIFETIME" ? "LIFETIME" : "DAILY",
+        dailyBudgetMinor: toFiniteNumber(boostSettingsRow.daily_budget_minor),
+        lifetimeBudgetMinor: toFiniteNumber(boostSettingsRow.lifetime_budget_minor),
+        durationDays: toFiniteNumber(boostSettingsRow.duration_days) ?? 3,
+        budgetOwnerType:
+          boostSettingsRow.budget_owner_type === "CAMPAIGN" ? "CAMPAIGN" : "AD_SET",
+        objective: String(boostSettingsRow.objective ?? "OUTCOME_ENGAGEMENT"),
+        sourceFilter:
+          boostSettingsRow.source_filter === "instagram"
+            ? "instagram"
+            : boostSettingsRow.source_filter === "both"
+              ? "both"
+              : "facebook",
+        defaultCountries: Array.isArray(boostSettingsRow.default_countries)
+          ? boostSettingsRow.default_countries.map(String)
+          : ["DE"],
+        defaultCtaType: boostSettingsRow.default_cta_type
+          ? String(boostSettingsRow.default_cta_type)
+          : null,
+        defaultDestinationUrl: boostSettingsRow.default_destination_url
+          ? String(boostSettingsRow.default_destination_url)
+          : null,
+        customerConfirmedAt: boostSettingsRow.customer_confirmed_at
+          ? String(boostSettingsRow.customer_confirmed_at)
+          : null,
+      }
+    : null;
+  const boostOverrideByCandidate = new Map<string, ContentBoostOverrideView>(
+    (boostOverrideRows ?? []).map((row) => [
+      String(row.content_candidate_id),
+      {
+        mode:
+          row.mode === "SKIP" || row.mode === "BOOST" ? row.mode : "INHERIT",
+        budgetMode:
+          row.budget_mode === "DAILY" || row.budget_mode === "LIFETIME"
+            ? row.budget_mode
+            : null,
+        dailyBudgetMinor: toFiniteNumber(row.daily_budget_minor),
+        lifetimeBudgetMinor: toFiniteNumber(row.lifetime_budget_minor),
+        durationDays: toFiniteNumber(row.duration_days),
+        ctaType: row.cta_type ? String(row.cta_type) : null,
+        destinationUrl: row.destination_url ? String(row.destination_url) : null,
+        clearCta: Boolean(row.clear_cta),
+      },
+    ]),
+  );
+  const organicBoostPlanByCandidate = new Map<string, HeldOrganicBoostPlanView>();
+  for (const link of organicBoostLinks ?? []) {
+    const plan = (recentLaunchPlans ?? []).find(
+      (entry) => String(entry.id) === String(link.plan_id),
+    );
+    if (!plan) continue;
+    const payload =
+      plan.planned_payload && typeof plan.planned_payload === "object"
+        ? (plan.planned_payload as Record<string, unknown>)
+        : {};
+    if (payload.launch_kind !== "ORGANIC_BOOST") continue;
+    organicBoostPlanByCandidate.set(String(link.content_candidate_id), {
+      planId: String(plan.id),
+      payloadHash: String(plan.payload_hash ?? ""),
+      objectStoryId: String(link.object_story_id),
+      budgetMode: payload.budget_mode === "LIFETIME" ? "LIFETIME" : "DAILY",
+      dailyBudgetMinor:
+        payload.daily_budget_minor === null || payload.daily_budget_minor === undefined
+          ? null
+          : String(payload.daily_budget_minor),
+      lifetimeBudgetMinor:
+        payload.lifetime_budget_minor === null
+        || payload.lifetime_budget_minor === undefined
+          ? null
+          : String(payload.lifetime_budget_minor),
+      durationDays: toFiniteNumber(payload.duration_days) ?? 1,
+      destinationUrl:
+        payload.destination_url === null || payload.destination_url === undefined
+          ? null
+          : String(payload.destination_url),
+      status: String(plan.status ?? "PENDING"),
+    });
+  }
   const automationAuditViews: AutomationAuditView[] = (
     controlAuditEvents ?? []
   ).map((event) => ({
@@ -1242,6 +1375,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               accountName={metaAccount.account_name ?? "Meta-Werbekonto"}
               auditEvents={automationAuditViews}
               automationScope={automationScopeView}
+              boostSettings={boostSettingsView}
               brandProfile={brandProfileView}
               budgetCanaries={budgetCanaryViews}
               canPrepareBudgetCanary={canPrepareBudgetCanary}
@@ -1445,7 +1579,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </h2>
                 </div>
                 <p className="max-w-xl text-sm leading-6 text-slate-500">
-                  Nur minimale Beitragsdaten – es werden noch keine Werbeanzeigen erstellt oder verändert.
+                  Neue Beiträge werden stündlich erkannt. Mit aktivem Beitrag-Push kannst du sie
+                  mit Fixed Budget bewerben – Standards gelten pro Konto, Overrides pro Beitrag.
                 </p>
               </div>
 
@@ -1499,6 +1634,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                               Kein öffentlicher Link verfügbar
                             </span>
                           )}
+                          <ContentCandidateBoostControls
+                            canApprove={Boolean(
+                              writeScopeGranted &&
+                                killSwitchView?.mode === "FREEZE_WRITES" &&
+                                boostSettingsView?.enabled,
+                            )}
+                            canPrepare={Boolean(
+                              writeScopeGranted &&
+                                killSwitchView?.mode === "FREEZE_WRITES" &&
+                                boostSettingsView?.enabled &&
+                                policyView?.status === "ACTIVE" &&
+                                policyView.allowNewLaunches,
+                            )}
+                            candidateId={String(candidate.id)}
+                            heldPlan={
+                              organicBoostPlanByCandidate.get(String(candidate.id)) ?? null
+                            }
+                            override={
+                              boostOverrideByCandidate.get(String(candidate.id)) ?? null
+                            }
+                            source={
+                              candidate.source === "instagram" ? "instagram" : "facebook"
+                            }
+                          />
                         </div>
                       </div>
                     </article>

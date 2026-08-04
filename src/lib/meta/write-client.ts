@@ -720,7 +720,16 @@ export function createMetaAdSet(input: MetaAccountMutationInput): Promise<MetaMu
   });
 }
 
-export function createMetaAdCreative(input: Omit<MetaAccountMutationInput, "mode">): Promise<MetaMutationResult> {
+function isInstagramOrganicMediaCreative(payload: MetaWritePayload): boolean {
+  return typeof payload.source_instagram_media_id === "string"
+    && META_NUMERIC_ID.test(payload.source_instagram_media_id)
+    && typeof payload.object_id === "string"
+    && META_NUMERIC_ID.test(payload.object_id)
+    && typeof payload.instagram_user_id === "string"
+    && META_NUMERIC_ID.test(payload.instagram_user_id);
+}
+
+export function createMetaAdCreative(input: MetaAccountMutationInput): Promise<MetaMutationResult> {
   assertAllowedPayload(input.payload, CREATIVE_CREATE_FIELDS);
   assertRequiredString(input.payload, "name");
 
@@ -728,8 +737,17 @@ export function createMetaAdCreative(input: Omit<MetaAccountMutationInput, "mode
     input.payload.object_story_spec === undefined
     && input.payload.object_story_id === undefined
     && input.payload.asset_feed_spec === undefined
+    && !isInstagramOrganicMediaCreative(input.payload)
   ) {
-    throw new TypeError("Creative requires object_story_spec, object_story_id, or asset_feed_spec");
+    throw new TypeError(
+      "Creative requires object_story_spec, object_story_id, asset_feed_spec, or Instagram organic media fields",
+    );
+  }
+
+  if (isInstagramOrganicMediaCreative(input.payload)) {
+    normalizeMetaObjectId(String(input.payload.object_id));
+    normalizeMetaObjectId(String(input.payload.instagram_user_id));
+    normalizeMetaObjectId(String(input.payload.source_instagram_media_id));
   }
 
   return mutateAccountEdge({
@@ -738,7 +756,7 @@ export function createMetaAdCreative(input: Omit<MetaAccountMutationInput, "mode
     edge: "adcreatives",
     operation: "create_creative",
     payload: input.payload,
-    mode: "execute",
+    mode: input.mode,
     requireId: true,
   });
 }

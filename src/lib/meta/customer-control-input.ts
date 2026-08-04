@@ -1069,3 +1069,341 @@ export function parseLaunchApprovalCommand(value: unknown): LaunchApprovalComman
     endTime,
   };
 }
+
+const BOOST_SOURCE_FILTERS = ["facebook", "instagram", "both"] as const;
+const BOOST_OBJECTIVES = ["OUTCOME_ENGAGEMENT", "POST_ENGAGEMENT"] as const;
+const BOOST_MODES = ["OFF", "REVIEW", "AUTO"] as const;
+const BOOST_OVERRIDE_MODES = ["INHERIT", "SKIP", "BOOST"] as const;
+const BOOST_COUNTRIES = [
+  "DE", "AT", "CH", "NL", "BE", "FR", "IT", "ES", "PL", "US", "GB", "IE",
+  "SE", "DK", "NO", "FI", "CZ", "PT", "LU",
+] as const;
+
+export type BoostMode = (typeof BOOST_MODES)[number];
+
+export type BoostSettingsCommand = {
+  boostMode: BoostMode;
+  budgetMode: "DAILY" | "LIFETIME";
+  dailyBudgetMinor: string | null;
+  lifetimeBudgetMinor: string | null;
+  durationDays: number;
+  budgetOwnerType: "CAMPAIGN" | "AD_SET";
+  objective: (typeof BOOST_OBJECTIVES)[number];
+  sourceFilter: (typeof BOOST_SOURCE_FILTERS)[number];
+  defaultCountries: string[];
+  defaultCtaType: string | null;
+  defaultDestinationUrl: string | null;
+};
+
+export type BoostOverrideCommand = {
+  contentCandidateId: string;
+  mode: (typeof BOOST_OVERRIDE_MODES)[number];
+  budgetMode: "DAILY" | "LIFETIME" | null;
+  dailyBudgetMinor: string | null;
+  lifetimeBudgetMinor: string | null;
+  durationDays: number | null;
+  ctaType: string | null;
+  destinationUrl: string | null;
+  clearCta: boolean;
+  notes: string;
+};
+
+export type OrganicBoostPrepareCommand = {
+  contentCandidateId: string;
+};
+
+export type OrganicBoostApprovalCommand = {
+  planId: string;
+  payloadHash: string;
+  objectStoryId: string;
+  budgetMode: "DAILY" | "LIFETIME";
+  dailyBudgetMinor: string | null;
+  lifetimeBudgetMinor: string | null;
+  durationDays: number;
+  destinationUrl: string | null;
+  reason: string;
+};
+
+function optionalHttpsUrl(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  return requiredHttpsUrl(value);
+}
+
+function requiredDurationDays(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 90) {
+    inputError(
+      "invalid_duration_days",
+      "Die Laufzeit muss eine ganze Zahl zwischen 1 und 90 Tagen sein.",
+    );
+  }
+  return value;
+}
+
+export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    [
+      "boostMode",
+      "budgetMode",
+      "dailyBudgetMinor",
+      "lifetimeBudgetMinor",
+      "durationDays",
+      "budgetOwnerType",
+      "objective",
+      "sourceFilter",
+      "defaultCountries",
+      "defaultCtaType",
+      "defaultDestinationUrl",
+    ],
+    "Der Beitrag-Push-Befehl",
+  );
+
+  const boostMode = requiredEnum(body.boostMode, "Der Beitrag-Push-Modus", BOOST_MODES);
+  const budgetMode = requiredEnum(
+    body.budgetMode,
+    "Der Budgetmodus",
+    LAUNCH_BUDGET_TYPES,
+  );
+  const budgetOwnerType = requiredEnum(
+    body.budgetOwnerType,
+    "Der Budgetträger",
+    BUDGET_OWNER_TYPES,
+  );
+  // Contribution pushes optimize for post interactions / likes by default.
+  const objective = requiredEnum(body.objective, "Das Werbeziel", BOOST_OBJECTIVES);
+  const sourceFilter = requiredEnum(
+    body.sourceFilter,
+    "Der Quellenfilter",
+    BOOST_SOURCE_FILTERS,
+  );
+  const durationDays = requiredDurationDays(body.durationDays);
+
+  if (boostMode === "AUTO" && budgetMode !== "DAILY") {
+    inputError(
+      "invalid_auto_budget",
+      "Der Automatik-Modus benötigt ein Tagesbudget und eine Laufzeit in Tagen.",
+    );
+  }
+
+  if (!Array.isArray(body.defaultCountries) || body.defaultCountries.length < 1) {
+    inputError("invalid_countries", "Mindestens ein Zielland ist erforderlich.");
+  }
+  const defaultCountries = body.defaultCountries.map((country) => {
+    if (typeof country !== "string" || !(BOOST_COUNTRIES as readonly string[]).includes(country)) {
+      inputError("invalid_countries", "Ein Zielland ist nicht zulässig.");
+    }
+    return country;
+  });
+
+  let dailyBudgetMinor: string | null = null;
+  let lifetimeBudgetMinor: string | null = null;
+  if (budgetMode === "DAILY") {
+    if (body.lifetimeBudgetMinor !== null && body.lifetimeBudgetMinor !== undefined) {
+      inputError("invalid_budget", "Tagesbudget und Laufzeitbudget schließen sich aus.");
+    }
+    dailyBudgetMinor = parseEuroAmountToMinor(body.dailyBudgetMinor, "Das Tagesbudget");
+  } else {
+    if (body.dailyBudgetMinor !== null && body.dailyBudgetMinor !== undefined) {
+      inputError("invalid_budget", "Tagesbudget und Laufzeitbudget schließen sich aus.");
+    }
+    if (budgetOwnerType !== "CAMPAIGN") {
+      inputError(
+        "invalid_budget_owner",
+        "Ein Laufzeitbudget muss auf Kampagnenebene liegen.",
+      );
+    }
+    lifetimeBudgetMinor = parseEuroAmountToMinor(
+      body.lifetimeBudgetMinor,
+      "Das Laufzeitbudget",
+    );
+  }
+
+  const defaultCtaType =
+    body.defaultCtaType === null || body.defaultCtaType === undefined || body.defaultCtaType === ""
+      ? null
+      : requiredText(body.defaultCtaType, "Der CTA-Typ", 2, 64).toUpperCase();
+  if (defaultCtaType && !/^[A-Z0-9_]+$/.test(defaultCtaType)) {
+    inputError("invalid_cta_type", "Der CTA-Typ ist ungültig.");
+  }
+  const defaultDestinationUrl = optionalHttpsUrl(body.defaultDestinationUrl);
+  if ((defaultCtaType === null) !== (defaultDestinationUrl === null)) {
+    inputError(
+      "invalid_cta_pair",
+      "CTA-Typ und Linkziel müssen gemeinsam gesetzt oder gemeinsam leer sein.",
+    );
+  }
+
+  return {
+    boostMode,
+    budgetMode,
+    dailyBudgetMinor,
+    lifetimeBudgetMinor,
+    durationDays,
+    budgetOwnerType: budgetMode === "LIFETIME" ? "CAMPAIGN" : budgetOwnerType,
+    objective,
+    sourceFilter,
+    defaultCountries,
+    defaultCtaType,
+    defaultDestinationUrl,
+  };
+}
+
+export function parseBoostOverrideCommand(value: unknown): BoostOverrideCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    [
+      "contentCandidateId",
+      "mode",
+      "budgetMode",
+      "dailyBudgetMinor",
+      "lifetimeBudgetMinor",
+      "durationDays",
+      "ctaType",
+      "destinationUrl",
+      "clearCta",
+      "notes",
+    ],
+    "Der Beitrags-Override-Befehl",
+  );
+
+  const mode = requiredEnum(body.mode, "Der Override-Modus", BOOST_OVERRIDE_MODES);
+  const clearCta = requiredBoolean(body.clearCta, "Das CTA-Zurücksetzen");
+  const budgetMode =
+    body.budgetMode === null || body.budgetMode === undefined || body.budgetMode === ""
+      ? null
+      : requiredEnum(body.budgetMode, "Der Budgetmodus", LAUNCH_BUDGET_TYPES);
+
+  let dailyBudgetMinor: string | null = null;
+  let lifetimeBudgetMinor: string | null = null;
+  if (budgetMode === "DAILY") {
+    dailyBudgetMinor = parseEuroAmountToMinor(body.dailyBudgetMinor, "Das Override-Tagesbudget");
+    if (body.lifetimeBudgetMinor !== null && body.lifetimeBudgetMinor !== undefined) {
+      inputError("invalid_budget", "Tagesbudget und Laufzeitbudget schließen sich aus.");
+    }
+  } else if (budgetMode === "LIFETIME") {
+    lifetimeBudgetMinor = parseEuroAmountToMinor(
+      body.lifetimeBudgetMinor,
+      "Das Override-Laufzeitbudget",
+    );
+    if (body.dailyBudgetMinor !== null && body.dailyBudgetMinor !== undefined) {
+      inputError("invalid_budget", "Tagesbudget und Laufzeitbudget schließen sich aus.");
+    }
+  } else if (
+    (body.dailyBudgetMinor !== null && body.dailyBudgetMinor !== undefined)
+    || (body.lifetimeBudgetMinor !== null && body.lifetimeBudgetMinor !== undefined)
+  ) {
+    inputError("invalid_budget", "Budgetbeträge erfordern einen Budgetmodus.");
+  }
+
+  const durationDays =
+    body.durationDays === null || body.durationDays === undefined || body.durationDays === ""
+      ? null
+      : requiredDurationDays(body.durationDays);
+
+  const ctaType =
+    clearCta || body.ctaType === null || body.ctaType === undefined || body.ctaType === ""
+      ? null
+      : requiredText(body.ctaType, "Der CTA-Typ", 2, 64).toUpperCase();
+  if (ctaType && !/^[A-Z0-9_]+$/.test(ctaType)) {
+    inputError("invalid_cta_type", "Der CTA-Typ ist ungültig.");
+  }
+  const destinationUrl = clearCta ? null : optionalHttpsUrl(body.destinationUrl);
+  if (!clearCta && (ctaType === null) !== (destinationUrl === null)) {
+    inputError(
+      "invalid_cta_pair",
+      "CTA-Typ und Linkziel müssen gemeinsam gesetzt oder gemeinsam leer sein.",
+    );
+  }
+
+  return {
+    contentCandidateId: requiredUuid(body.contentCandidateId, "Die Beitrags-ID"),
+    mode,
+    budgetMode,
+    dailyBudgetMinor,
+    lifetimeBudgetMinor,
+    durationDays,
+    ctaType,
+    destinationUrl,
+    clearCta,
+    notes: optionalText(body.notes, "Die Notiz", 500),
+  };
+}
+
+export function parseOrganicBoostPrepareCommand(
+  value: unknown,
+): OrganicBoostPrepareCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(body, ["contentCandidateId"], "Der Beitrag-Push-Prepare-Befehl");
+  return {
+    contentCandidateId: requiredUuid(body.contentCandidateId, "Die Beitrags-ID"),
+  };
+}
+
+export function parseOrganicBoostApprovalCommand(
+  value: unknown,
+): OrganicBoostApprovalCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    [
+      "planId",
+      "payloadHash",
+      "objectStoryId",
+      "budgetMode",
+      "dailyBudgetMinor",
+      "lifetimeBudgetMinor",
+      "durationDays",
+      "destinationUrl",
+      "reason",
+      "confirmation",
+    ],
+    "Der Beitrag-Push-Freigabebefehl",
+  );
+
+  if (body.confirmation !== "BEITRAG BEWERBEN") {
+    inputError(
+      "confirmation_required",
+      "Geben Sie zur Freigabe exakt „BEITRAG BEWERBEN“ ein.",
+    );
+  }
+
+  const payloadHash = requiredText(body.payloadHash, "Der Plan-Fingerprint", 64, 64);
+  if (!SHA256_PATTERN.test(payloadHash)) {
+    inputError("invalid_hash", "Der Plan-Fingerprint ist ungültig.");
+  }
+
+  const budgetMode = requiredEnum(
+    body.budgetMode,
+    "Der Budgetmodus",
+    LAUNCH_BUDGET_TYPES,
+  );
+  let dailyBudgetMinor: string | null = null;
+  let lifetimeBudgetMinor: string | null = null;
+  if (budgetMode === "DAILY") {
+    dailyBudgetMinor = requiredPositiveMinorUnits(
+      body.dailyBudgetMinor,
+      "Das Boost-Tagesbudget",
+    );
+  } else {
+    lifetimeBudgetMinor = requiredPositiveMinorUnits(
+      body.lifetimeBudgetMinor,
+      "Das Boost-Laufzeitbudget",
+    );
+  }
+
+  return {
+    planId: requiredUuid(body.planId, "Die Plan-ID"),
+    payloadHash,
+    objectStoryId: requiredText(body.objectStoryId, "Die Object-Story-ID", 3, 255),
+    budgetMode,
+    dailyBudgetMinor,
+    lifetimeBudgetMinor,
+    durationDays: requiredDurationDays(body.durationDays),
+    destinationUrl: optionalHttpsUrl(body.destinationUrl),
+    reason: requiredText(body.reason, "Die Begründung", 12, 500),
+  };
+}

@@ -20,6 +20,7 @@ import {
   MetaBudgetPlannerError,
   releaseMetaAccountOperation,
   runMetaBudgetPlannerAfterSnapshot,
+  runMetaOrganicBoostPlannerAfterSnapshot,
   type MetaBudgetPlannerResult,
 } from "./planner";
 import { decryptAccessToken } from "./crypto";
@@ -762,6 +763,19 @@ export async function syncMetaConnector(
               });
             } catch (error) {
               plannerErrorCode = classifyPlannerError(error);
+            }
+
+            try {
+              await runMetaOrganicBoostPlannerAfterSnapshot({
+                platformAccountId: connector.id,
+                userId: connector.user_id,
+                marketingSyncId: marketingResult.syncId,
+                readLeaseToken,
+                plannedAt: plannerAttemptedAt,
+              });
+            } catch {
+              // Organic boost planning is best-effort after budget planning.
+              // Failures must not roll back a successful marketing sync.
             }
           }
         } catch (error) {
