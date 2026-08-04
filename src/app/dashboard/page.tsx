@@ -319,7 +319,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const { data: connectedAccounts, error: connectedAccountsError } = await supabase
     .from("platform_accounts")
     .select(
-      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until",
+      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until, instagram_account_ids",
     )
     .eq("user_id", user.id);
   const platformAccountReadFailed = Boolean(connectedAccountsError);
@@ -398,7 +398,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ? await Promise.all([
           supabase
             .from("meta_assets")
-            .select("id, asset_type, name, username, last_synced_at")
+            .select("id, asset_type, meta_asset_id, name, username, last_synced_at")
             .eq("platform_account_id", metaAccount.id)
             .eq("user_id", user.id)
             .order("asset_type", { ascending: true }),
@@ -429,8 +429,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const pageAsset = metaAssets?.find(
     (asset) => asset.asset_type === "facebook_page",
   );
+  const selectedInstagramIds = new Set(
+    Array.isArray(metaAccount?.instagram_account_ids)
+      ? metaAccount.instagram_account_ids.filter(
+          (id): id is string => typeof id === "string" && /^\d{1,64}$/.test(id),
+        )
+      : [],
+  );
+  const instagramProfiles = (metaAssets ?? [])
+    .filter((asset) => asset.asset_type === "instagram_account")
+    .map((asset) => ({
+      metaAssetId: asset.meta_asset_id,
+      name: asset.name,
+      username: asset.username,
+      selected: selectedInstagramIds.has(asset.meta_asset_id),
+    }));
   const instagramAsset = metaAssets?.find(
-    (asset) => asset.asset_type === "instagram_account",
+    (asset) =>
+      asset.asset_type === "instagram_account" &&
+      selectedInstagramIds.has(asset.meta_asset_id),
   );
   const adAccountAsset = metaAssets?.find(
     (asset) => asset.asset_type === "ad_account",
@@ -1402,6 +1419,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               canPrepareBudgetCanary={canPrepareBudgetCanary}
               canConfirmBudgetCanary={canConfirmBudgetCanary}
               currency={marketingCurrency}
+              instagramProfiles={instagramProfiles}
               killSwitch={killSwitchView}
               onboarding={onboardingData}
               policy={policyView}

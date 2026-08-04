@@ -28,6 +28,10 @@ import {
   type AutomationOnboardingData,
 } from "@/components/AutomationOnboardingControls";
 import {
+  InstagramProfileSelector,
+  type InstagramProfileOption,
+} from "@/components/InstagramProfileSelector";
+import {
   AutomationScopeManager,
   type AutomationScopeCampaignView,
 } from "@/components/AutomationScopeManager";
@@ -83,6 +87,7 @@ type AutomationControlCenterProps = {
   policy: AutomationPolicyView | null;
   brandProfile: BrandProfileView | null;
   killSwitch: KillSwitchView;
+  instagramProfiles: InstagramProfileOption[];
   auditEvents: AutomationAuditView[];
   automationScope: AutomationScopeCampaignView[];
   budgetCanaries: BudgetCanaryPlanView[];
@@ -101,6 +106,7 @@ type AutomationControlCenterProps = {
 type ApiResponse = {
   ok?: boolean;
   message?: string;
+  managedBudgetOwnerCount?: number;
 };
 
 type Notice = {
@@ -209,6 +215,8 @@ async function postControl(url: string, body: Record<string, unknown>) {
       result.message ?? "Die Aktion konnte nicht sicher abgeschlossen werden.",
     );
   }
+
+  return result;
 }
 
 function ToggleField({
@@ -259,6 +267,7 @@ export function AutomationControlCenter({
   canConfirmBudgetCanary,
   currency,
   killSwitch,
+  instagramProfiles,
   onboarding,
   policy,
   readiness,
@@ -375,7 +384,7 @@ export function AutomationControlCenter({
     setPolicyNotice(null);
 
     try {
-      await postControl("/api/meta/automation/policy", {
+      const result = await postControl("/api/meta/automation/policy", {
         accountDailyHardCap,
         campaignDailyHardCap,
         allowBudgetChanges,
@@ -385,7 +394,10 @@ export function AutomationControlCenter({
       });
       setPolicyNotice({
         tone: "success",
-        message: "Die Policy wurde versioniert, bestätigt und vollständig auditiert.",
+        message:
+          enableAutomation && allowBudgetChanges
+            ? `Budget-Autonomie ist aktiv. ${result.managedBudgetOwnerCount ?? 0} Budget-Owner werden innerhalb deiner Grenzen verwaltet.`
+            : "Die Policy wurde gespeichert; autonome Budgetänderungen sind deaktiviert.",
       });
       refresh();
     } catch (error) {
@@ -527,6 +539,8 @@ export function AutomationControlCenter({
           ))}
         </div>
 
+        <InstagramProfileSelector profiles={instagramProfiles} />
+
         {!readiness.writeScopeGranted ? (
           <div className="flex flex-col gap-4 border-b border-amber-200 bg-amber-50 px-5 py-5 text-amber-950 sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <div className="flex items-start gap-3">
@@ -664,7 +678,11 @@ export function AutomationControlCenter({
                 type="submit"
               >
                 <Save className="size-4" />
-                {policyPending ? "Wird bestätigt …" : "Policy bestätigen"}
+                {policyPending
+                  ? "Wird bestätigt …"
+                  : enableAutomation && allowBudgetChanges
+                    ? "Grenzen bestätigen und Autonomie starten"
+                    : "Policy speichern"}
               </button>
             </div>
           </form>

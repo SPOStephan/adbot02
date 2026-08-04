@@ -120,9 +120,9 @@ begin
       '53000000-0000-4000-8000-000000000001',
       '53000000-0000-4000-8000-000000000003'
     )
-      and status <> 'SUSPENDED'
+      and status <> 'MANAGED'
   ) then
-    raise exception 'Targets were not fail-closed without an explicit selection';
+    raise exception 'Active bounded policies did not manage budget owners by default';
   end if;
 end;
 $$;
@@ -147,7 +147,7 @@ begin
         where campaign_id = '43000000-0000-4000-8000-000000000001'
           and status = 'MANAGED') <> 1
     or (select status from public.automation_targets
-        where id = '53000000-0000-4000-8000-000000000003') <> 'SUSPENDED' then
+        where id = '53000000-0000-4000-8000-000000000003') <> 'MANAGED' then
     raise exception 'Campaign selection or tenant isolation is incorrect';
   end if;
 end;

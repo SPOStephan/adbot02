@@ -27,6 +27,7 @@ const {
   parseBudgetCanaryMaterializationCommand,
   parseDomainCommand,
   parseEuroAmountToMinor,
+  parseInstagramSelectionCommand,
   parseKillSwitchCommand,
   parseLaunchApprovalCommand,
   parseLaunchCommand,
@@ -97,6 +98,34 @@ expectInputError(
       enableAutomation: true,
     }),
   "launch_requires_status_changes",
+);
+
+assert.deepEqual(
+  parseInstagramSelectionCommand({
+    instagramAccountIds: ["178414000000001", "178414000000002", "178414000000001"],
+  }),
+  {
+    instagramAccountIds: ["178414000000001", "178414000000002"],
+  },
+);
+expectInputError(
+  () => parseInstagramSelectionCommand({ instagramAccountIds: [] }),
+  "invalid_instagram_selection",
+);
+expectInputError(
+  () =>
+    parseInstagramSelectionCommand({
+      instagramAccountIds: ["kein-meta-profil"],
+    }),
+  "invalid_instagram_selection",
+);
+expectInputError(
+  () =>
+    parseInstagramSelectionCommand({
+      instagramAccountIds: ["178414000000001"],
+      platformAccountId: "nicht erlaubt",
+    }),
+  "unknown_field",
 );
 
 assert.deepEqual(
@@ -684,6 +713,7 @@ expectInputError(
 
 const [
   componentSource,
+  instagramComponentSource,
   scopeComponentSource,
   canaryComponentSource,
   onboardingSource,
@@ -691,6 +721,7 @@ const [
   serviceSource,
   routeHelperSource,
   policyRouteSource,
+  instagramRouteSource,
   brandRouteSource,
   killRouteSource,
   scopeRouteSource,
@@ -701,6 +732,7 @@ const [
   assetImportRouteSource,
   launchRouteSource,
   migrationSource,
+  autonomyMigrationSource,
   scopeMigrationSource,
   canaryMigrationSource,
   operatorCanaryMigrationSource,
@@ -710,6 +742,7 @@ const [
   storageSource,
 ] = await Promise.all([
   readFile(path.join(root, "src/components/AutomationControlCenter.tsx"), "utf8"),
+  readFile(path.join(root, "src/components/InstagramProfileSelector.tsx"), "utf8"),
   readFile(path.join(root, "src/components/AutomationScopeManager.tsx"), "utf8"),
   readFile(
     path.join(root, "src/components/AutomationBudgetCanaryManager.tsx"),
@@ -720,6 +753,10 @@ const [
   readFile(path.join(root, "src/lib/meta/customer-control-service.ts"), "utf8"),
   readFile(path.join(root, "src/lib/meta/customer-control-route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/policy/route.ts"), "utf8"),
+  readFile(
+    path.join(root, "src/app/api/meta/automation/instagram-selection/route.ts"),
+    "utf8",
+  ),
   readFile(path.join(root, "src/app/api/meta/automation/brand/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/kill-switch/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/scope/route.ts"), "utf8"),
@@ -742,6 +779,13 @@ const [
     path.join(
       root,
       "supabase/migrations/20260729240000_meta_customer_controls.sql",
+    ),
+    "utf8",
+  ),
+  readFile(
+    path.join(
+      root,
+      "supabase/migrations/20260804153000_meta_customer_budget_autonomy.sql",
     ),
     "utf8",
   ),
@@ -795,6 +839,9 @@ assert.match(routeHelperSource, /origin !== request\.nextUrl\.origin/);
 assert.match(routeHelperSource, /MAX_BODY_BYTES/);
 assert.match(routeHelperSource, /private, no-store/);
 assert.match(policyRouteSource, /parsePolicyCommand/);
+assert.match(policyRouteSource, /managedBudgetOwnerCount/);
+assert.match(instagramRouteSource, /parseInstagramSelectionCommand/);
+assert.match(instagramRouteSource, /saveCustomerInstagramSelection/);
 assert.match(brandRouteSource, /parseBrandCommand/);
 assert.match(killRouteSource, /parseKillSwitchCommand/);
 assert.match(scopeRouteSource, /parseAutomationScopeCommand/);
@@ -818,6 +865,8 @@ assert.match(launchRouteSource, /export async function PUT/);
 assert.match(launchRouteSource, /parseLaunchApprovalCommand/);
 assert.match(launchRouteSource, /approveCustomerLaunch/);
 assert.match(pageSource, /AutomationControlCenter/);
+assert.match(pageSource, /instagram_account_ids/);
+assert.match(pageSource, /meta_asset_id/);
 assert.match(pageSource, /meta_scopes\.includes\("ads_management"\)/);
 assert.match(pageSource, /writeScopeGranted/);
 assert.match(pageSource, /\.eq\("is_current", true\)/);
@@ -851,7 +900,12 @@ assert.doesNotMatch(
   /\.from\("creatives"\)[\s\S]{0,200}\.select\([^)]*content/,
 );
 assert.match(componentSource, /\/api\/meta\/automation\/policy/);
+assert.match(componentSource, /Grenzen bestätigen und Autonomie starten/);
+assert.match(componentSource, /InstagramProfileSelector/);
 assert.match(componentSource, /\/api\/meta\/automation\/brand/);
+assert.match(instagramComponentSource, /id="instagram-onboarding"/);
+assert.match(instagramComponentSource, /\/api\/meta\/automation\/instagram-selection/);
+assert.match(instagramComponentSource, /instagramAccountIds/);
 assert.match(componentSource, /\/api\/meta\/automation\/kill-switch/);
 assert.match(componentSource, /Max\. 20 % \/ 24 h/);
 assert.match(componentSource, /12 h Cooldown/);
@@ -861,7 +915,7 @@ assert.match(componentSource, /AutomationScopeManager/);
 assert.match(componentSource, /AutomationBudgetCanaryManager/);
 assert.match(scopeComponentSource, /\/api\/meta\/automation\/scope/);
 assert.match(scopeComponentSource, /window\.confirm/);
-assert.match(scopeComponentSource, /Bestehende Kampagnen sind standardmäßig suspendiert/);
+assert.match(scopeComponentSource, /aktive Budget-Policy verwaltet automatisch alle aktuellen und künftigen Budget-Owner/);
 assert.match(canaryComponentSource, /\/api\/meta\/automation\/budget-canary\/prepare/);
 assert.match(canaryComponentSource, /\/api\/meta\/automation\/budget-canary/);
 assert.match(canaryComponentSource, /window\.confirm/);
@@ -898,6 +952,10 @@ assert.doesNotMatch(
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease/i,
 );
 assert.doesNotMatch(
+  instagramComponentSource,
+  /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease/i,
+);
+assert.doesNotMatch(
   canaryComponentSource,
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease|accessToken/i,
 );
@@ -906,6 +964,9 @@ assert.match(serviceSource, /materialize_meta_customer_launch_plan/);
 assert.match(serviceSource, /customer-launch-prepare:/);
 assert.match(serviceSource, /approve_meta_launch_canary_plan/);
 assert.match(serviceSource, /p_expected_payload_hash: command\.payloadHash/);
+assert.match(serviceSource, /put_meta_customer_budget_autonomy_policy/);
+assert.match(serviceSource, /saveCustomerInstagramSelection/);
+assert.match(serviceSource, /\.from\("meta_assets"\)/);
 assert.match(serviceSource, /set_meta_customer_automation_scope/);
 assert.match(serviceSource, /command\.status === "MANAGED"/);
 assert.match(serviceSource, /materialize_meta_customer_budget_canary_plan/);
@@ -953,6 +1014,22 @@ assert.match(
 assert.doesNotMatch(
   migrationSource,
   /grant execute on function public\.(put_meta_customer_policy_version|set_meta_customer_kill_switch)[\s\S]*to authenticated/,
+);
+assert.match(autonomyMigrationSource, /put_meta_customer_budget_autonomy_policy/);
+assert.match(autonomyMigrationSource, /set_meta_customer_budget_autonomy/);
+assert.match(autonomyMigrationSource, /policy\.budget_change_limit_bps = 2000/);
+assert.match(autonomyMigrationSource, /policy\.cooldown_seconds = 43200/);
+assert.match(autonomyMigrationSource, /selection\.status = 'SUSPENDED'/);
+assert.match(autonomyMigrationSource, /then 'MANAGED'/);
+assert.match(autonomyMigrationSource, /'ALLOW'/);
+assert.match(autonomyMigrationSource, /'FREEZE_WRITES'/);
+assert.match(
+  autonomyMigrationSource,
+  /grant execute on function public\.put_meta_customer_budget_autonomy_policy[\s\S]*to service_role/,
+);
+assert.doesNotMatch(
+  autonomyMigrationSource,
+  /grant execute on function public\.put_meta_customer_budget_autonomy_policy[\s\S]{0,180}to authenticated/,
 );
 assert.match(scopeMigrationSource, /create table public\.automation_scope_selections/);
 assert.match(scopeMigrationSource, /update public\.automation_targets[\s\S]*status = 'SUSPENDED'/);

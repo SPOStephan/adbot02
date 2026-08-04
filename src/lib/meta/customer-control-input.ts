@@ -101,6 +101,49 @@ export type PolicyCommand = {
   enableAutomation: boolean;
 };
 
+export type InstagramSelectionCommand = {
+  instagramAccountIds: string[];
+};
+
+export function parseInstagramSelectionCommand(
+  value: unknown,
+): InstagramSelectionCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    ["instagramAccountIds"],
+    "Die Instagram-Profil-Auswahl",
+  );
+
+  if (!Array.isArray(body.instagramAccountIds)) {
+    inputError(
+      "invalid_instagram_selection",
+      "Die Instagram-Profil-Auswahl muss eine Liste sein.",
+    );
+  }
+
+  const instagramAccountIds = [
+    ...new Set(
+      body.instagramAccountIds.map((value) =>
+        typeof value === "string" ? value.trim() : "",
+      ),
+    ),
+  ];
+
+  if (
+    instagramAccountIds.length < 1 ||
+    instagramAccountIds.length > 50 ||
+    instagramAccountIds.some((id) => !META_OBJECT_ID_PATTERN.test(id))
+  ) {
+    inputError(
+      "invalid_instagram_selection",
+      "Bitte wähle mindestens ein gültiges Instagram-Profil aus.",
+    );
+  }
+
+  return { instagramAccountIds };
+}
+
 export function parsePolicyCommand(value: unknown): PolicyCommand {
   const body = asJsonObject(value);
   const accountDailyHardCapMinor = parseEuroAmountToMinor(

@@ -36,6 +36,7 @@ function connector(overrides = {}) {
     sync_backoff_until: null,
     last_sync_started_at: null,
     sync_consecutive_failures: 0,
+    instagram_account_ids: ["178414000000001"],
     ...overrides,
   };
 }
@@ -52,12 +53,19 @@ function defaultAssets(baselineCompletedAt = null) {
     {
       id: "10000000-0000-4000-8000-000000000002",
       asset_type: "instagram_account",
-      meta_asset_id: "instagram-1",
+      meta_asset_id: "178414000000001",
       parent_meta_asset_id: "page-1",
       baseline_completed_at: baselineCompletedAt,
     },
     {
       id: "10000000-0000-4000-8000-000000000003",
+      asset_type: "instagram_account",
+      meta_asset_id: "178414000000002",
+      parent_meta_asset_id: "page-1",
+      baseline_completed_at: baselineCompletedAt,
+    },
+    {
+      id: "10000000-0000-4000-8000-000000000004",
       asset_type: "ad_account",
       meta_asset_id: "ad-account-1",
       parent_meta_asset_id: null,
@@ -456,7 +464,7 @@ export function createAdminClient() {
             name: "Test Page",
             accessToken: "ephemeral-page-token",
             instagramAccount: {
-              id: "instagram-1",
+              id: "178414000000001",
               name: "Test Instagram",
               username: "test_account",
             },
@@ -535,6 +543,12 @@ export function createAdminClient() {
     ).input.pageAccessToken,
     "ephemeral-page-token",
   );
+  const instagramCalls = globalThis.__metaTest.calls.filter(
+    (call) => call.name === "getInstagramMedia",
+  );
+  assert.equal(instagramCalls.length, 1);
+  assert.equal(instagramCalls[0].input.instagramAccountId, "178414000000001");
+  assert.notEqual(instagramCalls[0].input.instagramAccountId, "178414000000002");
   const baselineRecords = baselineHarness.state.rpcCalls.filter(
     (call) => call.name === "record_meta_content_candidates",
   );

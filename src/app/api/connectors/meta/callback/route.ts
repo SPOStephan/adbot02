@@ -54,6 +54,10 @@ function dashboardRedirect(
     );
   }
 
+  if (status === "connected") {
+    url.hash = "instagram-onboarding";
+  }
+
   return noStoreRedirect(url);
 }
 

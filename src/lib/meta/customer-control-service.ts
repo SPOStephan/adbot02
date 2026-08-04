@@ -16,6 +16,7 @@ import {
   type BudgetCanaryMaterializationCommand,
   type BrandCommand,
   type DomainCommand,
+  type InstagramSelectionCommand,
   type KillSwitchCommand,
   type LaunchApprovalCommand,
   type LaunchCommand,
@@ -122,10 +123,60 @@ function rpcFailure(operation: string): never {
   );
 }
 
+export async function saveCustomerInstagramSelection(
+  customer: MetaCustomer,
+  command: InstagramSelectionCommand,
+): Promise<{ selectedCount: number }> {
+  const admin = createAdminClient();
+  const { data: assets, error: assetError } = await admin
+    .from("meta_assets")
+    .select("meta_asset_id")
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("asset_type", "instagram_account")
+    .in("meta_asset_id", command.instagramAccountIds);
+
+  if (assetError) {
+    rpcFailure("Die Instagram-Profil-Auswahl");
+  }
+
+  const availableIds = new Set(
+    (assets ?? []).map((asset) => asset.meta_asset_id),
+  );
+  if (
+    availableIds.size !== command.instagramAccountIds.length ||
+    command.instagramAccountIds.some((id) => !availableIds.has(id))
+  ) {
+    serviceError(
+      "instagram_profile_not_available",
+      409,
+      "Mindestens ein gewähltes Instagram-Profil gehört nicht mehr zu dieser Meta-Verbindung. Bitte verbinde Meta erneut.",
+    );
+  }
+
+  const { error } = await admin
+    .from("platform_accounts")
+    .update({
+      instagram_account_ids: command.instagramAccountIds,
+      next_sync_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", customer.platformAccountId)
+    .eq("user_id", customer.userId)
+    .eq("platform", "meta")
+    .is("revoked_at", null);
+
+  if (error) {
+    rpcFailure("Die Instagram-Profil-Auswahl");
+  }
+
+  return { selectedCount: command.instagramAccountIds.length };
+}
+
 export async function saveCustomerPolicy(
   customer: MetaCustomer,
   command: PolicyCommand,
-): Promise<{ policyId: string }> {
+): Promise<{ policyId: string; managedBudgetOwnerCount: number }> {
   if (command.enableAutomation && !customer.writeScopeGranted) {
     serviceError(
       "write_scope_required",
@@ -143,7 +194,7 @@ export async function saveCustomerPolicy(
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("put_meta_customer_policy_version", {
+  const { data, error } = await admin.rpc("put_meta_customer_budget_autonomy_policy", {
     p_user_id: customer.userId,
     p_platform_account_id: customer.platformAccountId,
     p_account_daily_hard_cap_minor: command.accountDailyHardCapMinor,
@@ -154,11 +205,20 @@ export async function saveCustomerPolicy(
     p_enable_automation: command.enableAutomation,
   });
 
-  if (error || typeof data !== "string") {
+  const result = Array.isArray(data) ? data[0] : null;
+  if (
+    error ||
+    !result ||
+    typeof result.policy_id !== "string" ||
+    typeof result.managed_budget_owner_count !== "number"
+  ) {
     rpcFailure("Die Autonomie-Policy");
   }
 
-  return { policyId: data };
+  return {
+    policyId: result.policy_id,
+    managedBudgetOwnerCount: result.managed_budget_owner_count,
+  };
 }
 
 export async function saveCustomerBrandProfile(
@@ -166,15 +226,28 @@ export async function saveCustomerBrandProfile(
   command: BrandCommand,
 ): Promise<{ brandProfileId: string }> {
   const admin = createAdminClient();
-  const { data: assets, error: assetError } = await admin
-    .from("meta_assets")
-    .select("asset_type,meta_asset_id")
-    .eq("user_id", customer.userId)
-    .eq("platform_account_id", customer.platformAccountId)
-    .in("asset_type", ["facebook_page", "instagram_account"])
-    .order("created_at", { ascending: false });
+  const [
+    { data: assets, error: assetError },
+    { data: account, error: accountError },
+  ] = await Promise.all([
+    admin
+      .from("meta_assets")
+      .select("asset_type,meta_asset_id")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .in("asset_type", ["facebook_page", "instagram_account"])
+      .order("created_at", { ascending: false }),
+    admin
+      .from("platform_accounts")
+      .select("instagram_account_ids")
+      .eq("id", customer.platformAccountId)
+      .eq("user_id", customer.userId)
+      .eq("platform", "meta")
+      .is("revoked_at", null)
+      .maybeSingle(),
+  ]);
 
-  if (assetError) {
+  if (assetError || accountError || !account) {
     serviceError(
       "brand_actor_lookup_failed",
       500,
@@ -182,11 +255,21 @@ export async function saveCustomerBrandProfile(
     );
   }
 
+  const selectedInstagramIds = new Set(
+    Array.isArray(account.instagram_account_ids)
+      ? account.instagram_account_ids.filter(
+          (id): id is string =>
+            typeof id === "string" && /^[0-9]{1,64}$/.test(id),
+        )
+      : [],
+  );
   const facebookPageId = assets?.find(
     (asset) => asset.asset_type === "facebook_page",
   )?.meta_asset_id;
   const instagramActorId = assets?.find(
-    (asset) => asset.asset_type === "instagram_account",
+    (asset) =>
+      asset.asset_type === "instagram_account" &&
+      selectedInstagramIds.has(asset.meta_asset_id),
   )?.meta_asset_id;
 
   if (!facebookPageId || !/^\d{1,64}$/.test(facebookPageId)) {
@@ -197,11 +280,11 @@ export async function saveCustomerBrandProfile(
     );
   }
 
-  if (instagramActorId && !/^\d{1,64}$/.test(instagramActorId)) {
+  if (!instagramActorId || !/^\d{1,64}$/.test(instagramActorId)) {
     serviceError(
       "invalid_instagram_actor",
       409,
-      "Das verbundene Instagram-Profil ist nicht eindeutig und muss neu verbunden werden.",
+      "Bitte wähle zuerst ein gültiges Instagram-Profil für Adbot aus.",
     );
   }
 
