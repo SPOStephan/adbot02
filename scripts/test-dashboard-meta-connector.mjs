@@ -85,6 +85,10 @@ assert.match(dashboardSource, /no_assets/);
 assert.match(dashboardSource, /storage/);
 assert.match(dashboardSource, /meta_scopes\.includes\("ads_management"\)/);
 assert.doesNotMatch(dashboardSource, /business_management/);
+assert.match(
+  dashboardSource,
+  /Instagram wird automatisch über die ausgewählte Facebook-Seite erkannt/,
+);
 assert.doesNotMatch(
   dashboardSource,
   /access_token_encrypted|token_iv|token_auth_tag|sync_backoff_until|sync_usage/,
@@ -243,8 +247,10 @@ assert.match(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
 assert.match(callbackSource, /dashboardRedirect\("connected"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "storage"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "invalid_state"\)/);
-assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation"\)/);
+assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation",/);
 assert.match(callbackSource, /dashboardRedirect\("error", "token_validation"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "no_assets"\)/);
+assert.match(callbackSource, /classifyMetaGrantedScopes\(/);
+assert.match(callbackSource, /compatibleSystemUserScopes/);
 
 console.log("Dashboard Meta connector checks passed");

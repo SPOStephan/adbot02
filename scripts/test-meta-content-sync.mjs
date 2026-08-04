@@ -315,6 +315,10 @@ export async function runMetaBudgetPlannerAfterSnapshot(input) {
   return globalThis.__metaTest.plannerResult;
 }
 
+export async function runMetaOrganicBoostPlannerAfterSnapshot() {
+  return undefined;
+}
+
 export async function releaseMetaAccountOperation(input) {
   globalThis.__metaTest.calls.push({ name: "releaseMetaAccountOperation", input });
   if (globalThis.__metaTest.plannerReleaseError) {
