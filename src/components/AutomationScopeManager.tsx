@@ -150,9 +150,9 @@ export function AutomationScopeManager({
             <SlidersHorizontal className="size-5" />
           </span>
           <div>
-            <h3 className="font-extrabold">Verwaltete Kampagnen</h3>
+            <h3 className="font-extrabold">Budget-Ausnahmen</h3>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-              Bestehende Kampagnen sind standardmäßig suspendiert. Nur hier ausdrücklich ausgewählte Budgetowner dürfen neue Budgetpläne erhalten.
+              Eine aktive Budget-Policy verwaltet automatisch alle aktuellen und künftigen Budget-Owner. Hier kannst du einzelne Kampagnen oder Budget-Owner gezielt ausnehmen.
             </p>
           </div>
         </div>
@@ -170,7 +170,7 @@ export function AutomationScopeManager({
         <div className="mt-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700" />
           <p className="text-xs leading-5">
-            Neue Auswahlen bleiben gesperrt, bis eine aktive EUR-Policy mit Budgetfreigabe und der Meta-Scope <strong>ads_management</strong> vorhanden sind. Bereits ausgewählte Bereiche kannst du weiterhin sicher suspendieren.
+            Budget-Autonomie ist deaktiviert, bis du eine aktive EUR-Policy mit Budgetfreigabe bestätigst und <strong>ads_management</strong> vorhanden ist. Bestehende Bereiche bleiben bis dahin sicher suspendiert.
           </p>
         </div>
       ) : null}
@@ -269,7 +269,7 @@ export function AutomationScopeManager({
                         type="button"
                       >
                         {campaignPending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
-                        Alle Budgets auswählen
+                        Ausnahme aufheben
                       </button>
                     )}
                   </div>
@@ -316,7 +316,7 @@ export function AutomationScopeManager({
                               type="button"
                             >
                               {ownerPending ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                              {owner.status === "MANAGED" ? "Suspendieren" : "Auswählen"}
+                              {owner.status === "MANAGED" ? "Ausnehmen" : "Ausnahme aufheben"}
                             </button>
                           </div>
                         );

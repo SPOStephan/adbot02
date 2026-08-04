@@ -245,6 +245,7 @@ assert.doesNotMatch(
 
 assert.match(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
 assert.match(callbackSource, /dashboardRedirect\("connected"\)/);
+assert.match(callbackSource, /url\.hash = "instagram-onboarding"/);
 assert.match(callbackSource, /dashboardRedirect\("error", "storage"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "invalid_state"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation",/);

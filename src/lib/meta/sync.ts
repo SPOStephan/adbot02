@@ -57,6 +57,7 @@ type ConnectorRow = {
   sync_backoff_until: string | null;
   last_sync_started_at: string | null;
   sync_consecutive_failures: number | null;
+  instagram_account_ids: unknown;
 };
 
 type AssetRow = {
@@ -314,7 +315,7 @@ async function fetchConnector(
   let query = admin
     .from("platform_accounts")
     .select(
-      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures",
+      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids",
     )
     .eq("id", platformAccountId)
     .eq("platform", "meta")
@@ -601,8 +602,18 @@ export async function syncMetaConnector(
     const pageAssets = assets.filter(
       (asset) => asset.asset_type === "facebook_page",
     );
+    const selectedInstagramIds = new Set(
+      Array.isArray(connector.instagram_account_ids)
+        ? connector.instagram_account_ids.filter(
+            (id): id is string =>
+              typeof id === "string" && /^[0-9]{1,64}$/.test(id),
+          )
+        : [],
+    );
     const instagramAssets = assets.filter(
-      (asset) => asset.asset_type === "instagram_account",
+      (asset) =>
+        asset.asset_type === "instagram_account" &&
+        selectedInstagramIds.has(asset.meta_asset_id),
     );
     const adAccountAssets = assets.filter(
       (asset) => asset.asset_type === "ad_account",
