@@ -7,8 +7,11 @@ import {
   getMetaAdCreatives,
   getMetaAdInsights,
   getMetaAds,
+  getMetaAdsByIds,
   getMetaAdSets,
+  getMetaAdSetsByIds,
   getMetaCampaigns,
+  getMetaCampaignsByIds,
   mergeMetaUsage,
   normalizeMetaAdAccountId,
   type MetaAd,
@@ -119,23 +122,35 @@ function assertUnique<T extends { id: string }>(items: T[]) {
 }
 
 export function classifyMetaInsightSnapshot(input: {
-  ads: Pick<MetaAd, "id">[];
-  insights: Pick<MetaAdInsight, "adId" | "dateStart" | "dateStop">[];
+  ads: Pick<MetaAd, "id" | "campaignId" | "adSetId">[];
+  insights: Pick<
+    MetaAdInsight,
+    "adId" | "campaignId" | "adSetId" | "dateStart" | "dateStop"
+  >[];
   since: string;
   until: string;
 }): {
   missingAdReferences: number;
+  parentMismatches: number;
   nonDailyRows: number;
   outOfRangeRows: number;
 } {
-  const adIds = new Set(input.ads.map((ad) => ad.id));
+  const adsById = new Map(input.ads.map((ad) => [ad.id, ad]));
   let missingAdReferences = 0;
+  let parentMismatches = 0;
   let nonDailyRows = 0;
   let outOfRangeRows = 0;
 
   for (const insight of input.insights) {
-    if (!adIds.has(insight.adId)) {
+    const ad = adsById.get(insight.adId);
+
+    if (!ad) {
       missingAdReferences += 1;
+    } else if (
+      insight.campaignId !== ad.campaignId ||
+      insight.adSetId !== ad.adSetId
+    ) {
+      parentMismatches += 1;
     }
 
     if (insight.dateStart !== insight.dateStop) {
@@ -147,7 +162,37 @@ export function classifyMetaInsightSnapshot(input: {
     }
   }
 
-  return { missingAdReferences, nonDailyRows, outOfRangeRows };
+  return {
+    missingAdReferences,
+    parentMismatches,
+    nonDailyRows,
+    outOfRangeRows,
+  };
+}
+
+function mergeUniqueById<T extends { id: string }>(
+  current: T[],
+  additions: T[],
+): T[] {
+  const merged = [...current];
+  const knownIds = new Set(current.map((item) => item.id));
+
+  for (const item of additions) {
+    if (!knownIds.has(item.id)) {
+      merged.push(item);
+      knownIds.add(item.id);
+    }
+  }
+
+  return merged;
+}
+
+function missingReferencedIds(
+  knownIds: Iterable<string>,
+  referencedIds: Iterable<string>,
+): string[] {
+  const known = new Set(knownIds);
+  return [...new Set(referencedIds)].filter((id) => !known.has(id)).sort();
 }
 
 function validateHierarchy(input: {
@@ -181,15 +226,18 @@ function validateHierarchy(input: {
   }
 
   const campaignIds = new Set(input.campaigns.map((campaign) => campaign.id));
-  const adSetIds = new Set(input.adSets.map((adSet) => adSet.id));
+  const adSetsById = new Map(input.adSets.map((adSet) => [adSet.id, adSet]));
 
   if (
     input.adSets.some((adSet) => !campaignIds.has(adSet.campaignId)) ||
-    input.ads.some(
-      (ad) =>
+    input.ads.some((ad) => {
+      const adSet = adSetsById.get(ad.adSetId);
+      return (
         !campaignIds.has(ad.campaignId) ||
-        !adSetIds.has(ad.adSetId),
-    ) ||
+        !adSet ||
+        adSet.campaignId !== ad.campaignId
+      );
+    }) ||
     input.insights.some(
       (insight) =>
         insight.accountId !== null && insight.accountId !== expectedAccountId,
@@ -365,16 +413,13 @@ export async function syncMetaMarketingSnapshot(input: {
 
   const campaignsResult = await getMetaCampaigns(input);
   usage = mergeMetaUsage(usage, campaignsResult.usage);
+  let campaigns = campaignsResult.items;
   const adSetsResult = await getMetaAdSets(input);
   usage = mergeMetaUsage(usage, adSetsResult.usage);
+  let adSets = adSetsResult.items;
   const adsResult = await getMetaAds(input);
   usage = mergeMetaUsage(usage, adsResult.usage);
-  const creativesResult = await getMetaAdCreatives({
-    creativeIds: adsResult.items.flatMap((ad) => ad.creativeId ? [ad.creativeId] : []),
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-  });
-  usage = mergeMetaUsage(usage, creativesResult.usage);
+  let ads = adsResult.items;
   const dateRange = completeInsightsDateRange(
     accountResult.account.timezoneName,
     input.now,
@@ -386,17 +431,106 @@ export async function syncMetaMarketingSnapshot(input: {
   });
   usage = mergeMetaUsage(usage, insightsResult.usage);
 
+  const missingAdIds = missingReferencedIds(
+    ads.map((ad) => ad.id),
+    insightsResult.items.map((insight) => insight.adId),
+  );
+  const historicalAdsResult = await getMetaAdsByIds({
+    adIds: missingAdIds,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+  });
+  usage = mergeMetaUsage(usage, historicalAdsResult.usage);
+  ads = mergeUniqueById(ads, historicalAdsResult.items);
+
+  const missingAdSetIds = missingReferencedIds(
+    adSets.map((adSet) => adSet.id),
+    ads.map((ad) => ad.adSetId),
+  );
+  const historicalAdSetsResult = await getMetaAdSetsByIds({
+    adSetIds: missingAdSetIds,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+  });
+  usage = mergeMetaUsage(usage, historicalAdSetsResult.usage);
+  adSets = mergeUniqueById(adSets, historicalAdSetsResult.items);
+
+  const missingCampaignIds = missingReferencedIds(
+    campaigns.map((campaign) => campaign.id),
+    [
+      ...adSets.map((adSet) => adSet.campaignId),
+      ...ads.map((ad) => ad.campaignId),
+    ],
+  );
+  const historicalCampaignsResult = await getMetaCampaignsByIds({
+    campaignIds: missingCampaignIds,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+  });
+  usage = mergeMetaUsage(usage, historicalCampaignsResult.usage);
+  campaigns = mergeUniqueById(campaigns, historicalCampaignsResult.items);
+
+  const unresolvedHierarchy = {
+    ads: missingReferencedIds(
+      ads.map((ad) => ad.id),
+      insightsResult.items.map((insight) => insight.adId),
+    ).length,
+    adSets: missingReferencedIds(
+      adSets.map((adSet) => adSet.id),
+      ads.map((ad) => ad.adSetId),
+    ).length,
+    campaigns: missingReferencedIds(
+      campaigns.map((campaign) => campaign.id),
+      [
+        ...adSets.map((adSet) => adSet.campaignId),
+        ...ads.map((ad) => ad.campaignId),
+      ],
+    ).length,
+  };
+
+  if (Object.values(unresolvedHierarchy).some((count) => count > 0)) {
+    console.error("Meta Marketing historical hierarchy unresolved", {
+      requestedAds: missingAdIds.length,
+      resolvedAds: historicalAdsResult.items.length,
+      requestedAdSets: missingAdSetIds.length,
+      resolvedAdSets: historicalAdSetsResult.items.length,
+      requestedCampaigns: missingCampaignIds.length,
+      resolvedCampaigns: historicalCampaignsResult.items.length,
+      ...unresolvedHierarchy,
+    });
+    throw new MetaMarketingDataError("invalid_hierarchy");
+  }
+
+  if (
+    missingAdIds.length > 0 ||
+    missingAdSetIds.length > 0 ||
+    missingCampaignIds.length > 0
+  ) {
+    console.info("Meta Marketing historical hierarchy hydrated", {
+      ads: historicalAdsResult.items.length,
+      adSets: historicalAdSetsResult.items.length,
+      campaigns: historicalCampaignsResult.items.length,
+    });
+  }
+
+  const creativesResult = await getMetaAdCreatives({
+    creativeIds: ads.flatMap((ad) => ad.creativeId ? [ad.creativeId] : []),
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+  });
+  usage = mergeMetaUsage(usage, creativesResult.usage);
+
   validateHierarchy({
     accountId: input.adAccountId,
-    campaigns: campaignsResult.items,
-    adSets: adSetsResult.items,
-    ads: adsResult.items,
+    campaigns,
+    adSets,
+    ads,
     creatives: creativesResult.items,
     insights: insightsResult.items,
   });
 
   const insightSnapshotDiagnostic = classifyMetaInsightSnapshot({
-    ads: adsResult.items,
+    ads,
     insights: insightsResult.items,
     since: dateRange.since,
     until: dateRange.until,
@@ -405,14 +539,14 @@ export async function syncMetaMarketingSnapshot(input: {
   if (Object.values(insightSnapshotDiagnostic).some((count) => count > 0)) {
     console.error("Meta Marketing insight snapshot preflight rejected", {
       ...insightSnapshotDiagnostic,
-      adsCount: adsResult.items.length,
+      adsCount: ads.length,
       insightsCount: insightsResult.items.length,
     });
     throw new MetaMarketingDataError("invalid_hierarchy");
   }
 
   const syncId = randomUUID();
-  const serializedCampaigns = serializeCampaigns(campaignsResult.items);
+  const serializedCampaigns = serializeCampaigns(campaigns);
   const campaignBudgetSharingSnapshot = serializedCampaigns.map((campaign) => ({
     platform_campaign_id: campaign.platform_campaign_id,
     is_adset_budget_sharing_enabled:
@@ -432,8 +566,8 @@ export async function syncMetaMarketingSnapshot(input: {
       account_status: accountResult.account.accountStatus,
     },
     p_campaigns: serializedCampaigns,
-    p_ad_sets: serializeAdSets(adSetsResult.items),
-    p_ads: serializeAds(adsResult.items),
+    p_ad_sets: serializeAdSets(adSets),
+    p_ads: serializeAds(ads),
     p_creatives: serializeCreatives(creativesResult.items),
     p_insights: serializeInsights(insightsResult.items),
     p_insights_since: dateRange.since,
@@ -457,14 +591,14 @@ export async function syncMetaMarketingSnapshot(input: {
     campaignsCount: persistedCount(
       persisted,
       "campaigns_count",
-      campaignsResult.items.length,
+      campaigns.length,
     ),
     adSetsCount: persistedCount(
       persisted,
       "ad_sets_count",
-      adSetsResult.items.length,
+      adSets.length,
     ),
-    adsCount: persistedCount(persisted, "ads_count", adsResult.items.length),
+    adsCount: persistedCount(persisted, "ads_count", ads.length),
     creativesCount: persistedCount(
       persisted,
       "creatives_count",
