@@ -102,8 +102,8 @@ export function AutomationScopeManager({
   ) {
     if (status === "MANAGED") {
       const confirmed = window.confirm(
-        `„${label}“ wirklich für die Budgetautomatisierung auswählen? ` +
-          "Meta-Schreibvorgänge bleiben zusätzlich durch Policy, Hard Caps und Kill-Switch geschützt.",
+        `„${label}“ wieder automatisch verwalten? ` +
+          "Deine festgelegten Tageslimits, maximal 20 % Änderung innerhalb von 24 Stunden und der Not-Aus bleiben aktiv.",
       );
       if (!confirmed) return;
     }
@@ -125,8 +125,8 @@ export function AutomationScopeManager({
         tone: "success",
         message:
           status === "MANAGED"
-            ? `${label} wurde ausgewählt. ${result.managedBudgetOwnerCount ?? 0} Budgetowner dieser Kampagne sind jetzt verwaltbar.`
-            : `${label} wurde suspendiert. Es werden dafür keine neuen Budgetpläne erzeugt.`,
+            ? `${label} wird automatisch verwaltet. ${result.managedBudgetOwnerCount ?? 0} Budgets dieser Kampagne sind einbezogen.`
+            : `${label} wurde von automatischen Budgetanpassungen ausgenommen.`,
       });
       router.refresh();
     } catch (error) {
@@ -152,7 +152,7 @@ export function AutomationScopeManager({
           <div>
             <h3 className="font-extrabold">Budget-Ausnahmen</h3>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-              Eine aktive Budget-Policy verwaltet automatisch alle aktuellen und künftigen Budget-Owner. Hier kannst du einzelne Kampagnen oder Budget-Owner gezielt ausnehmen.
+              Sobald du die Budgetautomatik gestartet hast, berücksichtigt Adbot automatisch alle aktuellen und künftigen Kampagnenbudgets. Hier kannst du einzelne Kampagnen oder Budgets gezielt von automatischen Anpassungen ausnehmen.
             </p>
           </div>
         </div>
@@ -161,7 +161,7 @@ export function AutomationScopeManager({
             {campaigns.length} Kampagnen
           </span>
           <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">
-            {managedBudgetOwnerCount} verwaltete Budgetowner
+            {managedBudgetOwnerCount} automatisch verwaltete Budgets
           </span>
         </div>
       </div>
@@ -170,7 +170,7 @@ export function AutomationScopeManager({
         <div className="mt-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700" />
           <p className="text-xs leading-5">
-            Budget-Autonomie ist deaktiviert, bis du eine aktive EUR-Policy mit Budgetfreigabe bestätigst und <strong>ads_management</strong> vorhanden ist. Bestehende Bereiche bleiben bis dahin sicher suspendiert.
+            Automatische Budgetanpassungen sind noch nicht aktiviert. Lege oben deine Budgetgrenzen fest und wähle „Grenzen bestätigen und Autonomie starten“. Falls noch eine Meta-Freigabe benötigt wird, zeigt dir Adbot den passenden Schritt an. Bis dahin ändert Adbot keine Budgets.
           </p>
         </div>
       ) : null}
@@ -236,7 +236,7 @@ export function AutomationScopeManager({
                         {campaign.name}
                       </span>
                       <span className="mt-1 block text-xs font-medium text-slate-500">
-                        {objectiveLabel(campaign.objective)} · {campaign.effectiveStatus} · {campaign.budgetOwners.length} Budgetowner
+                        {objectiveLabel(campaign.objective)} · {campaign.effectiveStatus} · {campaign.budgetOwners.length} Budgets
                       </span>
                     </span>
                     {expanded ? (
@@ -257,7 +257,7 @@ export function AutomationScopeManager({
                         type="button"
                       >
                         {campaignPending ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldOff className="size-4" />}
-                        Suspendieren
+                        Von Automatik ausnehmen
                       </button>
                     ) : (
                       <button
@@ -279,7 +279,7 @@ export function AutomationScopeManager({
                   <div className="grid gap-2 border-t border-slate-200 bg-white p-4">
                     {campaign.budgetOwners.length === 0 ? (
                       <p className="text-xs leading-5 text-slate-500">
-                        Für diese Kampagne wurde noch kein aktueller Budgetowner materialisiert. Der Budgetplanner ergänzt ihn nach dem nächsten erfolgreichen Meta-Sync.
+                        Für diese Kampagne sind noch keine aktuellen Budgetdaten verfügbar. Adbot ergänzt sie nach dem nächsten erfolgreichen Meta-Abgleich.
                       </p>
                     ) : (
                       campaign.budgetOwners.map((owner) => {
@@ -292,7 +292,7 @@ export function AutomationScopeManager({
                             <div>
                               <p className="text-sm font-bold text-slate-800">{owner.label}</p>
                               <p className={`mt-1 text-xs font-semibold ${owner.status === "MANAGED" ? "text-emerald-700" : "text-slate-500"}`}>
-                                {owner.status === "MANAGED" ? "Verwaltet" : "Suspendiert"}
+                                {owner.status === "MANAGED" ? "Automatisch verwaltet" : "Ausgenommen"}
                               </p>
                             </div>
                             <button
