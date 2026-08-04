@@ -364,7 +364,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ? "Die vorhandene Verbindung konnte nicht gelesen werden und bleibt unverändert. Bitte keinen Reconnect starten."
           : metaWriteScopeGranted
             ? "Liest Werbedaten und erlaubt ausschließlich policy-gedeckte Budget-, Status- und Active-Launch-Schritte. Keine Messaging- oder Beitrags-Publishing-Rechte."
-            : "Liest Kampagnen, Insights sowie Seiten- und Instagram-Beiträge. Schreibvorgänge bleiben bis zum expliziten Scope-Reconnect blockiert."
+            : "Liest Kampagnen, Insights sowie Seiten- und Instagram-Beiträge. Instagram wird automatisch über die ausgewählte Facebook-Seite erkannt und erscheint im Meta-Dialog nicht separat. Schreibvorgänge bleiben bis zum expliziten Scope-Reconnect blockiert."
         : undefined,
       actionHref:
         isMeta && platform.configured && !account && !platformAccountReadFailed

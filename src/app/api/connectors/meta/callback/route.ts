@@ -13,6 +13,7 @@ import {
 } from "@/lib/meta/client";
 import { encryptAccessToken, verifyOAuthState } from "@/lib/meta/crypto";
 import { getMetaCallbackEnv } from "@/lib/meta/env";
+import { classifyMetaGrantedScopes } from "@/lib/meta/scope-policy.mjs";
 import { createPortalUrl } from "@/lib/site-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -23,7 +24,6 @@ export const dynamic = "force-dynamic";
 const DAY_IN_SECONDS = 24 * 60 * 60;
 const DEFAULT_TOKEN_LIFETIME_SECONDS = 60 * DAY_IN_SECONDS;
 const TOKEN_REFRESH_AFTER_SECONDS = 45 * DAY_IN_SECONDS;
-const AUTOMATIC_META_SCOPES = new Set(["public_profile"]);
 
 function noStoreRedirect(url: URL) {
   const response = NextResponse.redirect(url);
@@ -146,16 +146,11 @@ export async function GET(request: Request) {
       accessToken: longLivedToken.accessToken,
       appSecret,
     });
-    const grantedScopes = new Set(tokenDebug.scopes);
-    const missingScopes = META_ALLOWED_SCOPES.filter(
-      (scope) => !grantedScopes.has(scope),
-    );
-    const unexpectedScopes = tokenDebug.scopes.filter(
-      (scope) =>
-        !META_ALLOWED_SCOPES.includes(
-          scope as (typeof META_ALLOWED_SCOPES)[number],
-        ) && !AUTOMATIC_META_SCOPES.has(scope),
-    );
+    const {
+      missingScopes,
+      compatibleSystemUserScopes,
+      unexpectedScopes,
+    } = classifyMetaGrantedScopes(tokenDebug.scopes, META_ALLOWED_SCOPES);
 
     if (
       !tokenDebug.isValid ||
@@ -170,6 +165,12 @@ export async function GET(request: Request) {
       return dashboardRedirect("error", "scope_validation", {
         missingScopes,
         unexpectedScopes,
+      });
+    }
+
+    if (compatibleSystemUserScopes.length) {
+      console.info("[meta-oauth] System-User-Kompatibilitätsscopes erkannt", {
+        scopes: compatibleSystemUserScopes.sort(),
       });
     }
 
