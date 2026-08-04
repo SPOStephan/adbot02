@@ -55,7 +55,10 @@ export async function updateSession(request: NextRequest) {
   );
   const isProtectedRoute =
     pathname === "/dashboard" || pathname.startsWith("/dashboard/");
-  const isAuthRoute = pathname === "/login" || pathname === "/registrieren";
+  const isAuthRoute =
+    pathname === "/login" ||
+    pathname === "/registrieren" ||
+    pathname === "/passwort-vergessen";
 
   if (isMarketingHostname(hostname) && isPortalPath(pathname)) {
     return redirectPreservingCookies(
