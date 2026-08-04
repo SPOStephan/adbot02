@@ -78,6 +78,8 @@ type DashboardPageProps = {
   searchParams: Promise<{
     meta?: string | string[];
     meta_error?: string | string[];
+    meta_missing_scopes?: string | string[];
+    meta_unexpected_scopes?: string | string[];
   }>;
 };
 
@@ -109,6 +111,8 @@ function getMetaNotice(
   errorReason: string | undefined,
   metaConnected: boolean,
   writeScopeGranted: boolean,
+  missingScopes?: string,
+  unexpectedScopes?: string,
 ): MetaNotice | null {
   if (meta === "connected") {
     return {
@@ -123,12 +127,27 @@ function getMetaNotice(
   }
 
   if (meta === "error" || errorReason) {
+    let message =
+      META_ERROR_MESSAGES[errorReason ?? ""] ??
+      "Die Verbindung wurde nicht abgeschlossen. Bitte starte den Vorgang erneut.";
+
+    if (errorReason === "scope_validation") {
+      const parts: string[] = [];
+      if (missingScopes) {
+        parts.push(`Es fehlen: ${missingScopes}`);
+      }
+      if (unexpectedScopes) {
+        parts.push(`Unerlaubt/zusätzlich: ${unexpectedScopes}`);
+      }
+      if (parts.length) {
+        message = `${message} ${parts.join(". ")}. Erlaubt sind nur: ads_read, ads_management, instagram_basic, pages_read_engagement, pages_show_list.`;
+      }
+    }
+
     return {
       tone: "error",
       title: "Meta konnte nicht verbunden werden.",
-      message:
-        META_ERROR_MESSAGES[errorReason ?? ""] ??
-        "Die Verbindung wurde nicht abgeschlossen. Bitte starte den Vorgang erneut.",
+      message,
     };
   }
 
@@ -421,6 +440,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     firstQueryValue(query.meta_error),
     metaConnected,
     writeScopeGranted,
+    firstQueryValue(query.meta_missing_scopes),
+    firstQueryValue(query.meta_unexpected_scopes),
   );
   const [
     { data: liveCampaigns },
