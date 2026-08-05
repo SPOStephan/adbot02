@@ -260,6 +260,8 @@ assert.match(
 assert.match(callbackSource, /allowedInstagramAccountIds/);
 assert.match(callbackSource, /resolveMetaSelectedPageIds/);
 assert.match(callbackSource, /getMetaAdAccountGranularTargetIds/);
+assert.match(callbackSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
+assert.match(callbackSource, /business_integration_system_user/);
 assert.doesNotMatch(callbackSource, /resolveMetaSelectedAdAccountIds|promote_pages/);
 assert.match(callbackSource, /missing_page_targets/);
 assert.match(callbackSource, /missing_ad_account_targets/);
@@ -272,6 +274,7 @@ assert.doesNotMatch(
   callbackSource,
   /systemUserId|assigned_instagram_accounts|clientBusinessId|client_business_id|business_management/,
 );
+assert.match(callbackSource, /!useSystemUserDirectAssetDiscovery/);
 assert.match(callbackSource, /assets\.instagramAccounts/);
 assert.doesNotMatch(
   callbackSource,

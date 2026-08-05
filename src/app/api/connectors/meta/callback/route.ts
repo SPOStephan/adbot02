@@ -12,6 +12,7 @@ import {
   MetaGraphError,
   resolveMetaSelectedPageIds,
   resolvePersistedMetaAccessToken,
+  shouldUseMetaSystemUserDirectAssetDiscovery,
 } from "@/lib/meta/client";
 import { encryptAccessToken, verifyOAuthState } from "@/lib/meta/crypto";
 import { getMetaCallbackEnv } from "@/lib/meta/env";
@@ -196,24 +197,32 @@ export async function GET(request: Request) {
       getGranularTargetIds(tokenDebug, "instagram_basic"),
     );
     const allowedAdAccountIds = getMetaAdAccountGranularTargetIds(tokenDebug);
+    const useSystemUserDirectAssetDiscovery =
+      shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug);
 
     console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
       instagramTargets: allowedInstagramAccountIds.size,
       adAccountTargets: allowedAdAccountIds.size,
+      selectionMode: useSystemUserDirectAssetDiscovery
+        ? "business_integration_system_user"
+        : "granular_targets",
       granularScopes: tokenDebug.granularScopes.map((item) => ({
         scope: item.scope,
         targetCount: item.targetIds.length,
       })),
     });
 
-    // Ad accounts and Instagram come only from dialog target_ids — never infer
-    // an ad account from a page. Pages may omit target_ids when Meta marks the
-    // permission as "applies to all"; then we derive pages only via the
-    // selected Instagram IDs (never /me/accounts fall-open).
-    if (!allowedInstagramAccountIds.size) {
+    // When Meta provides target_ids, they remain the sole authority. Business
+    // Integration System User tokens can instead return every granular scope
+    // with an empty target list; those tokens are already asset-restricted by
+    // the customer's dialog selection and are resolved directly below.
+    if (
+      !useSystemUserDirectAssetDiscovery
+      && !allowedInstagramAccountIds.size
+    ) {
       return dashboardRedirect("error", "missing_instagram_targets");
     }
-    if (!allowedAdAccountIds.size) {
+    if (!useSystemUserDirectAssetDiscovery && !allowedAdAccountIds.size) {
       console.warn(
         "[meta-oauth] Meta lieferte keine ads_* target_ids trotz Dialog-Auswahl",
         {
@@ -229,20 +238,25 @@ export async function GET(request: Request) {
     }
 
     stage = "asset_discovery";
-    const pageSelection = await resolveMetaSelectedPageIds({
-      accessToken: longLivedToken.accessToken,
-      appSecret,
-      tokenDebug,
-      allowedInstagramAccountIds,
-    });
+    const pageSelection = useSystemUserDirectAssetDiscovery
+      ? {
+          pageIds: undefined,
+          source: "system_user_token" as const,
+        }
+      : await resolveMetaSelectedPageIds({
+          accessToken: longLivedToken.accessToken,
+          appSecret,
+          tokenDebug,
+          allowedInstagramAccountIds,
+        });
     const allowedPageIds = pageSelection.pageIds;
 
     console.info("[meta-oauth] Seitenauswahl aufgelöst", {
-      pageTargets: allowedPageIds.size,
+      pageTargets: allowedPageIds?.size ?? null,
       pageSource: pageSelection.source,
     });
 
-    if (!allowedPageIds.size) {
+    if (!useSystemUserDirectAssetDiscovery && !allowedPageIds?.size) {
       return dashboardRedirect("error", "missing_page_targets");
     }
 
@@ -252,6 +266,9 @@ export async function GET(request: Request) {
       allowedPageIds,
       allowedInstagramAccountIds,
       allowedAdAccountIds,
+      selectionMode: useSystemUserDirectAssetDiscovery
+        ? "business_integration_system_user"
+        : "granular_targets",
     });
 
     if (
@@ -263,10 +280,11 @@ export async function GET(request: Request) {
         pages: assets.pages.length,
         instagramAccounts: assets.instagramAccounts.length,
         adAccounts: assets.adAccounts.length,
-        pageTargets: allowedPageIds.size,
+        pageTargets: allowedPageIds?.size ?? null,
         pageSource: pageSelection.source,
         instagramTargets: allowedInstagramAccountIds.size,
         adAccountTargets: allowedAdAccountIds.size,
+        instagramDiscovery: assets.instagramDiscovery,
       });
       return dashboardRedirect("error", "no_assets");
     }

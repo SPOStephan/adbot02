@@ -77,7 +77,14 @@ export type MetaAdAccountAsset = {
   name: string;
 };
 
-export type MetaInstagramDiscoverySource = "granular_targets" | "none";
+export type MetaInstagramDiscoverySource =
+  | "granular_targets"
+  | "system_user_token"
+  | "none";
+
+export type MetaAssetSelectionMode =
+  | "granular_targets"
+  | "business_integration_system_user";
 
 export type MetaConnectionAssets = {
   pages: MetaPageAsset[];
@@ -830,6 +837,23 @@ export function getGranularTargetIds(
   );
 }
 
+/**
+ * Login for Business system-user tokens are already restricted to the assets
+ * designated by the customer in Meta's dialog. Meta can return every
+ * granular_scopes entry without target_ids for this token type. Only that
+ * explicit all-empty system-user shape may use the token-visible asset lists;
+ * any token with at least one granular target remains strictly ID-filtered.
+ */
+export function shouldUseMetaSystemUserDirectAssetDiscovery(
+  tokenDebug: MetaTokenDebug,
+): boolean {
+  return (
+    tokenDebug.type?.toUpperCase() === "BUSINESS_INTEGRATION_SYSTEM_USER"
+    && tokenDebug.granularScopes.length > 0
+    && tokenDebug.granularScopes.every((item) => item.targetIds.length === 0)
+  );
+}
+
 /** Page scopes that may carry Login-for-Business target_ids. */
 export const META_PAGE_TARGET_SCOPES = [
   "pages_show_list",
@@ -1042,10 +1066,15 @@ export async function getMetaInstagramAccountAssets(input: {
   accessToken: string;
   appSecret: string;
   allowedInstagramAccountIds: Set<string>;
+  candidateInstagramAccountIds?: Set<string>;
 }): Promise<{ instagramAccounts: MetaInstagramAccountAsset[]; usage: MetaUsageSnapshot }> {
-  const ids = [...input.allowedInstagramAccountIds]
+  const granularIds = [...input.allowedInstagramAccountIds]
     .map((id) => asMetaAssetId(id))
     .filter((id): id is string => Boolean(id));
+  const candidateIds = [...(input.candidateInstagramAccountIds ?? [])]
+    .map((id) => asMetaAssetId(id))
+    .filter((id): id is string => Boolean(id));
+  const ids = granularIds.length > 0 ? granularIds : candidateIds;
   const expectedIds = new Set(ids);
 
   if (!ids.length) {
@@ -1097,18 +1126,38 @@ export async function getMetaConnectionAssets(input: {
   allowedPageIds?: Set<string>;
   allowedInstagramAccountIds: Set<string>;
   allowedAdAccountIds?: Set<string>;
+  selectionMode?: MetaAssetSelectionMode;
 }): Promise<MetaConnectionAssets> {
-  const pagesResult = await getMetaPageAssets(input);
-  // Instagram may only come from debug_token instagram_basic target_ids.
-  // Never invent profiles from page.instagram_business_account — that is how
-  // @bonkredit.de appeared despite only boncred.official being selected.
+  const useSystemUserTokenAssets =
+    input.selectionMode === "business_integration_system_user";
+  const pagesResult = await getMetaPageAssets({
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    allowedPageIds: useSystemUserTokenAssets ? undefined : input.allowedPageIds,
+  });
+  const candidateInstagramAccountIds = useSystemUserTokenAssets
+    ? new Set(
+        pagesResult.pages.flatMap((page) =>
+          page.instagramAccount ? [page.instagramAccount.id] : [],
+        ),
+      )
+    : undefined;
+  // Granular target IDs remain authoritative when present. In the all-empty
+  // Business Integration System User case, linked IDs are candidates only:
+  // each candidate must still be directly readable with the asset-limited
+  // token, so a merely page-linked but unselected Instagram profile is ignored.
   const instagramResult = await getMetaInstagramAccountAssets({
     accessToken: input.accessToken,
     appSecret: input.appSecret,
     allowedInstagramAccountIds: input.allowedInstagramAccountIds,
+    candidateInstagramAccountIds,
   });
   const instagramDiscovery: MetaInstagramDiscoverySource =
-    instagramResult.instagramAccounts.length > 0 ? "granular_targets" : "none";
+    instagramResult.instagramAccounts.length > 0
+      ? useSystemUserTokenAssets
+        ? "system_user_token"
+        : "granular_targets"
+      : "none";
 
   const adAccountUrl = new URL(
     `/${META_GRAPH_VERSION}/me/adaccounts`,
@@ -1126,14 +1175,16 @@ export async function getMetaConnectionAssets(input: {
   const allowedAdAccountIds = new Set(
     [...(input.allowedAdAccountIds ?? [])].map(normalizeAdAccountId),
   );
-  // Empty allow-list means "no selected ad accounts", not "allow every
-  // account visible to the token" — System Users can still see previously
-  // assigned assets via /me/adaccounts.
-  const adAccounts = input.allowedAdAccountIds
-    ? adAccountsResult.items.filter((account) =>
-        allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
-      )
-    : adAccountsResult.items;
+  // In granular mode, even an empty allow-list means "select none". In the
+  // all-empty Business Integration System User mode, /me/adaccounts is itself
+  // restricted by the token to the assets designated in the Meta dialog.
+  const adAccounts = useSystemUserTokenAssets
+    ? adAccountsResult.items
+    : input.allowedAdAccountIds
+      ? adAccountsResult.items.filter((account) =>
+          allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
+        )
+      : adAccountsResult.items;
 
   return {
     pages: pagesResult.pages,
