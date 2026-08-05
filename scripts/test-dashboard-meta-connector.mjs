@@ -82,15 +82,16 @@ assert.match(dashboardSource, /invalid_state/);
 assert.match(dashboardSource, /scope_validation/);
 assert.match(dashboardSource, /token_validation/);
 assert.match(dashboardSource, /no_assets/);
-assert.match(dashboardSource, /missing_instagram_targets/);
-assert.doesNotMatch(dashboardSource, /ambiguous_instagram/);
+assert.match(dashboardSource, /InstagramAssetConfirm/);
+assert.match(dashboardSource, /instagramConfirmRequired/);
+assert.doesNotMatch(dashboardSource, /missing_instagram_targets|ambiguous_instagram/);
 assert.match(
   dashboardSource,
   /selectedInstagramIds\.has\(asset\.meta_asset_id\)/,
 );
 assert.doesNotMatch(
   dashboardSource,
-  /selectedInstagramIds\.size === 0/,
+  /selectedInstagramIds\.size === 0 \|\|/,
 );
 assert.match(dashboardSource, /storage/);
 assert.match(dashboardSource, /meta_scopes\.includes\("ads_management"\)/);
@@ -254,18 +255,19 @@ assert.doesNotMatch(
 );
 
 assert.match(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
-assert.match(callbackSource, /dashboardRedirect\("connected"\)/);
+assert.match(callbackSource, /dashboardRedirect\("connected"/);
 assert.doesNotMatch(callbackSource, /instagram-onboarding/);
 assert.match(
   callbackSource,
   /getGranularTargetIds\(tokenDebug, "instagram_basic"\)/,
 );
 assert.match(callbackSource, /allowedInstagramAccountIds/);
-assert.match(callbackSource, /missing_instagram_targets/);
-assert.match(callbackSource, /assets\.instagramDiscovery/);
+assert.match(callbackSource, /instagramConfirm/);
+assert.match(callbackSource, /meta_instagram/);
+assert.match(callbackSource, /needsInstagramConfirm/);
 assert.doesNotMatch(
   callbackSource,
-  /ambiguous_instagram|unique_page_candidate|ambiguous_page_candidates|candidateInstagramAccountIds/,
+  /missing_instagram_targets|ambiguous_instagram|unique_page_candidate|candidateInstagramAccountIds/,
 );
 assert.doesNotMatch(
   callbackSource,

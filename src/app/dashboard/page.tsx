@@ -56,9 +56,11 @@ import {
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
+import { InstagramAssetConfirm } from "@/components/InstagramAssetConfirm";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { SignOutButton } from "@/components/SignOutButton";
+import { listInstagramConfirmCandidates } from "@/lib/meta/instagram-confirm";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
@@ -81,6 +83,7 @@ type DashboardPageProps = {
     meta_missing_scopes?: string | string[];
     meta_unexpected_scopes?: string | string[];
     meta_callback_stage?: string | string[];
+    meta_instagram?: string | string[];
   }>;
 };
 
@@ -99,7 +102,6 @@ const META_ERROR_MESSAGES: Record<string, string> = {
   scope_validation: "Die von Meta gewährten Berechtigungen entsprechen nicht dem minimalen sicheren Zugriff. Bitte bestätige den Reconnect vollständig.",
   token_validation: "Die Meta-Verbindung konnte nicht sicher bestätigt werden. Bitte verbinde Meta erneut.",
   no_assets: "Bitte im Meta-Dialog Facebook-Seite, Instagram-Konto und Werbekonto ausdrücklich auswählen.",
-  missing_instagram_targets: "Meta hat keine Instagram-Ziel-IDs bestätigt. Eine Seitenverknüpfung zählt nicht als Instagram-Auswahl — es wird kein Instagram-Konto erfunden. Bitte im Meta-Dialog Instagram ausdrücklich als eigenes Asset wählen und erneut verbinden.",
   storage: "Die Verbindung konnte nicht sicher gespeichert werden. Es wurde keine Verbindung aktiviert.",
   callback: "Die Meta-Antwort konnte nicht verarbeitet werden. Bitte starte die Verbindung erneut.",
 };
@@ -130,16 +132,19 @@ function getMetaNotice(
   missingScopes?: string,
   unexpectedScopes?: string,
   callbackStage?: string,
+  instagramConfirmRequired?: boolean,
 ): MetaNotice | null {
   if (meta === "connected") {
     return {
       tone: "success",
       title: "Meta wurde erfolgreich verbunden.",
-      message: metaConnected
-        ? writeScopeGranted
-          ? "Der minimale Meta-Schreibscope wurde bestätigt. Ausführung bleibt bis zu Kunden-Policy, EUR-Caps, Readiness-Gates und ausdrücklichem ALLOW fail-closed."
-          : "Der Connector ist verbunden, aber der minimale Schreibscope fehlt. Bitte führe den sicheren Reconnect aus."
-        : "Die Meta-Berechtigungen wurden bestätigt. Die verbundenen Kontodaten werden gerade aktualisiert.",
+      message: instagramConfirmRequired
+        ? "Facebook-Seite und Werbekonto sind gespeichert. Instagram fehlt noch — bitte unten ausdrücklich bestätigen, welches Konto du im Meta-Dialog gewählt hast. Es wird nichts aus einer Seitenverknüpfung erfunden."
+        : metaConnected
+          ? writeScopeGranted
+            ? "Der minimale Meta-Schreibscope wurde bestätigt. Ausführung bleibt bis zu Kunden-Policy, EUR-Caps, Readiness-Gates und ausdrücklichem ALLOW fail-closed."
+            : "Der Connector ist verbunden, aber der minimale Schreibscope fehlt. Bitte führe den sicheren Reconnect aus."
+          : "Die Meta-Berechtigungen wurden bestätigt. Die verbundenen Kontodaten werden gerade aktualisiert.",
     };
   }
 
@@ -470,6 +475,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const adAccountAssets = (metaAssets ?? []).filter(
     (asset) => asset.asset_type === "ad_account",
   );
+  const instagramConfirmRequired =
+    metaConnected &&
+    Boolean(metaAccount) &&
+    selectedInstagramIds.size === 0;
+  let instagramConfirmCandidates: Awaited<
+    ReturnType<typeof listInstagramConfirmCandidates>
+  >["candidates"] = [];
+
+  if (instagramConfirmRequired && user) {
+    try {
+      const listed = await listInstagramConfirmCandidates(user.id);
+      instagramConfirmCandidates = listed.candidates;
+    } catch {
+      instagramConfirmCandidates = [];
+    }
+  }
+
   const metaNotice = getMetaNotice(
     firstQueryValue(query.meta),
     firstQueryValue(query.meta_error),
@@ -478,6 +500,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     firstQueryValue(query.meta_missing_scopes),
     firstQueryValue(query.meta_unexpected_scopes),
     firstQueryValue(query.meta_callback_stage),
+    instagramConfirmRequired ||
+      firstQueryValue(query.meta_instagram) === "confirm",
   );
   const [
     { data: liveCampaigns },
@@ -1594,6 +1618,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       </span>
                     ))}
                   </div>
+
+                  {instagramConfirmRequired ? (
+                    <div className="mt-5">
+                      <InstagramAssetConfirm
+                        candidates={instagramConfirmCandidates}
+                      />
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="lg:min-w-60">
