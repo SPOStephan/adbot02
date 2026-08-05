@@ -1,17 +1,29 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { clearStoredMetaConnectionForReauthorization } from "@/lib/meta/authorization-reset";
 import {
+  createMetaLoginUrl,
   debugMetaAccessToken,
   exchangeCodeForAccessToken,
-  exchangeForLongLivedAccessToken,
   getGranularTargetIds,
+  getMetaAdAccountGranularTargetIds,
   getMetaConnectionAssets,
   getMetaIdentity,
   META_ALLOWED_SCOPES,
   MetaGraphError,
+  resolveMetaSelectedPageIds,
+  resolvePersistedMetaAccessToken,
+  revokeMetaAuthorization,
+  shouldUseMetaSystemUserDirectAssetDiscovery,
 } from "@/lib/meta/client";
-import { encryptAccessToken, verifyOAuthState } from "@/lib/meta/crypto";
+import {
+  createOAuthState,
+  encryptAccessToken,
+  verifyOAuthState,
+} from "@/lib/meta/crypto";
 import { getMetaCallbackEnv } from "@/lib/meta/env";
+import { classifyMetaGrantedScopes } from "@/lib/meta/scope-policy.mjs";
 import { createPortalUrl } from "@/lib/site-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -19,10 +31,10 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const META_CALLBACK_PATH = "/api/connectors/meta/callback";
 const DAY_IN_SECONDS = 24 * 60 * 60;
 const DEFAULT_TOKEN_LIFETIME_SECONDS = 60 * DAY_IN_SECONDS;
 const TOKEN_REFRESH_AFTER_SECONDS = 45 * DAY_IN_SECONDS;
-const AUTOMATIC_META_SCOPES = new Set(["public_profile"]);
 
 function noStoreRedirect(url: URL) {
   const response = NextResponse.redirect(url);
@@ -30,12 +42,35 @@ function noStoreRedirect(url: URL) {
   return response;
 }
 
-function dashboardRedirect(status: "connected" | "error", reason?: string) {
+function dashboardRedirect(
+  status: "connected" | "error",
+  reason?: string,
+  details?: {
+    missingScopes?: string[];
+    unexpectedScopes?: string[];
+    stage?: string;
+  },
+) {
   const url = createPortalUrl("/dashboard");
   url.searchParams.set("meta", status);
 
   if (reason) {
     url.searchParams.set("meta_error", reason);
+  }
+
+  if (details?.missingScopes?.length) {
+    url.searchParams.set("meta_missing_scopes", details.missingScopes.join(","));
+  }
+
+  if (details?.unexpectedScopes?.length) {
+    url.searchParams.set(
+      "meta_unexpected_scopes",
+      details.unexpectedScopes.join(","),
+    );
+  }
+
+  if (details?.stage) {
+    url.searchParams.set("meta_callback_stage", details.stage);
   }
 
   return noStoreRedirect(url);
@@ -98,48 +133,53 @@ export async function GET(request: Request) {
     return dashboardRedirect("error", "missing_response");
   }
 
+  let stage = "environment";
+
   try {
     const {
       appId,
       appSecret,
+      loginConfigId,
       stateSecret,
       tokenEncryptionKey,
     } = getMetaCallbackEnv();
 
-    if (!verifyOAuthState(state, stateSecret, user.id)) {
+    stage = "state_validation";
+    const oauthState = verifyOAuthState(state, stateSecret, user.id);
+    if (!oauthState) {
       return dashboardRedirect("error", "invalid_state");
     }
 
-    const shortLivedToken = await exchangeCodeForAccessToken({
+    stage = "code_exchange";
+    const codeAccessToken = await exchangeCodeForAccessToken({
       appId,
       appSecret,
       code,
       redirectUri: createPortalUrl("/api/connectors/meta/callback").toString(),
     });
-    const longLivedToken = await exchangeForLongLivedAccessToken({
+    stage = "long_lived_token_exchange";
+    const longLivedToken = await resolvePersistedMetaAccessToken({
       appId,
       appSecret,
-      shortLivedAccessToken: shortLivedToken.accessToken,
+      codeAccessToken,
     });
+    stage = "token_debug";
     const tokenDebug = await debugMetaAccessToken({
       appId,
       appSecret,
       accessToken: longLivedToken.accessToken,
     });
+    stage = "identity";
     const identity = await getMetaIdentity({
       accessToken: longLivedToken.accessToken,
       appSecret,
     });
-    const grantedScopes = new Set(tokenDebug.scopes);
-    const missingScopes = META_ALLOWED_SCOPES.filter(
-      (scope) => !grantedScopes.has(scope),
-    );
-    const unexpectedScopes = tokenDebug.scopes.filter(
-      (scope) =>
-        !META_ALLOWED_SCOPES.includes(
-          scope as (typeof META_ALLOWED_SCOPES)[number],
-        ) && !AUTOMATIC_META_SCOPES.has(scope),
-    );
+    stage = "scope_validation";
+    const {
+      missingScopes,
+      compatibleSystemUserScopes,
+      unexpectedScopes,
+    } = classifyMetaGrantedScopes(tokenDebug.scopes, META_ALLOWED_SCOPES);
 
     if (
       !tokenDebug.isValid ||
@@ -151,38 +191,178 @@ export async function GET(request: Request) {
     }
 
     if (missingScopes.length || unexpectedScopes.length) {
-      return dashboardRedirect("error", "scope_validation");
+      return dashboardRedirect("error", "scope_validation", {
+        missingScopes,
+        unexpectedScopes,
+      });
     }
 
-    const allowedPageIds = new Set([
-      ...getGranularTargetIds(tokenDebug, "pages_show_list"),
-      ...getGranularTargetIds(tokenDebug, "pages_read_engagement"),
-    ]);
-    const allowedAdAccountIds = new Set([
-      ...getGranularTargetIds(tokenDebug, "ads_read"),
-      ...getGranularTargetIds(tokenDebug, "ads_management"),
-    ]);
+    if (compatibleSystemUserScopes.length) {
+      console.info("[meta-oauth] System-User-Kompatibilitätsscopes erkannt", {
+        scopes: compatibleSystemUserScopes.sort(),
+      });
+    }
+
+    const allowedInstagramAccountIds = new Set(
+      getGranularTargetIds(tokenDebug, "instagram_basic"),
+    );
+    const allowedAdAccountIds = getMetaAdAccountGranularTargetIds(tokenDebug);
+    const systemUserDirectAssetCandidate =
+      shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug, {
+        authorizationReset: true,
+      });
+    const useSystemUserDirectAssetDiscovery =
+      shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug, {
+        authorizationReset: oauthState.authorizationReset,
+      });
+
+    if (
+      systemUserDirectAssetCandidate
+      && !useSystemUserDirectAssetDiscovery
+    ) {
+      stage = "authorization_reset";
+      await revokeMetaAuthorization({
+        userId: identity.id,
+        accessToken: longLivedToken.accessToken,
+        appSecret,
+      });
+      await clearStoredMetaConnectionForReauthorization(user.id);
+
+      const freshState = createOAuthState(
+        user.id,
+        stateSecret,
+        Date.now(),
+        true,
+      );
+      const freshLoginUrl = createMetaLoginUrl({
+        appId,
+        configId: loginConfigId,
+        redirectUri: createPortalUrl(META_CALLBACK_PATH).toString(),
+        state: freshState,
+      });
+
+      console.info("[meta-oauth] Stale System-User-Autorisierung widerrufen");
+      return noStoreRedirect(freshLoginUrl);
+    }
+
+    console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
+      tokenType: tokenDebug.type,
+      authorizationReset: oauthState.authorizationReset,
+      instagramTargets: allowedInstagramAccountIds.size,
+      adAccountTargets: allowedAdAccountIds.size,
+      selectionMode: useSystemUserDirectAssetDiscovery
+        ? "business_integration_system_user"
+        : "granular_targets",
+      granularScopes: tokenDebug.granularScopes.map((item) => ({
+        scope: item.scope,
+        targetCount: item.targetIds.length,
+      })),
+    });
+
+    // When Meta provides target_ids, they remain the sole authority. Business
+    // Integration System User tokens can instead return every granular scope
+    // with an empty target list; those tokens are already asset-restricted by
+    // the customer's dialog selection and are resolved directly below.
+    if (
+      !useSystemUserDirectAssetDiscovery
+      && !allowedInstagramAccountIds.size
+    ) {
+      return dashboardRedirect("error", "missing_instagram_targets");
+    }
+    if (!useSystemUserDirectAssetDiscovery && !allowedAdAccountIds.size) {
+      console.warn(
+        "[meta-oauth] Meta lieferte keine ads_* target_ids trotz Dialog-Auswahl",
+        {
+          adsScopes: tokenDebug.granularScopes
+            .filter((item) => item.scope.startsWith("ads_"))
+            .map((item) => ({
+              scope: item.scope,
+              targetCount: item.targetIds.length,
+            })),
+        },
+      );
+      return dashboardRedirect("error", "missing_ad_account_targets");
+    }
+
+    stage = "asset_discovery";
+    const pageSelection = useSystemUserDirectAssetDiscovery
+      ? {
+          pageIds: undefined,
+          source: "system_user_token" as const,
+        }
+      : await resolveMetaSelectedPageIds({
+          accessToken: longLivedToken.accessToken,
+          appSecret,
+          tokenDebug,
+          allowedInstagramAccountIds,
+        });
+    const allowedPageIds = pageSelection.pageIds;
+
+    console.info("[meta-oauth] Seitenauswahl aufgelöst", {
+      pageTargets: allowedPageIds?.size ?? null,
+      pageSource: pageSelection.source,
+    });
+
+    if (!useSystemUserDirectAssetDiscovery && !allowedPageIds?.size) {
+      return dashboardRedirect("error", "missing_page_targets");
+    }
+
     const assets = await getMetaConnectionAssets({
       accessToken: longLivedToken.accessToken,
       appSecret,
+      systemUserId: useSystemUserDirectAssetDiscovery
+        ? identity.id
+        : undefined,
       allowedPageIds,
+      allowedInstagramAccountIds,
       allowedAdAccountIds,
+      selectionMode: useSystemUserDirectAssetDiscovery
+        ? "business_integration_system_user"
+        : "granular_targets",
     });
-    const instagramAccounts = assets.pages.flatMap((page) =>
-      page.instagramAccount ? [page.instagramAccount] : [],
-    );
+    const instagramAccounts = assets.instagramAccounts ?? [];
 
     if (
       !assets.pages.length ||
       !instagramAccounts.length ||
       !assets.adAccounts.length
     ) {
+      console.warn("[meta-oauth] Ausgewählte Assets nicht lesbar", {
+        pages: assets.pages.length,
+        instagramAccounts: instagramAccounts.length,
+        adAccounts: assets.adAccounts.length,
+        pageTargets: allowedPageIds?.size ?? null,
+        pageSource: pageSelection.source,
+        instagramTargets: allowedInstagramAccountIds.size,
+        adAccountTargets: allowedAdAccountIds.size,
+        instagramDiscovery: assets.instagramDiscovery,
+      });
       return dashboardRedirect("error", "no_assets");
     }
 
+    console.info("[meta-oauth] Assetauswahl übernommen", {
+      pageSource: pageSelection.source,
+      pages: assets.pages.map((page) => page.name),
+      instagramUsernames: instagramAccounts.map(
+        (account) => account.username,
+      ),
+      adAccounts: assets.adAccounts.map((account) => account.name),
+    });
+
     const pageIds = assets.pages.map((page) => page.id);
     const adAccountIds = assets.adAccounts.map((account) => account.id);
-    const instagramAccountIds = instagramAccounts.map((account) => account.id);
+    const instagramAccountIds = instagramAccounts.map(
+      (account) => account.id,
+    );
+    const selectedInstagramAccountIds = new Set(instagramAccountIds);
+    const parentPageIdByInstagramId = new Map(
+      assets.pages.flatMap((page) =>
+        page.instagramAccount &&
+        selectedInstagramAccountIds.has(page.instagramAccount.id)
+          ? [[page.instagramAccount.id, page.id] as const]
+          : [],
+      ),
+    );
     const assetRows = [
       ...assets.pages.map((page) => ({
         asset_type: "facebook_page",
@@ -191,22 +371,14 @@ export async function GET(request: Request) {
         name: page.name,
         username: null,
       })),
-      ...assets.pages.flatMap((page) =>
-        page.instagramAccount
-          ? [
-              {
-                asset_type: "instagram_account",
-                meta_asset_id: page.instagramAccount.id,
-                parent_meta_asset_id: page.id,
-                name:
-                  page.instagramAccount.name ??
-                  page.instagramAccount.username ??
-                  "Instagram-Profil",
-                username: page.instagramAccount.username,
-              },
-            ]
-          : [],
-      ),
+      ...instagramAccounts.map((account) => ({
+        asset_type: "instagram_account",
+        meta_asset_id: account.id,
+        parent_meta_asset_id:
+          parentPageIdByInstagramId.get(account.id) ?? null,
+        name: account.name,
+        username: account.username,
+      })),
       ...assets.adAccounts.map((account) => ({
         asset_type: "ad_account",
         meta_asset_id: account.id,
@@ -215,6 +387,7 @@ export async function GET(request: Request) {
         username: null,
       })),
     ];
+    stage = "token_encryption";
     const encryptedToken = encryptAccessToken(
       longLivedToken.accessToken,
       tokenEncryptionKey,
@@ -223,6 +396,7 @@ export async function GET(request: Request) {
       expiresAt: tokenDebug.expiresAt,
       expiresInSeconds: longLivedToken.expiresInSeconds,
     });
+    stage = "storage";
     const admin = createAdminClient();
     const { error } = await admin.rpc("replace_meta_connection", {
       p_user_id: user.id,
@@ -249,12 +423,20 @@ export async function GET(request: Request) {
       return dashboardRedirect("error", "storage");
     }
 
+    stage = "revalidation";
+    revalidatePath("/dashboard", "page");
     return dashboardRedirect("connected");
   } catch (error) {
     console.error("[meta-oauth] Callback konnte nicht verarbeitet werden", {
+      stage,
       kind: error instanceof MetaGraphError ? "meta_graph" : "internal",
+      status: error instanceof MetaGraphError ? error.status : null,
       code: error instanceof MetaGraphError ? error.code : null,
+      subcode: error instanceof MetaGraphError ? error.subcode : null,
+      graphMessage:
+        error instanceof MetaGraphError ? error.graphMessage : null,
+      name: error instanceof Error ? error.name : "unknown",
     });
-    return dashboardRedirect("error", "callback");
+    return dashboardRedirect("error", "callback", { stage });
   }
 }

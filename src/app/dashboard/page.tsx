@@ -99,10 +99,10 @@ const META_ERROR_MESSAGES: Record<string, string> = {
   scope_validation: "Die von Meta gewährten Berechtigungen entsprechen nicht dem minimalen sicheren Zugriff. Bitte bestätige den Reconnect vollständig.",
   token_validation: "Die Meta-Verbindung konnte nicht sicher bestätigt werden. Bitte verbinde Meta erneut.",
   authorization_reset: "Die bisherige Meta-Autorisierung konnte nicht vollständig entfernt werden. Es wurden keine alten Assets übernommen. Bitte starte den Reconnect erneut.",
-  no_assets: "Meta hat die gewählten Assets bestätigt, aber Adbot konnte sie nicht lesen. Bitte im Dialog erneut auswählen und verbinden.",
-  missing_page_targets: "Meta hat keine Facebook-Seiten-IDs geliefert und keine Seite ist mit dem gewählten Instagram-Konto verknüpft. Ohne diese Auswahl speichert Adbot keine Seiten — auch keine älteren System-User-Zuweisungen.",
-  missing_ad_account_targets: "Meta hat die Werbekonto-ID aus dem Dialog nicht in der Token-Antwort geliefert (ads_* target_ids fehlen). Adbot speichert deshalb kein Werbekonto und rät auch keins aus der Seite.",
-  missing_instagram_targets: "Meta hat keine Instagram-IDs aus deiner Dialog-Auswahl geliefert. Ohne diese IDs speichert Adbot kein Instagram — auch nicht aus einer Seitenverknüpfung.",
+  no_assets: "Meta hat die Verbindung bestätigt, aber Adbot konnte die zugewiesenen Assets nicht lesen. Bitte trenne Meta vollständig und verbinde erneut.",
+  missing_page_targets: "Meta hat keine Facebook-Seiten-IDs aus der Dialog-Auswahl geliefert. Bitte trenne Meta vollständig und verbinde erneut mit ausdrücklicher Seitenauswahl.",
+  missing_ad_account_targets: "Meta hat keine Werbekonto-IDs aus der Dialog-Auswahl geliefert. Bitte trenne Meta vollständig und verbinde erneut mit ausdrücklicher Werbekonto-Auswahl.",
+  missing_instagram_targets: "Meta hat keine Instagram-IDs aus der Dialog-Auswahl geliefert. Bitte trenne Meta vollständig und verbinde erneut mit ausdrücklicher Instagram-Auswahl.",
   storage: "Die Verbindung konnte nicht sicher gespeichert werden. Es wurde keine Verbindung aktiviert.",
   callback: "Die Meta-Antwort konnte nicht verarbeitet werden. Bitte starte die Verbindung erneut.",
 };
@@ -1607,14 +1607,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           ? "Die Meta-Verbindung muss erneuert werden."
                           : "Der minimale Schreibscope muss bestätigt werden."}
                       </p>
-                      <Link
-                        className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
-                        href="/api/connectors/meta/start"
-                        prefetch={false}
-                      >
-                        Meta neu verbinden
-                        <ArrowUpRight className="size-4" />
-                      </Link>
+                      <form action="/api/connectors/meta/start" method="post">
+                        <button
+                          className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                          type="submit"
+                        >
+                          Meta neu verbinden
+                          <ArrowUpRight className="size-4" />
+                        </button>
+                      </form>
                     </div>
                   ) : (
                     <MetaSyncButton
