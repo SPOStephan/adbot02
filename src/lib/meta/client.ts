@@ -797,32 +797,19 @@ export async function getMetaInstagramAccountAssets(input: {
   accessToken: string;
   appSecret: string;
   allowedInstagramAccountIds: Set<string>;
-  systemUserId: string;
+  candidateInstagramAccountIds?: Set<string>;
 }): Promise<{ instagramAccounts: MetaInstagramAccountAsset[]; usage: MetaUsageSnapshot }> {
-  const ids = [...input.allowedInstagramAccountIds].filter((id) =>
+  const granularIds = [...input.allowedInstagramAccountIds].filter((id) =>
     /^\d{1,64}$/.test(id),
   );
+  const pageCandidateIds = [
+    ...(input.candidateInstagramAccountIds ?? new Set<string>()),
+  ].filter((id) => /^\d{1,64}$/.test(id));
+  const ids = granularIds.length ? granularIds : pageCandidateIds;
+  const expectedIds = new Set(ids);
 
   if (!ids.length) {
-    if (!/^\d{1,64}$/.test(input.systemUserId)) {
-      return { instagramAccounts: [], usage: EMPTY_USAGE };
-    }
-
-    const url = new URL(
-      `/${META_GRAPH_VERSION}/${encodeURIComponent(input.systemUserId)}/assigned_instagram_accounts`,
-      META_GRAPH_ORIGIN,
-    );
-    url.searchParams.set("fields", "id,name,username");
-    url.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
-    const result = await fetchMetaCollection({
-      initialUrl: url,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: parseInstagramAccountAsset,
-      requireComplete: true,
-    });
-
-    return { instagramAccounts: result.items, usage: result.usage };
+    return { instagramAccounts: [], usage: EMPTY_USAGE };
   }
 
   let usage = EMPTY_USAGE;
@@ -834,15 +821,30 @@ export async function getMetaInstagramAccountAssets(input: {
       META_GRAPH_ORIGIN,
     );
     url.searchParams.set("fields", "id,name,username");
-    const result = await fetchMetaJson(
-      url,
-      addTokenProtection(url, input.accessToken, input.appSecret),
-    );
-    usage = mergeMetaUsage(usage, result.usage);
-    const account = parseInstagramAccountAsset(result.body);
 
-    if (account && input.allowedInstagramAccountIds.has(account.id)) {
-      instagramAccounts.push(account);
+    try {
+      const result = await fetchMetaJson(
+        url,
+        addTokenProtection(url, input.accessToken, input.appSecret),
+      );
+      usage = mergeMetaUsage(usage, result.usage);
+      const account = parseInstagramAccountAsset(result.body);
+
+      if (account && expectedIds.has(account.id)) {
+        instagramAccounts.push(account);
+      }
+    } catch (error) {
+      if (
+        error instanceof MetaGraphError
+        && error.status >= 400
+        && error.status < 500
+        && [10, 100, 200].includes(error.code ?? -1)
+      ) {
+        usage = mergeMetaUsage(usage, error.usage);
+        continue;
+      }
+
+      throw error;
     }
   }
 
@@ -854,11 +856,20 @@ export async function getMetaConnectionAssets(input: {
   appSecret: string;
   allowedPageIds?: Set<string>;
   allowedInstagramAccountIds: Set<string>;
-  systemUserId: string;
   allowedAdAccountIds?: Set<string>;
 }): Promise<MetaConnectionAssets> {
   const pagesResult = await getMetaPageAssets(input);
-  const instagramResult = await getMetaInstagramAccountAssets(input);
+  const pageInstagramAccountIds = new Set(
+    pagesResult.pages.flatMap((page) =>
+      page.instagramAccount ? [page.instagramAccount.id] : [],
+    ),
+  );
+  const instagramResult = await getMetaInstagramAccountAssets({
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    allowedInstagramAccountIds: input.allowedInstagramAccountIds,
+    candidateInstagramAccountIds: pageInstagramAccountIds,
+  });
   const adAccountUrl = new URL(
     `/${META_GRAPH_VERSION}/me/adaccounts`,
     META_GRAPH_ORIGIN,
