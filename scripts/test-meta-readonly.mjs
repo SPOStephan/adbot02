@@ -37,13 +37,15 @@ try {
     .replace('from "./crypto";', 'from "./crypto.mjs";');
   const callbackSource = await readFile(callbackSourcePath, "utf8");
 
-  assert.doesNotMatch(clientSource, /client_business_id|business_management/);
+  assert.match(clientSource, /client_business_id/);
+  assert.doesNotMatch(clientSource, /business_management/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
-  assert.doesNotMatch(
+  assert.match(
     callbackSource,
-    /clientBusinessId|client_business_id|business_management/,
+    /clientBusinessId:\s*identity\.clientBusinessId/,
   );
+  assert.doesNotMatch(callbackSource, /business_management/);
   assert.match(
     callbackSource,
     /getGranularTargetIds\(tokenDebug, "ads_management"\)/,
@@ -75,10 +77,16 @@ try {
     const url = new URL(String(input));
     requests.push({ url, init });
 
-    return new Response(JSON.stringify({ id: "meta-app-scoped-user-id" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        id: "meta-app-scoped-user-id",
+        client_business_id: "123456789012345",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   };
 
   const identity = await clientModule.getMetaIdentity({
@@ -86,9 +94,15 @@ try {
     appSecret: "test-app-secret",
   });
 
-  assert.deepEqual(identity, { id: "meta-app-scoped-user-id" });
+  assert.deepEqual(identity, {
+    id: "meta-app-scoped-user-id",
+    clientBusinessId: "123456789012345",
+  });
   assert.equal(requests[0].url.pathname, "/v25.0/me");
-  assert.equal(requests[0].url.searchParams.get("fields"), "id");
+  assert.equal(
+    requests[0].url.searchParams.get("fields"),
+    "id,client_business_id",
+  );
   assert.ok(requests[0].url.searchParams.get("appsecret_proof"));
   assert.equal(requests[0].init.method, "GET");
   assert.equal(requests[0].init.cache, "no-store");
@@ -242,6 +256,7 @@ try {
         "17841400000000001",
         "not-a-meta-id",
       ]),
+      clientBusinessId: "123456789012345",
     });
 
   assert.equal(requests.length, 1);
@@ -258,6 +273,65 @@ try {
       username: "selected.by.customer",
     },
   ]);
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: "17841400000000002",
+            name: "Vom Client-Business delegiert",
+            username: "business.selected",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  const businessInstagramAssets =
+    await clientModule.getMetaInstagramAccountAssets({
+      accessToken: "delegated-instagram-token",
+      appSecret: "test-app-secret",
+      allowedInstagramAccountIds: new Set(),
+      clientBusinessId: "123456789012345",
+    });
+
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url.pathname,
+    "/v25.0/123456789012345/instagram_accounts",
+  );
+  assert.equal(requests[0].url.searchParams.get("fields"), "id,name,username");
+  assert.equal(
+    requests[0].init.headers.Authorization,
+    "Bearer delegated-instagram-token",
+  );
+  assert.deepEqual(businessInstagramAssets.instagramAccounts, [
+    {
+      id: "17841400000000002",
+      name: "Vom Client-Business delegiert",
+      username: "business.selected",
+    },
+  ]);
+
+  requests.length = 0;
+  const missingBusinessInstagramAssets =
+    await clientModule.getMetaInstagramAccountAssets({
+      accessToken: "delegated-instagram-token",
+      appSecret: "test-app-secret",
+      allowedInstagramAccountIds: new Set(),
+      clientBusinessId: null,
+    });
+  assert.equal(requests.length, 0);
+  assert.deepEqual(missingBusinessInstagramAssets.instagramAccounts, []);
 
   globalThis.fetch = async () =>
     new Response(

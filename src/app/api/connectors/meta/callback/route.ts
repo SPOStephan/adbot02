@@ -199,6 +199,7 @@ export async function GET(request: Request) {
       appSecret,
       allowedPageIds,
       allowedInstagramAccountIds,
+      clientBusinessId: identity.clientBusinessId,
       allowedAdAccountIds,
     });
 
@@ -207,6 +208,15 @@ export async function GET(request: Request) {
       !assets.instagramAccounts.length ||
       !assets.adAccounts.length
     ) {
+      console.warn("[meta-oauth] Unvollständige Assetauswahl", {
+        pages: assets.pages.length,
+        instagramAccounts: assets.instagramAccounts.length,
+        adAccounts: assets.adAccounts.length,
+        instagramSource: allowedInstagramAccountIds.size
+          ? "granular_targets"
+          : "client_business",
+        hasClientBusinessId: Boolean(identity.clientBusinessId),
+      });
       return dashboardRedirect("error", "no_assets");
     }
 
@@ -215,10 +225,11 @@ export async function GET(request: Request) {
     const instagramAccountIds = assets.instagramAccounts.map(
       (account) => account.id,
     );
+    const selectedInstagramAccountIds = new Set(instagramAccountIds);
     const parentPageIdByInstagramId = new Map(
       assets.pages.flatMap((page) =>
         page.instagramAccount &&
-        allowedInstagramAccountIds.has(page.instagramAccount.id)
+        selectedInstagramAccountIds.has(page.instagramAccount.id)
           ? [[page.instagramAccount.id, page.id] as const]
           : [],
       ),
