@@ -5,6 +5,7 @@ import {
   debugMetaAccessToken,
   exchangeCodeForAccessToken,
   getGranularTargetIds,
+  getMetaAdAccountGranularTargetIds,
   getMetaConnectionAssets,
   getMetaIdentity,
   META_ALLOWED_SCOPES,
@@ -191,32 +192,40 @@ export async function GET(request: Request) {
       });
     }
 
-    const allowedAdAccountIds = new Set([
-      ...getGranularTargetIds(tokenDebug, "ads_read"),
-      ...getGranularTargetIds(tokenDebug, "ads_management"),
-    ]);
     const allowedInstagramAccountIds = new Set(
       getGranularTargetIds(tokenDebug, "instagram_basic"),
     );
+    const allowedAdAccountIds = getMetaAdAccountGranularTargetIds(tokenDebug);
 
     console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
-      adAccountTargets: allowedAdAccountIds.size,
       instagramTargets: allowedInstagramAccountIds.size,
+      adAccountTargets: allowedAdAccountIds.size,
       granularScopes: tokenDebug.granularScopes.map((item) => ({
         scope: item.scope,
         targetCount: item.targetIds.length,
       })),
     });
 
-    // Ads + Instagram must come from dialog target_ids. Pages often omit
-    // target_ids when Meta marks the permission as "applies to all" — then we
-    // derive pages only via the selected Instagram IDs (never /me/accounts
-    // fall-open).
-    if (!allowedAdAccountIds.size) {
-      return dashboardRedirect("error", "missing_ad_account_targets");
-    }
+    // Ad accounts and Instagram come only from dialog target_ids — never infer
+    // an ad account from a page. Pages may omit target_ids when Meta marks the
+    // permission as "applies to all"; then we derive pages only via the
+    // selected Instagram IDs (never /me/accounts fall-open).
     if (!allowedInstagramAccountIds.size) {
       return dashboardRedirect("error", "missing_instagram_targets");
+    }
+    if (!allowedAdAccountIds.size) {
+      console.warn(
+        "[meta-oauth] Meta lieferte keine ads_* target_ids trotz Dialog-Auswahl",
+        {
+          adsScopes: tokenDebug.granularScopes
+            .filter((item) => item.scope.startsWith("ads_"))
+            .map((item) => ({
+              scope: item.scope,
+              targetCount: item.targetIds.length,
+            })),
+        },
+      );
+      return dashboardRedirect("error", "missing_ad_account_targets");
     }
 
     stage = "asset_discovery";

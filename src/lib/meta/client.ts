@@ -376,6 +376,21 @@ export function asMetaAssetId(value: unknown): string | null {
   return null;
 }
 
+/** Page/IG IDs are digits; ad-account target_ids may be digits or act_<digits>. */
+export function asMetaGranularTargetId(value: unknown): string | null {
+  const direct = asMetaAssetId(value);
+  if (direct) {
+    return direct;
+  }
+
+  if (typeof value === "string") {
+    const match = value.trim().match(/^act_(\d{1,64})$/i);
+    return match?.[1] ?? null;
+  }
+
+  return null;
+}
+
 async function fetchMetaResponse(
   url: URL,
   headers: Record<string, string>,
@@ -782,7 +797,7 @@ export async function debugMetaAccessToken(input: {
             scope: value.scope,
             targetIds: Array.isArray(value.target_ids)
               ? value.target_ids.flatMap((target) => {
-                  const id = asMetaAssetId(target);
+                  const id = asMetaGranularTargetId(target);
                   return id ? [id] : [];
                 })
               : [],
@@ -888,6 +903,18 @@ export async function resolveMetaSelectedPageIds(input: {
     source: pageIds.size > 0 ? "instagram_linked_pages" : "none",
     usage: pagesResult.usage,
   };
+}
+
+/** Ad-account IDs from the Login-for-Business dialog only (ads_* target_ids). */
+export function getMetaAdAccountGranularTargetIds(
+  tokenDebug: MetaTokenDebug,
+): Set<string> {
+  return new Set(
+    [
+      ...getGranularTargetIds(tokenDebug, "ads_read"),
+      ...getGranularTargetIds(tokenDebug, "ads_management"),
+    ].map(normalizeAdAccountId),
+  );
 }
 
 export async function getMetaIdentity(input: {

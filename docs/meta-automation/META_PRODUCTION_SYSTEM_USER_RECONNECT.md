@@ -35,12 +35,12 @@ Nach dem Code-Austausch versucht Adbot eine Token-Verlängerung. Für System-Use
 ## Persistierte Assets
 
 - Instagram: nur `instagram_basic` `target_ids`
-- Werbekonten: Schnittmenge `/me/adaccounts` ∩ (`ads_read` ∪ `ads_management` `target_ids`) — leere Allow-List = nichts speichern
-- Facebook Pages: granular `target_ids` aus Page-Scopes; fehlen sie (Meta: Permission „gilt für alle“), dann nur Seiten, deren verknüpftes Instagram in den IG-`target_ids` liegt — nie die volle `/me/accounts`-Liste
-- Fehlt Ads/IG-Ziel-ID → `missing_ad_account_targets` / `missing_instagram_targets`; keine ableitbare Seite → `missing_page_targets`
+- Werbekonten: nur `ads_*` `target_ids` (inkl. `act_`-Prefix) — **kein** Ableiten über Seite/`promote_pages`
+- Facebook Pages: granular Page-`target_ids`; fehlen sie, nur Seiten mit Link zu den IG-`target_ids`
+- Fehlt eine Dialog-Ziel-ID → `missing_*_targets`
 - Persistenz: `replace_meta_connection` ersetzt Assets vollständig
 
-Empfehlung Login-Config: **Facebook-Seite erforderlich = an**, damit Meta Page-`target_ids` zuverlässig liefert. Mit `aus` greift der Instagram-Link-Fallback.
+Wenn Meta trotz Dialog-Auswahl keine `ads_*` `target_ids` liefert, ist das ein Meta-/Login-Config-Problem (Permission „gilt für alle“ ohne Ziel-IDs). Adbot speichert dann bewusst nichts.
 
 ## Production-Abnahme
 

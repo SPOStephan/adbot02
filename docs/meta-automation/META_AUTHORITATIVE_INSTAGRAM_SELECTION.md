@@ -9,32 +9,31 @@ Im Facebook-Login-for-Business-Dialog wählt der Kunde Assets. Meta bestätigt d
 | Asset | Quelle |
 | --- | --- |
 | Instagram | nur `instagram_basic` `target_ids` |
-| Werbekonto | `ads_read` / `ads_management` `target_ids` |
-| Facebook-Seite | `pages_show_list` / `pages_read_engagement` / `pages_manage_ads` / `pages_manage_metadata` `target_ids` |
+| Werbekonto | nur `ads_read` / `ads_management` `target_ids` (auch `act_<id>`) |
+| Facebook-Seite | Page-Scope-`target_ids`; fehlen sie, Seiten mit Link zur gewählten Instagram-ID |
+
+**Kein Raten:** Ein Werbekonto wird niemals aus einer Seite, `promote_pages` oder „einzigem sichtbaren Konto“ abgeleitet.
 
 ## Seiten ohne `target_ids`
 
-Meta dokumentiert: wenn eine Permission „für alle“ gilt, fehlen `target_ids`.[1] Bei System-User-Tokens passiert das häufig für Pages (`Facebook-Seite erforderlich: aus` in der Login-Config).
+Meta dokumentiert: wenn eine Permission „für alle“ gilt, fehlen `target_ids`.[1] Bei System-User-Tokens passiert das häufig für Pages.
 
-Dann leitet Adbot Seiten **nur** so ab:
+Dann: Instagram-`target_ids` müssen vorhanden sein → `/me/accounts` → nur Seiten, deren `instagram_business_account.id` in den IG-`target_ids` liegt. Ohne Treffer → `missing_page_targets`.
 
-1. Instagram-`target_ids` müssen vorhanden sein
-2. `/me/accounts` wird gelesen
-3. Es bleiben **ausschließlich** Seiten, deren `instagram_business_account.id` in den Instagram-`target_ids` liegt
+## Werbekonten ohne `target_ids`
 
-Das ist kein Erfinden von Instagram aus Seiten — sondern Filtern der Seiten anhand der gewählten Instagram-IDs. Ohne Treffer → `missing_page_targets`.
+Fehlen `ads_*` `target_ids` → `missing_ad_account_targets`. Ursache liegt bei Meta/Login-Config (Token liefert die Dialog-Auswahl nicht als Ziel-IDs), nicht bei Adbot-Heuristik.
 
 ## Was verboten ist
 
 - `/me/accounts` oder `/me/adaccounts` **ohne** Filter als Auswahl zu behandeln
 - Instagram aus `page.instagram_business_account` abzuleiten, wenn Meta keine IG-`target_ids` liefert
+- Werbekonten aus Seitenverknüpfungen abzuleiten
 - Adbot-interne Zweitauswahl / Bestätigungs-UI
-
-Fehlt Ads- oder Instagram-Ziel-ID → `missing_ad_account_targets` / `missing_instagram_targets`. Sind IDs da, aber nicht lesbar → `no_assets`.
 
 ## Parsing
 
-`target_ids` können Zahlen oder Strings sein; große IDs werden vor `JSON.parse` geschützt.
+`target_ids` können Zahlen, Digit-Strings oder `act_<digits>` sein; große IDs werden vor `JSON.parse` geschützt.
 
 ## Quellen
 

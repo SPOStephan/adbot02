@@ -52,9 +52,14 @@ try {
   assert.match(callbackSource, /missing_instagram_targets/);
   assert.match(callbackSource, /Granulare Meta-Auswahl/);
   assert.match(callbackSource, /resolveMetaSelectedPageIds/);
+  assert.match(callbackSource, /getMetaAdAccountGranularTargetIds/);
   assert.match(callbackSource, /pageSource/);
+  assert.doesNotMatch(callbackSource, /resolveMetaSelectedAdAccountIds|page_promote_pages|promote_pages/);
   assert.match(clientSource, /resolveMetaSelectedPageIds/);
+  assert.match(clientSource, /getMetaAdAccountGranularTargetIds/);
   assert.match(clientSource, /instagram_linked_pages/);
+  assert.match(clientSource, /asMetaGranularTargetId/);
+  assert.doesNotMatch(clientSource, /page_promote_pages|promote_pages|unique_ad_account/);
   assert.match(clientSource, /pages_manage_ads/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
@@ -62,10 +67,7 @@ try {
     callbackSource,
     /systemUserId|clientBusinessId|client_business_id|business_management|assigned_instagram_accounts/,
   );
-  assert.match(
-    callbackSource,
-    /getGranularTargetIds\(tokenDebug, "ads_management"\)/,
-  );
+  assert.match(callbackSource, /getMetaAdAccountGranularTargetIds/);
   assert.match(callbackSource, /resolvePersistedMetaAccessToken/);
   assert.match(callbackSource, /debugMetaAccessToken/);
   assert.match(callbackSource, /replace_meta_connection/);
@@ -357,6 +359,9 @@ try {
   assert.equal(clientModule.asMetaAssetId(178414000000000), "178414000000000");
   assert.equal(clientModule.asMetaAssetId("17841400000000002"), "17841400000000002");
   assert.equal(clientModule.asMetaAssetId(Number.MAX_SAFE_INTEGER + 1), null);
+  assert.equal(clientModule.asMetaGranularTargetId("act_222222222222222"), "222222222222222");
+  assert.equal(clientModule.asMetaGranularTargetId("222222222222222"), "222222222222222");
+  assert.equal(clientModule.asMetaAssetId("act_222222222222222"), null);
 
   requests.length = 0;
   globalThis.fetch = async (input, init) => {
@@ -811,6 +816,88 @@ try {
     requests.filter((entry) => entry.url.pathname === "/v25.0/me/accounts").length,
     1,
     "granular page targets must not fetch /me/accounts for resolution",
+  );
+
+  // Ad accounts come only from ads_* target_ids (including act_ prefix) — never
+  // inferred from pages.
+  assert.deepEqual(
+    [
+      ...clientModule.getMetaAdAccountGranularTargetIds({
+        appId: "app",
+        userId: "user",
+        isValid: true,
+        type: "SYSTEM_USER",
+        scopes: ["ads_management"],
+        granularScopes: [
+          { scope: "ads_management", targetIds: ["act_222222222222222"] },
+        ],
+        expiresAt: null,
+        dataAccessExpiresAt: null,
+        usage: {
+          appPercent: null,
+          pagePercent: null,
+          businessPercent: null,
+          retryAfterSeconds: null,
+        },
+      }),
+    ],
+    ["222222222222222"],
+  );
+  assert.deepEqual(
+    [
+      ...clientModule.getMetaAdAccountGranularTargetIds({
+        appId: "app",
+        userId: "user",
+        isValid: true,
+        type: "SYSTEM_USER",
+        scopes: ["ads_read", "ads_management"],
+        granularScopes: [
+          { scope: "ads_read", targetIds: [] },
+          { scope: "ads_management", targetIds: [] },
+        ],
+        expiresAt: null,
+        dataAccessExpiresAt: null,
+        usage: {
+          appPercent: null,
+          pagePercent: null,
+          businessPercent: null,
+          retryAfterSeconds: null,
+        },
+      }),
+    ],
+    [],
+  );
+
+  // Simulate debug_token returning act_ prefixed string target_ids.
+  requests.length = 0;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        data: {
+          app_id: "meta-app-id",
+          user_id: "system-user-1",
+          is_valid: true,
+          type: "SYSTEM_USER",
+          scopes: ["ads_management"],
+          granular_scopes: [
+            {
+              scope: "ads_management",
+              target_ids: ["act_222222222222222"],
+            },
+          ],
+          expires_at: 0,
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  const debugWithActPrefix = await clientModule.debugMetaAccessToken({
+    appId: "meta-app-id",
+    appSecret: "meta-app-secret",
+    accessToken: "system-user-token",
+  });
+  assert.deepEqual(
+    [...clientModule.getGranularTargetIds(debugWithActPrefix, "ads_management")],
+    ["222222222222222"],
   );
 
   globalThis.fetch = async () =>
