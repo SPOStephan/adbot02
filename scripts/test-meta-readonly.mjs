@@ -52,12 +52,15 @@ try {
     callbackSource,
     /getGranularTargetIds\(tokenDebug, "ads_management"\)/,
   );
-  assert.match(callbackSource, /exchangeForLongLivedAccessToken/);
+  assert.match(callbackSource, /resolvePersistedMetaAccessToken/);
   assert.match(callbackSource, /debugMetaAccessToken/);
   assert.match(callbackSource, /replace_meta_connection/);
   assert.match(callbackSource, /p_meta_user_id:\s*identity\.id/);
   assert.match(callbackSource, /p_assets:\s*assetRows/);
   assert.match(callbackSource, /p_scopes:\s*\[\.\.\.META_ALLOWED_SCOPES\]/);
+  assert.match(callbackSource, /meta_callback_stage/);
+  assert.match(clientSource, /resolvePersistedMetaAccessToken/);
+  assert.match(clientSource, /set_token_expires_in_60_days/);
 
   const assetRowsStart = callbackSource.indexOf("const assetRows");
   const assetRowsEnd = callbackSource.indexOf("const encryptedToken");
@@ -131,6 +134,73 @@ try {
   assert.equal(requests[0].url.searchParams.get("grant_type"), "fb_exchange_token");
   assert.equal(requests[0].url.searchParams.get("fb_exchange_token"), "short-lived-token");
   assert.equal(requests[0].init.method, "GET");
+
+  requests.length = 0;
+  let debugCalls = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    if (url.pathname.endsWith("/debug_token")) {
+      debugCalls += 1;
+      return new Response(
+        JSON.stringify({
+          data: {
+            app_id: "meta-app-id",
+            user_id: "system-user-1",
+            is_valid: true,
+            type: "SYSTEM_USER",
+            scopes: ["ads_management"],
+            granular_scopes: [],
+            expires_at: 0,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: "Cannot exchange system user token like a user token",
+          type: "OAuthException",
+          code: 190,
+        },
+      }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  const persistedSystemUserToken =
+    await clientModule.resolvePersistedMetaAccessToken({
+      appId: "meta-app-id",
+      appSecret: "meta-app-secret",
+      codeAccessToken: {
+        accessToken: "system-user-code-token",
+        expiresInSeconds: 5_184_000,
+        tokenType: "bearer",
+        usage: {
+          appPercent: null,
+          pagePercent: null,
+          businessPercent: null,
+          retryAfterSeconds: null,
+        },
+      },
+    });
+
+  assert.equal(persistedSystemUserToken.accessToken, "system-user-code-token");
+  assert.equal(debugCalls, 1);
+  assert.ok(
+    requests.some((request) =>
+      request.url.searchParams.get("set_token_expires_in_60_days") === "true",
+    ),
+  );
 
   requests.length = 0;
   globalThis.fetch = async (input, init) => {

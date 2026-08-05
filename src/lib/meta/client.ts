@@ -44,6 +44,7 @@ export type MetaTokenDebug = {
   appId: string;
   userId: string;
   isValid: boolean;
+  type: string | null;
   scopes: string[];
   granularScopes: Array<{
     scope: string;
@@ -592,6 +593,7 @@ export async function exchangeForLongLivedAccessToken(input: {
   appId: string;
   appSecret: string;
   shortLivedAccessToken: string;
+  setTokenExpiresIn60Days?: boolean;
 }): Promise<MetaAccessToken> {
   const url = new URL(
     `/${META_GRAPH_VERSION}/oauth/access_token`,
@@ -601,6 +603,9 @@ export async function exchangeForLongLivedAccessToken(input: {
   url.searchParams.set("client_id", input.appId);
   url.searchParams.set("client_secret", input.appSecret);
   url.searchParams.set("fb_exchange_token", input.shortLivedAccessToken);
+  if (input.setTokenExpiresIn60Days) {
+    url.searchParams.set("set_token_expires_in_60_days", "true");
+  }
 
   const { body, usage } = await fetchMetaJson(url);
 
@@ -615,6 +620,75 @@ export async function exchangeForLongLivedAccessToken(input: {
     tokenType: typeof body.token_type === "string" ? body.token_type : null,
     usage,
   };
+}
+
+function isSystemUserTokenType(type: string | null | undefined) {
+  if (!type) {
+    return false;
+  }
+
+  const normalized = type.trim().toUpperCase();
+  return (
+    normalized === "SYSTEM_USER"
+    || normalized === "SYSTEM-USER"
+    || normalized.includes("SYSTEM_USER")
+  );
+}
+
+/**
+ * User short-lived tokens must be exchanged. Business Integration System User
+ * tokens from Facebook Login for Business are often already usable and reject
+ * the classic user exchange; fall back to the code token in that case.
+ */
+export async function resolvePersistedMetaAccessToken(input: {
+  appId: string;
+  appSecret: string;
+  codeAccessToken: MetaAccessToken;
+}): Promise<MetaAccessToken> {
+  const codeTokenDebug = await debugMetaAccessToken({
+    appId: input.appId,
+    appSecret: input.appSecret,
+    accessToken: input.codeAccessToken.accessToken,
+  });
+
+  if (!codeTokenDebug.isValid) {
+    throw new MetaGraphError(401, {
+      error: { code: 190, type: "OAuthException" },
+    });
+  }
+
+  const preferSystemUserExchange = isSystemUserTokenType(codeTokenDebug.type);
+
+  try {
+    return await exchangeForLongLivedAccessToken({
+      appId: input.appId,
+      appSecret: input.appSecret,
+      shortLivedAccessToken: input.codeAccessToken.accessToken,
+      setTokenExpiresIn60Days: preferSystemUserExchange,
+    });
+  } catch (error) {
+    if (!(error instanceof MetaGraphError)) {
+      throw error;
+    }
+
+    if (preferSystemUserExchange) {
+      return input.codeAccessToken;
+    }
+
+    try {
+      return await exchangeForLongLivedAccessToken({
+        appId: input.appId,
+        appSecret: input.appSecret,
+        shortLivedAccessToken: input.codeAccessToken.accessToken,
+        setTokenExpiresIn60Days: true,
+      });
+    } catch (systemUserExchangeError) {
+      if (systemUserExchangeError instanceof MetaGraphError) {
+        return input.codeAccessToken;
+      }
+      throw systemUserExchangeError;
+    }
+  }
 }
 
 export async function debugMetaAccessToken(input: {
@@ -659,6 +733,7 @@ export async function debugMetaAccessToken(input: {
     appId: asNonEmptyString(data.app_id) ?? "",
     userId: asNonEmptyString(data.user_id) ?? "",
     isValid: data.is_valid === true,
+    type: asNonEmptyString(data.type),
     scopes,
     granularScopes,
     expiresAt: asDateFromUnixSeconds(data.expires_at),

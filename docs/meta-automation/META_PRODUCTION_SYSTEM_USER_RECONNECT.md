@@ -30,6 +30,8 @@ Der Callback verlangt weiterhin alle fünf funktionalen Adbot-Scopes. Metas Syst
 
 Meta beschreibt Business Integration System User Access Tokens als Tokentyp für kontinuierliche automatisierte Aktionen und den automatisierten Abruf von Ads Insights. Der Flow verwendet den Authorization-Code-Grant; die Adbot-Start-Route setzt deshalb `response_type=code` und übergibt die Production-`config_id`.[1]
 
+Nach dem Code-Austausch versucht Adbot eine Token-Verlängerung. Für System-User-Tokens wird `set_token_expires_in_60_days=true` verwendet. Lehnt Meta den klassischen User-Austausch ab, bleibt das aus dem Code-Austausch stammende gültige Token erhalten — der Callback darf daran nicht mehr mit generischem `callback` scheitern.
+
 ## Production-Abnahme
 
 Der Reconnect gilt erst als erfolgreich, wenn der Meta-Dialog alle vier Asset-Kategorien anbietet und die vorgesehenen Assets ausgewählt wurden. Für PHDL sind dies das Portfolio `PHDL`, die Seite `Seehotel Fährhaus`, das Werbekonto `PHDL 1` und das Instagram-Konto `seehotel_faehrhaus`.
