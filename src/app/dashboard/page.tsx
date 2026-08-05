@@ -451,7 +451,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       : (SYNC_STATUS[syncStatus as keyof typeof SYNC_STATUS] ?? SYNC_STATUS.idle);
   const reconnectRequired =
     syncStatus === "reconnect_required" || !writeScopeGranted;
-  const pageAsset = metaAssets?.find(
+  const pageAssets = (metaAssets ?? []).filter(
     (asset) => asset.asset_type === "facebook_page",
   );
   const selectedInstagramIds = new Set(
@@ -464,9 +464,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const instagramAssets = (metaAssets ?? []).filter(
     (asset) =>
       asset.asset_type === "instagram_account" &&
-      selectedInstagramIds.has(asset.meta_asset_id),
+      (selectedInstagramIds.size === 0 ||
+        selectedInstagramIds.has(asset.meta_asset_id)),
   );
-  const adAccountAsset = metaAssets?.find(
+  const adAccountAssets = (metaAssets ?? []).filter(
     (asset) => asset.asset_type === "ad_account",
   );
   const metaNotice = getMetaNotice(
@@ -1503,7 +1504,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       Beiträge sicher abrufen
                     </h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-                      Adbot liest veröffentlichte Beiträge deiner in Meta ausgewählten Facebook-Seite und Instagram-Konten. Dieser Sync-Pfad führt keine Mutation aus; Meta-Änderungen laufen ausschließlich über die getrennte, policy-gedeckte Control Plane.
+                      Adbot liest veröffentlichte Beiträge deiner in Meta ausgewählten Facebook-Seiten und Instagram-Konten. Dieser Sync-Pfad führt keine Mutation aus; Meta-Änderungen laufen ausschließlich über die getrennte, policy-gedeckte Control Plane.
                     </p>
                   </div>
                   <span
@@ -1565,25 +1566,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </dl>
 
                   <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
-                    {pageAsset ? (
-                      <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                        Facebook: {pageAsset.name}
+                    {pageAssets.map((asset) => (
+                      <span
+                        className="rounded-full bg-slate-100 px-3 py-1.5"
+                        key={asset.id}
+                      >
+                        Facebook: {asset.name?.trim() || asset.meta_asset_id}
                       </span>
-                    ) : null}
+                    ))}
                     {instagramAssets.map((asset) => (
                       <span
                         className="rounded-full bg-slate-100 px-3 py-1.5"
-                        key={asset.meta_asset_id}
+                        key={asset.id}
                       >
-                        Instagram (Meta-Auswahl):{" "}
-                        {asset.username ? `@${asset.username}` : asset.name}
+                        Instagram:{" "}
+                        {asset.username
+                          ? `@${asset.username}`
+                          : asset.name?.trim() || asset.meta_asset_id}
                       </span>
                     ))}
-                    {adAccountAsset ? (
-                      <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                        Werbekonto: {adAccountAsset.name}
+                    {adAccountAssets.map((asset) => (
+                      <span
+                        className="rounded-full bg-slate-100 px-3 py-1.5"
+                        key={asset.id}
+                      >
+                        Werbekonto: {asset.name?.trim() || asset.meta_asset_id}
                       </span>
-                    ) : null}
+                    ))}
                   </div>
                 </div>
 

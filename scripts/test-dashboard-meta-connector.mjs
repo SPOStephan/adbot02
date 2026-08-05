@@ -270,4 +270,18 @@ assert.match(callbackSource, /dashboardRedirect\("error", "no_assets"\)/);
 assert.match(callbackSource, /classifyMetaGrantedScopes\(/);
 assert.match(callbackSource, /compatibleSystemUserScopes/);
 
+assert.match(dashboardSource, /const pageAssets = \(metaAssets \?\? \[\]\)\.filter/);
+assert.match(dashboardSource, /const adAccountAssets = \(metaAssets \?\? \[\]\)\.filter/);
+assert.match(dashboardSource, /pageAssets\.map\(\(asset\) =>/);
+assert.match(dashboardSource, /adAccountAssets\.map\(\(asset\) =>/);
+assert.match(dashboardSource, /instagramAssets\.map\(\(asset\) =>/);
+assert.doesNotMatch(
+  dashboardSource,
+  /const pageAsset = metaAssets\?\.find/,
+);
+assert.doesNotMatch(
+  dashboardSource,
+  /Instagram \(Meta-Auswahl\)/,
+);
+
 console.log("Dashboard Meta connector checks passed");
