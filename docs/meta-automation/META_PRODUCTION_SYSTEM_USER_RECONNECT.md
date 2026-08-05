@@ -1,6 +1,6 @@
 # Production-Reconnect mit Meta-System-User-Token
 
-**Stand: 4. August 2026.** Dieses Dokument beschreibt den Production-Vertrag für Facebook Login for Business auf `app.adbot.one`. Die separat erforderliche Instagram-Auswahl ist durch zwei erfolgreiche Staging-OAuth-Screenshots vom 30. Juli 2026 belegt.
+**Stand: 5. August 2026.** Dieses Dokument beschreibt den Production-Vertrag für Facebook Login for Business auf `app.adbot.one`. Die separat erforderliche Instagram-Auswahl ist durch zwei erfolgreiche Staging-OAuth-Screenshots vom 30. Juli 2026 belegt.
 
 ## Zielzustand der Login-Konfiguration
 
@@ -32,11 +32,21 @@ Meta beschreibt Business Integration System User Access Tokens als Tokentyp für
 
 Nach dem Code-Austausch versucht Adbot eine Token-Verlängerung. Für System-User-Tokens wird `set_token_expires_in_60_days=true` verwendet. Lehnt Meta den klassischen User-Austausch ab, bleibt das aus dem Code-Austausch stammende gültige Token erhalten — der Callback darf daran nicht mehr mit generischem `callback` scheitern.
 
+## Persistierte Assets
+
+Nur IDs aus `debug_token.granular_scopes[].target_ids` — kein Fall-Open auf `/me/accounts` oder `/me/adaccounts`:
+
+- Facebook Pages: Schnittmenge `/me/accounts` ∩ (`pages_show_list` ∪ `pages_read_engagement` `target_ids`)
+- Ad Accounts: Schnittmenge `/me/adaccounts` ∩ (`ads_read` ∪ `ads_management` `target_ids`)
+- Instagram: nur `instagram_basic` `target_ids` — kein Page-Fallback, kein Confirm-UI
+- Fehlt eine der drei ID-Mengen → Connect bricht mit `missing_page_targets` / `missing_ad_account_targets` / `missing_instagram_targets` ab
+- Persistenz: `upsertMetaConnection` / `replace_meta_connection` ersetzt Assets vollständig (kein Merge alter Zeilen)
+
 ## Production-Abnahme
 
 Der Reconnect gilt erst als erfolgreich, wenn der Meta-Dialog alle vier Asset-Kategorien anbietet und die vorgesehenen Assets ausgewählt wurden. Für PHDL sind dies das Portfolio `PHDL`, die Seite `Seehotel Fährhaus`, das Werbekonto `PHDL 1` und das Instagram-Konto `seehotel_faehrhaus`.
 
-Nach dem Callback muss das Dashboard `Meta wurde erfolgreich verbunden` anzeigen. Die Datenbank muss eine aktive Connectorzeile mit `revoked_at = null`, den fünf funktionalen `meta_scopes` und mindestens je einem Asset der Typen `facebook_page`, `instagram_account` und `ad_account` enthalten. Danach muss der erste manuelle Read-Sync ohne Mutation abschließen. Kundenpolicy und Kill-Switch werden durch den Reconnect nicht automatisch aktiviert.
+Nach dem Callback muss das Dashboard `Meta wurde erfolgreich verbunden` anzeigen. Die Datenbank muss eine aktive Connectorzeile mit `revoked_at = null`, den fünf funktionalen `meta_scopes` und mindestens je einem Asset der Typen `facebook_page`, `instagram_account` und `ad_account` enthalten — und zwar genau die im Dialog gewählten IDs, keine älteren System-User-Zuweisungen. Danach muss der erste manuelle Read-Sync ohne Mutation abschließen. Kundenpolicy und Kill-Switch werden durch den Reconnect nicht automatisch aktiviert.
 
 ## Regressionstests
 

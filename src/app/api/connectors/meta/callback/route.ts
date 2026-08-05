@@ -38,7 +38,6 @@ function dashboardRedirect(
     missingScopes?: string[];
     unexpectedScopes?: string[];
     stage?: string;
-    instagramConfirm?: boolean;
   },
 ) {
   const url = createPortalUrl("/dashboard");
@@ -61,10 +60,6 @@ function dashboardRedirect(
 
   if (details?.stage) {
     url.searchParams.set("meta_callback_stage", details.stage);
-  }
-
-  if (details?.instagramConfirm) {
-    url.searchParams.set("meta_instagram", "confirm");
   }
 
   return noStoreRedirect(url);
@@ -206,6 +201,30 @@ export async function GET(request: Request) {
     const allowedInstagramAccountIds = new Set(
       getGranularTargetIds(tokenDebug, "instagram_basic"),
     );
+
+    console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
+      pageTargets: allowedPageIds.size,
+      adAccountTargets: allowedAdAccountIds.size,
+      instagramTargets: allowedInstagramAccountIds.size,
+      granularScopes: tokenDebug.granularScopes.map((item) => ({
+        scope: item.scope,
+        targetCount: item.targetIds.length,
+      })),
+    });
+
+    // Only Meta's granular target_ids are the customer selection from the
+    // Login-for-Business dialog. /me/accounts can still list older System-User
+    // assignments — never treat that list as the current selection.
+    if (!allowedPageIds.size) {
+      return dashboardRedirect("error", "missing_page_targets");
+    }
+    if (!allowedAdAccountIds.size) {
+      return dashboardRedirect("error", "missing_ad_account_targets");
+    }
+    if (!allowedInstagramAccountIds.size) {
+      return dashboardRedirect("error", "missing_instagram_targets");
+    }
+
     stage = "asset_discovery";
     const assets = await getMetaConnectionAssets({
       accessToken: longLivedToken.accessToken,
@@ -215,48 +234,28 @@ export async function GET(request: Request) {
       allowedAdAccountIds,
     });
 
-    if (!assets.pages.length || !assets.adAccounts.length) {
-      console.warn("[meta-oauth] Unvollständige Assetauswahl", {
+    if (
+      !assets.pages.length ||
+      !assets.instagramAccounts.length ||
+      !assets.adAccounts.length
+    ) {
+      console.warn("[meta-oauth] Ausgewählte Assets nicht lesbar", {
         pages: assets.pages.length,
         instagramAccounts: assets.instagramAccounts.length,
         adAccounts: assets.adAccounts.length,
-        instagramGranularTargets: allowedInstagramAccountIds.size,
-        instagramSource: assets.instagramDiscovery,
-      });
-      return dashboardRedirect("error", "no_assets");
-    }
-
-    // Instagram only from granular target_ids. If Meta omits them, still save
-    // pages/ad accounts and require an explicit dashboard confirmation — never
-    // invent Instagram from page links.
-    const needsInstagramConfirm =
-      allowedInstagramAccountIds.size === 0 ||
-      assets.instagramAccounts.length === 0;
-
-    if (allowedInstagramAccountIds.size === 0) {
-      console.warn("[meta-oauth] Meta lieferte keine Instagram-Ziel-IDs", {
-        pages: assets.pages.length,
-        adAccounts: assets.adAccounts.length,
-        instagramSource: assets.instagramDiscovery,
-      });
-    } else if (!assets.instagramAccounts.length) {
-      console.warn("[meta-oauth] Instagram-Ziel-IDs nicht lesbar", {
-        pages: assets.pages.length,
-        adAccounts: assets.adAccounts.length,
-        instagramGranularTargets: allowedInstagramAccountIds.size,
+        pageTargets: allowedPageIds.size,
+        instagramTargets: allowedInstagramAccountIds.size,
+        adAccountTargets: allowedAdAccountIds.size,
       });
       return dashboardRedirect("error", "no_assets");
     }
 
     console.info("[meta-oauth] Assetauswahl übernommen", {
-      pages: assets.pages.length,
-      instagramAccounts: assets.instagramAccounts.length,
-      adAccounts: assets.adAccounts.length,
-      instagramSource: assets.instagramDiscovery,
+      pages: assets.pages.map((page) => page.name),
       instagramUsernames: assets.instagramAccounts.map(
         (account) => account.username,
       ),
-      needsInstagramConfirm,
+      adAccounts: assets.adAccounts.map((account) => account.name),
     });
 
     const pageIds = assets.pages.map((page) => page.id);
@@ -335,9 +334,7 @@ export async function GET(request: Request) {
 
     stage = "revalidation";
     revalidatePath("/dashboard", "page");
-    return dashboardRedirect("connected", undefined, {
-      instagramConfirm: needsInstagramConfirm,
-    });
+    return dashboardRedirect("connected");
   } catch (error) {
     console.error("[meta-oauth] Callback konnte nicht verarbeitet werden", {
       stage,
