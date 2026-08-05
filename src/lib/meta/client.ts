@@ -88,10 +88,10 @@ export type MetaAssetSelectionMode =
 
 export type MetaConnectionAssets = {
   pages: MetaPageAsset[];
-  instagramAccounts: MetaInstagramAccountAsset[];
-  instagramDiscovery: MetaInstagramDiscoverySource;
   adAccounts: MetaAdAccountAsset[];
   usage: MetaUsageSnapshot;
+  instagramAccounts?: MetaInstagramAccountAsset[];
+  instagramDiscovery?: MetaInstagramDiscoverySource;
 };
 
 export type MetaContentItem = {
@@ -1063,51 +1063,6 @@ function parseAdAccount(value: unknown): MetaAdAccountAsset | null {
   return id && name ? { id, name: name.slice(0, 255) } : null;
 }
 
-function parseAssignedPageAsset(
-  value: unknown,
-  systemUserAccessToken: string,
-): MetaPageAsset | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const id = asMetaAssetId(value.id);
-
-  if (!id) {
-    return null;
-  }
-
-  return {
-    id,
-    name:
-      asNonEmptyString(value.name)?.slice(0, 255)
-      ?? `Facebook-Seite ${id}`,
-    // This value is not persisted. Subsequent syncs resolve the selected page
-    // again by its authoritative assigned ID.
-    accessToken: systemUserAccessToken,
-    instagramAccount: null,
-  };
-}
-
-function parseAssignedAdAccount(value: unknown): MetaAdAccountAsset | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const id = asNonEmptyString(value.id);
-
-  if (!id || !/^(?:act_)?\d{1,64}$/i.test(id)) {
-    return null;
-  }
-
-  return {
-    id,
-    name:
-      asNonEmptyString(value.name)?.slice(0, 255)
-      ?? `Werbekonto ${id}`,
-  };
-}
-
 function normalizeAdAccountId(value: string): string {
   return value.startsWith("act_") ? value.slice(4) : value;
 }
@@ -1131,15 +1086,9 @@ export async function getMetaPageAssets(input: {
     parseItem: parsePageAsset,
   });
 
-  // Empty allow-list means "no selected pages", not "allow every page visible
-  // to the token" — System Users can still see previously assigned pages via
-  // /me/accounts. Only omit allowedPageIds when the caller intentionally wants
-  // the unfiltered Graph listing (e.g. internal tooling).
   return {
-    pages: result.items.filter((page) =>
-      input.allowedPageIds
-        ? input.allowedPageIds.has(page.id)
-        : true,
+    pages: result.items.filter(
+      (page) => !input.allowedPageIds?.size || input.allowedPageIds.has(page.id),
     ),
     usage: result.usage,
   };
@@ -1198,112 +1147,13 @@ export async function getMetaInstagramAccountAssets(input: {
   return { instagramAccounts, usage };
 }
 
-async function getMetaSystemUserAssignedAssets(input: {
-  systemUserId: string;
-  accessToken: string;
-  appSecret: string;
-}): Promise<MetaConnectionAssets> {
-  const systemUserId = asMetaAssetId(input.systemUserId);
-
-  if (!systemUserId) {
-    throw new MetaGraphError(400, {});
-  }
-
-  // Meta documents these three System User edges as parameterless. Passing
-  // fields or limit produces Graph code 100 for Business Login system users.
-  // Pagination supplied by Meta is still followed and validated below.
-  const assignedPagesUrl = new URL(
-    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_pages`,
-    META_GRAPH_ORIGIN,
-  );
-
-  const assignedInstagramUrl = new URL(
-    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_instagram_accounts`,
-    META_GRAPH_ORIGIN,
-  );
-
-  const assignedAdAccountsUrl = new URL(
-    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_ad_accounts`,
-    META_GRAPH_ORIGIN,
-  );
-
-  const [pagesResult, instagramResult, adAccountsResult] = await Promise.all([
-    fetchMetaCollection({
-      initialUrl: assignedPagesUrl,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: (value) =>
-        parseAssignedPageAsset(value, input.accessToken),
-      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-      requireComplete: true,
-    }),
-    fetchMetaCollection({
-      initialUrl: assignedInstagramUrl,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: parseInstagramAccountAsset,
-      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-      requireComplete: true,
-    }),
-    fetchMetaCollection({
-      initialUrl: assignedAdAccountsUrl,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: parseAssignedAdAccount,
-      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-      requireComplete: true,
-    }),
-  ]);
-
-  return {
-    pages: pagesResult.items,
-    instagramAccounts: instagramResult.items,
-    instagramDiscovery: instagramResult.items.length
-      ? "system_user_token"
-      : "none",
-    adAccounts: adAccountsResult.items,
-    usage: mergeMetaUsage(
-      mergeMetaUsage(pagesResult.usage, instagramResult.usage),
-      adAccountsResult.usage,
-    ),
-  };
-}
-
 export async function getMetaConnectionAssets(input: {
   accessToken: string;
   appSecret: string;
-  systemUserId?: string;
   allowedPageIds?: Set<string>;
-  allowedInstagramAccountIds: Set<string>;
   allowedAdAccountIds?: Set<string>;
-  selectionMode?: MetaAssetSelectionMode;
 }): Promise<MetaConnectionAssets> {
-  const useSystemUserTokenAssets =
-    input.selectionMode === "business_integration_system_user";
-
-  if (useSystemUserTokenAssets) {
-    return getMetaSystemUserAssignedAssets({
-      systemUserId: input.systemUserId ?? "",
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-    });
-  }
-
-  const pagesResult = await getMetaPageAssets({
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-    allowedPageIds: input.allowedPageIds,
-  });
-  const instagramResult = await getMetaInstagramAccountAssets({
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-    allowedInstagramAccountIds: input.allowedInstagramAccountIds,
-  });
-  const instagramDiscovery: MetaInstagramDiscoverySource =
-    instagramResult.instagramAccounts.length > 0
-      ? "granular_targets"
-      : "none";
-
+  const pagesResult = await getMetaPageAssets(input);
   const adAccountUrl = new URL(
     `/${META_GRAPH_VERSION}/me/adaccounts`,
     META_GRAPH_ORIGIN,
@@ -1320,21 +1170,16 @@ export async function getMetaConnectionAssets(input: {
   const allowedAdAccountIds = new Set(
     [...(input.allowedAdAccountIds ?? [])].map(normalizeAdAccountId),
   );
-  const adAccounts = input.allowedAdAccountIds
-    ? adAccountsResult.items.filter((account) =>
-        allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
-      )
-    : adAccountsResult.items;
+  const adAccounts = adAccountsResult.items.filter(
+    (account) =>
+      !allowedAdAccountIds.size ||
+      allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
+  );
 
   return {
     pages: pagesResult.pages,
-    instagramAccounts: instagramResult.instagramAccounts,
-    instagramDiscovery,
     adAccounts,
-    usage: mergeMetaUsage(
-      mergeMetaUsage(pagesResult.usage, instagramResult.usage),
-      adAccountsResult.usage,
-    ),
+    usage: mergeMetaUsage(pagesResult.usage, adAccountsResult.usage),
   };
 }
 
