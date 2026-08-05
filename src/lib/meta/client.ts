@@ -38,7 +38,6 @@ export type MetaAccessToken = {
 
 export type MetaIdentity = {
   id: string;
-  clientBusinessId: string | null;
 };
 
 export type MetaTokenDebug = {
@@ -688,7 +687,7 @@ export async function exchangeForLongLivedAccessToken(input: {
   };
 }
 
-export function isSystemUserTokenType(type: string | null | undefined) {
+function isSystemUserTokenType(type: string | null | undefined) {
   if (!type) {
     return false;
   }
@@ -870,6 +869,11 @@ export const META_PAGE_TARGET_SCOPES = [
   "pages_manage_metadata",
 ] as const;
 
+export type MetaPageSelectionSource =
+  | "granular_targets"
+  | "instagram_linked_pages"
+  | "none";
+
 export function getMetaPageGranularTargetIds(
   tokenDebug: MetaTokenDebug,
 ): Set<string> {
@@ -878,6 +882,58 @@ export function getMetaPageGranularTargetIds(
       ...getGranularTargetIds(tokenDebug, scope),
     ]),
   );
+}
+
+/**
+ * Resolve which Facebook Pages the customer selected.
+ *
+ * Prefer granular page target_ids. When Meta omits them because the page
+ * permission "applies to all" (common for System User tokens), derive pages
+ * only from /me/accounts entries whose linked Instagram ID is in the
+ * selected instagram_basic target_ids — never keep the full page list.
+ */
+export async function resolveMetaSelectedPageIds(input: {
+  accessToken: string;
+  appSecret: string;
+  tokenDebug: MetaTokenDebug;
+  allowedInstagramAccountIds: Set<string>;
+}): Promise<{
+  pageIds: Set<string>;
+  source: MetaPageSelectionSource;
+  usage: MetaUsageSnapshot;
+}> {
+  const fromGranular = getMetaPageGranularTargetIds(input.tokenDebug);
+  if (fromGranular.size > 0) {
+    return {
+      pageIds: fromGranular,
+      source: "granular_targets",
+      usage: EMPTY_USAGE,
+    };
+  }
+
+  if (!input.allowedInstagramAccountIds.size) {
+    return { pageIds: new Set(), source: "none", usage: EMPTY_USAGE };
+  }
+
+  const pagesResult = await getMetaPageAssets({
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+  });
+  const pageIds = new Set(
+    pagesResult.pages
+      .filter(
+        (page) =>
+          page.instagramAccount &&
+          input.allowedInstagramAccountIds.has(page.instagramAccount.id),
+      )
+      .map((page) => page.id),
+  );
+
+  return {
+    pageIds,
+    source: pageIds.size > 0 ? "instagram_linked_pages" : "none",
+    usage: pagesResult.usage,
+  };
 }
 
 /** Ad-account IDs from the Login-for-Business dialog only (ads_* target_ids). */
@@ -897,7 +953,7 @@ export async function getMetaIdentity(input: {
   appSecret: string;
 }): Promise<MetaIdentity> {
   const url = new URL(`/${META_GRAPH_VERSION}/me`, META_GRAPH_ORIGIN);
-  url.searchParams.set("fields", "id,client_business_id");
+  url.searchParams.set("fields", "id");
   const { body, usage } = await fetchMetaJson(
     url,
     addTokenProtection(url, input.accessToken, input.appSecret),
@@ -907,10 +963,7 @@ export async function getMetaIdentity(input: {
     throw new MetaGraphError(502, {}, usage);
   }
 
-  return {
-    id: body.id,
-    clientBusinessId: asMetaAssetId(body.client_business_id),
-  };
+  return { id: body.id };
 }
 
 /** Fully de-authorize this Meta app so the next login is a genuine first grant. */
@@ -957,11 +1010,23 @@ function parsePageAsset(value: unknown): MetaPageAsset | null {
     return null;
   }
 
+  const instagram = isRecord(value.instagram_business_account)
+    ? value.instagram_business_account
+    : null;
+  const instagramId = instagram ? asMetaAssetId(instagram.id) : null;
+
   return {
     id,
     name: name.slice(0, 255),
     accessToken,
-    instagramAccount: null,
+    instagramAccount: instagramId
+      ? {
+          id: instagramId,
+          name: asNonEmptyString(instagram?.name)?.slice(0, 255) ?? null,
+          username:
+            asNonEmptyString(instagram?.username)?.slice(0, 255) ?? null,
+        }
+      : null,
   };
 }
 
@@ -998,80 +1063,6 @@ function parseAdAccount(value: unknown): MetaAdAccountAsset | null {
   return id && name ? { id, name: name.slice(0, 255) } : null;
 }
 
-function parseAssignedPageAsset(
-  value: unknown,
-  systemUserAccessToken: string,
-): MetaPageAsset | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const id = asMetaAssetId(value.id);
-
-  if (!id) {
-    return null;
-  }
-
-  return {
-    id,
-    name:
-      asNonEmptyString(value.name)?.slice(0, 255)
-      ?? `Facebook-Seite ${id}`,
-    accessToken: systemUserAccessToken,
-    instagramAccount: null,
-  };
-}
-
-function parseAssignedAdAccount(value: unknown): MetaAdAccountAsset | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const id = asNonEmptyString(value.id);
-
-  if (!id || !/^(?:act_)?\d{1,64}$/i.test(id)) {
-    return null;
-  }
-
-  return {
-    id,
-    name:
-      asNonEmptyString(value.name)?.slice(0, 255)
-      ?? `Werbekonto ${id}`,
-  };
-}
-
-type MetaInstagramBusinessAssetCandidate = {
-  assetId: string;
-  instagramAccountId: string;
-  username: string | null;
-};
-
-function parseInstagramBusinessAssetCandidate(
-  value: unknown,
-): MetaInstagramBusinessAssetCandidate | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const assetId = asMetaAssetId(value.id);
-  const instagramAccountId = asMetaAssetId(value.ig_user_id);
-
-  if (!assetId || !instagramAccountId) {
-    return null;
-  }
-
-  return {
-    assetId,
-    instagramAccountId,
-    username: asNonEmptyString(value.ig_username)?.slice(0, 255) ?? null,
-  };
-}
-
-function parseAssignedUserId(value: unknown): string | null {
-  return isRecord(value) ? asMetaAssetId(value.id) : null;
-}
-
 function normalizeAdAccountId(value: string): string {
   return value.startsWith("act_") ? value.slice(4) : value;
 }
@@ -1082,7 +1073,10 @@ export async function getMetaPageAssets(input: {
   allowedPageIds?: Set<string>;
 }): Promise<{ pages: MetaPageAsset[]; usage: MetaUsageSnapshot }> {
   const pageUrl = new URL(`/${META_GRAPH_VERSION}/me/accounts`, META_GRAPH_ORIGIN);
-  pageUrl.searchParams.set("fields", "id,name,access_token");
+  pageUrl.searchParams.set(
+    "fields",
+    "id,name,access_token,instagram_business_account{id,name,username}",
+  );
   pageUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
 
   const result = await fetchMetaCollection({
@@ -1093,9 +1087,9 @@ export async function getMetaPageAssets(input: {
   });
 
   return {
-    pages: input.allowedPageIds
-      ? result.items.filter((page) => input.allowedPageIds?.has(page.id))
-      : result.items,
+    pages: result.items.filter(
+      (page) => !input.allowedPageIds?.size || input.allowedPageIds.has(page.id),
+    ),
     usage: result.usage,
   };
 }
@@ -1153,185 +1147,13 @@ export async function getMetaInstagramAccountAssets(input: {
   return { instagramAccounts, usage };
 }
 
-async function getMetaSystemUserAssignedInstagramAssets(input: {
-  systemUserId: string;
-  clientBusinessId: string;
-  accessToken: string;
-  appSecret: string;
-}): Promise<{
-  instagramAccounts: MetaInstagramAccountAsset[];
-  usage: MetaUsageSnapshot;
-}> {
-  const systemUserId = asMetaAssetId(input.systemUserId);
-  const clientBusinessId = asMetaAssetId(input.clientBusinessId);
-
-  if (!systemUserId || !clientBusinessId) {
-    throw new MetaGraphError(400, {});
-  }
-
-  const businessAssetUrls = [
-    "owned_instagram_assets",
-    "client_instagram_assets",
-  ].map((edge) => {
-    const url = new URL(
-      `/${META_GRAPH_VERSION}/${clientBusinessId}/${edge}`,
-      META_GRAPH_ORIGIN,
-    );
-    url.searchParams.set("fields", "id,ig_user_id,ig_username");
-    url.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
-    return url;
-  });
-  const businessAssetResults = await Promise.all(
-    businessAssetUrls.map((initialUrl) =>
-      fetchMetaCollection({
-        initialUrl,
-        accessToken: input.accessToken,
-        appSecret: input.appSecret,
-        parseItem: parseInstagramBusinessAssetCandidate,
-        maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-        requireComplete: true,
-      }),
-    ),
-  );
-  const candidatesByAssetId = new Map<
-    string,
-    MetaInstagramBusinessAssetCandidate
-  >();
-  let usage = EMPTY_USAGE;
-
-  for (const result of businessAssetResults) {
-    usage = mergeMetaUsage(usage, result.usage);
-    for (const candidate of result.items) {
-      candidatesByAssetId.set(candidate.assetId, candidate);
-    }
-  }
-
-  const assignedInstagramAccounts = new Map<
-    string,
-    MetaInstagramAccountAsset
-  >();
-
-  for (const candidate of candidatesByAssetId.values()) {
-    const assignedUsersUrl = new URL(
-      `/${META_GRAPH_VERSION}/${candidate.assetId}/assigned_users`,
-      META_GRAPH_ORIGIN,
-    );
-    assignedUsersUrl.searchParams.set("business", clientBusinessId);
-    assignedUsersUrl.searchParams.set("fields", "id");
-    assignedUsersUrl.searchParams.set(
-      "limit",
-      String(META_COLLECTION_PAGE_SIZE),
-    );
-    const assignedUsersResult = await fetchMetaCollection({
-      initialUrl: assignedUsersUrl,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: parseAssignedUserId,
-      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-      requireComplete: true,
-    });
-    usage = mergeMetaUsage(usage, assignedUsersResult.usage);
-
-    if (assignedUsersResult.items.includes(systemUserId)) {
-      assignedInstagramAccounts.set(candidate.instagramAccountId, {
-        id: candidate.instagramAccountId,
-        name: candidate.username ?? "Instagram-Profil",
-        username: candidate.username,
-      });
-    }
-  }
-
-  return {
-    instagramAccounts: [...assignedInstagramAccounts.values()],
-    usage,
-  };
-}
-
-async function getMetaSystemUserAssignedAssets(input: {
-  systemUserId: string;
-  clientBusinessId: string;
-  accessToken: string;
-  appSecret: string;
-}): Promise<MetaConnectionAssets> {
-  const systemUserId = asMetaAssetId(input.systemUserId);
-  const clientBusinessId = asMetaAssetId(input.clientBusinessId);
-
-  if (!systemUserId || !clientBusinessId) {
-    throw new MetaGraphError(400, {});
-  }
-
-  const assignedPagesUrl = new URL(
-    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_pages`,
-    META_GRAPH_ORIGIN,
-  );
-  const assignedAdAccountsUrl = new URL(
-    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_ad_accounts`,
-    META_GRAPH_ORIGIN,
-  );
-  const [pagesResult, adAccountsResult, instagramResult] = await Promise.all([
-    fetchMetaCollection({
-      initialUrl: assignedPagesUrl,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: (value) => parseAssignedPageAsset(value, input.accessToken),
-      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-      requireComplete: true,
-    }),
-    fetchMetaCollection({
-      initialUrl: assignedAdAccountsUrl,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: parseAssignedAdAccount,
-      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-      requireComplete: true,
-    }),
-    getMetaSystemUserAssignedInstagramAssets(input),
-  ]);
-
-  return {
-    pages: pagesResult.items,
-    instagramAccounts: instagramResult.instagramAccounts,
-    instagramDiscovery: instagramResult.instagramAccounts.length
-      ? "system_user_token"
-      : "none",
-    adAccounts: adAccountsResult.items,
-    usage: mergeMetaUsage(
-      mergeMetaUsage(pagesResult.usage, instagramResult.usage),
-      adAccountsResult.usage,
-    ),
-  };
-}
-
 export async function getMetaConnectionAssets(input: {
   accessToken: string;
   appSecret: string;
-  systemUserId?: string;
-  clientBusinessId?: string | null;
   allowedPageIds?: Set<string>;
-  allowedInstagramAccountIds?: Set<string>;
   allowedAdAccountIds?: Set<string>;
-  selectionMode?: MetaAssetSelectionMode;
 }): Promise<MetaConnectionAssets> {
-  if (input.selectionMode === "business_integration_system_user") {
-    return getMetaSystemUserAssignedAssets({
-      systemUserId: input.systemUserId ?? "",
-      clientBusinessId: input.clientBusinessId ?? "",
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-    });
-  }
-
-  const pagesResult = await getMetaPageAssets({
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-    allowedPageIds: input.allowedPageIds,
-  });
-  const instagramResult = await getMetaInstagramAccountAssets({
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-    allowedInstagramAccountIds:
-      input.allowedInstagramAccountIds ?? new Set<string>(),
-  });
+  const pagesResult = await getMetaPageAssets(input);
   const adAccountUrl = new URL(
     `/${META_GRAPH_VERSION}/me/adaccounts`,
     META_GRAPH_ORIGIN,
@@ -1348,23 +1170,16 @@ export async function getMetaConnectionAssets(input: {
   const allowedAdAccountIds = new Set(
     [...(input.allowedAdAccountIds ?? [])].map(normalizeAdAccountId),
   );
-  const adAccounts = input.allowedAdAccountIds
-    ? adAccountsResult.items.filter((account) =>
-        allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
-      )
-    : adAccountsResult.items;
+  const adAccounts = adAccountsResult.items.filter(
+    (account) =>
+      !allowedAdAccountIds.size ||
+      allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
+  );
 
   return {
     pages: pagesResult.pages,
-    instagramAccounts: instagramResult.instagramAccounts,
-    instagramDiscovery: instagramResult.instagramAccounts.length
-      ? "granular_targets"
-      : "none",
     adAccounts,
-    usage: mergeMetaUsage(
-      mergeMetaUsage(pagesResult.usage, instagramResult.usage),
-      adAccountsResult.usage,
-    ),
+    usage: mergeMetaUsage(pagesResult.usage, adAccountsResult.usage),
   };
 }
 
