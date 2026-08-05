@@ -815,6 +815,81 @@ export function getGranularTargetIds(
   );
 }
 
+/** Page scopes that may carry Login-for-Business target_ids. */
+export const META_PAGE_TARGET_SCOPES = [
+  "pages_show_list",
+  "pages_read_engagement",
+  "pages_manage_ads",
+  "pages_manage_metadata",
+] as const;
+
+export type MetaPageSelectionSource =
+  | "granular_targets"
+  | "instagram_linked_pages"
+  | "none";
+
+export function getMetaPageGranularTargetIds(
+  tokenDebug: MetaTokenDebug,
+): Set<string> {
+  return new Set(
+    META_PAGE_TARGET_SCOPES.flatMap((scope) => [
+      ...getGranularTargetIds(tokenDebug, scope),
+    ]),
+  );
+}
+
+/**
+ * Resolve which Facebook Pages the customer selected.
+ *
+ * Prefer granular page target_ids. When Meta omits them because the page
+ * permission "applies to all" (common for System User tokens), derive pages
+ * only from /me/accounts entries whose linked Instagram ID is in the
+ * selected instagram_basic target_ids — never keep the full page list.
+ */
+export async function resolveMetaSelectedPageIds(input: {
+  accessToken: string;
+  appSecret: string;
+  tokenDebug: MetaTokenDebug;
+  allowedInstagramAccountIds: Set<string>;
+}): Promise<{
+  pageIds: Set<string>;
+  source: MetaPageSelectionSource;
+  usage: MetaUsageSnapshot;
+}> {
+  const fromGranular = getMetaPageGranularTargetIds(input.tokenDebug);
+  if (fromGranular.size > 0) {
+    return {
+      pageIds: fromGranular,
+      source: "granular_targets",
+      usage: EMPTY_USAGE,
+    };
+  }
+
+  if (!input.allowedInstagramAccountIds.size) {
+    return { pageIds: new Set(), source: "none", usage: EMPTY_USAGE };
+  }
+
+  const pagesResult = await getMetaPageAssets({
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+  });
+  const pageIds = new Set(
+    pagesResult.pages
+      .filter(
+        (page) =>
+          page.instagramAccount &&
+          input.allowedInstagramAccountIds.has(page.instagramAccount.id),
+      )
+      .map((page) => page.id),
+  );
+
+  return {
+    pageIds,
+    source: pageIds.size > 0 ? "instagram_linked_pages" : "none",
+    usage: pagesResult.usage,
+  };
+}
+
 export async function getMetaIdentity(input: {
   accessToken: string;
   appSecret: string;

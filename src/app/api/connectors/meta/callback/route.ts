@@ -9,6 +9,7 @@ import {
   getMetaIdentity,
   META_ALLOWED_SCOPES,
   MetaGraphError,
+  resolveMetaSelectedPageIds,
   resolvePersistedMetaAccessToken,
 } from "@/lib/meta/client";
 import { encryptAccessToken, verifyOAuthState } from "@/lib/meta/crypto";
@@ -190,10 +191,6 @@ export async function GET(request: Request) {
       });
     }
 
-    const allowedPageIds = new Set([
-      ...getGranularTargetIds(tokenDebug, "pages_show_list"),
-      ...getGranularTargetIds(tokenDebug, "pages_read_engagement"),
-    ]);
     const allowedAdAccountIds = new Set([
       ...getGranularTargetIds(tokenDebug, "ads_read"),
       ...getGranularTargetIds(tokenDebug, "ads_management"),
@@ -203,7 +200,6 @@ export async function GET(request: Request) {
     );
 
     console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
-      pageTargets: allowedPageIds.size,
       adAccountTargets: allowedAdAccountIds.size,
       instagramTargets: allowedInstagramAccountIds.size,
       granularScopes: tokenDebug.granularScopes.map((item) => ({
@@ -212,12 +208,10 @@ export async function GET(request: Request) {
       })),
     });
 
-    // Only Meta's granular target_ids are the customer selection from the
-    // Login-for-Business dialog. /me/accounts can still list older System-User
-    // assignments — never treat that list as the current selection.
-    if (!allowedPageIds.size) {
-      return dashboardRedirect("error", "missing_page_targets");
-    }
+    // Ads + Instagram must come from dialog target_ids. Pages often omit
+    // target_ids when Meta marks the permission as "applies to all" — then we
+    // derive pages only via the selected Instagram IDs (never /me/accounts
+    // fall-open).
     if (!allowedAdAccountIds.size) {
       return dashboardRedirect("error", "missing_ad_account_targets");
     }
@@ -226,6 +220,23 @@ export async function GET(request: Request) {
     }
 
     stage = "asset_discovery";
+    const pageSelection = await resolveMetaSelectedPageIds({
+      accessToken: longLivedToken.accessToken,
+      appSecret,
+      tokenDebug,
+      allowedInstagramAccountIds,
+    });
+    const allowedPageIds = pageSelection.pageIds;
+
+    console.info("[meta-oauth] Seitenauswahl aufgelöst", {
+      pageTargets: allowedPageIds.size,
+      pageSource: pageSelection.source,
+    });
+
+    if (!allowedPageIds.size) {
+      return dashboardRedirect("error", "missing_page_targets");
+    }
+
     const assets = await getMetaConnectionAssets({
       accessToken: longLivedToken.accessToken,
       appSecret,
@@ -244,6 +255,7 @@ export async function GET(request: Request) {
         instagramAccounts: assets.instagramAccounts.length,
         adAccounts: assets.adAccounts.length,
         pageTargets: allowedPageIds.size,
+        pageSource: pageSelection.source,
         instagramTargets: allowedInstagramAccountIds.size,
         adAccountTargets: allowedAdAccountIds.size,
       });
@@ -251,6 +263,7 @@ export async function GET(request: Request) {
     }
 
     console.info("[meta-oauth] Assetauswahl übernommen", {
+      pageSource: pageSelection.source,
       pages: assets.pages.map((page) => page.name),
       instagramUsernames: assets.instagramAccounts.map(
         (account) => account.username,
