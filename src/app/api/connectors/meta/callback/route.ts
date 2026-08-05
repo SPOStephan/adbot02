@@ -5,8 +5,11 @@ import {
   exchangeCodeForAccessToken,
   exchangeForLongLivedAccessToken,
   getGranularTargetIds,
+  getMetaAdAccountGranularTargetIds,
   getMetaConnectionAssets,
   getMetaIdentity,
+  getMetaPageGranularTargetIds,
+  isSystemUserTokenType,
   META_ALLOWED_SCOPES,
   MetaGraphError,
 } from "@/lib/meta/client";
@@ -154,23 +157,57 @@ export async function GET(request: Request) {
       return dashboardRedirect("error", "scope_validation");
     }
 
-    const allowedPageIds = new Set([
-      ...getGranularTargetIds(tokenDebug, "pages_show_list"),
-      ...getGranularTargetIds(tokenDebug, "pages_read_engagement"),
-    ]);
-    const allowedAdAccountIds = new Set([
-      ...getGranularTargetIds(tokenDebug, "ads_read"),
-      ...getGranularTargetIds(tokenDebug, "ads_management"),
-    ]);
+    const allowedPageIds = getMetaPageGranularTargetIds(tokenDebug);
+    const allowedInstagramAccountIds = new Set(
+      getGranularTargetIds(tokenDebug, "instagram_basic"),
+    );
+    const allowedAdAccountIds = getMetaAdAccountGranularTargetIds(tokenDebug);
+    const hasAnyGranularTargets = tokenDebug.granularScopes.some(
+      (item) => item.targetIds.length > 0,
+    );
+    const useSystemUserAssignments =
+      isSystemUserTokenType(tokenDebug.type)
+      && tokenDebug.granularScopes.length > 0
+      && !hasAnyGranularTargets;
+
+    if (!useSystemUserAssignments && !allowedPageIds.size) {
+      return dashboardRedirect("error", "missing_page_targets");
+    }
+    if (!useSystemUserAssignments && !allowedInstagramAccountIds.size) {
+      return dashboardRedirect("error", "missing_instagram_targets");
+    }
+    if (!useSystemUserAssignments && !allowedAdAccountIds.size) {
+      return dashboardRedirect("error", "missing_ad_account_targets");
+    }
+    if (useSystemUserAssignments && !identity.clientBusinessId) {
+      return dashboardRedirect("error", "missing_business_id");
+    }
+
+    console.info("[meta-oauth] Autoritative Assetauswahl", {
+      tokenType: tokenDebug.type,
+      selectionMode: useSystemUserAssignments
+        ? "business_integration_system_user"
+        : "granular_targets",
+      pageTargets: allowedPageIds.size,
+      instagramTargets: allowedInstagramAccountIds.size,
+      adAccountTargets: allowedAdAccountIds.size,
+    });
+
     const assets = await getMetaConnectionAssets({
       accessToken: longLivedToken.accessToken,
       appSecret,
+      systemUserId: useSystemUserAssignments ? identity.id : undefined,
+      clientBusinessId: useSystemUserAssignments
+        ? identity.clientBusinessId
+        : undefined,
       allowedPageIds,
+      allowedInstagramAccountIds,
       allowedAdAccountIds,
+      selectionMode: useSystemUserAssignments
+        ? "business_integration_system_user"
+        : "granular_targets",
     });
-    const instagramAccounts = assets.pages.flatMap((page) =>
-      page.instagramAccount ? [page.instagramAccount] : [],
-    );
+    const instagramAccounts = assets.instagramAccounts ?? [];
 
     if (
       !assets.pages.length ||
@@ -191,22 +228,13 @@ export async function GET(request: Request) {
         name: page.name,
         username: null,
       })),
-      ...assets.pages.flatMap((page) =>
-        page.instagramAccount
-          ? [
-              {
-                asset_type: "instagram_account",
-                meta_asset_id: page.instagramAccount.id,
-                parent_meta_asset_id: page.id,
-                name:
-                  page.instagramAccount.name ??
-                  page.instagramAccount.username ??
-                  "Instagram-Profil",
-                username: page.instagramAccount.username,
-              },
-            ]
-          : [],
-      ),
+      ...instagramAccounts.map((account) => ({
+        asset_type: "instagram_account",
+        meta_asset_id: account.id,
+        parent_meta_asset_id: null,
+        name: account.name ?? account.username ?? "Instagram-Profil",
+        username: account.username,
+      })),
       ...assets.adAccounts.map((account) => ({
         asset_type: "ad_account",
         meta_asset_id: account.id,

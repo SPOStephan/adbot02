@@ -261,27 +261,29 @@ assert.doesNotMatch(
 assert.doesNotMatch(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
 assert.match(callbackSource, /dashboardRedirect\("connected"/);
 assert.doesNotMatch(callbackSource, /instagram-onboarding/);
+assert.match(callbackSource, /business_integration_system_user/);
 assert.doesNotMatch(
   callbackSource,
-  /assigned_|business_integration_system_user|authorizationReset|shouldUseMetaSystemUserDirectAssetDiscovery/,
+  /authorizationReset|shouldUseMetaSystemUserDirectAssetDiscovery/,
 );
 assert.doesNotMatch(
   callbackSource,
-  /resolvePersistedMetaAccessToken|resolveMetaSelectedPageIds|getMetaAdAccountGranularTargetIds/,
+  /resolvePersistedMetaAccessToken|resolveMetaSelectedPageIds/,
 );
 assert.match(callbackSource, /exchangeForLongLivedAccessToken/);
 assert.match(callbackSource, /getGranularTargetIds/);
+assert.match(callbackSource, /getMetaPageGranularTargetIds/);
+assert.match(callbackSource, /getMetaAdAccountGranularTargetIds/);
 assert.match(callbackSource, /getMetaConnectionAssets/);
-assert.match(callbackSource, /const instagramAccounts = assets\.pages\.flatMap/);
+assert.match(callbackSource, /const instagramAccounts = assets\.instagramAccounts/);
+assert.doesNotMatch(callbackSource, /assets\.pages\.flatMap/);
 assert.match(callbackSource, /instagramAccountIds = instagramAccounts\.map/);
 assert.doesNotMatch(
   callbackSource,
   /instagramConfirm|needsInstagramConfirm|InstagramAssetConfirm|candidateInstagramAccountIds/,
 );
-assert.doesNotMatch(
-  callbackSource,
-  /clientBusinessId|client_business_id|business_management/,
-);
+assert.match(callbackSource, /clientBusinessId/);
+assert.doesNotMatch(callbackSource, /business_management/);
 assert.match(callbackSource, /dashboardRedirect\("error", "storage"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "invalid_state"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation"\)/);
