@@ -9,7 +9,7 @@ Im Facebook-Login-for-Business-Dialog wählt der Kunde Seiten, Instagram-Konten 
 | Modus | Erkennung | Verbindliche Asset-Quelle |
 | --- | --- | --- |
 | Granulare Auswahl | Mindestens ein `debug_token.granular_scopes[].target_ids`-Eintrag enthält IDs | Nur die granularen Ziel-IDs; leere Kategorien bleiben fail-closed |
-| Business-System-User-Auswahl | Token-Typ ist exakt `BUSINESS_INTEGRATION_SYSTEM_USER`, `granular_scopes` ist vorhanden und **alle** `target_ids` sind leer | Nur die mit diesem asset-begrenzten Token über `/me/accounts` und `/me/adaccounts` sichtbaren Assets; Instagram zusätzlich nur nach direkter Profil-Verifikation |
+| Business-System-User-Auswahl | Meta klassifiziert den Token als System User (`SYSTEM_USER`, `SYSTEM-USER` oder eine `SYSTEM_USER`-Variante), `granular_scopes` ist vorhanden und **alle** `target_ids` sind leer | Nur die mit diesem asset-begrenzten Token über `/me/accounts` und `/me/adaccounts` sichtbaren Assets; Instagram zusätzlich nur nach direkter Profil-Verifikation |
 
 Sobald Meta mindestens eine granulare Ziel-ID liefert, ist der Business-System-User-Fallback vollständig deaktiviert. Damit kann eine teilweise granulare Antwort niemals unbeabsichtigt auf weitere token-sichtbare Assets erweitert werden.
 
