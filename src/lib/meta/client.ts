@@ -38,6 +38,7 @@ export type MetaAccessToken = {
 
 export type MetaIdentity = {
   id: string;
+  clientBusinessId: string | null;
 };
 
 export type MetaTokenDebug = {
@@ -683,7 +684,7 @@ export async function getMetaIdentity(input: {
   appSecret: string;
 }): Promise<MetaIdentity> {
   const url = new URL(`/${META_GRAPH_VERSION}/me`, META_GRAPH_ORIGIN);
-  url.searchParams.set("fields", "id");
+  url.searchParams.set("fields", "id,client_business_id");
   const { body, usage } = await fetchMetaJson(
     url,
     addTokenProtection(url, input.accessToken, input.appSecret),
@@ -693,7 +694,10 @@ export async function getMetaIdentity(input: {
     throw new MetaGraphError(502, {}, usage);
   }
 
-  return { id: body.id };
+  return {
+    id: body.id,
+    clientBusinessId: asNonEmptyString(body.client_business_id),
+  };
 }
 
 function parsePageAsset(value: unknown): MetaPageAsset | null {
@@ -797,10 +801,34 @@ export async function getMetaInstagramAccountAssets(input: {
   accessToken: string;
   appSecret: string;
   allowedInstagramAccountIds: Set<string>;
+  clientBusinessId: string | null;
 }): Promise<{ instagramAccounts: MetaInstagramAccountAsset[]; usage: MetaUsageSnapshot }> {
   const ids = [...input.allowedInstagramAccountIds].filter((id) =>
     /^\d{1,64}$/.test(id),
   );
+
+  if (!ids.length) {
+    if (!input.clientBusinessId || !/^\d{1,64}$/.test(input.clientBusinessId)) {
+      return { instagramAccounts: [], usage: EMPTY_USAGE };
+    }
+
+    const url = new URL(
+      `/${META_GRAPH_VERSION}/${encodeURIComponent(input.clientBusinessId)}/instagram_accounts`,
+      META_GRAPH_ORIGIN,
+    );
+    url.searchParams.set("fields", "id,name,username");
+    url.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
+    const result = await fetchMetaCollection({
+      initialUrl: url,
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+      parseItem: parseInstagramAccountAsset,
+      requireComplete: true,
+    });
+
+    return { instagramAccounts: result.items, usage: result.usage };
+  }
+
   let usage = EMPTY_USAGE;
   const instagramAccounts: MetaInstagramAccountAsset[] = [];
 
@@ -830,6 +858,7 @@ export async function getMetaConnectionAssets(input: {
   appSecret: string;
   allowedPageIds?: Set<string>;
   allowedInstagramAccountIds: Set<string>;
+  clientBusinessId: string | null;
   allowedAdAccountIds?: Set<string>;
 }): Promise<MetaConnectionAssets> {
   const pagesResult = await getMetaPageAssets(input);

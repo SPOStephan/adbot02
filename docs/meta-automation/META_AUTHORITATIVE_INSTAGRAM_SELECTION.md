@@ -40,3 +40,11 @@ Im Live-Datensatz vom 5. August 2026 war der Connector vollständig berechtigt u
 3. Eine Seitenverknüpfung darf nur als optionale technische Relation gespeichert werden, niemals als Auswahlquelle.
 4. Der nachgelagerte Adbot-eigene Instagram-Auswahlschritt entfällt; er darf Metas Auswahl nicht überschreiben.
 5. Instagram-Media wird mit dem Connector-Token für die ausdrücklich ausgewählte IGUser-ID gelesen und nicht davon abhängig gemacht, dass dieses Konto an eine ausgewählte Facebook-Seite gekoppelt ist.
+
+## Ergänzung nach Production-Fehler vom 5. August 2026
+
+Der erfolgreiche Meta-Dialog kann bei einem Business-Integration-System-User alle gewählten Assets anzeigen, obwohl `debug_token.granular_scopes[].target_ids` für `instagram_basic` leer ist. Meta dokumentiert ausdrücklich, dass die Client-Business-ID eines solchen Tokens über `GET /me?fields=client_business_id` gelesen wird. Quelle: https://developers.facebook.com/documentation/facebook-login/facebook-login-for-business
+
+Für diese Client-Business-ID liefert `GET /<CLIENT_BUSINESS_ID>/instagram_accounts` die Instagram-Konten, auf die dieses Business zugreifen kann. Quelle: https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/business/instagram_accounts
+
+Der Production-Hotfix darf daher nicht verlangen, dass `instagram_basic` zwingend granulare Ziel-IDs enthält. Er muss zunächst vorhandene granulare Ziel-IDs als strengsten Filter verwenden und bei deren Fehlen die Instagram-Assets des im Token enthaltenen `client_business_id` abfragen. Eine Ableitung aus `page.instagram_business_account` bleibt als Auswahlquelle ausgeschlossen.
