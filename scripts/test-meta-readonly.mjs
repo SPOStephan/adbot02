@@ -46,7 +46,11 @@ try {
   assert.match(clientSource, /asMetaGranularTargetId/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
-  assert.match(clientSource, /!input\.allowedPageIds\?\.size/);
+  assert.match(
+    clientSource,
+    /pages: input\.allowedPageIds[\s\S]*result\.items\.filter\([\s\S]*input\.allowedPageIds\?\.has\(page\.id\)[\s\S]*: result\.items/,
+  );
+  assert.doesNotMatch(clientSource, /!input\.allowedPageIds\?\.size/);
   assert.match(clientSource, /!allowedAdAccountIds\.size/);
   assert.doesNotMatch(callbackSource, /assigned_|business_integration_system_user|authorizationReset/);
   assert.doesNotMatch(callbackSource, /resolvePersistedMetaAccessToken|shouldUseMetaSystemUserDirectAssetDiscovery/);
@@ -506,6 +510,25 @@ try {
     ["/v25.0/me/accounts", "/v25.0/me/adaccounts"],
   );
   assert.ok(requests.every((entry) => entry.init.method === "GET"));
+
+  requests.length = 0;
+  const assetsWithNoSelectedPage = await clientModule.getMetaConnectionAssets({
+    accessToken: "staging-login-token",
+    appSecret: "test-app-secret",
+    allowedPageIds: new Set(),
+    allowedAdAccountIds: new Set(["222222222222222"]),
+  });
+
+  assert.deepEqual(assetsWithNoSelectedPage.pages, []);
+  assert.doesNotMatch(
+    JSON.stringify(assetsWithNoSelectedPage),
+    /Bon-Kredit|Boncred Facebook-Seite|bonkredit\.de|boncred\.official|17841400000000999|17841400000000002/,
+  );
+  assert.ok(
+    callbackSource.indexOf("!assets.pages.length")
+      < callbackSource.indexOf('admin.rpc("replace_meta_connection"'),
+    "empty page selection must abort before connection storage",
+  );
 
   // Simulate debug_token returning act_ prefixed string target_ids.
   requests.length = 0;
