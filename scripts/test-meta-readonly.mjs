@@ -691,14 +691,15 @@ try {
     ],
   );
   assert.ok(requests.every((entry) => entry.init.method === "GET"));
+  // Assigned edges must stay fully parameterless — including no appsecret_proof
+  // query (Graph code 100 in production when any query was present).
   assert.ok(
     requests.every(
       (entry) =>
-        !entry.url.searchParams.has("fields")
+        entry.url.search === ""
+        && !entry.url.searchParams.has("fields")
         && !entry.url.searchParams.has("limit")
-        && [...entry.url.searchParams.keys()].every(
-          (key) => key === "appsecret_proof",
-        ),
+        && !entry.url.searchParams.has("appsecret_proof"),
     ),
   );
   assert.ok(
@@ -707,6 +708,10 @@ try {
         entry.init.headers.Authorization ===
         "Bearer business-integration-system-user-token",
     ),
+  );
+  assert.match(
+    await readFile(clientSourcePath, "utf8"),
+    /includeAppSecretProof:\s*false/,
   );
 
   // Empty page/ad allow-lists must not fall open to every token-visible asset

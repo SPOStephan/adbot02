@@ -427,16 +427,29 @@ export async function GET(request: Request) {
     revalidatePath("/dashboard", "page");
     return dashboardRedirect("connected");
   } catch (error) {
+    const graphCode = error instanceof MetaGraphError ? error.code : null;
+    const graphMessage =
+      error instanceof MetaGraphError ? error.graphMessage : null;
     console.error("[meta-oauth] Callback konnte nicht verarbeitet werden", {
       stage,
       kind: error instanceof MetaGraphError ? "meta_graph" : "internal",
       status: error instanceof MetaGraphError ? error.status : null,
-      code: error instanceof MetaGraphError ? error.code : null,
+      code: graphCode,
       subcode: error instanceof MetaGraphError ? error.subcode : null,
-      graphMessage:
-        error instanceof MetaGraphError ? error.graphMessage : null,
+      graphMessage,
       name: error instanceof Error ? error.name : "unknown",
     });
+
+    if (
+      stage === "asset_discovery" &&
+      error instanceof MetaGraphError &&
+      error.code === 100
+    ) {
+      return dashboardRedirect("error", "assigned_assets_invalid_parameter", {
+        stage,
+      });
+    }
+
     return dashboardRedirect("error", "callback", { stage });
   }
 }

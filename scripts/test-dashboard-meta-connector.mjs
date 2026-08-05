@@ -85,6 +85,7 @@ assert.match(dashboardSource, /no_assets/);
 assert.match(dashboardSource, /missing_page_targets/);
 assert.match(dashboardSource, /missing_instagram_targets/);
 assert.match(dashboardSource, /authorization_reset/);
+assert.match(dashboardSource, /assigned_assets_invalid_parameter/);
 assert.match(
   dashboardSource,
   /<form action="\/api\/connectors\/meta\/start" method="post">/,
@@ -271,6 +272,7 @@ assert.match(callbackSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
 assert.match(callbackSource, /business_integration_system_user/);
 assert.doesNotMatch(callbackSource, /resolveMetaSelectedAdAccountIds|promote_pages/);
 assert.match(callbackSource, /missing_page_targets/);
+assert.match(callbackSource, /assigned_assets_invalid_parameter/);
 assert.match(callbackSource, /missing_ad_account_targets/);
 assert.match(callbackSource, /missing_instagram_targets/);
 assert.doesNotMatch(

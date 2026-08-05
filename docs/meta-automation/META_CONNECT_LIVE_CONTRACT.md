@@ -27,7 +27,7 @@ Stabiler Production-Connect über Facebook Login for Business, unabhängig vom B
 - `/me/accounts` / `/me/adaccounts` als Dialogauswahl
 - Instagram aus `page.instagram_business_account`
 - System-User-Assigned-Modus ohne nachweislichen Vollwiderruf
-- `fields` / `limit` an den drei `assigned_*`-Edges (Graph Code 100)
+- Jede Query an den drei `assigned_*`-Edges — inkl. `fields`, `limit` und `appsecret_proof` (Graph Code 100). Auth nur per `Authorization: Bearer`.
 
 ## Abnahme
 

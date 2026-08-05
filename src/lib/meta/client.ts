@@ -453,11 +453,16 @@ function addTokenProtection(
   url: URL,
   accessToken: string,
   appSecret: string,
+  options?: { includeAppSecretProof?: boolean },
 ): Record<string, string> {
-  url.searchParams.set(
-    "appsecret_proof",
-    createAppSecretProof(accessToken, appSecret),
-  );
+  // Business System User assigned_* edges are documented as parameterless.
+  // Adding appsecret_proof (or fields/limit) yields Graph code 100.
+  if (options?.includeAppSecretProof !== false) {
+    url.searchParams.set(
+      "appsecret_proof",
+      createAppSecretProof(accessToken, appSecret),
+    );
+  }
 
   return {
     Authorization: `Bearer ${accessToken}`,
@@ -543,11 +548,14 @@ async function fetchMetaCollection<T>(input: {
   maxPages?: number;
   maxItems?: number;
   requireComplete?: boolean;
+  /** When false, do not append appsecret_proof (required for parameterless edges). */
+  includeAppSecretProof?: boolean;
 }): Promise<{ items: T[]; usage: MetaUsageSnapshot }> {
   const items: T[] = [];
   const seenPageUrls = new Set<string>();
   let usage = EMPTY_USAGE;
   let nextUrl: URL | null = input.initialUrl;
+  const includeAppSecretProof = input.includeAppSecretProof !== false;
   const maxPages = Math.max(
     1,
     Math.min(
@@ -569,6 +577,7 @@ async function fetchMetaCollection<T>(input: {
       nextUrl,
       input.accessToken,
       input.appSecret,
+      { includeAppSecretProof },
     );
     const response = await fetchMetaJson(nextUrl, headers);
     usage = mergeMetaUsage(usage, response.usage);
@@ -1221,6 +1230,16 @@ async function getMetaSystemUserAssignedAssets(input: {
     META_GRAPH_ORIGIN,
   );
 
+  if (
+    assignedPagesUrl.search ||
+    assignedInstagramUrl.search ||
+    assignedAdAccountsUrl.search
+  ) {
+    throw new MetaGraphError(400, {
+      error: { message: "assigned_edges_must_be_parameterless" },
+    });
+  }
+
   const [pagesResult, instagramResult, adAccountsResult] = await Promise.all([
     fetchMetaCollection({
       initialUrl: assignedPagesUrl,
@@ -1230,6 +1249,7 @@ async function getMetaSystemUserAssignedAssets(input: {
         parseAssignedPageAsset(value, input.accessToken),
       maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
       requireComplete: true,
+      includeAppSecretProof: false,
     }),
     fetchMetaCollection({
       initialUrl: assignedInstagramUrl,
@@ -1238,6 +1258,7 @@ async function getMetaSystemUserAssignedAssets(input: {
       parseItem: parseInstagramAccountAsset,
       maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
       requireComplete: true,
+      includeAppSecretProof: false,
     }),
     fetchMetaCollection({
       initialUrl: assignedAdAccountsUrl,
@@ -1246,6 +1267,7 @@ async function getMetaSystemUserAssignedAssets(input: {
       parseItem: parseAssignedAdAccount,
       maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
       requireComplete: true,
+      includeAppSecretProof: false,
     }),
   ]);
 
