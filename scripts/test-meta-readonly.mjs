@@ -43,7 +43,8 @@ try {
   );
   assert.match(clientSource, /candidateInstagramAccountIds/);
   assert.match(clientSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
-  assert.match(clientSource, /BUSINESS_INTEGRATION_SYSTEM_USER/);
+  assert.match(clientSource, /isSystemUserTokenType/);
+  assert.match(clientSource, /normalized === "SYSTEM_USER"/);
   assert.match(clientSource, /business_integration_system_user/);
   assert.match(clientSource, /protectMetaDebugTokenTargetIds/);
   assert.match(clientSource, /asMetaAssetId/);
@@ -509,7 +510,24 @@ try {
   assert.equal(
     clientModule.shouldUseMetaSystemUserDirectAssetDiscovery({
       type: "SYSTEM_USER",
-      granularScopes: [{ scope: "instagram_basic", targetIds: [] }],
+      granularScopes: [
+        { scope: "pages_show_list", targetIds: [] },
+        { scope: "ads_management", targetIds: [] },
+        { scope: "ads_read", targetIds: [] },
+        { scope: "instagram_basic", targetIds: [] },
+        { scope: "pages_read_engagement", targetIds: [] },
+      ],
+    }),
+    true,
+  );
+  assert.equal(
+    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery({
+      type: "USER",
+      granularScopes: [
+        { scope: "pages_show_list", targetIds: [] },
+        { scope: "instagram_basic", targetIds: [] },
+        { scope: "ads_management", targetIds: [] },
+      ],
     }),
     false,
   );

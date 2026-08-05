@@ -201,6 +201,7 @@ export async function GET(request: Request) {
       shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug);
 
     console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
+      tokenType: tokenDebug.type,
       instagramTargets: allowedInstagramAccountIds.size,
       adAccountTargets: allowedAdAccountIds.size,
       selectionMode: useSystemUserDirectAssetDiscovery

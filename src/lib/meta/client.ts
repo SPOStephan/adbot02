@@ -848,7 +848,7 @@ export function shouldUseMetaSystemUserDirectAssetDiscovery(
   tokenDebug: MetaTokenDebug,
 ): boolean {
   return (
-    tokenDebug.type?.toUpperCase() === "BUSINESS_INTEGRATION_SYSTEM_USER"
+    isSystemUserTokenType(tokenDebug.type)
     && tokenDebug.granularScopes.length > 0
     && tokenDebug.granularScopes.every((item) => item.targetIds.length === 0)
   );
