@@ -82,6 +82,7 @@ assert.match(dashboardSource, /invalid_state/);
 assert.match(dashboardSource, /scope_validation/);
 assert.match(dashboardSource, /token_validation/);
 assert.match(dashboardSource, /no_assets/);
+assert.match(dashboardSource, /ambiguous_instagram/);
 assert.match(dashboardSource, /storage/);
 assert.match(dashboardSource, /meta_scopes\.includes\("ads_management"\)/);
 assert.doesNotMatch(dashboardSource, /business_management/);

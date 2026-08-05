@@ -739,7 +739,7 @@ export async function debugMetaAccessToken(input: {
   url.searchParams.set("input_token", input.accessToken);
   url.searchParams.set("access_token", `${input.appId}|${input.appSecret}`);
 
-  const response = await fetchMetaResponse(url);
+  const response = await fetchMetaResponse(url, {});
   const usage = metaUsageFromHeaders(response.headers);
   const rawText = await response.text();
 
