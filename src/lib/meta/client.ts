@@ -653,7 +653,7 @@ export async function resolvePersistedMetaAccessToken(input: {
 
   if (!codeTokenDebug.isValid) {
     throw new MetaGraphError(401, {
-      error: { message: "Meta code token is invalid", code: 190 },
+      error: { code: 190, type: "OAuthException" },
     });
   }
 
