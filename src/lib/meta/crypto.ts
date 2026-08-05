@@ -12,12 +12,13 @@ const OAUTH_STATE_TTL_SECONDS = 10 * 60;
 const AES_GCM_IV_BYTES = 12;
 const AES_GCM_KEY_BYTES = 32;
 
-type OAuthStatePayload = {
+export type OAuthStatePayload = {
   v: 1;
   sub: string;
   nonce: string;
   iat: number;
   exp: number;
+  authorizationReset: boolean;
 };
 
 export type EncryptedToken = {
@@ -70,6 +71,7 @@ export function createOAuthState(
   userId: string,
   secret: string,
   now = Date.now(),
+  authorizationReset = false,
 ): string {
   const issuedAt = Math.floor(now / 1000);
   const payload: OAuthStatePayload = {
@@ -78,6 +80,7 @@ export function createOAuthState(
     nonce: randomBytes(24).toString("base64url"),
     iat: issuedAt,
     exp: issuedAt + OAUTH_STATE_TTL_SECONDS,
+    authorizationReset,
   };
   const encodedPayload = encodeBase64Url(JSON.stringify(payload));
   const signature = hmacBase64Url(encodedPayload, secret);
@@ -127,7 +130,9 @@ export function verifyOAuthState(
       typeof parsed.nonce !== "string" ||
       !/^[A-Za-z0-9_-]{32}$/.test(parsed.nonce) ||
       typeof parsed.iat !== "number" ||
-      typeof parsed.exp !== "number"
+      typeof parsed.exp !== "number" ||
+      (parsed.authorizationReset !== undefined
+        && typeof parsed.authorizationReset !== "boolean")
     ) {
       return null;
     }
@@ -142,7 +147,10 @@ export function verifyOAuthState(
       return null;
     }
 
-    return parsed as OAuthStatePayload;
+    return {
+      ...(parsed as Omit<OAuthStatePayload, "authorizationReset">),
+      authorizationReset: parsed.authorizationReset === true,
+    };
   } catch {
     return null;
   }

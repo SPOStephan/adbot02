@@ -37,6 +37,7 @@ export function PlatformStatusCard({
   showMetaConnectionActions = false,
 }: PlatformStatusCardProps) {
   const canConnect = Boolean(actionHref && actionLabel && !connected);
+  const isMetaConnect = actionHref === "/api/connectors/meta/start";
 
   return (
     <article className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -79,6 +80,16 @@ export function PlatformStatusCard({
             <CheckCircle2 className="size-4" />
             Aktiv verbunden
           </div>
+        ) : canConnect && isMetaConnect ? (
+          <form action={actionHref} method="post">
+            <button
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              type="submit"
+            >
+              {actionLabel}
+              <ArrowUpRight className="size-4" />
+            </button>
+          </form>
         ) : canConnect ? (
           <Link
             className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"

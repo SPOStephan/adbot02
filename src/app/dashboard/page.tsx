@@ -98,6 +98,7 @@ const META_ERROR_MESSAGES: Record<string, string> = {
   invalid_state: "Die Sicherheitsprüfung ist abgelaufen oder ungültig. Bitte starte die Verbindung erneut.",
   scope_validation: "Die von Meta gewährten Berechtigungen entsprechen nicht dem minimalen sicheren Zugriff. Bitte bestätige den Reconnect vollständig.",
   token_validation: "Die Meta-Verbindung konnte nicht sicher bestätigt werden. Bitte verbinde Meta erneut.",
+  authorization_reset: "Die bisherige Meta-Autorisierung konnte nicht vollständig entfernt werden. Es wurden keine alten Assets übernommen. Bitte starte den Reconnect erneut.",
   no_assets: "Meta hat die gewählten Assets bestätigt, aber Adbot konnte sie nicht lesen. Bitte im Dialog erneut auswählen und verbinden.",
   missing_page_targets: "Meta hat keine Facebook-Seiten-IDs geliefert und keine Seite ist mit dem gewählten Instagram-Konto verknüpft. Ohne diese Auswahl speichert Adbot keine Seiten — auch keine älteren System-User-Zuweisungen.",
   missing_ad_account_targets: "Meta hat die Werbekonto-ID aus dem Dialog nicht in der Token-Antwort geliefert (ads_* target_ids fehlen). Adbot speichert deshalb kein Werbekonto und rät auch keins aus der Seite.",
@@ -1606,14 +1607,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           ? "Die Meta-Verbindung muss erneuert werden."
                           : "Der minimale Schreibscope muss bestätigt werden."}
                       </p>
-                      <Link
-                        className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
-                        href="/api/connectors/meta/start"
-                        prefetch={false}
-                      >
-                        Meta neu verbinden
-                        <ArrowUpRight className="size-4" />
-                      </Link>
+                      <form action="/api/connectors/meta/start" method="post">
+                        <button
+                          className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                          type="submit"
+                        >
+                          Meta neu verbinden
+                          <ArrowUpRight className="size-4" />
+                        </button>
+                      </form>
                     </div>
                   ) : (
                     <MetaSyncButton

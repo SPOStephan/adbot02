@@ -1,7 +1,9 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { resetStoredMetaAuthorization } from "@/lib/meta/authorization-reset";
+import { MetaGraphError } from "@/lib/meta/client";
+import { getMetaCallbackEnv } from "@/lib/meta/env";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -45,56 +47,31 @@ export async function POST(request: Request) {
     return json({ error: "unauthorized" }, 401);
   }
 
-  const admin = createAdminClient();
-  const { data: activeAccount, error: readError } = await admin
-    .from("platform_accounts")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("platform", "meta")
-    .is("revoked_at", null)
-    .maybeSingle();
+  try {
+    const {
+      appId,
+      appSecret,
+      tokenEncryptionKey,
+    } = getMetaCallbackEnv();
+    const reset = await resetStoredMetaAuthorization({
+      userId: user.id,
+      appId,
+      appSecret,
+      tokenEncryptionKey,
+    });
 
-  if (readError) {
-    console.error("[meta-oauth] Aktive Verbindung konnte vor dem Trennen nicht gelesen werden");
-    return json({ error: "disconnect_failed" }, 500);
-  }
-
-  if (!activeAccount) {
     revalidatePath("/dashboard", "page");
-    return json({ ok: true, status: "already_disconnected" });
-  }
-
-  const disconnectedAt = new Date().toISOString();
-  const { data: disconnectedAccount, error: updateError } = await admin
-    .from("platform_accounts")
-    .update({
-      revoked_at: disconnectedAt,
-      access_token: null,
-      refresh_token: null,
-      access_token_encrypted: null,
-      token_iv: null,
-      token_auth_tag: null,
-      expires_at: null,
-      refresh_at: null,
-      data_access_expires_at: null,
-      sync_lock_until: null,
-      sync_backoff_until: null,
-      sync_status: "reconnect_required",
-      sync_error_code: "customer_disconnected",
-      updated_at: disconnectedAt,
-    })
-    .eq("id", activeAccount.id)
-    .eq("user_id", user.id)
-    .eq("platform", "meta")
-    .is("revoked_at", null)
-    .select("id")
-    .maybeSingle();
-
-  if (updateError || !disconnectedAccount) {
-    console.error("[meta-oauth] Meta-Verbindung konnte nicht sicher getrennt werden");
+    return json({
+      ok: true,
+      status: reset.hadStoredAuthorization
+        ? "disconnected"
+        : "already_disconnected",
+    });
+  } catch (error) {
+    console.error("[meta-oauth] Meta konnte nicht vollständig getrennt werden", {
+      kind: error instanceof MetaGraphError ? "meta_graph" : "internal",
+      code: error instanceof MetaGraphError ? error.code : null,
+    });
     return json({ error: "disconnect_failed" }, 500);
   }
-
-  revalidatePath("/dashboard", "page");
-  return json({ ok: true, status: "disconnected" });
 }

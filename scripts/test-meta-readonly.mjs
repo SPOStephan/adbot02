@@ -37,11 +37,11 @@ try {
     .replace('from "./crypto";', 'from "./crypto.mjs";');
   const callbackSource = await readFile(callbackSourcePath, "utf8");
 
-  assert.doesNotMatch(
-    clientSource,
-    /assigned_instagram_accounts|client_business_id|business_management|\/instagram_accounts["'`]/,
-  );
-  assert.match(clientSource, /candidateInstagramAccountIds/);
+  assert.match(clientSource, /\/assigned_pages/);
+  assert.match(clientSource, /\/assigned_instagram_accounts/);
+  assert.match(clientSource, /\/assigned_ad_accounts/);
+  assert.match(clientSource, /requireComplete:\s*true/);
+  assert.doesNotMatch(clientSource, /candidateInstagramAccountIds/);
   assert.match(clientSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
   assert.match(clientSource, /isSystemUserTokenType/);
   assert.match(clientSource, /normalized === "SYSTEM_USER"/);
@@ -69,8 +69,11 @@ try {
   assert.match(clientSource, /auth_type", "rerequest"/);
   assert.doesNotMatch(
     callbackSource,
-    /systemUserId|clientBusinessId|client_business_id|business_management|assigned_instagram_accounts/,
+    /clientBusinessId|client_business_id|business_management/,
   );
+  assert.match(callbackSource, /systemUserId:\s*useSystemUserDirectAssetDiscovery/);
+  assert.match(callbackSource, /authorizationReset:\s*oauthState\.authorizationReset/);
+  assert.match(callbackSource, /revokeMetaAuthorization/);
   assert.match(callbackSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
   assert.match(callbackSource, /business_integration_system_user/);
   assert.match(callbackSource, /getMetaAdAccountGranularTargetIds/);
@@ -124,6 +127,43 @@ try {
   assert.equal(
     requests[0].init.headers.Authorization,
     "Bearer read-only-test-token",
+  );
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  await clientModule.revokeMetaAuthorization({
+    userId: "123456789012345",
+    accessToken: "token-to-revoke",
+    appSecret: "test-app-secret",
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url.pathname, "/v25.0/123456789012345/permissions");
+  assert.ok(requests[0].url.searchParams.get("appsecret_proof"));
+  assert.equal(requests[0].init.method, "DELETE");
+  assert.equal(requests[0].init.headers.Authorization, "Bearer token-to-revoke");
+
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: false }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  await assert.rejects(
+    clientModule.revokeMetaAuthorization({
+      userId: "123456789012345",
+      accessToken: "token-to-revoke",
+      appSecret: "test-app-secret",
+    }),
+    (error) =>
+      error instanceof clientModule.MetaGraphError && error.status === 502,
   );
 
   requests.length = 0;
@@ -487,48 +527,68 @@ try {
   );
 
   assert.equal(
-    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery({
-      type: "BUSINESS_INTEGRATION_SYSTEM_USER",
-      granularScopes: [
-        { scope: "pages_show_list", targetIds: [] },
-        { scope: "instagram_basic", targetIds: [] },
-        { scope: "ads_management", targetIds: [] },
-      ],
-    }),
+    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery(
+      {
+        type: "BUSINESS_INTEGRATION_SYSTEM_USER",
+        granularScopes: [
+          { scope: "pages_show_list", targetIds: [] },
+          { scope: "instagram_basic", targetIds: [] },
+          { scope: "ads_management", targetIds: [] },
+        ],
+      },
+      { authorizationReset: true },
+    ),
     true,
   );
   assert.equal(
-    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery({
-      type: "BUSINESS_INTEGRATION_SYSTEM_USER",
-      granularScopes: [
-        { scope: "pages_show_list", targetIds: [] },
-        { scope: "instagram_basic", targetIds: ["17841400000000002"] },
-      ],
-    }),
+    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery(
+      {
+        type: "BUSINESS_INTEGRATION_SYSTEM_USER",
+        granularScopes: [
+          { scope: "pages_show_list", targetIds: [] },
+          { scope: "instagram_basic", targetIds: ["17841400000000002"] },
+        ],
+      },
+      { authorizationReset: true },
+    ),
+    false,
+  );
+  const allEmptySystemUserDebug = {
+    type: "SYSTEM_USER",
+    granularScopes: [
+      { scope: "pages_show_list", targetIds: [] },
+      { scope: "ads_management", targetIds: [] },
+      { scope: "ads_read", targetIds: [] },
+      { scope: "instagram_basic", targetIds: [] },
+      { scope: "pages_read_engagement", targetIds: [] },
+    ],
+  };
+  assert.equal(
+    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery(
+      allEmptySystemUserDebug,
+      { authorizationReset: false },
+    ),
     false,
   );
   assert.equal(
-    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery({
-      type: "SYSTEM_USER",
-      granularScopes: [
-        { scope: "pages_show_list", targetIds: [] },
-        { scope: "ads_management", targetIds: [] },
-        { scope: "ads_read", targetIds: [] },
-        { scope: "instagram_basic", targetIds: [] },
-        { scope: "pages_read_engagement", targetIds: [] },
-      ],
-    }),
+    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery(
+      allEmptySystemUserDebug,
+      { authorizationReset: true },
+    ),
     true,
   );
   assert.equal(
-    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery({
-      type: "USER",
-      granularScopes: [
-        { scope: "pages_show_list", targetIds: [] },
-        { scope: "instagram_basic", targetIds: [] },
-        { scope: "ads_management", targetIds: [] },
-      ],
-    }),
+    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery(
+      {
+        type: "USER",
+        granularScopes: [
+          { scope: "pages_show_list", targetIds: [] },
+          { scope: "instagram_basic", targetIds: [] },
+          { scope: "ads_management", targetIds: [] },
+        ],
+      },
+      { authorizationReset: true },
+    ),
     false,
   );
 
@@ -537,29 +597,14 @@ try {
     const url = new URL(String(input));
     requests.push({ url, init });
 
-    if (url.pathname === "/v25.0/me/accounts") {
+    if (url.pathname === "/v25.0/999999999999999/assigned_pages") {
       return new Response(
         JSON.stringify({
           data: [
             {
-              id: "111111111111111",
-              name: "Erste im Meta-Dialog gewählte Seite",
-              access_token: "ephemeral-page-token-1",
-              instagram_business_account: {
-                id: "17841400000000999",
-                name: "Nur mit der Seite verknüpft",
-                username: "not.selected.in.meta",
-              },
-            },
-            {
               id: "111111111111112",
-              name: "Zweite im Meta-Dialog gewählte Seite",
-              access_token: "ephemeral-page-token-2",
-              instagram_business_account: {
-                id: "17841400000000002",
-                name: "Im Meta-Dialog gewähltes Instagram",
-                username: "selected.in.meta",
-              },
+              name: "Boncred Facebook-Seite",
+              access_token: "ephemeral-page-token-boncred",
             },
           ],
         }),
@@ -567,29 +612,26 @@ try {
       );
     }
 
-    if (url.pathname === "/v25.0/17841400000000999") {
-      return new Response(
-        JSON.stringify({ error: { code: 200, message: "Permissions error" } }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (url.pathname === "/v25.0/17841400000000002") {
+    if (url.pathname === "/v25.0/999999999999999/assigned_instagram_accounts") {
       return new Response(
         JSON.stringify({
-          id: "17841400000000002",
-          name: "Im Meta-Dialog gewähltes Instagram",
-          username: "selected.in.meta",
+          data: [
+            {
+              id: "17841400000000002",
+              name: "Boncred",
+              username: "boncred.official",
+            },
+          ],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
 
-    if (url.pathname === "/v25.0/me/adaccounts") {
+    if (url.pathname === "/v25.0/999999999999999/assigned_ad_accounts") {
       return new Response(
         JSON.stringify({
           data: [
-            { id: "act_222222222222222", name: "Erstes gewähltes Werbekonto" },
+            { id: "act_222222222222222", name: "Ausgewähltes Werbekonto" },
             { id: "act_333333333333333", name: "Zweites gewähltes Werbekonto" },
           ],
         }),
@@ -597,12 +639,13 @@ try {
       );
     }
 
-    throw new Error(`Unerwarteter System-User-Testpfad: ${url.pathname}`);
+    throw new Error(`Unzulässiger System-User-Testpfad: ${url.pathname}`);
   };
 
   const systemUserSelectedAssets = await clientModule.getMetaConnectionAssets({
     accessToken: "business-integration-system-user-token",
     appSecret: "test-app-secret",
+    systemUserId: "999999999999999",
     allowedPageIds: new Set(),
     allowedInstagramAccountIds: new Set(),
     allowedAdAccountIds: new Set(),
@@ -611,7 +654,7 @@ try {
 
   assert.deepEqual(
     systemUserSelectedAssets.pages.map((page) => page.id),
-    ["111111111111111", "111111111111112"],
+    ["111111111111112"],
   );
   assert.deepEqual(
     systemUserSelectedAssets.adAccounts.map((account) => account.id),
@@ -620,16 +663,31 @@ try {
   assert.deepEqual(systemUserSelectedAssets.instagramAccounts, [
     {
       id: "17841400000000002",
-      name: "Im Meta-Dialog gewähltes Instagram",
-      username: "selected.in.meta",
+      name: "Boncred",
+      username: "boncred.official",
     },
   ]);
   assert.equal(systemUserSelectedAssets.instagramDiscovery, "system_user_token");
   assert.doesNotMatch(
-    JSON.stringify(systemUserSelectedAssets.instagramAccounts),
-    /not\.selected\.in\.meta|17841400000000999/,
+    JSON.stringify(systemUserSelectedAssets),
+    /Bon-Kredit|bonkredit\.de|17841400000000999|111111111111111/,
   );
-  assert.equal(requests.length, 4);
+  assert.deepEqual(
+    requests.map((entry) => entry.url.pathname).sort(),
+    [
+      "/v25.0/999999999999999/assigned_ad_accounts",
+      "/v25.0/999999999999999/assigned_instagram_accounts",
+      "/v25.0/999999999999999/assigned_pages",
+    ],
+  );
+  assert.ok(requests.every((entry) => entry.init.method === "GET"));
+  assert.ok(
+    requests.every(
+      (entry) =>
+        entry.init.headers.Authorization ===
+        "Bearer business-integration-system-user-token",
+    ),
+  );
 
   // Empty page/ad allow-lists must not fall open to every token-visible asset
   // (that stored two Facebook pages when only one was selected in Meta).
