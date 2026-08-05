@@ -99,6 +99,7 @@ const META_ERROR_MESSAGES: Record<string, string> = {
   scope_validation: "Die von Meta gewährten Berechtigungen entsprechen nicht dem minimalen sicheren Zugriff. Bitte bestätige den Reconnect vollständig.",
   token_validation: "Die Meta-Verbindung konnte nicht sicher bestätigt werden. Bitte verbinde Meta erneut.",
   no_assets: "Bitte im Meta-Dialog Facebook-Seite, Instagram-Konto und Werbekonto ausdrücklich auswählen. Instagram wird nur aus Metas Bestätigung übernommen, nicht aus einer Seitenverknüpfung.",
+  ambiguous_instagram: "Meta hat mehrere Instagram-Profile über deine Seiten freigegeben, aber keine eindeutige Instagram-Auswahl geliefert. Wähle im Dialog nur die Facebook-Seite zu deinem gewünschten Instagram-Konto — oder stelle sicher, dass Instagram dort ausdrücklich als eigenes Asset gewählt wird.",
   storage: "Die Verbindung konnte nicht sicher gespeichert werden. Es wurde keine Verbindung aktiviert.",
   callback: "Die Meta-Antwort konnte nicht verarbeitet werden. Bitte starte die Verbindung erneut.",
 };
