@@ -260,6 +260,8 @@ assert.doesNotMatch(
   callbackSource,
   /const instagramAccounts = assets\.pages\.flatMap/,
 );
+assert.match(callbackSource, /resolvePersistedMetaAccessToken/);
+assert.match(callbackSource, /meta_callback_stage/);
 assert.match(callbackSource, /dashboardRedirect\("error", "storage"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "invalid_state"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation",/);

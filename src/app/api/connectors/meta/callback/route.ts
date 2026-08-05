@@ -4,12 +4,12 @@ import { NextResponse } from "next/server";
 import {
   debugMetaAccessToken,
   exchangeCodeForAccessToken,
-  exchangeForLongLivedAccessToken,
   getGranularTargetIds,
   getMetaConnectionAssets,
   getMetaIdentity,
   META_ALLOWED_SCOPES,
   MetaGraphError,
+  resolvePersistedMetaAccessToken,
 } from "@/lib/meta/client";
 import { encryptAccessToken, verifyOAuthState } from "@/lib/meta/crypto";
 import { getMetaCallbackEnv } from "@/lib/meta/env";
@@ -34,7 +34,11 @@ function noStoreRedirect(url: URL) {
 function dashboardRedirect(
   status: "connected" | "error",
   reason?: string,
-  details?: { missingScopes?: string[]; unexpectedScopes?: string[] },
+  details?: {
+    missingScopes?: string[];
+    unexpectedScopes?: string[];
+    stage?: string;
+  },
 ) {
   const url = createPortalUrl("/dashboard");
   url.searchParams.set("meta", status);
@@ -52,6 +56,10 @@ function dashboardRedirect(
       "meta_unexpected_scopes",
       details.unexpectedScopes.join(","),
     );
+  }
+
+  if (details?.stage) {
+    url.searchParams.set("meta_callback_stage", details.stage);
   }
 
   return noStoreRedirect(url);
@@ -130,17 +138,17 @@ export async function GET(request: Request) {
     }
 
     stage = "code_exchange";
-    const shortLivedToken = await exchangeCodeForAccessToken({
+    const codeAccessToken = await exchangeCodeForAccessToken({
       appId,
       appSecret,
       code,
       redirectUri: createPortalUrl("/api/connectors/meta/callback").toString(),
     });
     stage = "long_lived_token_exchange";
-    const longLivedToken = await exchangeForLongLivedAccessToken({
+    const longLivedToken = await resolvePersistedMetaAccessToken({
       appId,
       appSecret,
-      shortLivedAccessToken: shortLivedToken.accessToken,
+      codeAccessToken,
     });
     stage = "token_debug";
     const tokenDebug = await debugMetaAccessToken({
@@ -302,6 +310,6 @@ export async function GET(request: Request) {
       code: error instanceof MetaGraphError ? error.code : null,
       name: error instanceof Error ? error.name : "unknown",
     });
-    return dashboardRedirect("error", "callback");
+    return dashboardRedirect("error", "callback", { stage });
   }
 }

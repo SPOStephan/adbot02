@@ -80,6 +80,7 @@ type DashboardPageProps = {
     meta_error?: string | string[];
     meta_missing_scopes?: string | string[];
     meta_unexpected_scopes?: string | string[];
+    meta_callback_stage?: string | string[];
   }>;
 };
 
@@ -106,6 +107,20 @@ function firstQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+const META_CALLBACK_STAGE_MESSAGES: Record<string, string> = {
+  environment: "Umgebungskonfiguration",
+  state_validation: "Sicherheitsstatus",
+  code_exchange: "Code-Austausch",
+  long_lived_token_exchange: "Token-Verlängerung",
+  token_debug: "Token-Prüfung",
+  identity: "Identitätsprüfung",
+  scope_validation: "Berechtigungsprüfung",
+  asset_discovery: "Asset-Ermittlung",
+  token_encryption: "Token-Verschlüsselung",
+  storage: "Speichern",
+  revalidation: "Aktualisierung",
+};
+
 function getMetaNotice(
   meta: string | undefined,
   errorReason: string | undefined,
@@ -113,6 +128,7 @@ function getMetaNotice(
   writeScopeGranted: boolean,
   missingScopes?: string,
   unexpectedScopes?: string,
+  callbackStage?: string,
 ): MetaNotice | null {
   if (meta === "connected") {
     return {
@@ -142,6 +158,12 @@ function getMetaNotice(
       if (parts.length) {
         message = `${message} ${parts.join(". ")}. Erlaubt sind nur: ads_read, ads_management, instagram_basic, pages_read_engagement, pages_show_list.`;
       }
+    }
+
+    if (errorReason === "callback" && callbackStage) {
+      const stageLabel =
+        META_CALLBACK_STAGE_MESSAGES[callbackStage] ?? callbackStage;
+      message = `${message} Schritt: ${stageLabel}.`;
     }
 
     return {
@@ -454,6 +476,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     writeScopeGranted,
     firstQueryValue(query.meta_missing_scopes),
     firstQueryValue(query.meta_unexpected_scopes),
+    firstQueryValue(query.meta_callback_stage),
   );
   const [
     { data: liveCampaigns },
