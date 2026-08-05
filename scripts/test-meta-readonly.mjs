@@ -41,6 +41,16 @@ try {
   assert.match(clientSource, /\/assigned_instagram_accounts/);
   assert.match(clientSource, /\/assigned_ad_accounts/);
   assert.match(clientSource, /requireComplete:\s*true/);
+  const assignedAssetsSource = clientSource.slice(
+    clientSource.indexOf("async function getMetaSystemUserAssignedAssets"),
+    clientSource.indexOf("export async function getMetaConnectionAssets"),
+  );
+  assert.doesNotMatch(
+    assignedAssetsSource,
+    /searchParams\.set\(\s*"(?:fields|limit)"/,
+  );
+  assert.match(assignedAssetsSource, /parseAssignedPageAsset/);
+  assert.match(assignedAssetsSource, /parseAssignedAdAccount/);
   assert.doesNotMatch(clientSource, /candidateInstagramAccountIds/);
   assert.match(clientSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
   assert.match(clientSource, /isSystemUserTokenType/);
@@ -84,6 +94,7 @@ try {
   assert.match(callbackSource, /p_assets:\s*assetRows/);
   assert.match(callbackSource, /p_scopes:\s*\[\.\.\.META_ALLOWED_SCOPES\]/);
   assert.match(callbackSource, /meta_callback_stage/);
+  assert.match(callbackSource, /graphMessage/);
   assert.match(clientSource, /resolvePersistedMetaAccessToken/);
   assert.match(clientSource, /set_token_expires_in_60_days/);
 
@@ -604,7 +615,6 @@ try {
             {
               id: "111111111111112",
               name: "Boncred Facebook-Seite",
-              access_token: "ephemeral-page-token-boncred",
             },
           ],
         }),
@@ -681,6 +691,16 @@ try {
     ],
   );
   assert.ok(requests.every((entry) => entry.init.method === "GET"));
+  assert.ok(
+    requests.every(
+      (entry) =>
+        !entry.url.searchParams.has("fields")
+        && !entry.url.searchParams.has("limit")
+        && [...entry.url.searchParams.keys()].every(
+          (key) => key === "appsecret_proof",
+        ),
+    ),
+  );
   assert.ok(
     requests.every(
       (entry) =>

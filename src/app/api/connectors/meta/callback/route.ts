@@ -429,7 +429,11 @@ export async function GET(request: Request) {
     console.error("[meta-oauth] Callback konnte nicht verarbeitet werden", {
       stage,
       kind: error instanceof MetaGraphError ? "meta_graph" : "internal",
+      status: error instanceof MetaGraphError ? error.status : null,
       code: error instanceof MetaGraphError ? error.code : null,
+      subcode: error instanceof MetaGraphError ? error.subcode : null,
+      graphMessage:
+        error instanceof MetaGraphError ? error.graphMessage : null,
       name: error instanceof Error ? error.name : "unknown",
     });
     return dashboardRedirect("error", "callback", { stage });
