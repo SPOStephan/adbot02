@@ -44,9 +44,9 @@ try {
   assert.doesNotMatch(clientSource, /candidateInstagramAccountIds/);
   assert.match(clientSource, /protectMetaDebugTokenTargetIds/);
   assert.match(clientSource, /asMetaAssetId/);
-  assert.match(clientSource, /unique_page_candidate/);
-  assert.match(clientSource, /ambiguous_page_candidates/);
-  assert.match(callbackSource, /ambiguous_instagram/);
+  assert.doesNotMatch(clientSource, /unique_page_candidate|ambiguous_page_candidates/);
+  assert.match(callbackSource, /missing_instagram_targets/);
+  assert.doesNotMatch(callbackSource, /ambiguous_instagram/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
   assert.doesNotMatch(
@@ -380,8 +380,16 @@ try {
     ["111111111111112"],
   );
 
-  // Multiple readable page-linked IGs without granular targets are ambiguous —
-  // never store @bonkredit.de just because the Bon-Kredit page was selected.
+  // Already-quoted string target_ids must not be double-quoted.
+  assert.equal(
+    clientModule.protectMetaDebugTokenTargetIds(
+      '{"data":{"granular_scopes":[{"scope":"instagram_basic","target_ids":["17841400000000002"]}]}}',
+    ),
+    '{"data":{"granular_scopes":[{"scope":"instagram_basic","target_ids":["17841400000000002"]}]}}',
+  );
+
+  // Page-linked Instagram is NEVER stored — not even when exactly one page has
+  // a linked IG (that invented @bonkredit.de for meer-erfolg@gmx.de).
   requests.length = 0;
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
@@ -417,28 +425,6 @@ try {
       );
     }
 
-    if (url.pathname === "/v25.0/17841400000000999") {
-      return new Response(
-        JSON.stringify({
-          id: "17841400000000999",
-          name: "Nicht im Meta-Dialog ausgewählt",
-          username: "bonkredit.de",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (url.pathname === "/v25.0/17841400000000002") {
-      return new Response(
-        JSON.stringify({
-          id: "17841400000000002",
-          name: "Im Meta-Dialog ausgewählt",
-          username: "boncred.official",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
     if (url.pathname === "/v25.0/me/adaccounts") {
       return new Response(
         JSON.stringify({
@@ -448,27 +434,35 @@ try {
       );
     }
 
-    throw new Error(`Unerwarteter Meta-Testpfad: ${url.pathname}`);
+    throw new Error(
+      `Unerwarteter Meta-Testpfad (kein Seiten-Instagram-Fallback): ${url.pathname}`,
+    );
   };
 
-  const ambiguousAssets = await clientModule.getMetaConnectionAssets({
-    accessToken: "delegated-instagram-token",
-    appSecret: "test-app-secret",
-    allowedPageIds: new Set([
-      "111111111111111",
-      "111111111111112",
-    ]),
-    allowedInstagramAccountIds: new Set(),
-    allowedAdAccountIds: new Set(["222222222222222"]),
-  });
+  const assetsWithoutGranularInstagram =
+    await clientModule.getMetaConnectionAssets({
+      accessToken: "delegated-instagram-token",
+      appSecret: "test-app-secret",
+      allowedPageIds: new Set([
+        "111111111111111",
+        "111111111111112",
+      ]),
+      allowedInstagramAccountIds: new Set(),
+      allowedAdAccountIds: new Set(["222222222222222"]),
+    });
 
-  assert.equal(ambiguousAssets.pages.length, 2);
-  assert.equal(ambiguousAssets.adAccounts.length, 1);
-  assert.deepEqual(ambiguousAssets.instagramAccounts, []);
-  assert.equal(ambiguousAssets.instagramDiscovery, "ambiguous_page_candidates");
+  assert.equal(assetsWithoutGranularInstagram.pages.length, 2);
+  assert.equal(assetsWithoutGranularInstagram.adAccounts.length, 1);
+  assert.deepEqual(assetsWithoutGranularInstagram.instagramAccounts, []);
+  assert.equal(assetsWithoutGranularInstagram.instagramDiscovery, "none");
+  assert.equal(
+    requests.filter((entry) =>
+      entry.url.pathname.startsWith("/v25.0/178414"),
+    ).length,
+    0,
+  );
 
-  // Exactly one readable page-linked IG is an allowed fallback when Meta omits
-  // instagram_basic target_ids.
+  // Single page-linked IG is still not an Instagram selection.
   requests.length = 0;
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
@@ -479,27 +473,16 @@ try {
         JSON.stringify({
           data: [
             {
-              id: "111111111111112",
-              name: "Boncred Facebook-Seite",
-              access_token: "ephemeral-page-token-2",
+              id: "111111111111111",
+              name: "Bon-Kredit Facebook-Seite",
+              access_token: "ephemeral-page-token-1",
               instagram_business_account: {
-                id: "17841400000000002",
-                name: "Im Meta-Dialog ausgewählt",
-                username: "boncred.official",
+                id: "17841400000000999",
+                name: "Fantasiewert",
+                username: "bonkredit.de",
               },
             },
           ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (url.pathname === "/v25.0/17841400000000002") {
-      return new Response(
-        JSON.stringify({
-          id: "17841400000000002",
-          name: "Im Meta-Dialog ausgewählt",
-          username: "boncred.official",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -514,24 +497,20 @@ try {
       );
     }
 
-    throw new Error(`Unerwarteter Meta-Testpfad: ${url.pathname}`);
+    throw new Error(
+      `Unerwarteter Meta-Testpfad (kein Unique-Seiten-Fallback): ${url.pathname}`,
+    );
   };
 
-  const uniqueFallbackAssets = await clientModule.getMetaConnectionAssets({
+  const singlePageLinkedIgnored = await clientModule.getMetaConnectionAssets({
     accessToken: "delegated-instagram-token",
     appSecret: "test-app-secret",
-    allowedPageIds: new Set(["111111111111112"]),
+    allowedPageIds: new Set(["111111111111111"]),
     allowedInstagramAccountIds: new Set(),
     allowedAdAccountIds: new Set(["222222222222222"]),
   });
-  assert.equal(uniqueFallbackAssets.instagramDiscovery, "unique_page_candidate");
-  assert.deepEqual(uniqueFallbackAssets.instagramAccounts, [
-    {
-      id: "17841400000000002",
-      name: "Im Meta-Dialog ausgewählt",
-      username: "boncred.official",
-    },
-  ]);
+  assert.deepEqual(singlePageLinkedIgnored.instagramAccounts, []);
+  assert.equal(singlePageLinkedIgnored.instagramDiscovery, "none");
 
   requests.length = 0;
   globalThis.fetch = async (input, init) => {

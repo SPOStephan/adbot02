@@ -77,11 +77,7 @@ export type MetaAdAccountAsset = {
   name: string;
 };
 
-export type MetaInstagramDiscoverySource =
-  | "granular_targets"
-  | "unique_page_candidate"
-  | "ambiguous_page_candidates"
-  | "none";
+export type MetaInstagramDiscoverySource = "granular_targets" | "none";
 
 export type MetaConnectionAssets = {
   pages: MetaPageAsset[];
@@ -347,14 +343,17 @@ async function readJson(response: Response): Promise<unknown> {
 
 /**
  * Meta documents target_ids as int[], but Instagram/Page IDs often exceed
- * Number.MAX_SAFE_INTEGER. Quote long digit runs inside target_ids arrays
- * before JSON.parse so IDs stay exact strings.
+ * Number.MAX_SAFE_INTEGER. Quote only unquoted long digit runs inside
+ * target_ids arrays before JSON.parse so IDs stay exact strings.
  */
 export function protectMetaDebugTokenTargetIds(rawJson: string): string {
   return rawJson.replace(
     /"target_ids"\s*:\s*\[([\s\S]*?)\]/g,
     (_match, body: string) => {
-      const quoted = body.replace(/\b(\d{10,})\b/g, '"$1"');
+      const quoted = body.replace(
+        /(^|[\[,\s])(\d{10,})(?=[\],\s]|$)/g,
+        '$1"$2"',
+      );
       return `"target_ids":[${quoted}]`;
     },
   );
@@ -992,51 +991,16 @@ export async function getMetaConnectionAssets(input: {
   allowedAdAccountIds?: Set<string>;
 }): Promise<MetaConnectionAssets> {
   const pagesResult = await getMetaPageAssets(input);
-  let instagramResult = await getMetaInstagramAccountAssets({
+  // Instagram may only come from debug_token instagram_basic target_ids.
+  // Never invent profiles from page.instagram_business_account — that is how
+  // @bonkredit.de appeared despite only boncred.official being selected.
+  const instagramResult = await getMetaInstagramAccountAssets({
     accessToken: input.accessToken,
     appSecret: input.appSecret,
     allowedInstagramAccountIds: input.allowedInstagramAccountIds,
   });
-  let instagramDiscovery: MetaInstagramDiscoverySource =
-    input.allowedInstagramAccountIds.size > 0
-      ? instagramResult.instagramAccounts.length
-        ? "granular_targets"
-        : "none"
-      : "none";
-
-  // When debug_token omits instagram_basic target_ids ("applies to all"),
-  // page-linked IGs are only a safe fallback if exactly one profile is
-  // readable. Multiple readable page-linked IGs are ambiguous — never invent
-  // a selection (that stored @bonkredit.de despite only boncred.official).
-  if (
-    !instagramResult.instagramAccounts.length
-    && input.allowedInstagramAccountIds.size === 0
-  ) {
-    const pageLinkedIds = new Set(
-      pagesResult.pages.flatMap((page) =>
-        page.instagramAccount ? [page.instagramAccount.id] : [],
-      ),
-    );
-    const verifiedPageLinked = await getMetaInstagramAccountAssets({
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      allowedInstagramAccountIds: pageLinkedIds,
-    });
-    instagramResult = {
-      instagramAccounts: [],
-      usage: mergeMetaUsage(instagramResult.usage, verifiedPageLinked.usage),
-    };
-
-    if (verifiedPageLinked.instagramAccounts.length === 1) {
-      instagramResult = {
-        instagramAccounts: verifiedPageLinked.instagramAccounts,
-        usage: instagramResult.usage,
-      };
-      instagramDiscovery = "unique_page_candidate";
-    } else if (verifiedPageLinked.instagramAccounts.length > 1) {
-      instagramDiscovery = "ambiguous_page_candidates";
-    }
-  }
+  const instagramDiscovery: MetaInstagramDiscoverySource =
+    instagramResult.instagramAccounts.length > 0 ? "granular_targets" : "none";
 
   const adAccountUrl = new URL(
     `/${META_GRAPH_VERSION}/me/adaccounts`,

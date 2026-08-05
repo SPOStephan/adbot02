@@ -82,7 +82,16 @@ assert.match(dashboardSource, /invalid_state/);
 assert.match(dashboardSource, /scope_validation/);
 assert.match(dashboardSource, /token_validation/);
 assert.match(dashboardSource, /no_assets/);
-assert.match(dashboardSource, /ambiguous_instagram/);
+assert.match(dashboardSource, /missing_instagram_targets/);
+assert.doesNotMatch(dashboardSource, /ambiguous_instagram/);
+assert.match(
+  dashboardSource,
+  /selectedInstagramIds\.has\(asset\.meta_asset_id\)/,
+);
+assert.doesNotMatch(
+  dashboardSource,
+  /selectedInstagramIds\.size === 0/,
+);
 assert.match(dashboardSource, /storage/);
 assert.match(dashboardSource, /meta_scopes\.includes\("ads_management"\)/);
 assert.doesNotMatch(dashboardSource, /business_management/);
@@ -252,11 +261,11 @@ assert.match(
   /getGranularTargetIds\(tokenDebug, "instagram_basic"\)/,
 );
 assert.match(callbackSource, /allowedInstagramAccountIds/);
-assert.match(callbackSource, /ambiguous_instagram/);
+assert.match(callbackSource, /missing_instagram_targets/);
 assert.match(callbackSource, /assets\.instagramDiscovery/);
 assert.doesNotMatch(
   callbackSource,
-  /page_candidates_verified_with_connector_token|candidateInstagramAccountIds|missing_granular_instagram_targets/,
+  /ambiguous_instagram|unique_page_candidate|ambiguous_page_candidates|candidateInstagramAccountIds/,
 );
 assert.doesNotMatch(
   callbackSource,
