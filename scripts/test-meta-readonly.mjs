@@ -41,7 +41,12 @@ try {
     clientSource,
     /assigned_instagram_accounts|client_business_id|business_management|\/instagram_accounts["'`]/,
   );
-  assert.match(clientSource, /candidateInstagramAccountIds/);
+  assert.doesNotMatch(clientSource, /candidateInstagramAccountIds/);
+  assert.match(
+    clientSource,
+    /Page-linked Instagram IDs must never be treated as[\s\S]*selected/,
+  );
+  assert.match(callbackSource, /missing_granular_instagram_targets/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
   assert.doesNotMatch(
@@ -333,56 +338,79 @@ try {
     },
   ]);
 
+  // Page-linked Instagram IDs must never become selected assets when
+  // debug_token has no instagram_basic target_ids — even if the token can
+  // read them (that was how @bonkredit.de leaked in for meer-erfolg@gmx.de).
   requests.length = 0;
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
     requests.push({ url, init });
 
-    if (url.pathname === "/v25.0/17841400000000002") {
+    if (url.pathname === "/v25.0/me/accounts") {
       return new Response(
         JSON.stringify({
-          id: "17841400000000002",
-          name: "Im Meta-Dialog ausgewählt",
-          username: "selected.in.meta",
+          data: [
+            {
+              id: "111111111111111",
+              name: "Bon-Kredit Facebook-Seite",
+              access_token: "ephemeral-page-token-1",
+              instagram_business_account: {
+                id: "17841400000000999",
+                name: "Nicht im Meta-Dialog ausgewählt",
+                username: "bonkredit.de",
+              },
+            },
+            {
+              id: "111111111111112",
+              name: "Boncred Facebook-Seite",
+              access_token: "ephemeral-page-token-2",
+              instagram_business_account: {
+                id: "17841400000000002",
+                name: "Im Meta-Dialog ausgewählt",
+                username: "boncred.official",
+              },
+            },
+          ],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
 
-    return new Response(
-      JSON.stringify({ error: { code: 200, message: "Permissions error" } }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
+    if (url.pathname === "/v25.0/me/adaccounts") {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "act_222222222222222", name: "Ausgewähltes Werbekonto" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    // Any direct Instagram profile read would mean the old page-candidate
+    // fallback is still active — fail the test.
+    throw new Error(
+      `Unerwarteter Meta-Testpfad (kein Instagram-Fallback erlaubt): ${url.pathname}`,
     );
   };
 
-  const verifiedCandidateInstagramAssets =
-    await clientModule.getMetaInstagramAccountAssets({
+  const assetsWithoutGranularInstagram =
+    await clientModule.getMetaConnectionAssets({
       accessToken: "delegated-instagram-token",
       appSecret: "test-app-secret",
-      allowedInstagramAccountIds: new Set(),
-      candidateInstagramAccountIds: new Set([
-        "17841400000000999",
-        "17841400000000002",
+      allowedPageIds: new Set([
+        "111111111111111",
+        "111111111111112",
       ]),
+      allowedInstagramAccountIds: new Set(),
+      allowedAdAccountIds: new Set(["222222222222222"]),
     });
 
-  assert.equal(requests.length, 2);
-  assert.equal(
-    requests[0].url.pathname,
-    "/v25.0/17841400000000999",
+  assert.equal(assetsWithoutGranularInstagram.pages.length, 2);
+  assert.equal(assetsWithoutGranularInstagram.adAccounts.length, 1);
+  assert.deepEqual(assetsWithoutGranularInstagram.instagramAccounts, []);
+  assert.doesNotMatch(
+    JSON.stringify(assetsWithoutGranularInstagram.instagramAccounts),
+    /bonkredit\.de|boncred\.official|17841400000000999|17841400000000002/,
   );
-  assert.equal(
-    requests[1].url.pathname,
-    "/v25.0/17841400000000002",
-  );
-  assert.equal(requests[1].url.searchParams.get("fields"), "id,name,username");
-  assert.deepEqual(verifiedCandidateInstagramAssets.instagramAccounts, [
-    {
-      id: "17841400000000002",
-      name: "Im Meta-Dialog ausgewählt",
-      username: "selected.in.meta",
-    },
-  ]);
 
   requests.length = 0;
   globalThis.fetch = async (input, init) => {
@@ -395,22 +423,22 @@ try {
           data: [
             {
               id: "111111111111111",
-              name: "Erste ausgewählte Facebook-Seite",
+              name: "Bon-Kredit Facebook-Seite",
               access_token: "ephemeral-page-token-1",
               instagram_business_account: {
                 id: "17841400000000999",
                 name: "Nicht im Meta-Dialog ausgewählt",
-                username: "not.selected.in.meta",
+                username: "bonkredit.de",
               },
             },
             {
               id: "111111111111112",
-              name: "Zweite ausgewählte Facebook-Seite",
+              name: "Boncred Facebook-Seite",
               access_token: "ephemeral-page-token-2",
               instagram_business_account: {
                 id: "17841400000000002",
                 name: "Im Meta-Dialog ausgewählt",
-                username: "selected.in.meta",
+                username: "boncred.official",
               },
             },
           ],
@@ -419,19 +447,12 @@ try {
       );
     }
 
-    if (url.pathname === "/v25.0/17841400000000999") {
-      return new Response(
-        JSON.stringify({ error: { code: 200, message: "Permissions error" } }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
     if (url.pathname === "/v25.0/17841400000000002") {
       return new Response(
         JSON.stringify({
           id: "17841400000000002",
           name: "Im Meta-Dialog ausgewählt",
-          username: "selected.in.meta",
+          username: "boncred.official",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -449,30 +470,39 @@ try {
     throw new Error(`Unerwarteter Meta-Testpfad: ${url.pathname}`);
   };
 
-  const completeSystemUserAssets = await clientModule.getMetaConnectionAssets({
-    accessToken: "delegated-instagram-token",
-    appSecret: "test-app-secret",
-    allowedPageIds: new Set([
-      "111111111111111",
-      "111111111111112",
-    ]),
-    allowedInstagramAccountIds: new Set(),
-    allowedAdAccountIds: new Set(["222222222222222"]),
-  });
+  const assetsWithGranularInstagramOnly =
+    await clientModule.getMetaConnectionAssets({
+      accessToken: "delegated-instagram-token",
+      appSecret: "test-app-secret",
+      allowedPageIds: new Set([
+        "111111111111111",
+        "111111111111112",
+      ]),
+      allowedInstagramAccountIds: new Set(["17841400000000002"]),
+      allowedAdAccountIds: new Set(["222222222222222"]),
+    });
 
-  assert.equal(requests.length, 4);
-  assert.equal(completeSystemUserAssets.pages.length, 2);
-  assert.equal(completeSystemUserAssets.adAccounts.length, 1);
-  assert.deepEqual(completeSystemUserAssets.instagramAccounts, [
+  assert.equal(assetsWithGranularInstagramOnly.pages.length, 2);
+  assert.equal(assetsWithGranularInstagramOnly.adAccounts.length, 1);
+  assert.deepEqual(assetsWithGranularInstagramOnly.instagramAccounts, [
     {
       id: "17841400000000002",
       name: "Im Meta-Dialog ausgewählt",
-      username: "selected.in.meta",
+      username: "boncred.official",
     },
   ]);
   assert.doesNotMatch(
-    JSON.stringify(completeSystemUserAssets.instagramAccounts),
-    /not\.selected\.in\.meta|17841400000000999/,
+    JSON.stringify(assetsWithGranularInstagramOnly.instagramAccounts),
+    /bonkredit\.de|17841400000000999/,
+  );
+  assert.ok(
+    requests.some((entry) => entry.url.pathname === "/v25.0/17841400000000002"),
+  );
+  assert.equal(
+    requests.filter((entry) =>
+      entry.url.pathname.startsWith("/v25.0/178414"),
+    ).length,
+    1,
   );
 
   requests.length = 0;
@@ -481,7 +511,6 @@ try {
       accessToken: "delegated-instagram-token",
       appSecret: "test-app-secret",
       allowedInstagramAccountIds: new Set(),
-      candidateInstagramAccountIds: new Set(),
     });
   assert.equal(requests.length, 0);
   assert.deepEqual(emptyInstagramAssets.instagramAccounts, []);
