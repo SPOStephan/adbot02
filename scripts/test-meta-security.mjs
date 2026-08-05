@@ -29,8 +29,25 @@ try {
   const userId = "11111111-2222-4333-8444-555555555555";
   const now = Date.parse("2026-07-25T06:00:00.000Z");
   const state = cryptoModule.createOAuthState(userId, stateSecret, now);
+  const verifiedState = cryptoModule.verifyOAuthState(
+    state,
+    stateSecret,
+    userId,
+    now,
+  );
 
-  assert.ok(cryptoModule.verifyOAuthState(state, stateSecret, userId, now));
+  assert.equal(verifiedState?.authorizationReset, false);
+  const resetState = cryptoModule.createOAuthState(
+    userId,
+    stateSecret,
+    now,
+    true,
+  );
+  assert.equal(
+    cryptoModule.verifyOAuthState(resetState, stateSecret, userId, now)
+      ?.authorizationReset,
+    true,
+  );
   assert.equal(
     cryptoModule.verifyOAuthState(state, "wrong-secret", userId, now),
     null,
@@ -40,6 +57,21 @@ try {
     null,
   );
   const [statePayload, stateSignature] = state.split(".");
+  const decodedStatePayload = JSON.parse(
+    Buffer.from(statePayload, "base64url").toString("utf8"),
+  );
+  const tamperedResetPayload = Buffer.from(
+    JSON.stringify({ ...decodedStatePayload, authorizationReset: true }),
+  ).toString("base64url");
+  assert.equal(
+    cryptoModule.verifyOAuthState(
+      `${tamperedResetPayload}.${stateSignature}`,
+      stateSecret,
+      userId,
+      now,
+    ),
+    null,
+  );
   const tamperedSignature = `${stateSignature.startsWith("A") ? "B" : "A"}${stateSignature.slice(1)}`;
   assert.equal(
     cryptoModule.verifyOAuthState(

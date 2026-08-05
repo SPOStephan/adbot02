@@ -544,12 +544,14 @@ export function AutomationControlCenter({
                 </p>
               </div>
             </div>
-            <a
-              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-amber-800 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-amber-900"
-              href="/api/connectors/meta/start"
-            >
-              Meta sicher neu verbinden
-            </a>
+            <form action="/api/connectors/meta/start" method="post">
+              <button
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-amber-800 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-amber-900"
+                type="submit"
+              >
+                Meta sicher neu verbinden
+              </button>
+            </form>
           </div>
         ) : null}
 

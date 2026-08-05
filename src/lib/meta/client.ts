@@ -401,11 +401,12 @@ export function asMetaGranularTargetId(value: unknown): string | null {
 async function fetchMetaResponse(
   url: URL,
   headers: Record<string, string>,
+  method: "GET" | "DELETE" = "GET",
 ): Promise<Response> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await fetch(url, {
-        method: "GET",
+        method,
         cache: "no-store",
         signal: AbortSignal.timeout(META_REQUEST_TIMEOUT_MS),
         headers: {
@@ -846,9 +847,11 @@ export function getGranularTargetIds(
  */
 export function shouldUseMetaSystemUserDirectAssetDiscovery(
   tokenDebug: MetaTokenDebug,
+  options: { authorizationReset: boolean },
 ): boolean {
   return (
-    isSystemUserTokenType(tokenDebug.type)
+    options.authorizationReset
+    && isSystemUserTokenType(tokenDebug.type)
     && tokenDebug.granularScopes.length > 0
     && tokenDebug.granularScopes.every((item) => item.targetIds.length === 0)
   );
@@ -959,6 +962,37 @@ export async function getMetaIdentity(input: {
   return { id: body.id };
 }
 
+/** Fully de-authorize this Meta app so the next login is a genuine first grant. */
+export async function revokeMetaAuthorization(input: {
+  userId: string;
+  accessToken: string;
+  appSecret: string;
+}): Promise<void> {
+  const url = new URL(
+    `/${META_GRAPH_VERSION}/${encodeURIComponent(input.userId)}/permissions`,
+    META_GRAPH_ORIGIN,
+  );
+  const response = await fetchMetaResponse(
+    url,
+    addTokenProtection(url, input.accessToken, input.appSecret),
+    "DELETE",
+  );
+  const body = await readJson(response);
+  const usage = metaUsageFromHeaders(response.headers);
+
+  if (!response.ok) {
+    throw new MetaGraphError(
+      response.status,
+      isRecord(body) ? (body as MetaErrorBody) : {},
+      usage,
+    );
+  }
+
+  if (body !== true && (!isRecord(body) || body.success !== true)) {
+    throw new MetaGraphError(502, {}, usage);
+  }
+}
+
 function parsePageAsset(value: unknown): MetaPageAsset | null {
   if (!isRecord(value)) {
     return null;
@@ -1066,15 +1100,10 @@ export async function getMetaInstagramAccountAssets(input: {
   accessToken: string;
   appSecret: string;
   allowedInstagramAccountIds: Set<string>;
-  candidateInstagramAccountIds?: Set<string>;
 }): Promise<{ instagramAccounts: MetaInstagramAccountAsset[]; usage: MetaUsageSnapshot }> {
-  const granularIds = [...input.allowedInstagramAccountIds]
+  const ids = [...input.allowedInstagramAccountIds]
     .map((id) => asMetaAssetId(id))
     .filter((id): id is string => Boolean(id));
-  const candidateIds = [...(input.candidateInstagramAccountIds ?? [])]
-    .map((id) => asMetaAssetId(id))
-    .filter((id): id is string => Boolean(id));
-  const ids = granularIds.length > 0 ? granularIds : candidateIds;
   const expectedIds = new Set(ids);
 
   if (!ids.length) {
@@ -1120,9 +1149,83 @@ export async function getMetaInstagramAccountAssets(input: {
   return { instagramAccounts, usage };
 }
 
+async function getMetaSystemUserAssignedAssets(input: {
+  systemUserId: string;
+  accessToken: string;
+  appSecret: string;
+}): Promise<MetaConnectionAssets> {
+  const systemUserId = asMetaAssetId(input.systemUserId);
+
+  if (!systemUserId) {
+    throw new MetaGraphError(400, {});
+  }
+
+  const assignedPagesUrl = new URL(
+    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_pages`,
+    META_GRAPH_ORIGIN,
+  );
+  assignedPagesUrl.searchParams.set("fields", "id,name,access_token");
+  assignedPagesUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
+
+  const assignedInstagramUrl = new URL(
+    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_instagram_accounts`,
+    META_GRAPH_ORIGIN,
+  );
+  assignedInstagramUrl.searchParams.set("fields", "id,name,username");
+  assignedInstagramUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
+
+  const assignedAdAccountsUrl = new URL(
+    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_ad_accounts`,
+    META_GRAPH_ORIGIN,
+  );
+  assignedAdAccountsUrl.searchParams.set("fields", "id,name");
+  assignedAdAccountsUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
+
+  const [pagesResult, instagramResult, adAccountsResult] = await Promise.all([
+    fetchMetaCollection({
+      initialUrl: assignedPagesUrl,
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+      parseItem: parsePageAsset,
+      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
+      requireComplete: true,
+    }),
+    fetchMetaCollection({
+      initialUrl: assignedInstagramUrl,
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+      parseItem: parseInstagramAccountAsset,
+      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
+      requireComplete: true,
+    }),
+    fetchMetaCollection({
+      initialUrl: assignedAdAccountsUrl,
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+      parseItem: parseAdAccount,
+      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
+      requireComplete: true,
+    }),
+  ]);
+
+  return {
+    pages: pagesResult.items,
+    instagramAccounts: instagramResult.items,
+    instagramDiscovery: instagramResult.items.length
+      ? "system_user_token"
+      : "none",
+    adAccounts: adAccountsResult.items,
+    usage: mergeMetaUsage(
+      mergeMetaUsage(pagesResult.usage, instagramResult.usage),
+      adAccountsResult.usage,
+    ),
+  };
+}
+
 export async function getMetaConnectionAssets(input: {
   accessToken: string;
   appSecret: string;
+  systemUserId?: string;
   allowedPageIds?: Set<string>;
   allowedInstagramAccountIds: Set<string>;
   allowedAdAccountIds?: Set<string>;
@@ -1130,33 +1233,28 @@ export async function getMetaConnectionAssets(input: {
 }): Promise<MetaConnectionAssets> {
   const useSystemUserTokenAssets =
     input.selectionMode === "business_integration_system_user";
+
+  if (useSystemUserTokenAssets) {
+    return getMetaSystemUserAssignedAssets({
+      systemUserId: input.systemUserId ?? "",
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+    });
+  }
+
   const pagesResult = await getMetaPageAssets({
     accessToken: input.accessToken,
     appSecret: input.appSecret,
-    allowedPageIds: useSystemUserTokenAssets ? undefined : input.allowedPageIds,
+    allowedPageIds: input.allowedPageIds,
   });
-  const candidateInstagramAccountIds = useSystemUserTokenAssets
-    ? new Set(
-        pagesResult.pages.flatMap((page) =>
-          page.instagramAccount ? [page.instagramAccount.id] : [],
-        ),
-      )
-    : undefined;
-  // Granular target IDs remain authoritative when present. In the all-empty
-  // Business Integration System User case, linked IDs are candidates only:
-  // each candidate must still be directly readable with the asset-limited
-  // token, so a merely page-linked but unselected Instagram profile is ignored.
   const instagramResult = await getMetaInstagramAccountAssets({
     accessToken: input.accessToken,
     appSecret: input.appSecret,
     allowedInstagramAccountIds: input.allowedInstagramAccountIds,
-    candidateInstagramAccountIds,
   });
   const instagramDiscovery: MetaInstagramDiscoverySource =
     instagramResult.instagramAccounts.length > 0
-      ? useSystemUserTokenAssets
-        ? "system_user_token"
-        : "granular_targets"
+      ? "granular_targets"
       : "none";
 
   const adAccountUrl = new URL(
@@ -1175,16 +1273,11 @@ export async function getMetaConnectionAssets(input: {
   const allowedAdAccountIds = new Set(
     [...(input.allowedAdAccountIds ?? [])].map(normalizeAdAccountId),
   );
-  // In granular mode, even an empty allow-list means "select none". In the
-  // all-empty Business Integration System User mode, /me/adaccounts is itself
-  // restricted by the token to the assets designated in the Meta dialog.
-  const adAccounts = useSystemUserTokenAssets
-    ? adAccountsResult.items
-    : input.allowedAdAccountIds
-      ? adAccountsResult.items.filter((account) =>
-          allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
-        )
-      : adAccountsResult.items;
+  const adAccounts = input.allowedAdAccountIds
+    ? adAccountsResult.items.filter((account) =>
+        allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
+      )
+    : adAccountsResult.items;
 
   return {
     pages: pagesResult.pages,

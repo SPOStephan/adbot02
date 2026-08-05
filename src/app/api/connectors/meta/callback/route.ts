@@ -1,7 +1,9 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { clearStoredMetaConnectionForReauthorization } from "@/lib/meta/authorization-reset";
 import {
+  createMetaLoginUrl,
   debugMetaAccessToken,
   exchangeCodeForAccessToken,
   getGranularTargetIds,
@@ -12,9 +14,14 @@ import {
   MetaGraphError,
   resolveMetaSelectedPageIds,
   resolvePersistedMetaAccessToken,
+  revokeMetaAuthorization,
   shouldUseMetaSystemUserDirectAssetDiscovery,
 } from "@/lib/meta/client";
-import { encryptAccessToken, verifyOAuthState } from "@/lib/meta/crypto";
+import {
+  createOAuthState,
+  encryptAccessToken,
+  verifyOAuthState,
+} from "@/lib/meta/crypto";
 import { getMetaCallbackEnv } from "@/lib/meta/env";
 import { classifyMetaGrantedScopes } from "@/lib/meta/scope-policy.mjs";
 import { createPortalUrl } from "@/lib/site-urls";
@@ -24,6 +31,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const META_CALLBACK_PATH = "/api/connectors/meta/callback";
 const DAY_IN_SECONDS = 24 * 60 * 60;
 const DEFAULT_TOKEN_LIFETIME_SECONDS = 60 * DAY_IN_SECONDS;
 const TOKEN_REFRESH_AFTER_SECONDS = 45 * DAY_IN_SECONDS;
@@ -131,12 +139,14 @@ export async function GET(request: Request) {
     const {
       appId,
       appSecret,
+      loginConfigId,
       stateSecret,
       tokenEncryptionKey,
     } = getMetaCallbackEnv();
 
     stage = "state_validation";
-    if (!verifyOAuthState(state, stateSecret, user.id)) {
+    const oauthState = verifyOAuthState(state, stateSecret, user.id);
+    if (!oauthState) {
       return dashboardRedirect("error", "invalid_state");
     }
 
@@ -197,11 +207,47 @@ export async function GET(request: Request) {
       getGranularTargetIds(tokenDebug, "instagram_basic"),
     );
     const allowedAdAccountIds = getMetaAdAccountGranularTargetIds(tokenDebug);
+    const systemUserDirectAssetCandidate =
+      shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug, {
+        authorizationReset: true,
+      });
     const useSystemUserDirectAssetDiscovery =
-      shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug);
+      shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug, {
+        authorizationReset: oauthState.authorizationReset,
+      });
+
+    if (
+      systemUserDirectAssetCandidate
+      && !useSystemUserDirectAssetDiscovery
+    ) {
+      stage = "authorization_reset";
+      await revokeMetaAuthorization({
+        userId: identity.id,
+        accessToken: longLivedToken.accessToken,
+        appSecret,
+      });
+      await clearStoredMetaConnectionForReauthorization(user.id);
+
+      const freshState = createOAuthState(
+        user.id,
+        stateSecret,
+        Date.now(),
+        true,
+      );
+      const freshLoginUrl = createMetaLoginUrl({
+        appId,
+        configId: loginConfigId,
+        redirectUri: createPortalUrl(META_CALLBACK_PATH).toString(),
+        state: freshState,
+      });
+
+      console.info("[meta-oauth] Stale System-User-Autorisierung widerrufen");
+      return noStoreRedirect(freshLoginUrl);
+    }
 
     console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
       tokenType: tokenDebug.type,
+      authorizationReset: oauthState.authorizationReset,
       instagramTargets: allowedInstagramAccountIds.size,
       adAccountTargets: allowedAdAccountIds.size,
       selectionMode: useSystemUserDirectAssetDiscovery
@@ -264,6 +310,9 @@ export async function GET(request: Request) {
     const assets = await getMetaConnectionAssets({
       accessToken: longLivedToken.accessToken,
       appSecret,
+      systemUserId: useSystemUserDirectAssetDiscovery
+        ? identity.id
+        : undefined,
       allowedPageIds,
       allowedInstagramAccountIds,
       allowedAdAccountIds,

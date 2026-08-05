@@ -1,7 +1,6 @@
 "use client";
 
 import { ArrowUpRight, LoaderCircle, Unplug } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -34,8 +33,9 @@ export function MetaConnectionActions({
 
   async function disconnectMeta() {
     const confirmed = window.confirm(
-      "Meta wirklich trennen? Adbot stoppt sofort alle Meta-Abrufe und Automationen. " +
-        "Gespeicherte Kampagnendaten, Baselines und Einstellungen bleiben für die spätere Wiederverbindung erhalten.",
+      "Meta wirklich vollständig trennen? Adbot widerruft die Meta-Autorisierung " +
+        "und entfernt alle aktuell verbundenen Seiten, Instagram- und Werbekonten. " +
+        "Historische Berichtsdaten bleiben erhalten.",
     );
 
     if (!confirmed) return;
@@ -60,7 +60,7 @@ export function MetaConnectionActions({
 
       setNotice({
         tone: "success",
-        message: "Meta wurde getrennt. Deine gespeicherten Adbot-Daten bleiben erhalten.",
+        message: "Meta wurde vollständig widerrufen und alle verbundenen Assets wurden entfernt.",
       });
       router.refresh();
     } catch (error) {
@@ -78,14 +78,15 @@ export function MetaConnectionActions({
 
   return (
     <div className="space-y-2">
-      <Link
-        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-        href={reconnectHref}
-        prefetch={false}
-      >
-        Meta neu verbinden
-        <ArrowUpRight className="size-4" />
-      </Link>
+      <form action={reconnectHref} method="post">
+        <button
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          type="submit"
+        >
+          Meta neu verbinden
+          <ArrowUpRight className="size-4" />
+        </button>
+      </form>
       <button
         className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition hover:border-red-300 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disconnectPending}
@@ -100,7 +101,7 @@ export function MetaConnectionActions({
         {disconnectPending ? "Meta wird getrennt …" : "Meta trennen"}
       </button>
       <p className="text-xs leading-5 text-slate-500">
-        Beim Trennen werden Zugriff und Automationen sofort deaktiviert. Gespeicherte Daten und Einstellungen bleiben erhalten.
+        Beim Trennen werden die Meta-Autorisierung und alle aktuell verbundenen Assets vollständig entfernt. Historische Berichtsdaten bleiben erhalten.
       </p>
       {notice ? (
         <p

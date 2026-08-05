@@ -84,6 +84,11 @@ assert.match(dashboardSource, /token_validation/);
 assert.match(dashboardSource, /no_assets/);
 assert.match(dashboardSource, /missing_page_targets/);
 assert.match(dashboardSource, /missing_instagram_targets/);
+assert.match(dashboardSource, /authorization_reset/);
+assert.match(
+  dashboardSource,
+  /<form action="\/api\/connectors\/meta\/start" method="post">/,
+);
 assert.doesNotMatch(dashboardSource, /InstagramAssetConfirm|instagramConfirmRequired/);
 assert.match(
   dashboardSource,
@@ -184,6 +189,8 @@ assert.match(
 );
 assert.doesNotMatch(platformAccountPrivilegeHardeningSql, /grant\s+/i);
 
+assert.match(cardSource, /const isMetaConnect = actionHref === "\/api\/connectors\/meta\/start"/);
+assert.match(cardSource, /<form action=\{actionHref\} method="post">/);
 assert.match(cardSource, /href=\{actionHref!\}/);
 assert.match(cardSource, /prefetch=\{false\}/);
 assert.match(cardSource, /Aktiv verbunden/);
@@ -272,7 +279,18 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   callbackSource,
-  /systemUserId|assigned_instagram_accounts|clientBusinessId|client_business_id|business_management/,
+  /clientBusinessId|client_business_id|business_management/,
+);
+assert.match(callbackSource, /systemUserId:\s*useSystemUserDirectAssetDiscovery/);
+assert.match(callbackSource, /authorizationReset:\s*oauthState\.authorizationReset/);
+assert.match(
+  callbackSource,
+  /systemUserDirectAssetCandidate[\s\S]{0,200}&& !useSystemUserDirectAssetDiscovery/,
+);
+assert.match(callbackSource, /revokeMetaAuthorization/);
+assert.match(
+  callbackSource,
+  /const freshState = createOAuthState\([\s\S]{0,120}true,[\s\S]{0,30}\);/,
 );
 assert.match(callbackSource, /!useSystemUserDirectAssetDiscovery/);
 assert.match(callbackSource, /assets\.instagramAccounts/);
