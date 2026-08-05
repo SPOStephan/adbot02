@@ -51,6 +51,11 @@ try {
   assert.match(callbackSource, /missing_ad_account_targets/);
   assert.match(callbackSource, /missing_instagram_targets/);
   assert.match(callbackSource, /Granulare Meta-Auswahl/);
+  assert.match(callbackSource, /resolveMetaSelectedPageIds/);
+  assert.match(callbackSource, /pageSource/);
+  assert.match(clientSource, /resolveMetaSelectedPageIds/);
+  assert.match(clientSource, /instagram_linked_pages/);
+  assert.match(clientSource, /pages_manage_ads/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
   assert.doesNotMatch(
@@ -381,6 +386,10 @@ try {
   );
   assert.deepEqual(
     [...clientModule.getGranularTargetIds(debugWithNumericTargets, "pages_show_list")],
+    ["111111111111112"],
+  );
+  assert.deepEqual(
+    [...clientModule.getMetaPageGranularTargetIds(debugWithNumericTargets)].sort(),
     ["111111111111112"],
   );
 
@@ -717,6 +726,92 @@ try {
     });
   assert.equal(requests.length, 0);
   assert.deepEqual(emptyInstagramAssets.instagramAccounts, []);
+
+  // When Meta omits page target_ids ("applies to all"), derive pages only from
+  // Instagram selection — Boncred page yes, Bon-Kredit/@bonkredit.de no.
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    if (url.pathname === "/v25.0/me/accounts") {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "111111111111111",
+              name: "Bon-Kredit",
+              access_token: "page-token-1",
+              instagram_business_account: {
+                id: "17841400000000999",
+                username: "bonkredit.de",
+              },
+            },
+            {
+              id: "111111111111112",
+              name: "Boncred",
+              access_token: "page-token-2",
+              instagram_business_account: {
+                id: "17841400000000002",
+                username: "boncred.official",
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    throw new Error(`Unerwarteter Meta-Testpfad: ${url.pathname}`);
+  };
+
+  const pageFromInstagram = await clientModule.resolveMetaSelectedPageIds({
+    accessToken: "token",
+    appSecret: "secret",
+    tokenDebug: {
+      appId: "app",
+      userId: "user",
+      isValid: true,
+      type: "SYSTEM_USER",
+      scopes: ["pages_show_list", "instagram_basic"],
+      granularScopes: [
+        { scope: "pages_show_list", targetIds: [] },
+        { scope: "instagram_basic", targetIds: ["17841400000000002"] },
+      ],
+      expiresAt: null,
+      dataAccessExpiresAt: null,
+      usage: { appPercent: null, pagePercent: null, businessPercent: null, retryAfterSeconds: null },
+    },
+    allowedInstagramAccountIds: new Set(["17841400000000002"]),
+  });
+  assert.equal(pageFromInstagram.source, "instagram_linked_pages");
+  assert.deepEqual([...pageFromInstagram.pageIds], ["111111111111112"]);
+
+  const pageFromManageScope = await clientModule.resolveMetaSelectedPageIds({
+    accessToken: "token",
+    appSecret: "secret",
+    tokenDebug: {
+      appId: "app",
+      userId: "user",
+      isValid: true,
+      type: "SYSTEM_USER",
+      scopes: ["pages_manage_ads", "instagram_basic"],
+      granularScopes: [
+        { scope: "pages_manage_ads", targetIds: ["111111111111112"] },
+      ],
+      expiresAt: null,
+      dataAccessExpiresAt: null,
+      usage: { appPercent: null, pagePercent: null, businessPercent: null, retryAfterSeconds: null },
+    },
+    allowedInstagramAccountIds: new Set(["17841400000000002"]),
+  });
+  assert.equal(pageFromManageScope.source, "granular_targets");
+  assert.deepEqual([...pageFromManageScope.pageIds], ["111111111111112"]);
+  assert.equal(
+    requests.filter((entry) => entry.url.pathname === "/v25.0/me/accounts").length,
+    1,
+    "granular page targets must not fetch /me/accounts for resolution",
+  );
 
   globalThis.fetch = async () =>
     new Response(

@@ -34,13 +34,13 @@ Nach dem Code-Austausch versucht Adbot eine Token-Verlängerung. Für System-Use
 
 ## Persistierte Assets
 
-Nur IDs aus `debug_token.granular_scopes[].target_ids` — kein Fall-Open auf `/me/accounts` oder `/me/adaccounts`:
+- Instagram: nur `instagram_basic` `target_ids`
+- Werbekonten: Schnittmenge `/me/adaccounts` ∩ (`ads_read` ∪ `ads_management` `target_ids`) — leere Allow-List = nichts speichern
+- Facebook Pages: granular `target_ids` aus Page-Scopes; fehlen sie (Meta: Permission „gilt für alle“), dann nur Seiten, deren verknüpftes Instagram in den IG-`target_ids` liegt — nie die volle `/me/accounts`-Liste
+- Fehlt Ads/IG-Ziel-ID → `missing_ad_account_targets` / `missing_instagram_targets`; keine ableitbare Seite → `missing_page_targets`
+- Persistenz: `replace_meta_connection` ersetzt Assets vollständig
 
-- Facebook Pages: Schnittmenge `/me/accounts` ∩ (`pages_show_list` ∪ `pages_read_engagement` `target_ids`)
-- Ad Accounts: Schnittmenge `/me/adaccounts` ∩ (`ads_read` ∪ `ads_management` `target_ids`)
-- Instagram: nur `instagram_basic` `target_ids` — kein Page-Fallback, kein Confirm-UI
-- Fehlt eine der drei ID-Mengen → Connect bricht mit `missing_page_targets` / `missing_ad_account_targets` / `missing_instagram_targets` ab
-- Persistenz: `upsertMetaConnection` / `replace_meta_connection` ersetzt Assets vollständig (kein Merge alter Zeilen)
+Empfehlung Login-Config: **Facebook-Seite erforderlich = an**, damit Meta Page-`target_ids` zuverlässig liefert. Mit `aus` greift der Instagram-Link-Fallback.
 
 ## Production-Abnahme
 
