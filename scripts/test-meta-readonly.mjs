@@ -37,15 +37,18 @@ try {
     .replace('from "./crypto";', 'from "./crypto.mjs";');
   const callbackSource = await readFile(callbackSourcePath, "utf8");
 
-  assert.match(clientSource, /client_business_id/);
-  assert.doesNotMatch(clientSource, /business_management/);
+  assert.match(clientSource, /assigned_instagram_accounts/);
+  assert.doesNotMatch(
+    clientSource,
+    /client_business_id|business_management|\/instagram_accounts["'`]/,
+  );
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
-  assert.match(
+  assert.match(callbackSource, /systemUserId:\s*identity\.id/);
+  assert.doesNotMatch(
     callbackSource,
-    /clientBusinessId:\s*identity\.clientBusinessId/,
+    /clientBusinessId|client_business_id|business_management/,
   );
-  assert.doesNotMatch(callbackSource, /business_management/);
   assert.match(
     callbackSource,
     /getGranularTargetIds\(tokenDebug, "ads_management"\)/,
@@ -77,16 +80,10 @@ try {
     const url = new URL(String(input));
     requests.push({ url, init });
 
-    return new Response(
-      JSON.stringify({
-        id: "meta-app-scoped-user-id",
-        client_business_id: "123456789012345",
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    return new Response(JSON.stringify({ id: "123456789012345" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   };
 
   const identity = await clientModule.getMetaIdentity({
@@ -94,15 +91,9 @@ try {
     appSecret: "test-app-secret",
   });
 
-  assert.deepEqual(identity, {
-    id: "meta-app-scoped-user-id",
-    clientBusinessId: "123456789012345",
-  });
+  assert.deepEqual(identity, { id: "123456789012345" });
   assert.equal(requests[0].url.pathname, "/v25.0/me");
-  assert.equal(
-    requests[0].url.searchParams.get("fields"),
-    "id,client_business_id",
-  );
+  assert.equal(requests[0].url.searchParams.get("fields"), "id");
   assert.ok(requests[0].url.searchParams.get("appsecret_proof"));
   assert.equal(requests[0].init.method, "GET");
   assert.equal(requests[0].init.cache, "no-store");
@@ -256,7 +247,7 @@ try {
         "17841400000000001",
         "not-a-meta-id",
       ]),
-      clientBusinessId: "123456789012345",
+      systemUserId: "123456789012345",
     });
 
   assert.equal(requests.length, 1);
@@ -284,8 +275,8 @@ try {
         data: [
           {
             id: "17841400000000002",
-            name: "Vom Client-Business delegiert",
-            username: "business.selected",
+            name: "Dem System-User zugewiesen",
+            username: "system.user.selected",
           },
         ],
       }),
@@ -296,42 +287,122 @@ try {
     );
   };
 
-  const businessInstagramAssets =
+  const assignedInstagramAssets =
     await clientModule.getMetaInstagramAccountAssets({
       accessToken: "delegated-instagram-token",
       appSecret: "test-app-secret",
       allowedInstagramAccountIds: new Set(),
-      clientBusinessId: "123456789012345",
+      systemUserId: "123456789012345",
     });
 
   assert.equal(requests.length, 1);
   assert.equal(
     requests[0].url.pathname,
-    "/v25.0/123456789012345/instagram_accounts",
+    "/v25.0/123456789012345/assigned_instagram_accounts",
   );
   assert.equal(requests[0].url.searchParams.get("fields"), "id,name,username");
   assert.equal(
     requests[0].init.headers.Authorization,
     "Bearer delegated-instagram-token",
   );
-  assert.deepEqual(businessInstagramAssets.instagramAccounts, [
+  assert.deepEqual(assignedInstagramAssets.instagramAccounts, [
     {
       id: "17841400000000002",
-      name: "Vom Client-Business delegiert",
-      username: "business.selected",
+      name: "Dem System-User zugewiesen",
+      username: "system.user.selected",
     },
   ]);
 
   requests.length = 0;
-  const missingBusinessInstagramAssets =
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    if (url.pathname === "/v25.0/me/accounts") {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "111111111111111",
+              name: "Ausgewählte Facebook-Seite",
+              access_token: "ephemeral-page-token",
+              instagram_business_account: {
+                id: "17841400000000999",
+                name: "Nur über Seite verknüpft",
+                username: "not.selected.in.meta",
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (
+      url.pathname
+      === "/v25.0/123456789012345/assigned_instagram_accounts"
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "17841400000000002",
+              name: "Im Meta-Dialog ausgewählt",
+              username: "selected.in.meta",
+              permitted_roles: ["CONTENT"],
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (url.pathname === "/v25.0/me/adaccounts") {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "act_222222222222222", name: "Ausgewähltes Werbekonto" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    throw new Error(`Unerwarteter Meta-Testpfad: ${url.pathname}`);
+  };
+
+  const completeSystemUserAssets = await clientModule.getMetaConnectionAssets({
+    accessToken: "delegated-instagram-token",
+    appSecret: "test-app-secret",
+    allowedPageIds: new Set(["111111111111111"]),
+    allowedInstagramAccountIds: new Set(),
+    systemUserId: "123456789012345",
+    allowedAdAccountIds: new Set(["222222222222222"]),
+  });
+
+  assert.equal(requests.length, 3);
+  assert.equal(completeSystemUserAssets.pages.length, 1);
+  assert.equal(completeSystemUserAssets.adAccounts.length, 1);
+  assert.deepEqual(completeSystemUserAssets.instagramAccounts, [
+    {
+      id: "17841400000000002",
+      name: "Im Meta-Dialog ausgewählt",
+      username: "selected.in.meta",
+    },
+  ]);
+  assert.doesNotMatch(
+    JSON.stringify(completeSystemUserAssets.instagramAccounts),
+    /not\.selected\.in\.meta|17841400000000999/,
+  );
+
+  requests.length = 0;
+  const invalidSystemUserInstagramAssets =
     await clientModule.getMetaInstagramAccountAssets({
       accessToken: "delegated-instagram-token",
       appSecret: "test-app-secret",
       allowedInstagramAccountIds: new Set(),
-      clientBusinessId: null,
+      systemUserId: "not-a-system-user-id",
     });
   assert.equal(requests.length, 0);
-  assert.deepEqual(missingBusinessInstagramAssets.instagramAccounts, []);
+  assert.deepEqual(invalidSystemUserInstagramAssets.instagramAccounts, []);
 
   globalThis.fetch = async () =>
     new Response(

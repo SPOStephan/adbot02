@@ -38,7 +38,6 @@ export type MetaAccessToken = {
 
 export type MetaIdentity = {
   id: string;
-  clientBusinessId: string | null;
 };
 
 export type MetaTokenDebug = {
@@ -684,7 +683,7 @@ export async function getMetaIdentity(input: {
   appSecret: string;
 }): Promise<MetaIdentity> {
   const url = new URL(`/${META_GRAPH_VERSION}/me`, META_GRAPH_ORIGIN);
-  url.searchParams.set("fields", "id,client_business_id");
+  url.searchParams.set("fields", "id");
   const { body, usage } = await fetchMetaJson(
     url,
     addTokenProtection(url, input.accessToken, input.appSecret),
@@ -694,10 +693,7 @@ export async function getMetaIdentity(input: {
     throw new MetaGraphError(502, {}, usage);
   }
 
-  return {
-    id: body.id,
-    clientBusinessId: asNonEmptyString(body.client_business_id),
-  };
+  return { id: body.id };
 }
 
 function parsePageAsset(value: unknown): MetaPageAsset | null {
@@ -801,19 +797,19 @@ export async function getMetaInstagramAccountAssets(input: {
   accessToken: string;
   appSecret: string;
   allowedInstagramAccountIds: Set<string>;
-  clientBusinessId: string | null;
+  systemUserId: string;
 }): Promise<{ instagramAccounts: MetaInstagramAccountAsset[]; usage: MetaUsageSnapshot }> {
   const ids = [...input.allowedInstagramAccountIds].filter((id) =>
     /^\d{1,64}$/.test(id),
   );
 
   if (!ids.length) {
-    if (!input.clientBusinessId || !/^\d{1,64}$/.test(input.clientBusinessId)) {
+    if (!/^\d{1,64}$/.test(input.systemUserId)) {
       return { instagramAccounts: [], usage: EMPTY_USAGE };
     }
 
     const url = new URL(
-      `/${META_GRAPH_VERSION}/${encodeURIComponent(input.clientBusinessId)}/instagram_accounts`,
+      `/${META_GRAPH_VERSION}/${encodeURIComponent(input.systemUserId)}/assigned_instagram_accounts`,
       META_GRAPH_ORIGIN,
     );
     url.searchParams.set("fields", "id,name,username");
@@ -858,7 +854,7 @@ export async function getMetaConnectionAssets(input: {
   appSecret: string;
   allowedPageIds?: Set<string>;
   allowedInstagramAccountIds: Set<string>;
-  clientBusinessId: string | null;
+  systemUserId: string;
   allowedAdAccountIds?: Set<string>;
 }): Promise<MetaConnectionAssets> {
   const pagesResult = await getMetaPageAssets(input);

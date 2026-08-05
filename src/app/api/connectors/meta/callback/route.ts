@@ -199,7 +199,7 @@ export async function GET(request: Request) {
       appSecret,
       allowedPageIds,
       allowedInstagramAccountIds,
-      clientBusinessId: identity.clientBusinessId,
+      systemUserId: identity.id,
       allowedAdAccountIds,
     });
 
@@ -214,8 +214,7 @@ export async function GET(request: Request) {
         adAccounts: assets.adAccounts.length,
         instagramSource: allowedInstagramAccountIds.size
           ? "granular_targets"
-          : "client_business",
-        hasClientBusinessId: Boolean(identity.clientBusinessId),
+          : "assigned_instagram_accounts",
       });
       return dashboardRedirect("error", "no_assets");
     }
