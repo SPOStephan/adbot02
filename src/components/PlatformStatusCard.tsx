@@ -7,6 +7,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { MetaConnectionActions } from "@/components/MetaConnectionActions";
+
 export type PlatformStatusCardProps = {
   name: string;
   description: string;
@@ -18,6 +20,7 @@ export type PlatformStatusCardProps = {
   helperText?: string;
   actionHref?: string;
   actionLabel?: string;
+  showMetaConnectionActions?: boolean;
 };
 
 export function PlatformStatusCard({
@@ -31,6 +34,7 @@ export function PlatformStatusCard({
   helperText,
   actionHref,
   actionLabel,
+  showMetaConnectionActions = false,
 }: PlatformStatusCardProps) {
   const canConnect = Boolean(actionHref && actionLabel && !connected);
 
@@ -68,7 +72,9 @@ export function PlatformStatusCard({
       ) : null}
 
       <div className="mt-auto pt-5">
-        {connected ? (
+        {connected && showMetaConnectionActions ? (
+          <MetaConnectionActions reconnectHref="/api/connectors/meta/start" />
+        ) : connected ? (
           <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700">
             <CheckCircle2 className="size-4" />
             Aktiv verbunden

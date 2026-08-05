@@ -321,7 +321,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .select(
       "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until, instagram_account_ids",
     )
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .is("revoked_at", null);
   const platformAccountReadFailed = Boolean(connectedAccountsError);
 
   const platforms = getPlatformCatalog().map((platform) => {
@@ -374,6 +375,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         isMeta && platform.configured && !account && !platformAccountReadFailed
           ? "Meta verbinden"
           : undefined,
+      showMetaConnectionActions:
+        isMeta && platform.configured && Boolean(account) && !platformAccountReadFailed,
       ...platformVisuals[platform.id],
     };
   });
