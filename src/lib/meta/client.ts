@@ -77,9 +77,16 @@ export type MetaAdAccountAsset = {
   name: string;
 };
 
+export type MetaInstagramDiscoverySource =
+  | "granular_targets"
+  | "unique_page_candidate"
+  | "ambiguous_page_candidates"
+  | "none";
+
 export type MetaConnectionAssets = {
   pages: MetaPageAsset[];
   instagramAccounts: MetaInstagramAccountAsset[];
+  instagramDiscovery: MetaInstagramDiscoverySource;
   adAccounts: MetaAdAccountAsset[];
   usage: MetaUsageSnapshot;
 };
@@ -336,6 +343,38 @@ async function readJson(response: Response): Promise<unknown> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Meta documents target_ids as int[], but Instagram/Page IDs often exceed
+ * Number.MAX_SAFE_INTEGER. Quote long digit runs inside target_ids arrays
+ * before JSON.parse so IDs stay exact strings.
+ */
+export function protectMetaDebugTokenTargetIds(rawJson: string): string {
+  return rawJson.replace(
+    /"target_ids"\s*:\s*\[([\s\S]*?)\]/g,
+    (_match, body: string) => {
+      const quoted = body.replace(/\b(\d{10,})\b/g, '"$1"');
+      return `"target_ids":[${quoted}]`;
+    },
+  );
+}
+
+export function asMetaAssetId(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return /^\d{1,64}$/.test(trimmed) ? trimmed : null;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    if (!Number.isSafeInteger(value)) {
+      return null;
+    }
+
+    return String(value);
+  }
+
+  return null;
 }
 
 async function fetchMetaResponse(
@@ -700,7 +739,30 @@ export async function debugMetaAccessToken(input: {
   url.searchParams.set("input_token", input.accessToken);
   url.searchParams.set("access_token", `${input.appId}|${input.appSecret}`);
 
-  const { body, usage } = await fetchMetaJson(url);
+  const response = await fetchMetaResponse(url, {});
+  const usage = metaUsageFromHeaders(response.headers);
+  const rawText = await response.text();
+
+  if (!response.ok) {
+    let errorBody: unknown = null;
+    try {
+      errorBody = JSON.parse(rawText) as unknown;
+    } catch {
+      errorBody = null;
+    }
+    throw new MetaGraphError(
+      response.status,
+      isRecord(errorBody) ? (errorBody as MetaErrorBody) : {},
+      usage,
+    );
+  }
+
+  let body: unknown = null;
+  try {
+    body = JSON.parse(protectMetaDebugTokenTargetIds(rawText)) as unknown;
+  } catch {
+    body = null;
+  }
   const data = isRecord(body) && isRecord(body.data) ? body.data : null;
 
   if (!data) {
@@ -720,9 +782,10 @@ export async function debugMetaAccessToken(input: {
           {
             scope: value.scope,
             targetIds: Array.isArray(value.target_ids)
-              ? value.target_ids.filter(
-                  (target): target is string => typeof target === "string",
-                )
+              ? value.target_ids.flatMap((target) => {
+                  const id = asMetaAssetId(target);
+                  return id ? [id] : [];
+                })
               : [],
           },
         ];
@@ -776,7 +839,7 @@ function parsePageAsset(value: unknown): MetaPageAsset | null {
     return null;
   }
 
-  const id = asNonEmptyString(value.id);
+  const id = asMetaAssetId(value.id) ?? asNonEmptyString(value.id);
   const name = asNonEmptyString(value.name);
   const accessToken = asNonEmptyString(value.access_token);
 
@@ -787,7 +850,7 @@ function parsePageAsset(value: unknown): MetaPageAsset | null {
   const instagram = isRecord(value.instagram_business_account)
     ? value.instagram_business_account
     : null;
-  const instagramId = instagram ? asNonEmptyString(instagram.id) : null;
+  const instagramId = instagram ? asMetaAssetId(instagram.id) : null;
 
   return {
     id,
@@ -811,11 +874,11 @@ function parseInstagramAccountAsset(
     return null;
   }
 
-  const id = asNonEmptyString(value.id);
+  const id = asMetaAssetId(value.id);
   const username = asNonEmptyString(value.username)?.slice(0, 255) ?? null;
   const name = asNonEmptyString(value.name)?.slice(0, 255) ?? username;
 
-  if (!id || !/^\d{1,64}$/.test(id)) {
+  if (!id) {
     return null;
   }
 
@@ -873,13 +936,9 @@ export async function getMetaInstagramAccountAssets(input: {
   appSecret: string;
   allowedInstagramAccountIds: Set<string>;
 }): Promise<{ instagramAccounts: MetaInstagramAccountAsset[]; usage: MetaUsageSnapshot }> {
-  // Only Meta's granular instagram_basic target IDs are an authoritative
-  // customer selection. Page-linked Instagram IDs must never be treated as
-  // selected — a granted Facebook page can expose a linked IG that was not
-  // chosen in the Login-for-Business dialog.
-  const ids = [...input.allowedInstagramAccountIds].filter((id) =>
-    /^\d{1,64}$/.test(id),
-  );
+  const ids = [...input.allowedInstagramAccountIds]
+    .map((id) => asMetaAssetId(id))
+    .filter((id): id is string => Boolean(id));
   const expectedIds = new Set(ids);
 
   if (!ids.length) {
@@ -933,11 +992,52 @@ export async function getMetaConnectionAssets(input: {
   allowedAdAccountIds?: Set<string>;
 }): Promise<MetaConnectionAssets> {
   const pagesResult = await getMetaPageAssets(input);
-  const instagramResult = await getMetaInstagramAccountAssets({
+  let instagramResult = await getMetaInstagramAccountAssets({
     accessToken: input.accessToken,
     appSecret: input.appSecret,
     allowedInstagramAccountIds: input.allowedInstagramAccountIds,
   });
+  let instagramDiscovery: MetaInstagramDiscoverySource =
+    input.allowedInstagramAccountIds.size > 0
+      ? instagramResult.instagramAccounts.length
+        ? "granular_targets"
+        : "none"
+      : "none";
+
+  // When debug_token omits instagram_basic target_ids ("applies to all"),
+  // page-linked IGs are only a safe fallback if exactly one profile is
+  // readable. Multiple readable page-linked IGs are ambiguous — never invent
+  // a selection (that stored @bonkredit.de despite only boncred.official).
+  if (
+    !instagramResult.instagramAccounts.length
+    && input.allowedInstagramAccountIds.size === 0
+  ) {
+    const pageLinkedIds = new Set(
+      pagesResult.pages.flatMap((page) =>
+        page.instagramAccount ? [page.instagramAccount.id] : [],
+      ),
+    );
+    const verifiedPageLinked = await getMetaInstagramAccountAssets({
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+      allowedInstagramAccountIds: pageLinkedIds,
+    });
+    instagramResult = {
+      instagramAccounts: [],
+      usage: mergeMetaUsage(instagramResult.usage, verifiedPageLinked.usage),
+    };
+
+    if (verifiedPageLinked.instagramAccounts.length === 1) {
+      instagramResult = {
+        instagramAccounts: verifiedPageLinked.instagramAccounts,
+        usage: instagramResult.usage,
+      };
+      instagramDiscovery = "unique_page_candidate";
+    } else if (verifiedPageLinked.instagramAccounts.length > 1) {
+      instagramDiscovery = "ambiguous_page_candidates";
+    }
+  }
+
   const adAccountUrl = new URL(
     `/${META_GRAPH_VERSION}/me/adaccounts`,
     META_GRAPH_ORIGIN,
@@ -963,6 +1063,7 @@ export async function getMetaConnectionAssets(input: {
   return {
     pages: pagesResult.pages,
     instagramAccounts: instagramResult.instagramAccounts,
+    instagramDiscovery,
     adAccounts,
     usage: mergeMetaUsage(
       mergeMetaUsage(pagesResult.usage, instagramResult.usage),

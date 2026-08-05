@@ -211,6 +211,20 @@ export async function GET(request: Request) {
     });
 
     if (
+      assets.instagramDiscovery === "ambiguous_page_candidates"
+    ) {
+      console.warn("[meta-oauth] Mehrdeutige Instagram-Kandidaten", {
+        pages: assets.pages.length,
+        pageLinkedInstagramCandidates: assets.pages.filter(
+          (page) => page.instagramAccount,
+        ).length,
+        instagramGranularTargets: allowedInstagramAccountIds.size,
+        instagramSource: assets.instagramDiscovery,
+      });
+      return dashboardRedirect("error", "ambiguous_instagram");
+    }
+
+    if (
       !assets.pages.length ||
       !assets.instagramAccounts.length ||
       !assets.adAccounts.length
@@ -220,9 +234,7 @@ export async function GET(request: Request) {
         instagramAccounts: assets.instagramAccounts.length,
         adAccounts: assets.adAccounts.length,
         instagramGranularTargets: allowedInstagramAccountIds.size,
-        instagramSource: allowedInstagramAccountIds.size
-          ? "granular_targets"
-          : "missing_granular_instagram_targets",
+        instagramSource: assets.instagramDiscovery,
       });
       return dashboardRedirect("error", "no_assets");
     }
