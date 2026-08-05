@@ -44,10 +44,13 @@ try {
   assert.doesNotMatch(clientSource, /candidateInstagramAccountIds/);
   assert.match(clientSource, /protectMetaDebugTokenTargetIds/);
   assert.match(clientSource, /asMetaAssetId/);
-  assert.doesNotMatch(clientSource, /unique_page_candidate|ambiguous_page_candidates/);
-  assert.match(callbackSource, /needsInstagramConfirm/);
-  assert.match(callbackSource, /instagramConfirm/);
-  assert.doesNotMatch(callbackSource, /missing_instagram_targets|ambiguous_instagram/);
+  assert.doesNotMatch(clientSource, /unique_page_candidate|ambiguous_page_candidates|needsInstagramConfirm/);
+  assert.doesNotMatch(clientSource, /!input\.allowedPageIds\?\.size/);
+  assert.doesNotMatch(clientSource, /!allowedAdAccountIds\.size/);
+  assert.match(callbackSource, /missing_page_targets/);
+  assert.match(callbackSource, /missing_ad_account_targets/);
+  assert.match(callbackSource, /missing_instagram_targets/);
+  assert.match(callbackSource, /Granulare Meta-Auswahl/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
   assert.doesNotMatch(
@@ -462,6 +465,101 @@ try {
     ).length,
     0,
   );
+
+  // Empty page/ad allow-lists must not fall open to every token-visible asset
+  // (that stored two Facebook pages when only one was selected in Meta).
+  requests.length = 0;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    requests.push({ url });
+
+    if (url.pathname === "/v25.0/me/accounts") {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "111111111111111",
+              name: "Bon-Kredit Facebook-Seite",
+              access_token: "ephemeral-page-token-1",
+            },
+            {
+              id: "111111111111112",
+              name: "Gewählte Seite",
+              access_token: "ephemeral-page-token-2",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (url.pathname === "/v25.0/17841400000000002") {
+      return new Response(
+        JSON.stringify({
+          id: "17841400000000002",
+          name: "Gewähltes IG",
+          username: "boncred.official",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (url.pathname === "/v25.0/me/adaccounts") {
+      return new Response(
+        JSON.stringify({
+          data: [
+            { id: "act_222222222222222", name: "Ausgewählt" },
+            { id: "act_333333333333333", name: "Nicht ausgewählt" },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    throw new Error(`Unerwarteter Meta-Testpfad: ${url.pathname}`);
+  };
+
+  const strictlySelectedAssets = await clientModule.getMetaConnectionAssets({
+    accessToken: "token",
+    appSecret: "secret",
+    allowedPageIds: new Set(["111111111111112"]),
+    allowedInstagramAccountIds: new Set(["17841400000000002"]),
+    allowedAdAccountIds: new Set(["222222222222222"]),
+  });
+  assert.equal(strictlySelectedAssets.pages.length, 1);
+  assert.equal(strictlySelectedAssets.pages[0]?.id, "111111111111112");
+  assert.equal(strictlySelectedAssets.adAccounts.length, 1);
+  assert.equal(
+    strictlySelectedAssets.adAccounts[0]?.id,
+    "act_222222222222222",
+  );
+  assert.deepEqual(strictlySelectedAssets.instagramAccounts, [
+    {
+      id: "17841400000000002",
+      name: "Gewähltes IG",
+      username: "boncred.official",
+    },
+  ]);
+
+  const emptyPageAllowList = await clientModule.getMetaConnectionAssets({
+    accessToken: "token",
+    appSecret: "secret",
+    allowedPageIds: new Set(),
+    allowedInstagramAccountIds: new Set(["17841400000000002"]),
+    allowedAdAccountIds: new Set(["222222222222222"]),
+  });
+  assert.equal(emptyPageAllowList.pages.length, 0);
+  assert.equal(emptyPageAllowList.adAccounts.length, 1);
+
+  const emptyAdAllowList = await clientModule.getMetaConnectionAssets({
+    accessToken: "token",
+    appSecret: "secret",
+    allowedPageIds: new Set(["111111111111112"]),
+    allowedInstagramAccountIds: new Set(["17841400000000002"]),
+    allowedAdAccountIds: new Set(),
+  });
+  assert.equal(emptyAdAllowList.pages.length, 1);
+  assert.equal(emptyAdAllowList.adAccounts.length, 0);
 
   // Single page-linked IG is still not an Instagram selection.
   requests.length = 0;

@@ -922,9 +922,15 @@ export async function getMetaPageAssets(input: {
     parseItem: parsePageAsset,
   });
 
+  // Empty allow-list means "no selected pages", not "allow every page visible
+  // to the token" — System Users can still see previously assigned pages via
+  // /me/accounts. Only omit allowedPageIds when the caller intentionally wants
+  // the unfiltered Graph listing (e.g. internal tooling).
   return {
-    pages: result.items.filter(
-      (page) => !input.allowedPageIds?.size || input.allowedPageIds.has(page.id),
+    pages: result.items.filter((page) =>
+      input.allowedPageIds
+        ? input.allowedPageIds.has(page.id)
+        : true,
     ),
     usage: result.usage,
   };
@@ -1018,11 +1024,14 @@ export async function getMetaConnectionAssets(input: {
   const allowedAdAccountIds = new Set(
     [...(input.allowedAdAccountIds ?? [])].map(normalizeAdAccountId),
   );
-  const adAccounts = adAccountsResult.items.filter(
-    (account) =>
-      !allowedAdAccountIds.size ||
-      allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
-  );
+  // Empty allow-list means "no selected ad accounts", not "allow every
+  // account visible to the token" — System Users can still see previously
+  // assigned assets via /me/adaccounts.
+  const adAccounts = input.allowedAdAccountIds
+    ? adAccountsResult.items.filter((account) =>
+        allowedAdAccountIds.has(normalizeAdAccountId(account.id)),
+      )
+    : adAccountsResult.items;
 
   return {
     pages: pagesResult.pages,
