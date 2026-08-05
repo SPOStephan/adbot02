@@ -245,7 +245,17 @@ assert.doesNotMatch(
 
 assert.match(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
 assert.match(callbackSource, /dashboardRedirect\("connected"\)/);
-assert.match(callbackSource, /url\.hash = "instagram-onboarding"/);
+assert.doesNotMatch(callbackSource, /instagram-onboarding/);
+assert.match(
+  callbackSource,
+  /getGranularTargetIds\(tokenDebug, "instagram_basic"\)/,
+);
+assert.match(callbackSource, /allowedInstagramAccountIds/);
+assert.match(callbackSource, /assets\.instagramAccounts/);
+assert.doesNotMatch(
+  callbackSource,
+  /const instagramAccounts = assets\.pages\.flatMap/,
+);
 assert.match(callbackSource, /dashboardRedirect\("error", "storage"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "invalid_state"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation",/);

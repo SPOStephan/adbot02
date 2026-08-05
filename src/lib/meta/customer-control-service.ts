@@ -16,7 +16,6 @@ import {
   type BudgetCanaryMaterializationCommand,
   type BrandCommand,
   type DomainCommand,
-  type InstagramSelectionCommand,
   type KillSwitchCommand,
   type LaunchApprovalCommand,
   type LaunchCommand,
@@ -121,56 +120,6 @@ function rpcFailure(operation: string): never {
     500,
     `${operation} konnte nicht sicher gespeichert werden. Es wurden keine unsicheren Änderungen ausgeführt.`,
   );
-}
-
-export async function saveCustomerInstagramSelection(
-  customer: MetaCustomer,
-  command: InstagramSelectionCommand,
-): Promise<{ selectedCount: number }> {
-  const admin = createAdminClient();
-  const { data: assets, error: assetError } = await admin
-    .from("meta_assets")
-    .select("meta_asset_id")
-    .eq("user_id", customer.userId)
-    .eq("platform_account_id", customer.platformAccountId)
-    .eq("asset_type", "instagram_account")
-    .in("meta_asset_id", command.instagramAccountIds);
-
-  if (assetError) {
-    rpcFailure("Die Instagram-Profil-Auswahl");
-  }
-
-  const availableIds = new Set(
-    (assets ?? []).map((asset) => asset.meta_asset_id),
-  );
-  if (
-    availableIds.size !== command.instagramAccountIds.length ||
-    command.instagramAccountIds.some((id) => !availableIds.has(id))
-  ) {
-    serviceError(
-      "instagram_profile_not_available",
-      409,
-      "Mindestens ein gewähltes Instagram-Profil gehört nicht mehr zu dieser Meta-Verbindung. Bitte verbinde Meta erneut.",
-    );
-  }
-
-  const { error } = await admin
-    .from("platform_accounts")
-    .update({
-      instagram_account_ids: command.instagramAccountIds,
-      next_sync_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", customer.platformAccountId)
-    .eq("user_id", customer.userId)
-    .eq("platform", "meta")
-    .is("revoked_at", null);
-
-  if (error) {
-    rpcFailure("Die Instagram-Profil-Auswahl");
-  }
-
-  return { selectedCount: command.instagramAccountIds.length };
 }
 
 export async function saveCustomerPolicy(

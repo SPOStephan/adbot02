@@ -204,13 +204,60 @@ try {
 
   const instagram = await clientModule.getInstagramMedia({
     instagramAccountId: "ig-id",
-    pageAccessToken: "ephemeral-page-token",
+    accessToken: "delegated-instagram-token",
     appSecret: "test-app-secret",
   });
 
   assert.equal(requests[0].init.method, "GET");
+  assert.equal(
+    requests[0].init.headers.Authorization,
+    "Bearer delegated-instagram-token",
+  );
   assert.equal(instagram.items[0].contentType, "reel");
   assert.equal(instagram.items[0].previewUrl, "https://cdn.example.test/reel.jpg");
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+
+    return new Response(
+      JSON.stringify({
+        id: "17841400000000001",
+        name: "Aus Meta gewählt",
+        username: "selected.by.customer",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  const selectedInstagramAssets =
+    await clientModule.getMetaInstagramAccountAssets({
+      accessToken: "delegated-instagram-token",
+      appSecret: "test-app-secret",
+      allowedInstagramAccountIds: new Set([
+        "17841400000000001",
+        "not-a-meta-id",
+      ]),
+    });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url.pathname, "/v25.0/17841400000000001");
+  assert.equal(requests[0].url.searchParams.get("fields"), "id,name,username");
+  assert.equal(
+    requests[0].init.headers.Authorization,
+    "Bearer delegated-instagram-token",
+  );
+  assert.deepEqual(selectedInstagramAssets.instagramAccounts, [
+    {
+      id: "17841400000000001",
+      name: "Aus Meta gewählt",
+      username: "selected.by.customer",
+    },
+  ]);
 
   globalThis.fetch = async () =>
     new Response(

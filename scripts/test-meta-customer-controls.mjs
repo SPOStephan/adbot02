@@ -27,7 +27,6 @@ const {
   parseBudgetCanaryMaterializationCommand,
   parseDomainCommand,
   parseEuroAmountToMinor,
-  parseInstagramSelectionCommand,
   parseKillSwitchCommand,
   parseLaunchApprovalCommand,
   parseLaunchCommand,
@@ -98,34 +97,6 @@ expectInputError(
       enableAutomation: true,
     }),
   "launch_requires_status_changes",
-);
-
-assert.deepEqual(
-  parseInstagramSelectionCommand({
-    instagramAccountIds: ["178414000000001", "178414000000002", "178414000000001"],
-  }),
-  {
-    instagramAccountIds: ["178414000000001", "178414000000002"],
-  },
-);
-expectInputError(
-  () => parseInstagramSelectionCommand({ instagramAccountIds: [] }),
-  "invalid_instagram_selection",
-);
-expectInputError(
-  () =>
-    parseInstagramSelectionCommand({
-      instagramAccountIds: ["kein-meta-profil"],
-    }),
-  "invalid_instagram_selection",
-);
-expectInputError(
-  () =>
-    parseInstagramSelectionCommand({
-      instagramAccountIds: ["178414000000001"],
-      platformAccountId: "nicht erlaubt",
-    }),
-  "unknown_field",
 );
 
 assert.deepEqual(
@@ -713,7 +684,6 @@ expectInputError(
 
 const [
   componentSource,
-  instagramComponentSource,
   scopeComponentSource,
   canaryComponentSource,
   onboardingSource,
@@ -742,7 +712,6 @@ const [
   storageSource,
 ] = await Promise.all([
   readFile(path.join(root, "src/components/AutomationControlCenter.tsx"), "utf8"),
-  readFile(path.join(root, "src/components/InstagramProfileSelector.tsx"), "utf8"),
   readFile(path.join(root, "src/components/AutomationScopeManager.tsx"), "utf8"),
   readFile(
     path.join(root, "src/components/AutomationBudgetCanaryManager.tsx"),
@@ -840,8 +809,12 @@ assert.match(routeHelperSource, /MAX_BODY_BYTES/);
 assert.match(routeHelperSource, /private, no-store/);
 assert.match(policyRouteSource, /parsePolicyCommand/);
 assert.match(policyRouteSource, /managedBudgetOwnerCount/);
-assert.match(instagramRouteSource, /parseInstagramSelectionCommand/);
-assert.match(instagramRouteSource, /saveCustomerInstagramSelection/);
+assert.match(instagramRouteSource, /selection_managed_by_meta/);
+assert.match(instagramRouteSource, /\b410\b/);
+assert.doesNotMatch(
+  instagramRouteSource,
+  /parseInstagramSelectionCommand|saveCustomerInstagramSelection/,
+);
 assert.match(brandRouteSource, /parseBrandCommand/);
 assert.match(killRouteSource, /parseKillSwitchCommand/);
 assert.match(scopeRouteSource, /parseAutomationScopeCommand/);
@@ -901,11 +874,11 @@ assert.doesNotMatch(
 );
 assert.match(componentSource, /\/api\/meta\/automation\/policy/);
 assert.match(componentSource, /Grenzen bestätigen und Autonomie starten/);
-assert.match(componentSource, /InstagramProfileSelector/);
+assert.doesNotMatch(
+  componentSource,
+  /InstagramProfileSelector|instagram-selection/,
+);
 assert.match(componentSource, /\/api\/meta\/automation\/brand/);
-assert.match(instagramComponentSource, /id="instagram-onboarding"/);
-assert.match(instagramComponentSource, /\/api\/meta\/automation\/instagram-selection/);
-assert.match(instagramComponentSource, /instagramAccountIds/);
 assert.match(componentSource, /\/api\/meta\/automation\/kill-switch/);
 assert.match(componentSource, /Max\. 20 % \/ 24 h/);
 assert.match(componentSource, /12 h Cooldown/);
@@ -958,7 +931,7 @@ assert.doesNotMatch(
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease/i,
 );
 assert.doesNotMatch(
-  instagramComponentSource,
+  instagramRouteSource,
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token|read_lease/i,
 );
 assert.doesNotMatch(
@@ -971,7 +944,6 @@ assert.match(serviceSource, /customer-launch-prepare:/);
 assert.match(serviceSource, /approve_meta_launch_canary_plan/);
 assert.match(serviceSource, /p_expected_payload_hash: command\.payloadHash/);
 assert.match(serviceSource, /put_meta_customer_budget_autonomy_policy/);
-assert.match(serviceSource, /saveCustomerInstagramSelection/);
 assert.match(serviceSource, /\.from\("meta_assets"\)/);
 assert.match(serviceSource, /set_meta_customer_automation_scope/);
 assert.match(serviceSource, /command\.status === "MANAGED"/);

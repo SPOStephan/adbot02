@@ -28,10 +28,6 @@ import {
   type AutomationOnboardingData,
 } from "@/components/AutomationOnboardingControls";
 import {
-  InstagramProfileSelector,
-  type InstagramProfileOption,
-} from "@/components/InstagramProfileSelector";
-import {
   AutomationScopeManager,
   type AutomationScopeCampaignView,
 } from "@/components/AutomationScopeManager";
@@ -87,7 +83,6 @@ type AutomationControlCenterProps = {
   policy: AutomationPolicyView | null;
   brandProfile: BrandProfileView | null;
   killSwitch: KillSwitchView;
-  instagramProfiles: InstagramProfileOption[];
   auditEvents: AutomationAuditView[];
   automationScope: AutomationScopeCampaignView[];
   budgetCanaries: BudgetCanaryPlanView[];
@@ -267,7 +262,6 @@ export function AutomationControlCenter({
   canConfirmBudgetCanary,
   currency,
   killSwitch,
-  instagramProfiles,
   onboarding,
   policy,
   readiness,
@@ -538,8 +532,6 @@ export function AutomationControlCenter({
             </div>
           ))}
         </div>
-
-        <InstagramProfileSelector profiles={instagramProfiles} />
 
         {!readiness.writeScopeGranted ? (
           <div className="flex flex-col gap-4 border-b border-amber-200 bg-amber-50 px-5 py-5 text-amber-950 sm:flex-row sm:items-center sm:justify-between sm:px-7">
