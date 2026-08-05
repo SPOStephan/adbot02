@@ -210,18 +210,13 @@ export async function GET(request: Request) {
       allowedAdAccountIds,
     });
 
-    if (
-      assets.instagramDiscovery === "ambiguous_page_candidates"
-    ) {
-      console.warn("[meta-oauth] Mehrdeutige Instagram-Kandidaten", {
+    if (allowedInstagramAccountIds.size === 0) {
+      console.warn("[meta-oauth] Meta lieferte keine Instagram-Ziel-IDs", {
         pages: assets.pages.length,
-        pageLinkedInstagramCandidates: assets.pages.filter(
-          (page) => page.instagramAccount,
-        ).length,
-        instagramGranularTargets: allowedInstagramAccountIds.size,
+        adAccounts: assets.adAccounts.length,
         instagramSource: assets.instagramDiscovery,
       });
-      return dashboardRedirect("error", "ambiguous_instagram");
+      return dashboardRedirect("error", "missing_instagram_targets");
     }
 
     if (
@@ -235,9 +230,22 @@ export async function GET(request: Request) {
         adAccounts: assets.adAccounts.length,
         instagramGranularTargets: allowedInstagramAccountIds.size,
         instagramSource: assets.instagramDiscovery,
+        instagramUsernames: assets.instagramAccounts.map(
+          (account) => account.username,
+        ),
       });
       return dashboardRedirect("error", "no_assets");
     }
+
+    console.info("[meta-oauth] Assetauswahl übernommen", {
+      pages: assets.pages.length,
+      instagramAccounts: assets.instagramAccounts.length,
+      adAccounts: assets.adAccounts.length,
+      instagramSource: assets.instagramDiscovery,
+      instagramUsernames: assets.instagramAccounts.map(
+        (account) => account.username,
+      ),
+    });
 
     const pageIds = assets.pages.map((page) => page.id);
     const adAccountIds = assets.adAccounts.map((account) => account.id);
