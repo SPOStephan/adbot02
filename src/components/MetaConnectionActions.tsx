@@ -78,15 +78,13 @@ export function MetaConnectionActions({
 
   return (
     <div className="space-y-2">
-      <form action={reconnectHref} method="post">
-        <button
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-          type="submit"
-        >
-          Meta neu verbinden
-          <ArrowUpRight className="size-4" />
-        </button>
-      </form>
+      <a
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        href={reconnectHref}
+      >
+        Meta neu verbinden
+        <ArrowUpRight className="size-4" />
+      </a>
       <button
         className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition hover:border-red-300 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disconnectPending}

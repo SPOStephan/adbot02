@@ -1607,15 +1607,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           ? "Die Meta-Verbindung muss erneuert werden."
                           : "Der minimale Schreibscope muss bestätigt werden."}
                       </p>
-                      <form action="/api/connectors/meta/start" method="post">
-                        <button
-                          className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
-                          type="submit"
-                        >
-                          Meta neu verbinden
-                          <ArrowUpRight className="size-4" />
-                        </button>
-                      </form>
+                      <Link
+                        className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                        href="/api/connectors/meta/start"
+                        prefetch={false}
+                      >
+                        Meta neu verbinden
+                        <ArrowUpRight className="size-4" />
+                      </Link>
                     </div>
                   ) : (
                     <MetaSyncButton

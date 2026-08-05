@@ -85,7 +85,8 @@ assert.match(dashboardSource, /no_assets/);
 assert.match(dashboardSource, /missing_page_targets/);
 assert.match(dashboardSource, /missing_instagram_targets/);
 assert.match(dashboardSource, /authorization_reset/);
-assert.match(
+assert.match(dashboardSource, /href="\/api\/connectors\/meta\/start"/);
+assert.doesNotMatch(
   dashboardSource,
   /<form action="\/api\/connectors\/meta\/start" method="post">/,
 );
@@ -189,8 +190,8 @@ assert.match(
 );
 assert.doesNotMatch(platformAccountPrivilegeHardeningSql, /grant\s+/i);
 
-assert.match(cardSource, /const isMetaConnect = actionHref === "\/api\/connectors\/meta\/start"/);
-assert.match(cardSource, /<form action=\{actionHref\} method="post">/);
+assert.doesNotMatch(cardSource, /const isMetaConnect/);
+assert.doesNotMatch(cardSource, /<form action=\{actionHref\} method="post">/);
 assert.match(cardSource, /href=\{actionHref!\}/);
 assert.match(cardSource, /prefetch=\{false\}/);
 assert.match(cardSource, /Aktiv verbunden/);
@@ -257,22 +258,22 @@ assert.doesNotMatch(
   /access_token_encrypted|token_iv|token_auth_tag|sync_usage/,
 );
 
-assert.match(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
+assert.doesNotMatch(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
 assert.match(callbackSource, /dashboardRedirect\("connected"/);
 assert.doesNotMatch(callbackSource, /instagram-onboarding/);
-assert.match(
+assert.doesNotMatch(
   callbackSource,
-  /getGranularTargetIds\(tokenDebug, "instagram_basic"\)/,
+  /assigned_|business_integration_system_user|authorizationReset|shouldUseMetaSystemUserDirectAssetDiscovery/,
 );
-assert.match(callbackSource, /allowedInstagramAccountIds/);
-assert.match(callbackSource, /resolveMetaSelectedPageIds/);
-assert.match(callbackSource, /getMetaAdAccountGranularTargetIds/);
-assert.match(callbackSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
-assert.match(callbackSource, /business_integration_system_user/);
-assert.doesNotMatch(callbackSource, /resolveMetaSelectedAdAccountIds|promote_pages/);
-assert.match(callbackSource, /missing_page_targets/);
-assert.match(callbackSource, /missing_ad_account_targets/);
-assert.match(callbackSource, /missing_instagram_targets/);
+assert.doesNotMatch(
+  callbackSource,
+  /resolvePersistedMetaAccessToken|resolveMetaSelectedPageIds|getMetaAdAccountGranularTargetIds/,
+);
+assert.match(callbackSource, /exchangeForLongLivedAccessToken/);
+assert.match(callbackSource, /getGranularTargetIds/);
+assert.match(callbackSource, /getMetaConnectionAssets/);
+assert.match(callbackSource, /const instagramAccounts = assets\.pages\.flatMap/);
+assert.match(callbackSource, /instagramAccountIds = instagramAccounts\.map/);
 assert.doesNotMatch(
   callbackSource,
   /instagramConfirm|needsInstagramConfirm|InstagramAssetConfirm|candidateInstagramAccountIds/,
@@ -281,32 +282,13 @@ assert.doesNotMatch(
   callbackSource,
   /clientBusinessId|client_business_id|business_management/,
 );
-assert.match(callbackSource, /systemUserId:\s*useSystemUserDirectAssetDiscovery/);
-assert.match(callbackSource, /authorizationReset:\s*oauthState\.authorizationReset/);
-assert.match(
-  callbackSource,
-  /systemUserDirectAssetCandidate[\s\S]{0,200}&& !useSystemUserDirectAssetDiscovery/,
-);
-assert.match(callbackSource, /revokeMetaAuthorization/);
-assert.match(
-  callbackSource,
-  /const freshState = createOAuthState\([\s\S]{0,120}true,[\s\S]{0,30}\);/,
-);
-assert.match(callbackSource, /!useSystemUserDirectAssetDiscovery/);
-assert.match(callbackSource, /assets\.instagramAccounts/);
-assert.doesNotMatch(
-  callbackSource,
-  /const instagramAccounts = assets\.pages\.flatMap/,
-);
-assert.match(callbackSource, /resolvePersistedMetaAccessToken/);
-assert.match(callbackSource, /meta_callback_stage/);
 assert.match(callbackSource, /dashboardRedirect\("error", "storage"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "invalid_state"\)/);
-assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation",/);
+assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "token_validation"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "no_assets"\)/);
-assert.match(callbackSource, /classifyMetaGrantedScopes\(/);
-assert.match(callbackSource, /compatibleSystemUserScopes/);
+assert.match(callbackSource, /const missingScopes = META_ALLOWED_SCOPES\.filter/);
+assert.match(callbackSource, /const unexpectedScopes = tokenDebug\.scopes\.filter/);
 
 assert.match(dashboardSource, /const pageAssets = \(metaAssets \?\? \[\]\)\.filter/);
 assert.match(dashboardSource, /const adAccountAssets = \(metaAssets \?\? \[\]\)\.filter/);
