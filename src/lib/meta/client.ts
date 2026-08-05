@@ -114,6 +114,7 @@ type MetaErrorBody = {
     code?: number;
     type?: string;
     error_subcode?: number;
+    message?: string;
   };
 };
 
@@ -135,6 +136,7 @@ export class MetaGraphError extends Error {
   readonly status: number;
   readonly code: number | null;
   readonly subcode: number | null;
+  readonly graphMessage: string | null;
   readonly usage: MetaUsageSnapshot;
 
   constructor(
@@ -142,11 +144,13 @@ export class MetaGraphError extends Error {
     body: MetaErrorBody,
     usage: MetaUsageSnapshot = EMPTY_USAGE,
   ) {
+    const graphMessage = asNonEmptyString(body.error?.message);
     super("Meta Graph API request failed");
     this.name = "MetaGraphError";
     this.status = status;
     this.code = body.error?.code ?? null;
     this.subcode = body.error?.error_subcode ?? null;
+    this.graphMessage = graphMessage;
     this.usage = usage;
   }
 
@@ -1059,6 +1063,51 @@ function parseAdAccount(value: unknown): MetaAdAccountAsset | null {
   return id && name ? { id, name: name.slice(0, 255) } : null;
 }
 
+function parseAssignedPageAsset(
+  value: unknown,
+  systemUserAccessToken: string,
+): MetaPageAsset | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = asMetaAssetId(value.id);
+
+  if (!id) {
+    return null;
+  }
+
+  return {
+    id,
+    name:
+      asNonEmptyString(value.name)?.slice(0, 255)
+      ?? `Facebook-Seite ${id}`,
+    // This value is not persisted. Subsequent syncs resolve the selected page
+    // again by its authoritative assigned ID.
+    accessToken: systemUserAccessToken,
+    instagramAccount: null,
+  };
+}
+
+function parseAssignedAdAccount(value: unknown): MetaAdAccountAsset | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = asNonEmptyString(value.id);
+
+  if (!id || !/^(?:act_)?\d{1,64}$/i.test(id)) {
+    return null;
+  }
+
+  return {
+    id,
+    name:
+      asNonEmptyString(value.name)?.slice(0, 255)
+      ?? `Werbekonto ${id}`,
+  };
+}
+
 function normalizeAdAccountId(value: string): string {
   return value.startsWith("act_") ? value.slice(4) : value;
 }
@@ -1160,33 +1209,31 @@ async function getMetaSystemUserAssignedAssets(input: {
     throw new MetaGraphError(400, {});
   }
 
+  // Meta documents these three System User edges as parameterless. Passing
+  // fields or limit produces Graph code 100 for Business Login system users.
+  // Pagination supplied by Meta is still followed and validated below.
   const assignedPagesUrl = new URL(
     `/${META_GRAPH_VERSION}/${systemUserId}/assigned_pages`,
     META_GRAPH_ORIGIN,
   );
-  assignedPagesUrl.searchParams.set("fields", "id,name,access_token");
-  assignedPagesUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
 
   const assignedInstagramUrl = new URL(
     `/${META_GRAPH_VERSION}/${systemUserId}/assigned_instagram_accounts`,
     META_GRAPH_ORIGIN,
   );
-  assignedInstagramUrl.searchParams.set("fields", "id,name,username");
-  assignedInstagramUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
 
   const assignedAdAccountsUrl = new URL(
     `/${META_GRAPH_VERSION}/${systemUserId}/assigned_ad_accounts`,
     META_GRAPH_ORIGIN,
   );
-  assignedAdAccountsUrl.searchParams.set("fields", "id,name");
-  assignedAdAccountsUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
 
   const [pagesResult, instagramResult, adAccountsResult] = await Promise.all([
     fetchMetaCollection({
       initialUrl: assignedPagesUrl,
       accessToken: input.accessToken,
       appSecret: input.appSecret,
-      parseItem: parsePageAsset,
+      parseItem: (value) =>
+        parseAssignedPageAsset(value, input.accessToken),
       maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
       requireComplete: true,
     }),
@@ -1202,7 +1249,7 @@ async function getMetaSystemUserAssignedAssets(input: {
       initialUrl: assignedAdAccountsUrl,
       accessToken: input.accessToken,
       appSecret: input.appSecret,
-      parseItem: parseAdAccount,
+      parseItem: parseAssignedAdAccount,
       maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
       requireComplete: true,
     }),

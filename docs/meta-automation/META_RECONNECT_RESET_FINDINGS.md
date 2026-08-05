@@ -44,3 +44,9 @@ Quellen:
 4. https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user/assigned_pages
 5. https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user/assigned_ad_accounts
 6. https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user/assigned_instagram_accounts
+
+## Production-Beleg vom 5. August 2026, 16:26 MESZ
+
+Der frische, signierte Reconnect erreichte den vorgesehenen System-User-Modus (`tokenType: SYSTEM_USER`, `authorizationReset: true`, alle fünf granularen Ziel-ID-Listen leer). Der Callback scheiterte danach in `asset_discovery` mit Meta Graph Code `100` (`Invalid parameter`).
+
+Die drei oben verlinkten offiziellen Meta-v25-Referenzen beschreiben die System-User-Edges ausdrücklich als **parameterlos**. Der fehlgeschlagene Adbot-Request ergänzte an jede Edge `fields=...` und `limit=25`. Diese Parameter werden entfernt. Die Edges bleiben die alleinige Quelle der gewählten IDs; `/me/accounts`, `/me/adaccounts` und `page.instagram_business_account` dürfen im System-User-Auswahlmodus weiterhin nicht als Auswahlquelle dienen.
