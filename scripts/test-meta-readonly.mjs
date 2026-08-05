@@ -45,8 +45,9 @@ try {
   assert.match(clientSource, /protectMetaDebugTokenTargetIds/);
   assert.match(clientSource, /asMetaAssetId/);
   assert.doesNotMatch(clientSource, /unique_page_candidate|ambiguous_page_candidates/);
-  assert.match(callbackSource, /missing_instagram_targets/);
-  assert.doesNotMatch(callbackSource, /ambiguous_instagram/);
+  assert.match(callbackSource, /needsInstagramConfirm/);
+  assert.match(callbackSource, /instagramConfirm/);
+  assert.doesNotMatch(callbackSource, /missing_instagram_targets|ambiguous_instagram/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
   assert.doesNotMatch(

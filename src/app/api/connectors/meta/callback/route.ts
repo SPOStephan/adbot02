@@ -38,6 +38,7 @@ function dashboardRedirect(
     missingScopes?: string[];
     unexpectedScopes?: string[];
     stage?: string;
+    instagramConfirm?: boolean;
   },
 ) {
   const url = createPortalUrl("/dashboard");
@@ -60,6 +61,10 @@ function dashboardRedirect(
 
   if (details?.stage) {
     url.searchParams.set("meta_callback_stage", details.stage);
+  }
+
+  if (details?.instagramConfirm) {
+    url.searchParams.set("meta_instagram", "confirm");
   }
 
   return noStoreRedirect(url);
@@ -210,29 +215,35 @@ export async function GET(request: Request) {
       allowedAdAccountIds,
     });
 
-    if (allowedInstagramAccountIds.size === 0) {
-      console.warn("[meta-oauth] Meta lieferte keine Instagram-Ziel-IDs", {
-        pages: assets.pages.length,
-        adAccounts: assets.adAccounts.length,
-        instagramSource: assets.instagramDiscovery,
-      });
-      return dashboardRedirect("error", "missing_instagram_targets");
-    }
-
-    if (
-      !assets.pages.length ||
-      !assets.instagramAccounts.length ||
-      !assets.adAccounts.length
-    ) {
+    if (!assets.pages.length || !assets.adAccounts.length) {
       console.warn("[meta-oauth] Unvollständige Assetauswahl", {
         pages: assets.pages.length,
         instagramAccounts: assets.instagramAccounts.length,
         adAccounts: assets.adAccounts.length,
         instagramGranularTargets: allowedInstagramAccountIds.size,
         instagramSource: assets.instagramDiscovery,
-        instagramUsernames: assets.instagramAccounts.map(
-          (account) => account.username,
-        ),
+      });
+      return dashboardRedirect("error", "no_assets");
+    }
+
+    // Instagram only from granular target_ids. If Meta omits them, still save
+    // pages/ad accounts and require an explicit dashboard confirmation — never
+    // invent Instagram from page links.
+    const needsInstagramConfirm =
+      allowedInstagramAccountIds.size === 0 ||
+      assets.instagramAccounts.length === 0;
+
+    if (allowedInstagramAccountIds.size === 0) {
+      console.warn("[meta-oauth] Meta lieferte keine Instagram-Ziel-IDs", {
+        pages: assets.pages.length,
+        adAccounts: assets.adAccounts.length,
+        instagramSource: assets.instagramDiscovery,
+      });
+    } else if (!assets.instagramAccounts.length) {
+      console.warn("[meta-oauth] Instagram-Ziel-IDs nicht lesbar", {
+        pages: assets.pages.length,
+        adAccounts: assets.adAccounts.length,
+        instagramGranularTargets: allowedInstagramAccountIds.size,
       });
       return dashboardRedirect("error", "no_assets");
     }
@@ -245,6 +256,7 @@ export async function GET(request: Request) {
       instagramUsernames: assets.instagramAccounts.map(
         (account) => account.username,
       ),
+      needsInstagramConfirm,
     });
 
     const pageIds = assets.pages.map((page) => page.id);
@@ -323,7 +335,9 @@ export async function GET(request: Request) {
 
     stage = "revalidation";
     revalidatePath("/dashboard", "page");
-    return dashboardRedirect("connected");
+    return dashboardRedirect("connected", undefined, {
+      instagramConfirm: needsInstagramConfirm,
+    });
   } catch (error) {
     console.error("[meta-oauth] Callback konnte nicht verarbeitet werden", {
       stage,
