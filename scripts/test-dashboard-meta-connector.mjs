@@ -259,6 +259,7 @@ assert.match(
 );
 assert.match(callbackSource, /allowedInstagramAccountIds/);
 assert.match(callbackSource, /resolveMetaSelectedPageIds/);
+assert.match(callbackSource, /resolveMetaSelectedAdAccountIds/);
 assert.match(callbackSource, /missing_page_targets/);
 assert.match(callbackSource, /missing_ad_account_targets/);
 assert.match(callbackSource, /missing_instagram_targets/);

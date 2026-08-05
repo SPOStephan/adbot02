@@ -9,20 +9,18 @@ Im Facebook-Login-for-Business-Dialog wählt der Kunde Assets. Meta bestätigt d
 | Asset | Quelle |
 | --- | --- |
 | Instagram | nur `instagram_basic` `target_ids` |
-| Werbekonto | `ads_read` / `ads_management` `target_ids` |
-| Facebook-Seite | `pages_show_list` / `pages_read_engagement` / `pages_manage_ads` / `pages_manage_metadata` `target_ids` |
+| Facebook-Seite | Page-Scope-`target_ids`, sonst Seiten mit Link zur gewählten Instagram-ID |
+| Werbekonto | `ads_*` `target_ids` (auch `act_<id>`), sonst eindeutig über `promote_pages` der gewählten Seite (oder einziges sichtbares Werbekonto) |
 
-## Seiten ohne `target_ids`
+## Seiten / Werbekonten ohne `target_ids`
 
-Meta dokumentiert: wenn eine Permission „für alle“ gilt, fehlen `target_ids`.[1] Bei System-User-Tokens passiert das häufig für Pages (`Facebook-Seite erforderlich: aus` in der Login-Config).
+Meta dokumentiert: wenn eine Permission „für alle“ gilt, fehlen `target_ids`.[1] Bei System-User-Tokens passiert das häufig.
 
-Dann leitet Adbot Seiten **nur** so ab:
+**Seiten:** Instagram-`target_ids` müssen vorhanden sein → `/me/accounts` → nur Seiten, deren `instagram_business_account.id` in den IG-`target_ids` liegt.
 
-1. Instagram-`target_ids` müssen vorhanden sein
-2. `/me/accounts` wird gelesen
-3. Es bleiben **ausschließlich** Seiten, deren `instagram_business_account.id` in den Instagram-`target_ids` liegt
+**Werbekonten:** gewählte Seiten-IDs → `/me/adaccounts` + `/{ad-account}/promote_pages` → nur das Werbekonto, das genau eine der gewählten Seiten bewerben kann. Mehrere Treffer oder keiner (bei mehreren Konten) → `missing_ad_account_targets`. Ein einziges sichtbares Werbekonto ohne Page-Match → dieses Unique-Konto.
 
-Das ist kein Erfinden von Instagram aus Seiten — sondern Filtern der Seiten anhand der gewählten Instagram-IDs. Ohne Treffer → `missing_page_targets`.
+Das ist kein Erfinden von Instagram aus Seiten — und kein Fall-Open auf alle Pages/Ads.
 
 ## Was verboten ist
 

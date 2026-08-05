@@ -376,6 +376,21 @@ export function asMetaAssetId(value: unknown): string | null {
   return null;
 }
 
+/** Page/IG IDs are digits; ad-account target_ids may be digits or act_<digits>. */
+export function asMetaGranularTargetId(value: unknown): string | null {
+  const direct = asMetaAssetId(value);
+  if (direct) {
+    return direct;
+  }
+
+  if (typeof value === "string") {
+    const match = value.trim().match(/^act_(\d{1,64})$/i);
+    return match?.[1] ?? null;
+  }
+
+  return null;
+}
+
 async function fetchMetaResponse(
   url: URL,
   headers: Record<string, string>,
@@ -782,7 +797,7 @@ export async function debugMetaAccessToken(input: {
             scope: value.scope,
             targetIds: Array.isArray(value.target_ids)
               ? value.target_ids.flatMap((target) => {
-                  const id = asMetaAssetId(target);
+                  const id = asMetaGranularTargetId(target);
                   return id ? [id] : [];
                 })
               : [],
@@ -888,6 +903,157 @@ export async function resolveMetaSelectedPageIds(input: {
     source: pageIds.size > 0 ? "instagram_linked_pages" : "none",
     usage: pagesResult.usage,
   };
+}
+
+export type MetaAdAccountSelectionSource =
+  | "granular_targets"
+  | "page_promote_pages"
+  | "unique_ad_account"
+  | "none";
+
+export function getMetaAdAccountGranularTargetIds(
+  tokenDebug: MetaTokenDebug,
+): Set<string> {
+  return new Set(
+    [
+      ...getGranularTargetIds(tokenDebug, "ads_read"),
+      ...getGranularTargetIds(tokenDebug, "ads_management"),
+    ].map(normalizeAdAccountId),
+  );
+}
+
+async function getAdAccountPromotePageIds(input: {
+  accessToken: string;
+  appSecret: string;
+  adAccountId: string;
+}): Promise<{ pageIds: Set<string>; usage: MetaUsageSnapshot }> {
+  const accountId = normalizeAdAccountId(input.adAccountId);
+  const url = new URL(
+    `/${META_GRAPH_VERSION}/act_${encodeURIComponent(accountId)}/promote_pages`,
+    META_GRAPH_ORIGIN,
+  );
+  url.searchParams.set("fields", "id");
+  url.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
+
+  try {
+    const result = await fetchMetaCollection({
+      initialUrl: url,
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+      parseItem: (value) => {
+        if (!isRecord(value)) {
+          return null;
+        }
+        const id = asMetaAssetId(value.id) ?? asNonEmptyString(value.id);
+        return id ? { id } : null;
+      },
+    });
+    return {
+      pageIds: new Set(result.items.map((item) => item.id)),
+      usage: result.usage,
+    };
+  } catch (error) {
+    if (
+      error instanceof MetaGraphError &&
+      error.status >= 400 &&
+      error.status < 500
+    ) {
+      return { pageIds: new Set(), usage: error.usage };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Resolve which ad accounts the customer selected.
+ *
+ * Prefer ads_* target_ids. When Meta omits them ("applies to all"), keep only
+ * ad accounts that can promote one of the already-resolved selected pages.
+ * If that is ambiguous/empty but exactly one ad account is visible on the
+ * token, use that unique account — never the full multi-account list.
+ */
+export async function resolveMetaSelectedAdAccountIds(input: {
+  accessToken: string;
+  appSecret: string;
+  tokenDebug: MetaTokenDebug;
+  allowedPageIds: Set<string>;
+}): Promise<{
+  adAccountIds: Set<string>;
+  source: MetaAdAccountSelectionSource;
+  usage: MetaUsageSnapshot;
+}> {
+  const fromGranular = getMetaAdAccountGranularTargetIds(input.tokenDebug);
+  if (fromGranular.size > 0) {
+    return {
+      adAccountIds: fromGranular,
+      source: "granular_targets",
+      usage: EMPTY_USAGE,
+    };
+  }
+
+  const adAccountUrl = new URL(
+    `/${META_GRAPH_VERSION}/me/adaccounts`,
+    META_GRAPH_ORIGIN,
+  );
+  adAccountUrl.searchParams.set("fields", "id,name");
+  adAccountUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
+
+  const listed = await fetchMetaCollection({
+    initialUrl: adAccountUrl,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseAdAccount,
+  });
+
+  if (!listed.items.length) {
+    return { adAccountIds: new Set(), source: "none", usage: listed.usage };
+  }
+
+  let usage = listed.usage;
+
+  if (input.allowedPageIds.size > 0) {
+    const matched = new Set<string>();
+
+    for (const account of listed.items) {
+      const promoted = await getAdAccountPromotePageIds({
+        accessToken: input.accessToken,
+        appSecret: input.appSecret,
+        adAccountId: account.id,
+      });
+      usage = mergeMetaUsage(usage, promoted.usage);
+
+      const promotesSelectedPage = [...promoted.pageIds].some((pageId) =>
+        input.allowedPageIds.has(pageId),
+      );
+      if (promotesSelectedPage) {
+        matched.add(normalizeAdAccountId(account.id));
+      }
+    }
+
+    if (matched.size === 1) {
+      return {
+        adAccountIds: matched,
+        source: "page_promote_pages",
+        usage,
+      };
+    }
+
+    if (matched.size > 1) {
+      // Ambiguous: several ad accounts can promote the selected page and Meta
+      // did not return target_ids — do not guess.
+      return { adAccountIds: new Set(), source: "none", usage };
+    }
+  }
+
+  if (listed.items.length === 1) {
+    return {
+      adAccountIds: new Set([normalizeAdAccountId(listed.items[0]!.id)]),
+      source: "unique_ad_account",
+      usage,
+    };
+  }
+
+  return { adAccountIds: new Set(), source: "none", usage };
 }
 
 export async function getMetaIdentity(input: {
