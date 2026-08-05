@@ -46,8 +46,7 @@ assert.match(dashboardSource, /\.is\("revoked_at", null\)/);
 assert.match(cardSource, /<MetaConnectionActions/);
 assert.match(cardSource, /reconnectHref="\/api\/connectors\/meta\/start"/);
 assert.match(cardSource, /connected && showMetaConnectionActions/);
-assert.match(cardSource, /href=\{actionHref!\}/);
-assert.match(cardSource, /prefetch=\{false\}/);
+assert.match(cardSource, /<form action=\{actionHref\} method="post">/);
 
 assert.match(actionsSource, /"use client"/);
 assert.match(actionsSource, /Meta neu verbinden/);
