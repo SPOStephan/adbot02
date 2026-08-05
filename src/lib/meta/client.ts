@@ -872,15 +872,14 @@ export async function getMetaInstagramAccountAssets(input: {
   accessToken: string;
   appSecret: string;
   allowedInstagramAccountIds: Set<string>;
-  candidateInstagramAccountIds?: Set<string>;
 }): Promise<{ instagramAccounts: MetaInstagramAccountAsset[]; usage: MetaUsageSnapshot }> {
-  const granularIds = [...input.allowedInstagramAccountIds].filter((id) =>
+  // Only Meta's granular instagram_basic target IDs are an authoritative
+  // customer selection. Page-linked Instagram IDs must never be treated as
+  // selected — a granted Facebook page can expose a linked IG that was not
+  // chosen in the Login-for-Business dialog.
+  const ids = [...input.allowedInstagramAccountIds].filter((id) =>
     /^\d{1,64}$/.test(id),
   );
-  const pageCandidateIds = [
-    ...(input.candidateInstagramAccountIds ?? new Set<string>()),
-  ].filter((id) => /^\d{1,64}$/.test(id));
-  const ids = granularIds.length ? granularIds : pageCandidateIds;
   const expectedIds = new Set(ids);
 
   if (!ids.length) {
@@ -934,16 +933,10 @@ export async function getMetaConnectionAssets(input: {
   allowedAdAccountIds?: Set<string>;
 }): Promise<MetaConnectionAssets> {
   const pagesResult = await getMetaPageAssets(input);
-  const pageInstagramAccountIds = new Set(
-    pagesResult.pages.flatMap((page) =>
-      page.instagramAccount ? [page.instagramAccount.id] : [],
-    ),
-  );
   const instagramResult = await getMetaInstagramAccountAssets({
     accessToken: input.accessToken,
     appSecret: input.appSecret,
     allowedInstagramAccountIds: input.allowedInstagramAccountIds,
-    candidateInstagramAccountIds: pageInstagramAccountIds,
   });
   const adAccountUrl = new URL(
     `/${META_GRAPH_VERSION}/me/adaccounts`,

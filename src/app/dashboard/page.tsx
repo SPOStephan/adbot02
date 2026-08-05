@@ -98,7 +98,7 @@ const META_ERROR_MESSAGES: Record<string, string> = {
   invalid_state: "Die Sicherheitsprüfung ist abgelaufen oder ungültig. Bitte starte die Verbindung erneut.",
   scope_validation: "Die von Meta gewährten Berechtigungen entsprechen nicht dem minimalen sicheren Zugriff. Bitte bestätige den Reconnect vollständig.",
   token_validation: "Die Meta-Verbindung konnte nicht sicher bestätigt werden. Bitte verbinde Meta erneut.",
-  no_assets: "Bitte eine Facebook-Seite, das verbundene Instagram-Profil und ein Werbekonto auswählen.",
+  no_assets: "Bitte im Meta-Dialog Facebook-Seite, Instagram-Konto und Werbekonto ausdrücklich auswählen. Instagram wird nur aus Metas Bestätigung übernommen, nicht aus einer Seitenverknüpfung.",
   storage: "Die Verbindung konnte nicht sicher gespeichert werden. Es wurde keine Verbindung aktiviert.",
   callback: "Die Meta-Antwort konnte nicht verarbeitet werden. Bitte starte die Verbindung erneut.",
 };

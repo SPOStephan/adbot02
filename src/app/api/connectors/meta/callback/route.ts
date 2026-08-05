@@ -219,9 +219,10 @@ export async function GET(request: Request) {
         pages: assets.pages.length,
         instagramAccounts: assets.instagramAccounts.length,
         adAccounts: assets.adAccounts.length,
+        instagramGranularTargets: allowedInstagramAccountIds.size,
         instagramSource: allowedInstagramAccountIds.size
           ? "granular_targets"
-          : "page_candidates_verified_with_connector_token",
+          : "missing_granular_instagram_targets",
       });
       return dashboardRedirect("error", "no_assets");
     }

@@ -251,6 +251,11 @@ assert.match(
   /getGranularTargetIds\(tokenDebug, "instagram_basic"\)/,
 );
 assert.match(callbackSource, /allowedInstagramAccountIds/);
+assert.match(callbackSource, /missing_granular_instagram_targets/);
+assert.doesNotMatch(
+  callbackSource,
+  /page_candidates_verified_with_connector_token|candidateInstagramAccountIds/,
+);
 assert.doesNotMatch(
   callbackSource,
   /systemUserId|assigned_instagram_accounts|clientBusinessId|client_business_id|business_management/,
