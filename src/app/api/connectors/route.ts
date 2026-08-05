@@ -22,7 +22,8 @@ export async function GET() {
   const { data, error } = await supabase
     .from("platform_accounts")
     .select("platform, account_name, expires_at")
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .is("revoked_at", null);
 
   if (error) {
     return NextResponse.json(
