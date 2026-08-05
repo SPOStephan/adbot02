@@ -50,3 +50,26 @@ Quellen:
 Der frische, signierte Reconnect erreichte den vorgesehenen System-User-Modus (`tokenType: SYSTEM_USER`, `authorizationReset: true`, alle fünf granularen Ziel-ID-Listen leer). Der Callback scheiterte danach in `asset_discovery` mit Meta Graph Code `100` (`Invalid parameter`).
 
 Die drei oben verlinkten offiziellen Meta-v25-Referenzen beschreiben die System-User-Edges ausdrücklich als **parameterlos**. Der fehlgeschlagene Adbot-Request ergänzte an jede Edge `fields=...` und `limit=25`. Diese Parameter werden entfernt. Die Edges bleiben die alleinige Quelle der gewählten IDs; `/me/accounts`, `/me/adaccounts` und `page.instagram_business_account` dürfen im System-User-Auswahlmodus weiterhin nicht als Auswahlquelle dienen.
+
+## Korrigierter autoritativer Assetvertrag, 5. August 2026
+
+Der Production-Live-Flow liefert weiterhin einen `SYSTEM_USER`-Token mit vorhandenen `granular_scopes`, aber leeren `target_ids`. Meta bestätigt den Dialog trotzdem erfolgreich, weil die Assetauswahl als Business-System-User-Zuweisung erfolgt; `target_ids` sind in diesem Modus nicht die Quelle.
+
+Der früher verwendete Pfad `/{system-user-id}/assigned_instagram_accounts` ist in Graph v25 live **nicht vorhanden** (`OAuthException`, Code 100: `Tried accessing nonexisting field (assigned_instagram_accounts) on node type (SystemUser)`). Metas aktuell generiertes offizielles Python Business SDK bestätigt diesen Live-Befund: `SystemUser` besitzt `assigned_pages` und `assigned_ad_accounts`, aber keine Instagram-Assignment-Methode.
+
+Für die drei ausdrücklich getrennten Dialogauswahlen gilt daher beim Business-System-User-Token:
+
+- Facebook-Seiten: ausschließlich `/{system-user-id}/assigned_pages`.
+- Werbekonten: ausschließlich `/{system-user-id}/assigned_ad_accounts`.
+- Instagram: Business-Instagram-Assets (`/{client-business-id}/owned_instagram_assets` und gegebenenfalls `client_instagram_assets`) auflisten und je Asset über `/{instagram-asset-id}/assigned_users?business={client-business-id}` ausschließlich diejenigen behalten, deren `AssignedUser.id` dem aktuellen System User entspricht.
+
+Die benötigte Business-ID ist im Login-for-Business-Userobjekt als `client_business_id` verfügbar (`/me?fields=id,client_business_id`); die eigene Git-Historie hatte dieses Feld bereits korrekt gelesen, aber danach mit einem falschen `/instagram_accounts`-Fallback kombiniert.
+
+Im granularen Tokenmodus bleiben die Quellen unverändert strikt getrennt: Seiten ausschließlich aus Page-Scope-`target_ids`, Instagram ausschließlich aus `instagram_basic.target_ids`, Werbekonten ausschließlich aus Ads-Scope-`target_ids`.
+
+Offizielle SDK-Quellen:
+
+1. https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/systemuser.py
+2. https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/business.py
+3. https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/instagrambusinessasset.py
+4. https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/assigneduser.py
