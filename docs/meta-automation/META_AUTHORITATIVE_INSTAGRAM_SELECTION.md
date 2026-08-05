@@ -9,30 +9,31 @@ Im Facebook-Login-for-Business-Dialog wählt der Kunde Assets. Meta bestätigt d
 | Asset | Quelle |
 | --- | --- |
 | Instagram | nur `instagram_basic` `target_ids` |
-| Facebook-Seite | Page-Scope-`target_ids`, sonst Seiten mit Link zur gewählten Instagram-ID |
-| Werbekonto | `ads_*` `target_ids` (auch `act_<id>`), sonst eindeutig über `promote_pages` der gewählten Seite (oder einziges sichtbares Werbekonto) |
+| Werbekonto | nur `ads_read` / `ads_management` `target_ids` (auch `act_<id>`) |
+| Facebook-Seite | Page-Scope-`target_ids`; fehlen sie, Seiten mit Link zur gewählten Instagram-ID |
 
-## Seiten / Werbekonten ohne `target_ids`
+**Kein Raten:** Ein Werbekonto wird niemals aus einer Seite, `promote_pages` oder „einzigem sichtbaren Konto“ abgeleitet.
 
-Meta dokumentiert: wenn eine Permission „für alle“ gilt, fehlen `target_ids`.[1] Bei System-User-Tokens passiert das häufig.
+## Seiten ohne `target_ids`
 
-**Seiten:** Instagram-`target_ids` müssen vorhanden sein → `/me/accounts` → nur Seiten, deren `instagram_business_account.id` in den IG-`target_ids` liegt.
+Meta dokumentiert: wenn eine Permission „für alle“ gilt, fehlen `target_ids`.[1] Bei System-User-Tokens passiert das häufig für Pages.
 
-**Werbekonten:** gewählte Seiten-IDs → `/me/adaccounts` + `/{ad-account}/promote_pages` → nur das Werbekonto, das genau eine der gewählten Seiten bewerben kann. Mehrere Treffer oder keiner (bei mehreren Konten) → `missing_ad_account_targets`. Ein einziges sichtbares Werbekonto ohne Page-Match → dieses Unique-Konto.
+Dann: Instagram-`target_ids` müssen vorhanden sein → `/me/accounts` → nur Seiten, deren `instagram_business_account.id` in den IG-`target_ids` liegt. Ohne Treffer → `missing_page_targets`.
 
-Das ist kein Erfinden von Instagram aus Seiten — und kein Fall-Open auf alle Pages/Ads.
+## Werbekonten ohne `target_ids`
+
+Fehlen `ads_*` `target_ids` → `missing_ad_account_targets`. Ursache liegt bei Meta/Login-Config (Token liefert die Dialog-Auswahl nicht als Ziel-IDs), nicht bei Adbot-Heuristik.
 
 ## Was verboten ist
 
 - `/me/accounts` oder `/me/adaccounts` **ohne** Filter als Auswahl zu behandeln
 - Instagram aus `page.instagram_business_account` abzuleiten, wenn Meta keine IG-`target_ids` liefert
+- Werbekonten aus Seitenverknüpfungen abzuleiten
 - Adbot-interne Zweitauswahl / Bestätigungs-UI
-
-Fehlt Ads- oder Instagram-Ziel-ID → `missing_ad_account_targets` / `missing_instagram_targets`. Sind IDs da, aber nicht lesbar → `no_assets`.
 
 ## Parsing
 
-`target_ids` können Zahlen oder Strings sein; große IDs werden vor `JSON.parse` geschützt.
+`target_ids` können Zahlen, Digit-Strings oder `act_<digits>` sein; große IDs werden vor `JSON.parse` geschützt.
 
 ## Quellen
 

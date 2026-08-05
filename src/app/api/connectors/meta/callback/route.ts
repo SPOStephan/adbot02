@@ -5,11 +5,11 @@ import {
   debugMetaAccessToken,
   exchangeCodeForAccessToken,
   getGranularTargetIds,
+  getMetaAdAccountGranularTargetIds,
   getMetaConnectionAssets,
   getMetaIdentity,
   META_ALLOWED_SCOPES,
   MetaGraphError,
-  resolveMetaSelectedAdAccountIds,
   resolveMetaSelectedPageIds,
   resolvePersistedMetaAccessToken,
 } from "@/lib/meta/client";
@@ -195,21 +195,37 @@ export async function GET(request: Request) {
     const allowedInstagramAccountIds = new Set(
       getGranularTargetIds(tokenDebug, "instagram_basic"),
     );
+    const allowedAdAccountIds = getMetaAdAccountGranularTargetIds(tokenDebug);
 
     console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
       instagramTargets: allowedInstagramAccountIds.size,
+      adAccountTargets: allowedAdAccountIds.size,
       granularScopes: tokenDebug.granularScopes.map((item) => ({
         scope: item.scope,
         targetCount: item.targetIds.length,
       })),
     });
 
-    // Instagram must come from dialog target_ids. Pages/ads often omit
-    // target_ids when Meta marks the permission as "applies to all" — then we
-    // derive them from the selected Instagram / page linkage (never fall-open
-    // to every /me asset).
+    // Ad accounts and Instagram come only from dialog target_ids — never infer
+    // an ad account from a page. Pages may omit target_ids when Meta marks the
+    // permission as "applies to all"; then we derive pages only via the
+    // selected Instagram IDs (never /me/accounts fall-open).
     if (!allowedInstagramAccountIds.size) {
       return dashboardRedirect("error", "missing_instagram_targets");
+    }
+    if (!allowedAdAccountIds.size) {
+      console.warn(
+        "[meta-oauth] Meta lieferte keine ads_* target_ids trotz Dialog-Auswahl",
+        {
+          adsScopes: tokenDebug.granularScopes
+            .filter((item) => item.scope.startsWith("ads_"))
+            .map((item) => ({
+              scope: item.scope,
+              targetCount: item.targetIds.length,
+            })),
+        },
+      );
+      return dashboardRedirect("error", "missing_ad_account_targets");
     }
 
     stage = "asset_discovery";
@@ -228,23 +244,6 @@ export async function GET(request: Request) {
 
     if (!allowedPageIds.size) {
       return dashboardRedirect("error", "missing_page_targets");
-    }
-
-    const adAccountSelection = await resolveMetaSelectedAdAccountIds({
-      accessToken: longLivedToken.accessToken,
-      appSecret,
-      tokenDebug,
-      allowedPageIds,
-    });
-    const allowedAdAccountIds = adAccountSelection.adAccountIds;
-
-    console.info("[meta-oauth] Werbekonto-Auswahl aufgelöst", {
-      adAccountTargets: allowedAdAccountIds.size,
-      adAccountSource: adAccountSelection.source,
-    });
-
-    if (!allowedAdAccountIds.size) {
-      return dashboardRedirect("error", "missing_ad_account_targets");
     }
 
     const assets = await getMetaConnectionAssets({
@@ -268,14 +267,12 @@ export async function GET(request: Request) {
         pageSource: pageSelection.source,
         instagramTargets: allowedInstagramAccountIds.size,
         adAccountTargets: allowedAdAccountIds.size,
-        adAccountSource: adAccountSelection.source,
       });
       return dashboardRedirect("error", "no_assets");
     }
 
     console.info("[meta-oauth] Assetauswahl übernommen", {
       pageSource: pageSelection.source,
-      adAccountSource: adAccountSelection.source,
       pages: assets.pages.map((page) => page.name),
       instagramUsernames: assets.instagramAccounts.map(
         (account) => account.username,

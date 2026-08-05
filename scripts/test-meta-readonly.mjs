@@ -52,14 +52,14 @@ try {
   assert.match(callbackSource, /missing_instagram_targets/);
   assert.match(callbackSource, /Granulare Meta-Auswahl/);
   assert.match(callbackSource, /resolveMetaSelectedPageIds/);
-  assert.match(callbackSource, /resolveMetaSelectedAdAccountIds/);
+  assert.match(callbackSource, /getMetaAdAccountGranularTargetIds/);
   assert.match(callbackSource, /pageSource/);
-  assert.match(callbackSource, /adAccountSource/);
+  assert.doesNotMatch(callbackSource, /resolveMetaSelectedAdAccountIds|page_promote_pages|promote_pages/);
   assert.match(clientSource, /resolveMetaSelectedPageIds/);
-  assert.match(clientSource, /resolveMetaSelectedAdAccountIds/);
+  assert.match(clientSource, /getMetaAdAccountGranularTargetIds/);
   assert.match(clientSource, /instagram_linked_pages/);
-  assert.match(clientSource, /page_promote_pages/);
   assert.match(clientSource, /asMetaGranularTargetId/);
+  assert.doesNotMatch(clientSource, /page_promote_pages|promote_pages|unique_ad_account/);
   assert.match(clientSource, /pages_manage_ads/);
   assert.match(clientSource, /META_ALLOWED_SCOPES[\s\S]*"ads_management"/);
   assert.match(clientSource, /auth_type", "rerequest"/);
@@ -67,7 +67,7 @@ try {
     callbackSource,
     /systemUserId|clientBusinessId|client_business_id|business_management|assigned_instagram_accounts/,
   );
-  assert.match(callbackSource, /resolveMetaSelectedAdAccountIds/);
+  assert.match(callbackSource, /getMetaAdAccountGranularTargetIds/);
   assert.match(callbackSource, /resolvePersistedMetaAccessToken/);
   assert.match(callbackSource, /debugMetaAccessToken/);
   assert.match(callbackSource, /replace_meta_connection/);
@@ -818,84 +818,55 @@ try {
     "granular page targets must not fetch /me/accounts for resolution",
   );
 
-  // When Meta omits ads target_ids, keep the unique ad account that can promote
-  // the selected page — never every /me/adaccounts entry.
-  requests.length = 0;
-  globalThis.fetch = async (input, init) => {
-    const url = new URL(String(input));
-    requests.push({ url, init });
-
-    if (url.pathname === "/v25.0/me/adaccounts") {
-      return new Response(
-        JSON.stringify({
-          data: [
-            { id: "act_222222222222222", name: "Bon-NoLeadsAds" },
-            { id: "act_333333333333333", name: "Anderes Konto" },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (url.pathname === "/v25.0/act_222222222222222/promote_pages") {
-      return new Response(
-        JSON.stringify({ data: [{ id: "111111111111112" }] }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (url.pathname === "/v25.0/act_333333333333333/promote_pages") {
-      return new Response(
-        JSON.stringify({ data: [{ id: "999999999999999" }] }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    throw new Error(`Unerwarteter Meta-Testpfad: ${url.pathname}`);
-  };
-
-  const adFromPage = await clientModule.resolveMetaSelectedAdAccountIds({
-    accessToken: "token",
-    appSecret: "secret",
-    tokenDebug: {
-      appId: "app",
-      userId: "user",
-      isValid: true,
-      type: "SYSTEM_USER",
-      scopes: ["ads_read", "ads_management"],
-      granularScopes: [
-        { scope: "ads_read", targetIds: [] },
-        { scope: "ads_management", targetIds: [] },
-      ],
-      expiresAt: null,
-      dataAccessExpiresAt: null,
-      usage: { appPercent: null, pagePercent: null, businessPercent: null, retryAfterSeconds: null },
-    },
-    allowedPageIds: new Set(["111111111111112"]),
-  });
-  assert.equal(adFromPage.source, "page_promote_pages");
-  assert.deepEqual([...adFromPage.adAccountIds], ["222222222222222"]);
-
-  const adFromActPrefix = await clientModule.resolveMetaSelectedAdAccountIds({
-    accessToken: "token",
-    appSecret: "secret",
-    tokenDebug: {
-      appId: "app",
-      userId: "user",
-      isValid: true,
-      type: "SYSTEM_USER",
-      scopes: ["ads_management"],
-      granularScopes: [
-        { scope: "ads_management", targetIds: ["act_222222222222222"] },
-      ],
-      expiresAt: null,
-      dataAccessExpiresAt: null,
-      usage: { appPercent: null, pagePercent: null, businessPercent: null, retryAfterSeconds: null },
-    },
-    allowedPageIds: new Set(["111111111111112"]),
-  });
-  assert.equal(adFromActPrefix.source, "granular_targets");
-  assert.deepEqual([...adFromActPrefix.adAccountIds], ["222222222222222"]);
+  // Ad accounts come only from ads_* target_ids (including act_ prefix) — never
+  // inferred from pages.
+  assert.deepEqual(
+    [
+      ...clientModule.getMetaAdAccountGranularTargetIds({
+        appId: "app",
+        userId: "user",
+        isValid: true,
+        type: "SYSTEM_USER",
+        scopes: ["ads_management"],
+        granularScopes: [
+          { scope: "ads_management", targetIds: ["act_222222222222222"] },
+        ],
+        expiresAt: null,
+        dataAccessExpiresAt: null,
+        usage: {
+          appPercent: null,
+          pagePercent: null,
+          businessPercent: null,
+          retryAfterSeconds: null,
+        },
+      }),
+    ],
+    ["222222222222222"],
+  );
+  assert.deepEqual(
+    [
+      ...clientModule.getMetaAdAccountGranularTargetIds({
+        appId: "app",
+        userId: "user",
+        isValid: true,
+        type: "SYSTEM_USER",
+        scopes: ["ads_read", "ads_management"],
+        granularScopes: [
+          { scope: "ads_read", targetIds: [] },
+          { scope: "ads_management", targetIds: [] },
+        ],
+        expiresAt: null,
+        dataAccessExpiresAt: null,
+        usage: {
+          appPercent: null,
+          pagePercent: null,
+          businessPercent: null,
+          retryAfterSeconds: null,
+        },
+      }),
+    ],
+    [],
+  );
 
   // Simulate debug_token returning act_ prefixed string target_ids.
   requests.length = 0;
