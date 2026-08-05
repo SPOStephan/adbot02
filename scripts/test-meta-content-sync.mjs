@@ -548,6 +548,8 @@ export function createAdminClient() {
   );
   assert.equal(instagramCalls.length, 1);
   assert.equal(instagramCalls[0].input.instagramAccountId, "178414000000001");
+  assert.equal(instagramCalls[0].input.accessToken, "decrypted-user-token");
+  assert.equal(instagramCalls[0].input.pageAccessToken, undefined);
   assert.notEqual(instagramCalls[0].input.instagramAccountId, "178414000000002");
   const baselineRecords = baselineHarness.state.rpcCalls.filter(
     (call) => call.name === "record_meta_content_candidates",

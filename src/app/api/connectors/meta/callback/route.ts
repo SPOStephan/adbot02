@@ -54,10 +54,6 @@ function dashboardRedirect(
     );
   }
 
-  if (status === "connected") {
-    url.hash = "instagram-onboarding";
-  }
-
   return noStoreRedirect(url);
 }
 
@@ -194,20 +190,21 @@ export async function GET(request: Request) {
       ...getGranularTargetIds(tokenDebug, "ads_read"),
       ...getGranularTargetIds(tokenDebug, "ads_management"),
     ]);
+    const allowedInstagramAccountIds = new Set(
+      getGranularTargetIds(tokenDebug, "instagram_basic"),
+    );
     stage = "asset_discovery";
     const assets = await getMetaConnectionAssets({
       accessToken: longLivedToken.accessToken,
       appSecret,
       allowedPageIds,
+      allowedInstagramAccountIds,
       allowedAdAccountIds,
     });
-    const instagramAccounts = assets.pages.flatMap((page) =>
-      page.instagramAccount ? [page.instagramAccount] : [],
-    );
 
     if (
       !assets.pages.length ||
-      !instagramAccounts.length ||
+      !assets.instagramAccounts.length ||
       !assets.adAccounts.length
     ) {
       return dashboardRedirect("error", "no_assets");
@@ -215,7 +212,17 @@ export async function GET(request: Request) {
 
     const pageIds = assets.pages.map((page) => page.id);
     const adAccountIds = assets.adAccounts.map((account) => account.id);
-    const instagramAccountIds = instagramAccounts.map((account) => account.id);
+    const instagramAccountIds = assets.instagramAccounts.map(
+      (account) => account.id,
+    );
+    const parentPageIdByInstagramId = new Map(
+      assets.pages.flatMap((page) =>
+        page.instagramAccount &&
+        allowedInstagramAccountIds.has(page.instagramAccount.id)
+          ? [[page.instagramAccount.id, page.id] as const]
+          : [],
+      ),
+    );
     const assetRows = [
       ...assets.pages.map((page) => ({
         asset_type: "facebook_page",
@@ -224,22 +231,14 @@ export async function GET(request: Request) {
         name: page.name,
         username: null,
       })),
-      ...assets.pages.flatMap((page) =>
-        page.instagramAccount
-          ? [
-              {
-                asset_type: "instagram_account",
-                meta_asset_id: page.instagramAccount.id,
-                parent_meta_asset_id: page.id,
-                name:
-                  page.instagramAccount.name ??
-                  page.instagramAccount.username ??
-                  "Instagram-Profil",
-                username: page.instagramAccount.username,
-              },
-            ]
-          : [],
-      ),
+      ...assets.instagramAccounts.map((account) => ({
+        asset_type: "instagram_account",
+        meta_asset_id: account.id,
+        parent_meta_asset_id:
+          parentPageIdByInstagramId.get(account.id) ?? null,
+        name: account.name,
+        username: account.username,
+      })),
       ...assets.adAccounts.map((account) => ({
         asset_type: "ad_account",
         meta_asset_id: account.id,

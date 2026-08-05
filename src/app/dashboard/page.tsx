@@ -439,15 +439,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         )
       : [],
   );
-  const instagramProfiles = (metaAssets ?? [])
-    .filter((asset) => asset.asset_type === "instagram_account")
-    .map((asset) => ({
-      metaAssetId: asset.meta_asset_id,
-      name: asset.name,
-      username: asset.username,
-      selected: selectedInstagramIds.has(asset.meta_asset_id),
-    }));
-  const instagramAsset = metaAssets?.find(
+  const instagramAssets = (metaAssets ?? []).filter(
     (asset) =>
       asset.asset_type === "instagram_account" &&
       selectedInstagramIds.has(asset.meta_asset_id),
@@ -1422,7 +1414,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               canPrepareBudgetCanary={canPrepareBudgetCanary}
               canConfirmBudgetCanary={canConfirmBudgetCanary}
               currency={marketingCurrency}
-              instagramProfiles={instagramProfiles}
               killSwitch={killSwitchView}
               onboarding={onboardingData}
               policy={policyView}
@@ -1489,7 +1480,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       Beiträge sicher abrufen
                     </h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-                      Adbot liest veröffentlichte Beiträge deiner ausgewählten Facebook-Seite und des verbundenen Instagram-Profils. Dieser Sync-Pfad führt keine Mutation aus; Meta-Änderungen laufen ausschließlich über die getrennte, policy-gedeckte Control Plane.
+                      Adbot liest veröffentlichte Beiträge deiner in Meta ausgewählten Facebook-Seite und Instagram-Konten. Dieser Sync-Pfad führt keine Mutation aus; Meta-Änderungen laufen ausschließlich über die getrennte, policy-gedeckte Control Plane.
                     </p>
                   </div>
                   <span
@@ -1556,14 +1547,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         Facebook: {pageAsset.name}
                       </span>
                     ) : null}
-                    {instagramAsset ? (
-                      <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                        Instagram:{" "}
-                        {instagramAsset.username
-                          ? `@${instagramAsset.username}`
-                          : instagramAsset.name}
+                    {instagramAssets.map((asset) => (
+                      <span
+                        className="rounded-full bg-slate-100 px-3 py-1.5"
+                        key={asset.meta_asset_id}
+                      >
+                        Instagram (Meta-Auswahl):{" "}
+                        {asset.username ? `@${asset.username}` : asset.name}
                       </span>
-                    ) : null}
+                    ))}
                     {adAccountAsset ? (
                       <span className="rounded-full bg-slate-100 px-3 py-1.5">
                         Werbekonto: {adAccountAsset.name}

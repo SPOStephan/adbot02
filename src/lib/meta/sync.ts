@@ -676,24 +676,13 @@ export async function syncMetaConnector(
 
         failedAssetCount += 1;
       }
+    }
 
-      const instagramAsset = instagramAssets.find(
-        (asset) => asset.parent_meta_asset_id === pageAsset.meta_asset_id,
-      );
-
-      if (!instagramAsset) {
-        continue;
-      }
-
-      if (page.instagramAccount?.id !== instagramAsset.meta_asset_id) {
-        failedAssetCount += 1;
-        continue;
-      }
-
+    for (const instagramAsset of instagramAssets) {
       try {
         const media = await getInstagramMedia({
           instagramAccountId: instagramAsset.meta_asset_id,
-          pageAccessToken: page.accessToken,
+          accessToken,
           appSecret: env.appSecret,
         });
         usage = mergeMetaUsage(usage, media.usage);
