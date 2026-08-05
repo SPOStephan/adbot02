@@ -1087,9 +1087,9 @@ export async function getMetaPageAssets(input: {
   });
 
   return {
-    pages: input.allowedPageIds
-      ? result.items.filter((page) => input.allowedPageIds?.has(page.id))
-      : result.items,
+    pages: result.items.filter(
+      (page) => !input.allowedPageIds?.size || input.allowedPageIds.has(page.id),
+    ),
     usage: result.usage,
   };
 }
