@@ -16,12 +16,12 @@ Ein Instagram Business- oder Creator-Konto kann mit Facebook Login for Business 
 
 Quelle: https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user
 
-Meta stellt außerdem `GET /<BUSINESS_ID>/instagram_accounts` bereit, um Instagram-Konten zu lesen, auf die ein Business Zugriff hat. Die Antwort enthält IGUser-Objekte. Die Business-Manager-Anleitung empfiehlt ausdrücklich Business-Assets statt einer Ableitung über Connection Objects.
+Meta stellt für einen System-User den Edge `GET /<SYSTEM_USER_ID>/assigned_instagram_accounts` bereit. Er liefert die diesem System-User erlaubten Instagram-Konten als IGUser-Knoten. Dieser Edge bildet deshalb den autoritativen Fallback, wenn `debug_token.granular_scopes[].target_ids` für `instagram_basic` fehlt.
 
 Quellen:
 
-- https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/business/instagram_accounts
-- https://developers.facebook.com/documentation/ads-commerce/instagram/ads-api/guides/ig-accounts-with-business-manager
+- https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user/assigned_instagram_accounts
+- https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user
 
 Für page-connected Instagram-Konten existiert zusätzlich `/<PAGE_ID>/instagram_accounts`; diese Seitenverknüpfung ist jedoch nur eine mögliche technische Beziehung und darf nicht als Ersatz für die im Login-for-Business-Dialog ausdrücklich gewählte Instagram-Assetmenge verwendet werden.
 
@@ -35,16 +35,22 @@ Im Live-Datensatz vom 5. August 2026 war der Connector vollständig berechtigt u
 
 ## Zielvertrag der Korrektur
 
-1. `instagram_basic`-Ziel-IDs aus `debug_token.granular_scopes` sind die einzige verbindliche Instagram-Auswahl.
-2. Nur diese IDs werden direkt über den IGUser-Endpunkt aufgelöst und in `instagram_account_ids` sowie `meta_assets` gespeichert.
-3. Eine Seitenverknüpfung darf nur als optionale technische Relation gespeichert werden, niemals als Auswahlquelle.
-4. Der nachgelagerte Adbot-eigene Instagram-Auswahlschritt entfällt; er darf Metas Auswahl nicht überschreiben.
-5. Instagram-Media wird mit dem Connector-Token für die ausdrücklich ausgewählte IGUser-ID gelesen und nicht davon abhängig gemacht, dass dieses Konto an eine ausgewählte Facebook-Seite gekoppelt ist.
+1. Vorhandene `instagram_basic`-Ziel-IDs aus `debug_token.granular_scopes` sind der strengste verbindliche Instagram-Filter.
+2. Fehlen diese Ziel-IDs beim Business-Integration-System-User, wird ausschließlich `GET /<SYSTEM_USER_ID>/assigned_instagram_accounts` mit demselben eingeschränkten Connector-Token verwendet.
+3. Nur die über einen dieser beiden Meta-autoritativen Pfade gelesenen IDs werden in `instagram_account_ids` und `meta_assets` gespeichert.
+4. Eine Seitenverknüpfung darf nur als optionale technische Relation gespeichert werden, niemals als Auswahlquelle.
+5. Der nachgelagerte Adbot-eigene Instagram-Auswahlschritt entfällt; er darf Metas Auswahl nicht überschreiben.
+6. Instagram-Media wird mit dem Connector-Token für die ausdrücklich ausgewählte IGUser-ID gelesen und nicht davon abhängig gemacht, dass dieses Konto an eine ausgewählte Facebook-Seite gekoppelt ist.
 
-## Ergänzung nach Production-Fehler vom 5. August 2026
+## Ergänzung nach den Production-Fehlern vom 5. August 2026
 
-Der erfolgreiche Meta-Dialog kann bei einem Business-Integration-System-User alle gewählten Assets anzeigen, obwohl `debug_token.granular_scopes[].target_ids` für `instagram_basic` leer ist. Meta dokumentiert ausdrücklich, dass die Client-Business-ID eines solchen Tokens über `GET /me?fields=client_business_id` gelesen wird. Quelle: https://developers.facebook.com/documentation/facebook-login/facebook-login-for-business
+Der erfolgreiche Meta-Dialog kann bei einem Business-Integration-System-User alle gewählten Assets anzeigen, obwohl `debug_token.granular_scopes[].target_ids` für `instagram_basic` leer ist. Der erste Fallbackversuch über `GET /<CLIENT_BUSINESS_ID>/instagram_accounts` schlug im instrumentierten Production-Callback während `asset_discovery` mit Meta-Graph-Code `200` fehl; dieser Business-Edge setzt damit einen breiteren Berechtigungsvertrag voraus und ist für das bestehende Onboarding ungeeignet.
 
-Für diese Client-Business-ID liefert `GET /<CLIENT_BUSINESS_ID>/instagram_accounts` die Instagram-Konten, auf die dieses Business zugreifen kann. Quelle: https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/business/instagram_accounts
+Meta dokumentiert für genau diesen Fall `GET /<SYSTEM_USER_ID>/assigned_instagram_accounts` als lesbaren Edge für die dem System-User erlaubten Instagram-Konten. Die System-User-ID ist bereits die validierte Identität aus `GET /me?fields=id` und stimmt mit `debug_token.user_id` überein.
 
-Der Production-Hotfix darf daher nicht verlangen, dass `instagram_basic` zwingend granulare Ziel-IDs enthält. Er muss zunächst vorhandene granulare Ziel-IDs als strengsten Filter verwenden und bei deren Fehlen die Instagram-Assets des im Token enthaltenen `client_business_id` abfragen. Eine Ableitung aus `page.instagram_business_account` bleibt als Auswahlquelle ausgeschlossen.
+Quellen:
+
+- https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user/assigned_instagram_accounts
+- https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user
+
+Der finale Hotfix verwendet daher vorhandene granulare Ziel-IDs als primären Pfad und bei deren Fehlen ausschließlich die dem validierten System-User zugewiesenen Instagram-Konten. `client_business_id`, `business_management`, `/<BUSINESS_ID>/instagram_accounts` und `page.instagram_business_account` sind keine Auswahlquellen.
