@@ -198,9 +198,33 @@ assert.match(
   read("src/components/OrganicBoostAutoPlanner.tsx"),
   /START_DELAY_MS/,
 );
+assert.match(
+  read("src/components/OrganicBoostAutoPlanner.tsx"),
+  /MAX_ATTEMPTS/,
+);
+assert.match(
+  read("src/components/OrganicBoostAutoPlanner.tsx"),
+  /pendingCandidateCount/,
+);
 assert.doesNotMatch(
   read("src/components/OrganicBoostAutoPlanner.tsx"),
   /controller\.abort/,
+);
+assert.match(
+  read("src/components/OrganicBoostPlanButton.tsx"),
+  /Beitrag-Push jetzt starten/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /OrganicBoostPlanButton/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /pendingBoostCandidateCount/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /pendingBoostCandidateCount/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-runner.ts"),
@@ -220,7 +244,7 @@ assert.doesNotMatch(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /unabh[^"]*ngig vom Beitrags-Abruf/,
+  /unabh[^"]*ngig vom Abruf/,
 );
 assert.match(
   read("src/app/dashboard/page.tsx"),

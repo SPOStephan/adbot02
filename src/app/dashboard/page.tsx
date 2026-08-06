@@ -1091,6 +1091,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         (candidate) => !organicBoostPlanByCandidate.has(String(candidate.id)),
       ),
   );
+  const pendingBoostCandidateCount = (contentCandidates ?? []).filter(
+    (candidate) => !organicBoostPlanByCandidate.has(String(candidate.id)),
+  ).length;
   const automationAuditViews: AutomationAuditView[] = (
     controlAuditEvents ?? []
   ).map((event) => ({
@@ -1777,6 +1780,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   boostSettingsView.boostMode !== "OFF" &&
                   boostSettingsView.enabled,
               )}
+              organicPlannerLastError={organicPlannerLastError}
+              organicPlannerStatus={organicPlannerStatus}
+              pendingBoostCandidateCount={pendingBoostCandidateCount}
               counts={{
                 campaigns: metaAccount.marketing_campaign_count ?? 0,
                 adSets: metaAccount.marketing_ad_set_count ?? 0,
@@ -1932,7 +1938,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           {metaConnected ? (
             <section className="mt-10 scroll-mt-24" id="beitragskandidaten">
-              <OrganicBoostAutoPlanner enabled={shouldAutoPlanOrganicBoost} />
+              <OrganicBoostAutoPlanner
+                enabled={shouldAutoPlanOrganicBoost}
+                pendingCandidateCount={pendingBoostCandidateCount}
+              />
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
