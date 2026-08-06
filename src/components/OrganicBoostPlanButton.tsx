@@ -9,7 +9,7 @@ type Props = {
 };
 
 export function OrganicBoostPlanButton({
-  label = "Beitrag-Push jetzt starten",
+  label = "Manuell erneut prüfen",
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);

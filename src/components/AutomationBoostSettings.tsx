@@ -245,18 +245,38 @@ export function AutomationBoostSettings({
       const result = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         message?: string;
+        organicBoost?: {
+          status?: string;
+          plansCreated?: number;
+          plansExisting?: number;
+          candidatesConsidered?: number;
+          lastError?: string | null;
+        } | null;
       };
       if (!response.ok || !result.ok) {
         throw new Error(
           result.message ?? "Die Beitrag-Push-Einstellungen konnten nicht gespeichert werden.",
         );
       }
+      const boost = result.organicBoost;
+      const ready =
+        (boost?.plansCreated ?? 0) + (boost?.plansExisting ?? 0);
+      const boostFollowUp =
+        boostMode === "AUTO" && killSwitchMode === "ALLOW"
+          ? ready > 0
+            ? ` ${ready} Boost-Plan/Pläne angelegt — Bewerbung startet ohne Extra-Klick.`
+            : boost?.lastError
+              ? ` Planner: ${boost.status ?? "Fehler"} · ${boost.lastError}`
+              : boost?.status
+                ? ` Planner-Status: ${boost.status}.`
+                : " Erkannte Beiträge werden jetzt ohne Extra-Klick beworben."
+          : "";
       setNotice({
         tone: "success",
         message:
           boostMode === "AUTO"
             ? killSwitchMode === "ALLOW"
-              ? "Vollautomatik gespeichert. Erkannte Beiträge werden jetzt ohne weiteren Abruf beworben."
+              ? `Vollautomatik gespeichert.${boostFollowUp}`
               : "Vollautomatik gespeichert. Noch kein automatischer Boost: Oben bei der Sicherheitsschranke „Freigeben“ wählen und auf „Freigabe speichern“ klicken."
             : boostMode === "REVIEW"
               ? "Freigabe-Modus gespeichert: Neue Beiträge werden zur einzelnen Freigabe vorbereitet."

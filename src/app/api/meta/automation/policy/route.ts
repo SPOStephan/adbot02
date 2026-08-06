@@ -25,6 +25,17 @@ export async function POST(request: NextRequest) {
       ok: true,
       policyId: result.policyId,
       managedBudgetOwnerCount: result.managedBudgetOwnerCount,
+      organicBoost: result.organicBoost
+        ? {
+            status: result.organicBoost.status,
+            plansCreated: result.organicBoost.plansCreated,
+            plansExisting: result.organicBoost.plansExisting,
+            candidatesFailed: result.organicBoost.candidatesFailed,
+            candidatesSkipped: result.organicBoost.candidatesSkipped,
+            candidatesConsidered: result.organicBoost.candidatesConsidered,
+            lastError: result.organicBoost.lastError,
+          }
+        : null,
     });
   } catch (error) {
     return controlErrorResponse(error);

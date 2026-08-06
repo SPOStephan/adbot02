@@ -124,10 +124,37 @@ function rpcFailure(operation: string): never {
   );
 }
 
+async function tryRunOrganicBoostPlanner(input: {
+  customer: MetaCustomer;
+  ownerPrefix: string;
+}): Promise<MetaOrganicBoostPlannerResult | null> {
+  try {
+    return await runOrganicBoostPlannerForAccount({
+      platformAccountId: input.customer.platformAccountId,
+      userId: input.customer.userId,
+      ownerPrefix: input.ownerPrefix,
+    });
+  } catch {
+    return {
+      status: "PLANNER_RPC_FAILED",
+      plansCreated: 0,
+      plansExisting: 0,
+      candidatesSkipped: 0,
+      candidatesFailed: 0,
+      candidatesConsidered: 0,
+      lastError: "organic_boost_planner_exception",
+    };
+  }
+}
+
 export async function saveCustomerPolicy(
   customer: MetaCustomer,
   command: PolicyCommand,
-): Promise<{ policyId: string; managedBudgetOwnerCount: number }> {
+): Promise<{
+  policyId: string;
+  managedBudgetOwnerCount: number;
+  organicBoost: MetaOrganicBoostPlannerResult | null;
+}> {
   if (command.enableAutomation && !customer.writeScopeGranted) {
     serviceError(
       "write_scope_required",
@@ -166,9 +193,24 @@ export async function saveCustomerPolicy(
     rpcFailure("Die Autonomie-Policy");
   }
 
+  // Autonomie aktivieren muss Beitrag-Push ohne Extra-Klick anstoßen, sobald
+  // Vollautomatik + Freigeben schon stehen (Planner selbst prüft die Gates).
+  let organicBoost: MetaOrganicBoostPlannerResult | null = null;
+  if (
+    command.enableAutomation &&
+    command.allowNewLaunches &&
+    command.allowStatusChanges
+  ) {
+    organicBoost = await tryRunOrganicBoostPlanner({
+      customer,
+      ownerPrefix: "organic-boost-policy",
+    });
+  }
+
   return {
     policyId: result.policy_id,
     managedBudgetOwnerCount: result.managed_budget_owner_count,
+    organicBoost,
   };
 }
 
@@ -289,15 +331,10 @@ export async function setCustomerKillSwitch(
 
   let organicBoost: MetaOrganicBoostPlannerResult | null = null;
   if (command.mode === "ALLOW") {
-    try {
-      organicBoost = await runOrganicBoostPlannerForAccount({
-        platformAccountId: customer.platformAccountId,
-        userId: customer.userId,
-        ownerPrefix: "organic-boost-kill-switch",
-      });
-    } catch {
-      organicBoost = null;
-    }
+    organicBoost = await tryRunOrganicBoostPlanner({
+      customer,
+      ownerPrefix: "organic-boost-kill-switch",
+    });
   }
 
   return { eventId: data, organicBoost };
@@ -1062,15 +1099,10 @@ export async function saveCustomerBoostSettings(
       .maybeSingle();
 
     if (killRow?.mode === "ALLOW") {
-      try {
-        organicBoost = await runOrganicBoostPlannerForAccount({
-          platformAccountId: customer.platformAccountId,
-          userId: customer.userId,
-          ownerPrefix: "organic-boost-settings",
-        });
-      } catch {
-        organicBoost = null;
-      }
+      organicBoost = await tryRunOrganicBoostPlanner({
+        customer,
+        ownerPrefix: "organic-boost-settings",
+      });
     }
   }
 

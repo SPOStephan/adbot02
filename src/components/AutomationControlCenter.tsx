@@ -104,12 +104,39 @@ type ApiResponse = {
   ok?: boolean;
   message?: string;
   managedBudgetOwnerCount?: number;
+  organicBoost?: {
+    status?: string;
+    plansCreated?: number;
+    plansExisting?: number;
+    candidatesConsidered?: number;
+    lastError?: string | null;
+  } | null;
 };
 
 type Notice = {
   tone: "success" | "error";
   message: string;
 } | null;
+
+function organicBoostFollowUp(
+  boost: ApiResponse["organicBoost"] | undefined,
+): string {
+  if (!boost) {
+    return "";
+  }
+  const ready =
+    (boost.plansCreated ?? 0) + (boost.plansExisting ?? 0);
+  if (ready > 0) {
+    return ` Beitrag-Push läuft automatisch: ${ready} Plan/Pläne angelegt.`;
+  }
+  if (boost.lastError) {
+    return ` Beitrag-Push noch nicht gestartet (${boost.status ?? "Fehler"}: ${boost.lastError}).`;
+  }
+  if (boost.status) {
+    return ` Beitrag-Push-Status: ${boost.status} (geprüft: ${boost.candidatesConsidered ?? 0}).`;
+  }
+  return "";
+}
 
 const KILL_SWITCH_OPTIONS = [
   {
@@ -394,9 +421,10 @@ export function AutomationControlCenter({
       setPolicyNotice({
         tone: "success",
         message:
-          enableAutomation && allowBudgetChanges
+          (enableAutomation && allowBudgetChanges
             ? `Budget-Autonomie ist aktiv. ${result.managedBudgetOwnerCount ?? 0} Budget-Owner werden innerhalb deiner Grenzen verwaltet.`
-            : "Die Policy wurde gespeichert; autonome Budgetänderungen sind deaktiviert.",
+            : "Die Policy wurde gespeichert; autonome Budgetänderungen sind deaktiviert.") +
+          organicBoostFollowUp(result.organicBoost),
       });
       refresh();
     } catch (error) {
@@ -459,15 +487,16 @@ export function AutomationControlCenter({
     setKillNotice(null);
 
     try {
-      await postControl("/api/meta/automation/kill-switch", {
+      const result = await postControl("/api/meta/automation/kill-switch", {
         mode: killMode,
       });
       setKillNotice({
         tone: "success",
         message:
-          killMode === "ALLOW"
+          (killMode === "ALLOW"
             ? "Freigabe gespeichert. Beitrag-Push und andere Writes dürfen jetzt laufen — auch für bereits erkannte Beiträge, ohne weiteren Abruf."
-            : "Der Sicherheitsmodus wurde gespeichert.",
+            : "Der Sicherheitsmodus wurde gespeichert.") +
+          organicBoostFollowUp(result.organicBoost),
       });
       refresh();
     } catch (error) {

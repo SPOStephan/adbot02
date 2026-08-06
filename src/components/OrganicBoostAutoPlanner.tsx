@@ -17,9 +17,9 @@ type Props = {
 };
 
 const SESSION_KEY = "adbot.organicBoostAutoPlan.v2";
-const START_DELAY_MS = 2_500;
-const RETRY_DELAY_MS = 12_000;
-const MAX_ATTEMPTS = 3;
+const START_DELAY_MS = 2_000;
+const RETRY_DELAY_MS = 10_000;
+const MAX_RETRY_DELAY_MS = 60_000;
 
 function plansReady(boost: OrganicBoostResult | null | undefined): boolean {
   return (boost?.plansCreated ?? 0) + (boost?.plansExisting ?? 0) > 0;
@@ -27,16 +27,16 @@ function plansReady(boost: OrganicBoostResult | null | undefined): boolean {
 
 /**
  * Starts Beitrag-Push for already-recognized posts without requiring another
- * content Abruf. Retries while candidates are still pending — a previous
- * hard-cap / lease failure must not suppress later successful planning.
+ * content Abruf or a manual button click. Keeps retrying while Autonomie gates
+ * are open and candidates remain pending.
  */
 export function OrganicBoostAutoPlanner({
   enabled,
   pendingCandidateCount,
 }: Props) {
   const router = useRouter();
-  const kickoffRef = useRef(false);
-  const attemptsRef = useRef(0);
+  const inFlightRef = useRef(false);
+  const attemptRef = useRef(0);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -65,19 +65,21 @@ export function OrganicBoostAutoPlanner({
       }
     }
 
-    if (kickoffRef.current || attemptsRef.current >= MAX_ATTEMPTS) {
-      return;
-    }
-
     let cancelled = false;
     let retryTimer = 0;
+    let startTimer = 0;
+
+    const schedule = (delayMs: number) => {
+      window.clearTimeout(retryTimer);
+      retryTimer = window.setTimeout(run, delayMs);
+    };
 
     const run = () => {
-      if (cancelled || kickoffRef.current) {
+      if (cancelled || inFlightRef.current) {
         return;
       }
-      kickoffRef.current = true;
-      attemptsRef.current += 1;
+      inFlightRef.current = true;
+      attemptRef.current += 1;
 
       void (async () => {
         try {
@@ -100,14 +102,14 @@ export function OrganicBoostAutoPlanner({
           };
 
           if (!response.ok || body.ok !== true) {
-            kickoffRef.current = false;
-            if (attemptsRef.current < MAX_ATTEMPTS) {
-              retryTimer = window.setTimeout(run, RETRY_DELAY_MS);
-            }
+            inFlightRef.current = false;
+            const delay = Math.min(
+              RETRY_DELAY_MS * attemptRef.current,
+              MAX_RETRY_DELAY_MS,
+            );
+            schedule(delay);
             return;
           }
-
-          router.refresh();
 
           if (plansReady(body.organicBoost)) {
             window.sessionStorage.setItem(
@@ -115,26 +117,32 @@ export function OrganicBoostAutoPlanner({
               JSON.stringify({ at: Date.now(), created: true }),
             );
             setDone(true);
+            router.refresh();
             return;
           }
 
-          // Planner ran but created nothing yet — retry while candidates remain.
-          kickoffRef.current = false;
-          if (attemptsRef.current < MAX_ATTEMPTS) {
-            retryTimer = window.setTimeout(run, RETRY_DELAY_MS);
-          }
+          // Planner ran but created nothing yet — keep retrying while pending.
+          // Do not refresh here: refresh would cancel the retry timer.
+          inFlightRef.current = false;
+          const delay = Math.min(
+            RETRY_DELAY_MS * attemptRef.current,
+            MAX_RETRY_DELAY_MS,
+          );
+          schedule(delay);
         } catch {
           if (!cancelled) {
-            kickoffRef.current = false;
-            if (attemptsRef.current < MAX_ATTEMPTS) {
-              retryTimer = window.setTimeout(run, RETRY_DELAY_MS);
-            }
+            inFlightRef.current = false;
+            const delay = Math.min(
+              RETRY_DELAY_MS * attemptRef.current,
+              MAX_RETRY_DELAY_MS,
+            );
+            schedule(delay);
           }
         }
       })();
     };
 
-    const startTimer = window.setTimeout(run, START_DELAY_MS);
+    startTimer = window.setTimeout(run, START_DELAY_MS);
 
     return () => {
       cancelled = true;
