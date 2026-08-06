@@ -44,6 +44,9 @@ export type OrganicBoostCampaignView = {
   campaignName: string;
   status: string | null;
   effectiveStatus: string | null;
+  /** Customer-facing delivery state for traffic-light UI */
+  deliveryState: "active" | "waiting_meta" | "starting" | "paused" | "unknown";
+  deliveryLabel: string;
   budgetMode: "DAILY" | "LIFETIME";
   dailyBudgetMinor: number | null;
   lifetimeBudgetMinor: number | null;
@@ -58,9 +61,77 @@ export type OrganicBoostCampaignView = {
   createdAt: string;
 };
 
+export function deriveOrganicBoostDelivery(input: {
+  planStatus: string | null | undefined;
+  status: string | null | undefined;
+  effectiveStatus: string | null | undefined;
+}): Pick<OrganicBoostCampaignView, "deliveryState" | "deliveryLabel"> {
+  const plan = (input.planStatus ?? "").toUpperCase();
+  const effective = (input.effectiveStatus ?? input.status ?? "").toUpperCase();
+
+  if (
+    effective === "PENDING_REVIEW" ||
+    effective === "IN_PROCESS" ||
+    effective === "PREAPPROVED" ||
+    effective === "PENDING"
+  ) {
+    return {
+      deliveryState: "waiting_meta",
+      deliveryLabel: "Wartet auf Freigabe durch Meta",
+    };
+  }
+
+  if (effective === "ACTIVE") {
+    return {
+      deliveryState: "active",
+      deliveryLabel: "Boost aktiv",
+    };
+  }
+
+  if (effective === "PAUSED" || effective === "CAMPAIGN_PAUSED" || effective === "ADSET_PAUSED") {
+    return {
+      deliveryState: "paused",
+      deliveryLabel: "Pausiert",
+    };
+  }
+
+  if (
+    plan === "PENDING" ||
+    plan === "RETRYABLE" ||
+    plan === "CLAIMED" ||
+    plan === "RUNNING" ||
+    plan === "RECONCILING"
+  ) {
+    return {
+      deliveryState: "starting",
+      deliveryLabel: "Boost wird gestartet",
+    };
+  }
+
+  if (plan === "BLOCKED" || plan === "HELD") {
+    return {
+      deliveryState: "waiting_meta",
+      deliveryLabel: "Wartet auf Freigabe",
+    };
+  }
+
+  if (plan === "SUCCEEDED" && !effective) {
+    return {
+      deliveryState: "waiting_meta",
+      deliveryLabel: "Wartet auf Freigabe durch Meta",
+    };
+  }
+
+  return {
+    deliveryState: "unknown",
+    deliveryLabel: effective || plan || "Status offen",
+  };
+}
+
 type MetaCampaignOverviewProps = {
   campaigns: CampaignPerformance[];
   organicBoostCampaigns: OrganicBoostCampaignView[];
+  organicBoostConfigured: boolean;
   counts: {
     campaigns: number;
     adSets: number;
@@ -244,6 +315,31 @@ function statusStyle(status: string | null) {
   return "bg-slate-100 text-slate-600 ring-slate-200";
 }
 
+function boostDeliveryStyle(state: OrganicBoostCampaignView["deliveryState"]) {
+  if (state === "active") {
+    return {
+      badge: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+      dot: "bg-emerald-500",
+    };
+  }
+  if (state === "waiting_meta" || state === "starting") {
+    return {
+      badge: "bg-amber-50 text-amber-900 ring-amber-200",
+      dot: "bg-amber-400",
+    };
+  }
+  if (state === "paused") {
+    return {
+      badge: "bg-slate-100 text-slate-700 ring-slate-200",
+      dot: "bg-slate-400",
+    };
+  }
+  return {
+    badge: "bg-slate-100 text-slate-600 ring-slate-200",
+    dot: "bg-slate-300",
+  };
+}
+
 function recommendationStyle(severity: string) {
   if (severity === "warning") {
     return {
@@ -271,6 +367,7 @@ const countLabels = [
 export function MetaCampaignOverview({
   campaigns,
   organicBoostCampaigns,
+  organicBoostConfigured,
   counts,
   currency,
   errorCode,
@@ -389,13 +486,20 @@ export function MetaCampaignOverview({
                             </span>
                           </th>
                           <td className="px-4 py-4">
-                            <span
-                              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${statusStyle(campaign.effectiveStatus ?? campaign.status ?? campaign.planStatus)}`}
-                            >
-                              {campaign.effectiveStatus ??
-                                campaign.status ??
-                                campaign.planStatus}
-                            </span>
+                            {(() => {
+                              const style = boostDeliveryStyle(campaign.deliveryState);
+                              return (
+                                <span
+                                  className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${style.badge}`}
+                                >
+                                  <span
+                                    aria-hidden
+                                    className={`size-2.5 shrink-0 rounded-full ${style.dot}`}
+                                  />
+                                  {campaign.deliveryLabel}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-4 text-right font-semibold text-slate-900">
                             {formatMoney(campaign.spend, campaign.currency)}
@@ -431,8 +535,9 @@ export function MetaCampaignOverview({
                   Noch keine Beitrag-Push-Kampagnen
                 </p>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
-                  Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben,
-                  Restbudget und Laufzeit.
+                  {organicBoostConfigured
+                    ? "Automatischer Beitrag-Push ist eingeschaltet, aber für diese Beiträge liegt noch kein Boost-Plan vor. Nach dem nächsten erfolgreichen Sync erscheinen gestartete Push-Kampagnen hier mit Ampel-Status."
+                    : "Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben, Restbudget und Laufzeit."}
                 </p>
               </div>
             </div>
