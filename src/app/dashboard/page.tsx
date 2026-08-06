@@ -100,7 +100,6 @@ const META_ERROR_MESSAGES: Record<string, string> = {
   token_validation: "Die Meta-Verbindung konnte nicht sicher bestätigt werden. Bitte verbinde Meta erneut.",
   authorization_reset: "Die bisherige Meta-Autorisierung konnte nicht vollständig entfernt werden. Es wurden keine alten Assets übernommen. Bitte starte den Reconnect erneut.",
   no_assets: "Meta hat die Verbindung bestätigt, aber Adbot konnte die zugewiesenen Assets nicht lesen. Bitte trenne Meta vollständig und verbinde erneut.",
-  assigned_assets_invalid_parameter: "Meta hat die Asset-Zuweisung abgelehnt (Graph-Parameter). Bitte trenne Meta vollständig und verbinde erneut — Adbot liest die Zuweisungen jetzt ohne zusätzliche Query-Parameter.",
   missing_page_targets: "Meta hat keine Facebook-Seiten-IDs aus der Dialog-Auswahl geliefert. Bitte trenne Meta vollständig und verbinde erneut mit ausdrücklicher Seitenauswahl.",
   missing_ad_account_targets: "Meta hat keine Werbekonto-IDs aus der Dialog-Auswahl geliefert. Bitte trenne Meta vollständig und verbinde erneut mit ausdrücklicher Werbekonto-Auswahl.",
   missing_instagram_targets: "Meta hat keine Instagram-IDs aus der Dialog-Auswahl geliefert. Bitte trenne Meta vollständig und verbinde erneut mit ausdrücklicher Instagram-Auswahl.",

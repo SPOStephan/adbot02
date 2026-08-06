@@ -1,6 +1,6 @@
 # Verbindliche Asset-Auswahl im Meta-Onboarding
 
-Stand: 5. August 2026
+Stand: 6. August 2026
 
 ## Vertrag
 
@@ -9,7 +9,7 @@ Im Facebook-Login-for-Business-Dialog wählt der Kunde Seiten, Instagram-Konten 
 | Modus | Erkennung | Verbindliche Asset-Quelle |
 | --- | --- | --- |
 | Granulare Auswahl | Mindestens ein `debug_token.granular_scopes[].target_ids`-Eintrag enthält IDs | Nur die granularen Ziel-IDs; leere Kategorien bleiben fail-closed |
-| Business-System-User-Auswahl | Meta klassifiziert den Token als System User (`SYSTEM_USER`, `SYSTEM-USER` oder eine `SYSTEM_USER`-Variante), `granular_scopes` ist vorhanden, **alle** `target_ids` sind leer und der signierte OAuth-State bestätigt einen unmittelbar zuvor erfolgreichen Vollwiderruf | Ausschließlich `/{system-user-id}/assigned_pages`, `/{system-user-id}/assigned_instagram_accounts` und `/{system-user-id}/assigned_ad_accounts` |
+| Business-System-User-Auswahl | Meta klassifiziert den Token als System User (`SYSTEM_USER`, `SYSTEM-USER` oder eine `SYSTEM_USER`-Variante), `granular_scopes` ist vorhanden, **alle** `target_ids` sind leer und der signierte OAuth-State bestätigt einen unmittelbar zuvor erfolgreichen Vollwiderruf | `/me/accounts` + `/me/adaccounts` nach frischem Widerruf; Instagram über die auf diesen Seiten verknüpften Business-Konten |
 
 Sobald Meta mindestens eine granulare Ziel-ID liefert, ist der Business-System-User-Fallback vollständig deaktiviert. Damit kann eine teilweise granulare Antwort niemals unbeabsichtigt auf weitere token-sichtbare Assets erweitert werden.
 
@@ -25,19 +25,19 @@ Fehlen in diesem Modus die erforderlichen Instagram-, Werbekonto- oder Seiten-Zi
 
 ## Business-Integration-System-User-Modus
 
-Meta dokumentiert für Business System User drei direkte Zuweisungs-Edges: `assigned_pages`, `assigned_instagram_accounts` und `assigned_ad_accounts`.[1][3][4][5] Adbot verwendet in diesem Modus ausschließlich diese drei vollständig paginierten Antworten. `/me/accounts`, `/me/adaccounts` und `page.instagram_business_account` sind keine Auswahlquelle.
+Production zeigte, dass die dokumentierten Edges `assigned_pages` / `assigned_instagram_accounts` / `assigned_ad_accounts` für Login-for-Business-System-User mit Graph Code 100 scheitern (auch parameterlos).[3][4][5] Nach nachgewiesenem Vollwiderruf ist das Token bereits auf die Dialogauswahl begrenzt; Adbot liest deshalb `/me/accounts` und `/me/adaccounts` und übernimmt Instagram-Konten, die an genau diesen Seiten hängen.
 
 Bevor dieser Modus aktiviert werden darf, muss Adbot die vorherige App-Autorisierung über `DELETE /{user-id}/permissions` erfolgreich widerrufen, die lokal gespeicherten Tokens und Asset-IDs löschen und diesen Erfolg im signierten, kurzlebigen OAuth-State festhalten.[6] Ein System-User-Token ohne diesen Resetnachweis wird sofort widerrufen und in einen neuen Meta-Dialog umgeleitet; es wird nichts gespeichert.
 
-Der Callback speichert die Verbindung nur, wenn mindestens eine über `assigned_pages` zugewiesene Seite, mindestens ein über `assigned_instagram_accounts` zugewiesenes Instagram-Konto und mindestens ein über `assigned_ad_accounts` zugewiesenes Werbekonto aufgelöst wurden. Andernfalls bleibt der Vorgang fail-closed.
+Der Callback speichert die Verbindung nur, wenn mindestens eine Seite, ein Instagram-Konto und ein Werbekonto aus dieser frischen Token-Sicht aufgelöst wurden. Andernfalls bleibt der Vorgang fail-closed.
 
 ## Verbotene Auflösungen
 
 | Verbot | Grund |
 | --- | --- |
 | Direkte Tokenlisten bei normalen oder teilweise granularen Tokens | Würde über die Dialogauswahl hinaus erweitern |
-| `/me/accounts` oder `/me/adaccounts` im System-User-Modus als Dialogauswahl behandeln | Kann ältere oder anderweitig token-sichtbare Zuweisungen enthalten |
-| Instagram aus `page.instagram_business_account` übernehmen oder nur direkt lesbar prüfen | Seitenverknüpfung und Lesbarkeit sind keine aktuelle Instagram-Auswahl |
+| `/me/accounts` oder `/me/adaccounts` ohne signierten Vollwiderruf als Dialogauswahl | Kann ältere oder anderweitig token-sichtbare Zuweisungen enthalten |
+| Instagram aus `page.instagram_business_account` im **granularen** Modus | Dort sind nur `instagram_basic` `target_ids` autoritativ |
 | System-User-Direktmodus ohne signierten Vollwiderrufsnachweis | Kann eine bestehende Business-Integration samt Altzuweisungen wiederverwenden |
 | Werbekonten aus Seitenverknüpfungen oder Eindeutigkeitsheuristiken ableiten | Nicht autoritativ |
 | Adbot-interne Zweitauswahl oder Bestätigungs-UI einführen | Der Meta-Dialog bleibt die alleinige Auswahloberfläche |
