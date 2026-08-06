@@ -133,7 +133,24 @@ assert.match(
 
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /Boost noch nicht gestartet/,
+  /Bewerbung startet automatisch/,
+);
+
+const snapshotFallbackMigration = read(
+  "supabase/migrations/20260806140000_meta_organic_boost_snapshot_fallback.sql",
+);
+assert.match(snapshotFallbackMigration, /run_meta_organic_boost_planner/);
+assert.match(
+  snapshotFallbackMigration,
+  /Policy may have been rotated after the last budget snapshot/,
+);
+assert.match(
+  snapshotFallbackMigration,
+  /Do not require the current/,
+);
+assert.match(
+  snapshotFallbackMigration,
+  /Identity is the snapshot id from the planner/,
 );
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),

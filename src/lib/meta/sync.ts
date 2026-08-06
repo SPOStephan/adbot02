@@ -789,16 +789,18 @@ export async function syncMetaConnector(
               plannerErrorCode = classifyPlannerError(error);
             }
 
+            // Beitrag-Push must not depend on budget-planner success: the SQL
+            // planner falls back to the latest COMPLETE exposure snapshot.
             try {
               await runMetaOrganicBoostPlannerAfterSnapshot({
                 platformAccountId: connector.id,
                 userId: connector.user_id,
                 marketingSyncId: marketingResult.syncId,
                 readLeaseToken,
-                plannedAt: plannerAttemptedAt,
+                plannedAt: plannerAttemptedAt ?? new Date().toISOString(),
               });
             } catch {
-              // Organic boost planning is best-effort after budget planning.
+              // Organic boost planning is best-effort after marketing sync.
               // Failures must not roll back a successful marketing sync.
             }
           }

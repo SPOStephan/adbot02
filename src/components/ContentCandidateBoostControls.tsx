@@ -67,20 +67,20 @@ function statusCopy(input: {
       return {
         tone: "success" as const,
         title: "Boost aktiv",
-        body: "Für diesen Beitrag läuft ein Beitrag-Push. Details siehst du unter Kampagnen.",
+        body: "Dieser Beitrag wird beworben. Status und Budget siehst du unter Kampagnen.",
       };
     }
     if (plan === "PENDING" || plan === "RETRYABLE" || plan === "RUNNING" || plan === "CLAIMED") {
       return {
         tone: "amber" as const,
-        title: "Boost wird gestartet",
-        body: "Der Push-Plan ist angelegt. Adbot schreibt gerade an Meta bzw. wartet auf die Auslieferung.",
+        title: "Bewerbung wird gestartet",
+        body: "Adbot legt die Meta-Kampagne an bzw. wartet auf die Freigabe/Auslieferung bei Meta.",
       };
     }
     return {
       tone: "amber" as const,
       title: "Boost vorbereitet",
-      body: "Der Plan liegt bereit. Nach Freigabe schreibt Adbot die Kampagne an Meta.",
+      body: "Die Bewerbung liegt bereit und wartet auf die letzte Freigabe.",
     };
   }
 
@@ -110,8 +110,8 @@ function statusCopy(input: {
     }
     return {
       tone: "amber" as const,
-      title: "Boost noch nicht gestartet",
-      body: "Einstellungen sind bereit. Für diesen Beitrag gibt es noch keinen Push-Plan — er erscheint unter Kampagnen, sobald der Boost wirklich gestartet wurde.",
+      title: "Bewerbung startet automatisch",
+      body: "Einstellungen sind bereit. Beim nächsten Abruf startet Adbot die Bewerbung von selbst — du musst nichts weiter klicken.",
     };
   }
 
