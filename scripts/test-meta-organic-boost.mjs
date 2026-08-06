@@ -136,6 +136,10 @@ assert.match(
   /Boost-Status fehlt/,
 );
 assert.match(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Beitrag-Push nicht gelaufen/,
+);
+assert.match(
   read("src/components/MetaSyncButton.tsx"),
   /Beitrag-Push:/,
 );
@@ -177,7 +181,11 @@ assert.match(
 );
 assert.match(
   read("src/app/dashboard/page.tsx"),
-  /organic_boost_planner_status/,
+  /sync_usage/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /organic_boost/,
 );
 assert.match(
   read("src/app/dashboard/page.tsx"),

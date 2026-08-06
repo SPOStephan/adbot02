@@ -822,7 +822,15 @@ export async function syncMetaConnector(
               plannedAt: plannerAttemptedAt,
             });
           } catch {
-            // Best-effort: marketing sync + later planner still run below.
+            organicBoostResult = {
+              status: "PLANNER_RPC_FAILED",
+              plansCreated: 0,
+              plansExisting: 0,
+              candidatesSkipped: 0,
+              candidatesFailed: 0,
+              candidatesConsidered: 0,
+              lastError: "run_meta_organic_boost_planner failed",
+            };
           }
         }
 
@@ -863,7 +871,15 @@ export async function syncMetaConnector(
               plannedAt: plannerAttemptedAt,
             });
           } catch {
-            // Failures must not roll back a successful marketing sync.
+            organicBoostResult = {
+              status: "PLANNER_RPC_FAILED",
+              plansCreated: 0,
+              plansExisting: 0,
+              candidatesSkipped: 0,
+              candidatesFailed: 0,
+              candidatesConsidered: 0,
+              lastError: "run_meta_organic_boost_planner failed",
+            };
           }
         } catch (error) {
           if (error instanceof MetaGraphError) {
@@ -932,6 +948,20 @@ export async function syncMetaConnector(
           ? "asset_partial"
           : marketingErrorCode;
     const nextSyncAt = nextHourlyRun().toISOString();
+    const organicBoostForStorage: MetaOrganicBoostPlannerResult =
+      organicBoostResult ?? {
+        status: "NOT_RUN",
+        plansCreated: 0,
+        plansExisting: 0,
+        candidatesSkipped: 0,
+        candidatesFailed: 0,
+        candidatesConsidered: 0,
+        lastError: readLeaseToken
+          ? marketingErrorCode
+            ? `marketing_${marketingErrorCode}`
+            : "organic_planner_not_invoked"
+          : marketingErrorCode ?? "read_lease_unavailable",
+      };
     await updateConnector(connector.id, {
       baseline_completed_at:
         failedAssetCount === 0 ? new Date().toISOString() : undefined,
@@ -944,7 +974,7 @@ export async function syncMetaConnector(
       sync_consecutive_failures: 0,
       last_sync_seen_count: seenCount,
       last_sync_new_count: newCount,
-      sync_usage: usageForStorage(usage, organicBoostResult),
+      sync_usage: usageForStorage(usage, organicBoostForStorage),
       marketing_sync_status: marketingResult ? "success" : "error",
       marketing_sync_error_code: marketingErrorCode,
       marketing_last_sync_started_at: marketingStartedAt,
@@ -974,7 +1004,7 @@ export async function syncMetaConnector(
       failedAssetCount,
       ...marketingFields(marketingResult, marketingErrorCode !== null),
       ...plannerFields(plannerResult, plannerErrorCode !== null),
-      ...organicBoostFields(organicBoostResult),
+      ...organicBoostFields(organicBoostForStorage),
       nextSyncAt,
       retryAt: null,
     };

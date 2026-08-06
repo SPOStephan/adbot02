@@ -103,7 +103,7 @@ assert.match(
 );
 assert.doesNotMatch(
   dashboardSource,
-  /access_token_encrypted|token_iv|token_auth_tag|sync_backoff_until|sync_usage/,
+  /access_token_encrypted|token_iv|token_auth_tag|sync_backoff_until/,
 );
 
 assert.match(dashboardSource, /Meta Content Sync/);
