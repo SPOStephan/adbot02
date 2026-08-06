@@ -77,7 +77,7 @@ function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): str
   const error = boost.lastError?.trim();
 
   if (created + existing > 0) {
-    return `Beitrag-Push: ${created + existing} Bewerbung(en) angelegt — Meta-Schreiben folgt über den Executor.`;
+    return `Beitrag-Push: ${created + existing} Bewerbung(en) angelegt — Meta-Versand folgt automatisch.`;
   }
 
   if (boost.status === "MATERIALIZE_FAILED" || failed > 0) {

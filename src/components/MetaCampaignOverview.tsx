@@ -8,6 +8,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import { OrganicBoostLiveRefresh } from "@/components/OrganicBoostLiveRefresh";
 import { OrganicBoostPlanButton } from "@/components/OrganicBoostPlanButton";
 
 type CampaignPerformance = {
@@ -385,6 +386,12 @@ export function MetaCampaignOverview({
   recommendations,
   status,
 }: MetaCampaignOverviewProps) {
+  const awaitingOrganicBoostProgress =
+    organicBoostConfigured &&
+    (pendingBoostCandidateCount > 0 ||
+      organicBoostCampaigns.some(
+        (campaign) => campaign.deliveryState === "starting",
+      ));
   const statusLabel =
     status === "success"
       ? "Meta Live"
@@ -440,100 +447,103 @@ export function MetaCampaignOverview({
           </div>
 
           {organicBoostCampaigns.length ? (
-            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-              <div className="overflow-x-auto">
-                <table className="min-w-[1080px] divide-y divide-slate-200 text-left text-sm">
-                  <caption className="sr-only">
-                    Adbot Beitrag-Push-Kampagnen mit Budget, Laufzeit und Leistung
-                  </caption>
-                  <thead className="bg-slate-50 text-xs font-bold uppercase tracking-[0.06em] text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3" scope="col">Kampagne</th>
-                      <th className="px-4 py-3" scope="col">Status</th>
-                      <th className="px-4 py-3 text-right" scope="col">Ausgegeben</th>
-                      <th className="px-4 py-3 text-right" scope="col">Restbudget</th>
-                      <th className="px-4 py-3 text-right" scope="col">Verstrichen</th>
-                      <th className="px-4 py-3 text-right" scope="col">Restlaufzeit</th>
-                      <th className="px-4 py-3 text-right" scope="col">Interaktionen</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {organicBoostCampaigns.map((campaign) => {
-                      const runtime = formatDurationProgress(
-                        campaign.startTime,
-                        campaign.endTime,
-                      );
-                      const plannedLifetime =
-                        campaign.budgetMode === "LIFETIME"
-                          ? campaign.lifetimeBudgetMinor
-                          : campaign.dailyBudgetMinor != null &&
-                              campaign.durationDays != null
-                            ? campaign.dailyBudgetMinor * campaign.durationDays
-                            : null;
-                      const remaining =
-                        campaign.budgetRemainingMinor ??
-                        (plannedLifetime != null && campaign.spend != null
-                          ? Math.max(plannedLifetime - Math.round(campaign.spend * 100), 0)
-                          : null);
+            <div className="mt-5 space-y-3">
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="overflow-x-auto">
+                  <table className="min-w-[1080px] divide-y divide-slate-200 text-left text-sm">
+                    <caption className="sr-only">
+                      Adbot Beitrag-Push-Kampagnen mit Budget, Laufzeit und Leistung
+                    </caption>
+                    <thead className="bg-slate-50 text-xs font-bold uppercase tracking-[0.06em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3" scope="col">Kampagne</th>
+                        <th className="px-4 py-3" scope="col">Status</th>
+                        <th className="px-4 py-3 text-right" scope="col">Ausgegeben</th>
+                        <th className="px-4 py-3 text-right" scope="col">Restbudget</th>
+                        <th className="px-4 py-3 text-right" scope="col">Verstrichen</th>
+                        <th className="px-4 py-3 text-right" scope="col">Restlaufzeit</th>
+                        <th className="px-4 py-3 text-right" scope="col">Interaktionen</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {organicBoostCampaigns.map((campaign) => {
+                        const runtime = formatDurationProgress(
+                          campaign.startTime,
+                          campaign.endTime,
+                        );
+                        const plannedLifetime =
+                          campaign.budgetMode === "LIFETIME"
+                            ? campaign.lifetimeBudgetMinor
+                            : campaign.dailyBudgetMinor != null &&
+                                campaign.durationDays != null
+                              ? campaign.dailyBudgetMinor * campaign.durationDays
+                              : null;
+                        const remaining =
+                          campaign.budgetRemainingMinor ??
+                          (plannedLifetime != null && campaign.spend != null
+                            ? Math.max(plannedLifetime - Math.round(campaign.spend * 100), 0)
+                            : null);
 
-                      return (
-                        <tr key={campaign.planId}>
-                          <th className="max-w-xs px-4 py-4 font-semibold text-slate-900" scope="row">
-                            <span className="block truncate">{campaign.campaignName}</span>
-                            <span className="mt-1 block text-xs font-medium text-slate-500">
-                              {campaign.budgetMode === "LIFETIME"
-                                ? `Laufzeitbudget ${formatMinorMoney(campaign.lifetimeBudgetMinor, campaign.currency)}`
-                                : `Tagesbudget ${formatMinorMoney(campaign.dailyBudgetMinor, campaign.currency)}${
-                                    campaign.durationDays
-                                      ? ` · ${campaign.durationDays} Tage`
-                                      : ""
-                                  }`}
-                            </span>
-                            <span className="mt-1 block text-xs font-medium text-slate-400">
-                              {formatDateTime(campaign.startTime)} – {formatDateTime(campaign.endTime)}
-                            </span>
-                          </th>
-                          <td className="px-4 py-4">
-                            {(() => {
-                              const style = boostDeliveryStyle(campaign.deliveryState);
-                              return (
-                                <span
-                                  className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${style.badge}`}
-                                >
+                        return (
+                          <tr key={campaign.planId}>
+                            <th className="max-w-xs px-4 py-4 font-semibold text-slate-900" scope="row">
+                              <span className="block truncate">{campaign.campaignName}</span>
+                              <span className="mt-1 block text-xs font-medium text-slate-500">
+                                {campaign.budgetMode === "LIFETIME"
+                                  ? `Laufzeitbudget ${formatMinorMoney(campaign.lifetimeBudgetMinor, campaign.currency)}`
+                                  : `Tagesbudget ${formatMinorMoney(campaign.dailyBudgetMinor, campaign.currency)}${
+                                      campaign.durationDays
+                                        ? ` · ${campaign.durationDays} Tage`
+                                        : ""
+                                    }`}
+                              </span>
+                              <span className="mt-1 block text-xs font-medium text-slate-400">
+                                {formatDateTime(campaign.startTime)} – {formatDateTime(campaign.endTime)}
+                              </span>
+                            </th>
+                            <td className="px-4 py-4">
+                              {(() => {
+                                const style = boostDeliveryStyle(campaign.deliveryState);
+                                return (
                                   <span
-                                    aria-hidden
-                                    className={`size-2.5 shrink-0 rounded-full ${style.dot}`}
-                                  />
-                                  {campaign.deliveryLabel}
-                                </span>
-                              );
-                            })()}
-                          </td>
-                          <td className="px-4 py-4 text-right font-semibold text-slate-900">
-                            {formatMoney(campaign.spend, campaign.currency)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-slate-700">
-                            {formatMinorMoney(remaining, campaign.currency)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-slate-700">
-                            {runtime.elapsedLabel}
-                          </td>
-                          <td className="px-4 py-4 text-right text-slate-700">
-                            {runtime.remainingLabel}
-                          </td>
-                          <td className="px-4 py-4 text-right text-slate-700">
-                            {campaign.postEngagements != null && campaign.postEngagements > 0
-                              ? formatNumber(campaign.postEngagements)
-                              : campaign.impressions != null
-                                ? `${formatNumber(campaign.impressions)} Imp.`
-                                : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                                    className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${style.badge}`}
+                                  >
+                                    <span
+                                      aria-hidden
+                                      className={`size-2.5 shrink-0 rounded-full ${style.dot}`}
+                                    />
+                                    {campaign.deliveryLabel}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            <td className="px-4 py-4 text-right font-semibold text-slate-900">
+                              {formatMoney(campaign.spend, campaign.currency)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-slate-700">
+                              {formatMinorMoney(remaining, campaign.currency)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-slate-700">
+                              {runtime.elapsedLabel}
+                            </td>
+                            <td className="px-4 py-4 text-right text-slate-700">
+                              {runtime.remainingLabel}
+                            </td>
+                            <td className="px-4 py-4 text-right text-slate-700">
+                              {campaign.postEngagements != null && campaign.postEngagements > 0
+                                ? formatNumber(campaign.postEngagements)
+                                : campaign.impressions != null
+                                  ? `${formatNumber(campaign.impressions)} Imp.`
+                                  : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+              <OrganicBoostLiveRefresh active={awaitingOrganicBoostProgress} />
             </div>
           ) : (
             <div className="mt-5 flex gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
@@ -545,8 +555,8 @@ export function MetaCampaignOverview({
                 <p className="mt-1 text-sm leading-6 text-slate-500">
                   {organicBoostConfigured
                     ? pendingBoostCandidateCount > 0
-                      ? `${pendingBoostCandidateCount} erkannte Beiträge werden automatisch beworben (Vollautomatik + Freigeben), unabhängig vom Abruf. Kein Extra-Klick nötig — Pläne erscheinen hier, sobald der Executor sie bei Meta geschrieben hat.`
-                      : "Automatischer Beitrag-Push ist eingeschaltet, aber aktuell liegt kein Boost-Plan vor. Sobald Pläne angelegt und vom Executor geschrieben sind, erscheinen sie hier mit Ampel-Status."
+                      ? `${pendingBoostCandidateCount} erkannte Beiträge werden automatisch beworben (Vollautomatik + Freigeben), unabhängig vom Abruf. Kein Extra-Klick nötig — sobald der Meta-Versand die Kampagnen geschrieben hat, erscheinen sie hier.`
+                      : "Automatischer Beitrag-Push ist eingeschaltet, aber aktuell liegt kein Boost-Plan vor. Sobald Pläne angelegt und per Meta-Versand geschrieben sind, erscheinen sie hier mit Ampel-Status."
                     : "Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben, Restbudget und Laufzeit."}
                 </p>
                 {organicBoostConfigured &&
@@ -558,6 +568,7 @@ export function MetaCampaignOverview({
                       : ""}
                   </p>
                 ) : null}
+                <OrganicBoostLiveRefresh active={awaitingOrganicBoostProgress} />
                 {organicBoostConfigured ? (
                   <OrganicBoostPlanButton label="Manuell erneut prüfen" />
                 ) : null}

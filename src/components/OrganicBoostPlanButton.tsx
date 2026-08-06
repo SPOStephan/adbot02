@@ -53,7 +53,7 @@ export function OrganicBoostPlanButton({
       const error = body.organicBoost?.lastError?.trim();
       setNotice(
         created > 0
-          ? `${created} Boost-Plan/Pläne angelegt (Status ${status}). Meta-Schreiben folgt über den Executor.`
+          ? `${created} Boost-Plan/Pläne angelegt (Status ${status}). Meta-Versand folgt automatisch.`
           : error
             ? `Kein Plan angelegt (${status}): ${error}`
             : `Kein Plan angelegt (Status ${status}, geprüft: ${body.organicBoost?.candidatesConsidered ?? 0}).`,
