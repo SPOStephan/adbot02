@@ -1,7 +1,8 @@
 -- Fix organic Beitrag-Push Meta payloads and stuck/failed plans.
 -- 1) Ad set: destination_type=ON_POST for engagement boosts.
 -- 2) Creative: never attach top-level CTA/link on organic object_story_id boosts.
--- 3) Repair existing plan payloads/steps and re-queue FAILED/stuck plans.
+-- 3) Repair existing plan payloads/steps and re-queue FAILED/stuck plans
+--    (temporarily disables intent-immutability triggers for that repair only).
 -- 4) Surface plan/step errors in list_meta_organic_boost_campaigns.
 -- 5) Permanent preflight misses become BLOCKED with reason (not silent PENDING).
 
