@@ -58,6 +58,8 @@ type ConnectorRow = {
   last_sync_started_at: string | null;
   sync_consecutive_failures: number | null;
   instagram_account_ids: unknown;
+  marketing_sync_id: string | null;
+  marketing_sync_status: string | null;
 };
 
 type AssetRow = {
@@ -315,7 +317,7 @@ async function fetchConnector(
   let query = admin
     .from("platform_accounts")
     .select(
-      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids",
+      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids,marketing_sync_id,marketing_sync_status",
     )
     .eq("id", platformAccountId)
     .eq("platform", "meta")
@@ -739,6 +741,28 @@ export async function syncMetaConnector(
       }
 
       if (readLeaseToken) {
+        // Run Beitrag-Push as soon as new posts are recorded, using the last
+        // successful marketing snapshot — do not wait for the marketing refresh.
+        if (
+          !isHighUsage(usage) &&
+          connector.marketing_sync_status === "success" &&
+          typeof connector.marketing_sync_id === "string" &&
+          connector.marketing_sync_id.length > 0
+        ) {
+          plannerAttemptedAt = new Date().toISOString();
+          try {
+            await runMetaOrganicBoostPlannerAfterSnapshot({
+              platformAccountId: connector.id,
+              userId: connector.user_id,
+              marketingSyncId: connector.marketing_sync_id,
+              readLeaseToken,
+              plannedAt: plannerAttemptedAt,
+            });
+          } catch {
+            // Best-effort: marketing sync + later planner still run below.
+          }
+        }
+
         try {
           marketingResult = await syncMetaMarketingSnapshot({
             platformAccountId: connector.id,

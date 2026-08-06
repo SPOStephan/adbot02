@@ -58,6 +58,10 @@ assert.match(serviceSource, /approveCustomerOrganicBoost/);
 
 assert.match(plannerSource, /runMetaOrganicBoostPlannerAfterSnapshot/);
 assert.match(syncSource, /runMetaOrganicBoostPlannerAfterSnapshot/);
+assert.match(
+  syncSource,
+  /Run Beitrag-Push as soon as new posts are recorded/,
+);
 
 assert.match(
   read("src/app/api/meta/automation/boost-settings/route.ts"),
@@ -129,7 +133,15 @@ assert.match(
 
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /Boost vorbereiten/,
+  /Automatischer Boost aktiv/,
+);
+assert.match(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Details anpassen/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /href: "#kampagnen"/,
 );
 
 const writeClient = read("src/lib/meta/write-client.ts");

@@ -296,7 +296,7 @@ export function MetaCampaignOverview({
         : "bg-blue-50 text-blue-700 ring-blue-200";
 
   return (
-    <section className="mt-10 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" id="kampagnen">
+    <section className="mt-10 scroll-mt-24 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" id="kampagnen">
       <div className="border-b border-slate-200 px-5 py-5 sm:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
