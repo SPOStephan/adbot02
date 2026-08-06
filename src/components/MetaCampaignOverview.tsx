@@ -38,8 +38,29 @@ type CampaignRecommendation = {
   windowEnd: string;
 };
 
+export type OrganicBoostCampaignView = {
+  planId: string;
+  planStatus: string;
+  campaignName: string;
+  status: string | null;
+  effectiveStatus: string | null;
+  budgetMode: "DAILY" | "LIFETIME";
+  dailyBudgetMinor: number | null;
+  lifetimeBudgetMinor: number | null;
+  budgetRemainingMinor: number | null;
+  durationDays: number | null;
+  startTime: string | null;
+  endTime: string | null;
+  spend: number | null;
+  impressions: number | null;
+  postEngagements: number | null;
+  currency: string;
+  createdAt: string;
+};
+
 type MetaCampaignOverviewProps = {
   campaigns: CampaignPerformance[];
+  organicBoostCampaigns: OrganicBoostCampaignView[];
   counts: {
     campaigns: number;
     adSets: number;
@@ -103,6 +124,52 @@ function formatPercent(value: number | null) {
   return `${new Intl.NumberFormat("de-DE", {
     maximumFractionDigits: 2,
   }).format(value)} %`;
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Berlin",
+  }).format(date);
+}
+
+function formatDurationProgress(startTime: string | null, endTime: string | null) {
+  if (!startTime || !endTime) {
+    return { elapsedLabel: "—", remainingLabel: "—" };
+  }
+  const start = new Date(startTime).getTime();
+  const end = new Date(endTime).getTime();
+  const now = Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return { elapsedLabel: "—", remainingLabel: "—" };
+  }
+
+  const totalMs = end - start;
+  const elapsedMs = Math.min(Math.max(now - start, 0), totalMs);
+  const remainingMs = Math.max(end - now, 0);
+
+  const toDaysHours = (ms: number) => {
+    const totalHours = Math.floor(ms / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    if (days <= 0) return `${hours} Std.`;
+    if (hours <= 0) return `${days} Tg.`;
+    return `${days} Tg. ${hours} Std.`;
+  };
+
+  return {
+    elapsedLabel: now < start ? "Noch nicht gestartet" : toDaysHours(elapsedMs),
+    remainingLabel: now >= end ? "Beendet" : toDaysHours(remainingMs),
+  };
+}
+
+function formatMinorMoney(value: number | null, currency: string) {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return formatMoney(value / 100, currency);
 }
 
 function evidenceNumber(evidence: Record<string, unknown>, key: string) {
@@ -203,6 +270,7 @@ const countLabels = [
 
 export function MetaCampaignOverview({
   campaigns,
+  organicBoostCampaigns,
   counts,
   currency,
   errorCode,
@@ -239,7 +307,7 @@ export function MetaCampaignOverview({
               Kampagnen und Leistung
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              Vollständig schreibgeschützte Meta-Hierarchie mit täglichen Insights. Es gibt weder Bearbeitungsaktionen noch einen API-Pfad für Kampagnenänderungen.
+              Schreibgeschützte Meta-Hierarchie mit täglichen Insights — und die von Adbot gestarteten Beitrag-Push-Kampagnen mit Budget und Laufzeit.
             </p>
           </div>
           <span className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset ${statusClass}`}>
@@ -250,6 +318,127 @@ export function MetaCampaignOverview({
       </div>
 
       <div className="px-5 py-6 sm:px-6">
+        <section className="mb-8" aria-labelledby="organic-boost-campaigns-title">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+                Beitrag-Push
+              </p>
+              <h3 className="mt-2 text-lg font-extrabold" id="organic-boost-campaigns-title">
+                Von Adbot gestartete Push-Kampagnen
+              </h3>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                Ausgaben, Restbudget und Laufzeit aus Plan und Meta-Abruf. Interaktionen erscheinen,
+                sobald Meta sie in den Insights liefert.
+              </p>
+            </div>
+          </div>
+
+          {organicBoostCampaigns.length ? (
+            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+              <div className="overflow-x-auto">
+                <table className="min-w-[1080px] divide-y divide-slate-200 text-left text-sm">
+                  <caption className="sr-only">
+                    Adbot Beitrag-Push-Kampagnen mit Budget, Laufzeit und Leistung
+                  </caption>
+                  <thead className="bg-slate-50 text-xs font-bold uppercase tracking-[0.06em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3" scope="col">Kampagne</th>
+                      <th className="px-4 py-3" scope="col">Status</th>
+                      <th className="px-4 py-3 text-right" scope="col">Ausgegeben</th>
+                      <th className="px-4 py-3 text-right" scope="col">Restbudget</th>
+                      <th className="px-4 py-3 text-right" scope="col">Verstrichen</th>
+                      <th className="px-4 py-3 text-right" scope="col">Restlaufzeit</th>
+                      <th className="px-4 py-3 text-right" scope="col">Interaktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {organicBoostCampaigns.map((campaign) => {
+                      const runtime = formatDurationProgress(
+                        campaign.startTime,
+                        campaign.endTime,
+                      );
+                      const plannedLifetime =
+                        campaign.budgetMode === "LIFETIME"
+                          ? campaign.lifetimeBudgetMinor
+                          : campaign.dailyBudgetMinor != null &&
+                              campaign.durationDays != null
+                            ? campaign.dailyBudgetMinor * campaign.durationDays
+                            : null;
+                      const remaining =
+                        campaign.budgetRemainingMinor ??
+                        (plannedLifetime != null && campaign.spend != null
+                          ? Math.max(plannedLifetime - Math.round(campaign.spend * 100), 0)
+                          : null);
+
+                      return (
+                        <tr key={campaign.planId}>
+                          <th className="max-w-xs px-4 py-4 font-semibold text-slate-900" scope="row">
+                            <span className="block truncate">{campaign.campaignName}</span>
+                            <span className="mt-1 block text-xs font-medium text-slate-500">
+                              {campaign.budgetMode === "LIFETIME"
+                                ? `Laufzeitbudget ${formatMinorMoney(campaign.lifetimeBudgetMinor, campaign.currency)}`
+                                : `Tagesbudget ${formatMinorMoney(campaign.dailyBudgetMinor, campaign.currency)}${
+                                    campaign.durationDays
+                                      ? ` · ${campaign.durationDays} Tage`
+                                      : ""
+                                  }`}
+                            </span>
+                            <span className="mt-1 block text-xs font-medium text-slate-400">
+                              {formatDateTime(campaign.startTime)} – {formatDateTime(campaign.endTime)}
+                            </span>
+                          </th>
+                          <td className="px-4 py-4">
+                            <span
+                              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${statusStyle(campaign.effectiveStatus ?? campaign.status ?? campaign.planStatus)}`}
+                            >
+                              {campaign.effectiveStatus ??
+                                campaign.status ??
+                                campaign.planStatus}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-right font-semibold text-slate-900">
+                            {formatMoney(campaign.spend, campaign.currency)}
+                          </td>
+                          <td className="px-4 py-4 text-right text-slate-700">
+                            {formatMinorMoney(remaining, campaign.currency)}
+                          </td>
+                          <td className="px-4 py-4 text-right text-slate-700">
+                            {runtime.elapsedLabel}
+                          </td>
+                          <td className="px-4 py-4 text-right text-slate-700">
+                            {runtime.remainingLabel}
+                          </td>
+                          <td className="px-4 py-4 text-right text-slate-700">
+                            {campaign.postEngagements != null && campaign.postEngagements > 0
+                              ? formatNumber(campaign.postEngagements)
+                              : campaign.impressions != null
+                                ? `${formatNumber(campaign.impressions)} Imp.`
+                                : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-5 flex gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
+              <Megaphone className="mt-0.5 size-5 shrink-0 text-slate-400" />
+              <div>
+                <p className="text-sm font-bold text-slate-900">
+                  Noch keine Beitrag-Push-Kampagnen
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben,
+                  Restbudget und Laufzeit.
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+
         <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {countLabels.map(([label, key]) => (
             <div className="rounded-xl bg-slate-50 p-4" key={key}>
