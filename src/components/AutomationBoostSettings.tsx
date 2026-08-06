@@ -5,6 +5,20 @@ import { useRouter } from "next/navigation";
 import { Megaphone, Save } from "lucide-react";
 
 export type BoostMode = "OFF" | "REVIEW" | "AUTO";
+export type BoostAssetScope = "ALL" | "SELECTED";
+
+export type BoostAssetSettingView = {
+  metaAssetId: string;
+  included: boolean;
+  dailyBudgetMinor: number | null;
+  durationDays: number | null;
+};
+
+export type BoostEligibleAssetView = {
+  id: string;
+  label: string;
+  assetType: "facebook_page" | "instagram_account";
+};
 
 export type BoostSettingsView = {
   id: string;
@@ -23,6 +37,8 @@ export type BoostSettingsView = {
   defaultCountries: string[];
   defaultCtaType: string | null;
   defaultDestinationUrl: string | null;
+  assetScope: BoostAssetScope;
+  assetSettings: BoostAssetSettingView[];
   customerConfirmedAt: string | null;
 };
 
@@ -41,8 +57,15 @@ function deriveBoostMode(settings: BoostSettingsView | null): BoostMode {
   return settings.requireManualApproval ? "REVIEW" : "AUTO";
 }
 
+type AssetDraft = {
+  included: boolean;
+  dailyBudget: string;
+  durationDays: string;
+};
+
 type Props = {
   settings: BoostSettingsView | null;
+  eligibleAssets: BoostEligibleAssetView[];
   writeScopeGranted: boolean;
   killSwitchMode: "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED" | null;
 };
@@ -67,7 +90,7 @@ const MODE_OPTIONS: Array<{
     mode: "AUTO",
     title: "Vollautomatisch",
     description:
-      "Jeder neue Beitrag (laut Quellenfilter) wird mit dem festgelegten Tagesbudget und Zeitraum automatisch beworben.",
+      "Jeder neue Beitrag (laut Quellenfilter und Asset-Auswahl) wird mit dem festgelegten Tagesbudget und Zeitraum automatisch beworben.",
   },
 ];
 
@@ -80,8 +103,50 @@ const SOURCE_OPTIONS: Array<{
   { value: "both", title: "Facebook und Instagram" },
 ];
 
+const SCOPE_OPTIONS: Array<{
+  value: BoostAssetScope;
+  title: string;
+  description: string;
+}> = [
+  {
+    value: "ALL",
+    title: "Alle verbundenen Assets",
+    description:
+      "Neue Beiträge aller verbundenen Facebook-Seiten und Instagram-Konten werden berücksichtigt.",
+  },
+  {
+    value: "SELECTED",
+    title: "Nur ausgewählte Assets",
+    description:
+      "Nur Beiträge der unten markierten Seiten und Konten werden vorbereitet oder automatisch beworben.",
+  },
+];
+
+function initialAssetDrafts(
+  assets: BoostEligibleAssetView[],
+  settings: BoostSettingsView | null,
+): Record<string, AssetDraft> {
+  const byId = new Map(
+    (settings?.assetSettings ?? []).map((row) => [row.metaAssetId, row]),
+  );
+  const drafts: Record<string, AssetDraft> = {};
+  for (const asset of assets) {
+    const row = byId.get(asset.id);
+    drafts[asset.id] = {
+      included: row?.included ?? (settings?.assetScope !== "SELECTED"),
+      dailyBudget:
+        row?.dailyBudgetMinor != null
+          ? minorToEuroInput(row.dailyBudgetMinor, "")
+          : "",
+      durationDays: row?.durationDays != null ? String(row.durationDays) : "",
+    };
+  }
+  return drafts;
+}
+
 export function AutomationBoostSettings({
   settings,
+  eligibleAssets,
   writeScopeGranted,
   killSwitchMode,
 }: Props) {
@@ -108,6 +173,12 @@ export function AutomationBoostSettings({
   const [sourceFilter, setSourceFilter] = useState<BoostSettingsView["sourceFilter"]>(
     settings?.sourceFilter ?? "both",
   );
+  const [assetScope, setAssetScope] = useState<BoostAssetScope>(
+    settings?.assetScope ?? "ALL",
+  );
+  const [assetDrafts, setAssetDrafts] = useState<Record<string, AssetDraft>>(() =>
+    initialAssetDrafts(eligibleAssets, settings),
+  );
 
   const effectiveBudgetMode = boostMode === "AUTO" ? "DAILY" : budgetMode;
   const autoNeedsAllow = boostMode === "AUTO" && killSwitchMode !== "ALLOW";
@@ -121,6 +192,16 @@ export function AutomationBoostSettings({
     }
     return "Kein Boost-Plan wird erzeugt.";
   }, [boostMode]);
+
+  function updateAssetDraft(assetId: string, patch: Partial<AssetDraft>) {
+    setAssetDrafts((current) => ({
+      ...current,
+      [assetId]: {
+        ...(current[assetId] ?? { included: false, dailyBudget: "", durationDays: "" }),
+        ...patch,
+      },
+    }));
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,6 +224,22 @@ export function AutomationBoostSettings({
           defaultCountries: ["DE"],
           defaultCtaType: ctaType.trim() ? ctaType.trim().toUpperCase() : null,
           defaultDestinationUrl: destinationUrl.trim() || null,
+          assetScope,
+          assetSettings: eligibleAssets.map((asset) => {
+            const draft = assetDrafts[asset.id] ?? {
+              included: assetScope === "ALL",
+              dailyBudget: "",
+              durationDays: "",
+            };
+            return {
+              metaAssetId: asset.id,
+              included: assetScope === "ALL" ? true : draft.included,
+              dailyBudgetMinor: draft.dailyBudget.trim() || null,
+              durationDays: draft.durationDays.trim()
+                ? Number(draft.durationDays)
+                : null,
+            };
+          }),
         }),
       });
       const result = (await response.json().catch(() => ({}))) as {
@@ -264,6 +361,136 @@ export function AutomationBoostSettings({
             </div>
           </fieldset>
 
+          <fieldset className="sm:col-span-2">
+            <legend className="text-sm font-bold text-slate-800">Welche Assets?</legend>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {SCOPE_OPTIONS.map((option) => (
+                <label
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition ${
+                    assetScope === option.value
+                      ? "border-blue-300 bg-blue-50"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                  key={option.value}
+                >
+                  <input
+                    checked={assetScope === option.value}
+                    className="mt-1"
+                    name="assetScope"
+                    onChange={() => setAssetScope(option.value)}
+                    type="radio"
+                    value={option.value}
+                  />
+                  <span>
+                    <span className="block text-sm font-bold text-slate-900">
+                      {option.title}
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">
+                      {option.description}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {eligibleAssets.length ? (
+            <div className="sm:col-span-2 space-y-3">
+              <div>
+                <p className="text-sm font-bold text-slate-800">
+                  {assetScope === "SELECTED"
+                    ? "Assets auswählen"
+                    : "Optionale Werte je Asset"}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {assetScope === "SELECTED"
+                    ? "Markiere die Seiten und Konten, deren Beiträge gepusht werden sollen. Tagesbudget und Laufzeit je Asset sind optional und ersetzen dann die globalen Werte."
+                    : "Leer lassen = globale Werte unten. Nur ausfüllen, wenn eine Seite oder ein Konto abweichend laufen soll."}
+                </p>
+              </div>
+              {eligibleAssets.map((asset) => {
+                const draft = assetDrafts[asset.id] ?? {
+                  included: assetScope === "ALL",
+                  dailyBudget: "",
+                  durationDays: "",
+                };
+                return (
+                  <div
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+                    key={asset.id}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      {assetScope === "SELECTED" ? (
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                          <input
+                            checked={draft.included}
+                            onChange={(event) =>
+                              updateAssetDraft(asset.id, {
+                                included: event.target.checked,
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          {asset.label}
+                        </label>
+                      ) : (
+                        <p className="text-sm font-bold text-slate-900">{asset.label}</p>
+                      )}
+                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                        {asset.assetType === "facebook_page" ? "Facebook" : "Instagram"}
+                      </span>
+                    </div>
+                    {(assetScope === "ALL" || draft.included) &&
+                    effectiveBudgetMode === "DAILY" ? (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs font-bold text-slate-700">
+                          Tagesbudget (optional)
+                          <span className="relative mt-1.5 block">
+                            <input
+                              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 pr-12 text-sm font-semibold"
+                              inputMode="decimal"
+                              onChange={(event) =>
+                                updateAssetDraft(asset.id, {
+                                  dailyBudget: event.target.value,
+                                })
+                              }
+                              placeholder={dailyBudget || "wie global"}
+                              value={draft.dailyBudget}
+                            />
+                            <span className="absolute inset-y-0 right-3 flex items-center text-xs text-slate-400">
+                              EUR
+                            </span>
+                          </span>
+                        </label>
+                        <label className="text-xs font-bold text-slate-700">
+                          Laufzeit in Tagen (optional)
+                          <input
+                            className="mt-1.5 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold"
+                            max={90}
+                            min={1}
+                            onChange={(event) =>
+                              updateAssetDraft(asset.id, {
+                                durationDays: event.target.value,
+                              })
+                            }
+                            placeholder={durationDays || "wie global"}
+                            type="number"
+                            value={draft.durationDays}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="sm:col-span-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              Noch keine Facebook-Seiten oder Instagram-Konten verbunden. Verbinde zuerst Meta-
+              Assets, dann kannst du den Umfang festlegen.
+            </p>
+          )}
+
           {boostMode === "REVIEW" ? (
             <label className="text-sm font-bold text-slate-800">
               Budgetart
@@ -286,7 +513,7 @@ export function AutomationBoostSettings({
           )}
 
           <label className="text-sm font-bold text-slate-800">
-            Laufzeit (Tage)
+            Laufzeit (Tage) — global
             <input
               className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold"
               max={90}
@@ -300,7 +527,7 @@ export function AutomationBoostSettings({
 
           {effectiveBudgetMode === "DAILY" ? (
             <label className="text-sm font-bold text-slate-800">
-              Tagesbudget
+              Tagesbudget — global
               <span className="relative mt-2 block">
                 <input
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-14 font-semibold"
@@ -316,7 +543,7 @@ export function AutomationBoostSettings({
             </label>
           ) : (
             <label className="text-sm font-bold text-slate-800">
-              Laufzeitbudget
+              Laufzeitbudget — global
               <span className="relative mt-2 block">
                 <input
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-14 font-semibold"

@@ -83,7 +83,50 @@ assert.match(
   read("src/components/AutomationBoostSettings.tsx"),
   /sourceFilter/,
 );
+assert.match(
+  read("src/components/AutomationBoostSettings.tsx"),
+  /assetScope/,
+);
+assert.match(
+  read("src/components/AutomationBoostSettings.tsx"),
+  /Nur ausgewählte Assets/,
+);
+assert.match(
+  read("src/components/AutomationBoostSettings.tsx"),
+  /Tagesbudget \(optional\)/,
+);
 assert.match(inputSource, /boostMode/);
+assert.match(inputSource, /assetScope/);
+assert.match(inputSource, /assetSettings/);
+assert.match(serviceSource, /p_asset_scope/);
+assert.match(serviceSource, /p_asset_settings/);
+
+const assetScopeMigration = read(
+  "supabase/migrations/20260806120000_meta_boost_asset_scope_campaigns.sql",
+);
+assert.match(assetScopeMigration, /meta_boost_asset_settings/);
+assert.match(assetScopeMigration, /asset_scope in \('ALL', 'SELECTED'\)/);
+assert.match(assetScopeMigration, /asset_not_selected_for_boost/);
+assert.match(assetScopeMigration, /list_meta_organic_boost_campaigns/);
+assert.match(assetScopeMigration, /post_engagements/);
+
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Von Adbot gestartete Push-Kampagnen/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /organicBoostCampaigns/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /list_meta_organic_boost_campaigns/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /boostEligibleAssets/,
+);
+
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
   /Boost vorbereiten/,

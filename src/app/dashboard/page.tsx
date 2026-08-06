@@ -47,14 +47,20 @@ import type {
 } from "@/components/AutomationOnboardingControls";
 import type { BudgetCanaryPlanView } from "@/components/AutomationBudgetCanaryManager";
 import type { AutomationScopeCampaignView } from "@/components/AutomationScopeManager";
-import type { BoostSettingsView } from "@/components/AutomationBoostSettings";
+import type {
+  BoostEligibleAssetView,
+  BoostSettingsView,
+} from "@/components/AutomationBoostSettings";
 import {
   ContentCandidateBoostControls,
   type ContentBoostOverrideView,
   type HeldOrganicBoostPlanView,
 } from "@/components/ContentCandidateBoostControls";
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
-import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
+import {
+  MetaCampaignOverview,
+  type OrganicBoostCampaignView,
+} from "@/components/MetaCampaignOverview";
 import {
   MetaConnectedAssets,
   type MetaConnectedAssetView,
@@ -575,6 +581,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: boostSettingsRow },
     { data: boostOverrideRows },
     { data: organicBoostLinks },
+    { data: boostAssetSettingRows },
+    { data: organicBoostCampaignRows },
   ] = metaConnected && metaAccount
     ? await Promise.all([
         supabase
@@ -653,7 +661,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .eq("platform_account_id", metaAccount.id)
           .eq("action_type", "LAUNCH_CHAIN")
           .order("created_at", { ascending: false })
-          .limit(5),
+          .limit(20),
         supabase
           .from("daily_budget_exposure_snapshots")
           .select(
@@ -679,7 +687,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         supabase
           .from("meta_boost_settings")
           .select(
-            "id,version,boost_mode,enabled,auto_boost_new_candidates,require_manual_approval,budget_mode,daily_budget_minor,lifetime_budget_minor,duration_days,budget_owner_type,objective,source_filter,default_countries,default_cta_type,default_destination_url,customer_confirmed_at",
+            "id,version,boost_mode,enabled,auto_boost_new_candidates,require_manual_approval,budget_mode,daily_budget_minor,lifetime_budget_minor,duration_days,budget_owner_type,objective,source_filter,default_countries,default_cta_type,default_destination_url,asset_scope,customer_confirmed_at",
           )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
@@ -699,7 +707,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .order("created_at", { ascending: false })
-          .limit(20),
+          .limit(50),
+        supabase
+          .from("meta_boost_asset_settings")
+          .select("meta_asset_id,included,daily_budget_minor,duration_days")
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .limit(100),
+        supabase.rpc("list_meta_organic_boost_campaigns", {
+          p_platform_account_id: metaAccount.id,
+        }),
       ])
     : [
         { data: null },
@@ -715,6 +732,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         { data: [] },
         { data: [] },
         { data: null },
+        { data: [] },
+        { data: [] },
         { data: [] },
         { data: [] },
       ];
@@ -777,6 +796,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         createdAt: String(latestKillSwitch.created_at),
       }
     : null;
+  const boostEligibleAssets: BoostEligibleAssetView[] = [
+    ...pageAssets.map((asset) => ({
+      id: String(asset.id),
+      assetType: "facebook_page" as const,
+      label: `Facebook: ${asset.name?.trim() || asset.meta_asset_id}`,
+    })),
+    ...instagramAssets.map((asset) => ({
+      id: String(asset.id),
+      assetType: "instagram_account" as const,
+      label: `Instagram: ${
+        asset.username
+          ? `@${asset.username}`
+          : asset.name?.trim() || asset.meta_asset_id
+      }`,
+    })),
+  ];
   const boostSettingsView: BoostSettingsView | null = boostSettingsRow
     ? {
         id: String(boostSettingsRow.id),
@@ -817,11 +852,50 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         defaultDestinationUrl: boostSettingsRow.default_destination_url
           ? String(boostSettingsRow.default_destination_url)
           : null,
+        assetScope:
+          boostSettingsRow.asset_scope === "SELECTED" ? "SELECTED" : "ALL",
+        assetSettings: (boostAssetSettingRows ?? []).map((row) => ({
+          metaAssetId: String(row.meta_asset_id),
+          included: Boolean(row.included),
+          dailyBudgetMinor: toFiniteNumber(row.daily_budget_minor),
+          durationDays: toFiniteNumber(row.duration_days),
+        })),
         customerConfirmedAt: boostSettingsRow.customer_confirmed_at
           ? String(boostSettingsRow.customer_confirmed_at)
           : null,
       }
     : null;
+  const organicBoostCampaignViews: OrganicBoostCampaignView[] = (
+    (organicBoostCampaignRows ?? []) as Record<string, unknown>[]
+  ).flatMap((row) => {
+    const planId = String(row.plan_id ?? "");
+    if (!/^[0-9a-f-]{36}$/i.test(planId)) return [];
+    return [
+      {
+        planId,
+        planStatus: String(row.plan_status ?? "UNKNOWN"),
+        campaignName: String(row.campaign_name ?? "Beitrag-Push"),
+        status: row.status ? String(row.status) : null,
+        effectiveStatus: row.effective_status
+          ? String(row.effective_status)
+          : null,
+        budgetMode: row.budget_mode === "LIFETIME" ? "LIFETIME" : "DAILY",
+        dailyBudgetMinor: toFiniteNumber(row.daily_budget_minor),
+        lifetimeBudgetMinor: toFiniteNumber(row.lifetime_budget_minor),
+        budgetRemainingMinor: toFiniteNumber(row.budget_remaining_minor),
+        durationDays: toFiniteNumber(row.duration_days),
+        startTime: row.start_time ? String(row.start_time) : null,
+        endTime: row.end_time ? String(row.end_time) : null,
+        spend: toFiniteNumber(row.spend),
+        impressions: toFiniteNumber(row.impressions),
+        postEngagements: toFiniteNumber(row.post_engagements),
+        currency: String(
+          row.currency ?? metaAccount?.marketing_currency ?? "EUR",
+        ),
+        createdAt: String(row.created_at ?? new Date().toISOString()),
+      },
+    ];
+  });
   const boostOverrideByCandidate = new Map<string, ContentBoostOverrideView>(
     (boostOverrideRows ?? []).map((row) => [
       String(row.content_candidate_id),
@@ -1467,6 +1541,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               accountName={metaAccount.account_name ?? "Meta-Werbekonto"}
               auditEvents={automationAuditViews}
               automationScope={automationScopeView}
+              boostEligibleAssets={boostEligibleAssets}
               boostSettings={boostSettingsView}
               brandProfile={brandProfileView}
               budgetCanaries={budgetCanaryViews}
@@ -1492,6 +1567,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {metaConnected && metaAccount ? (
             <MetaCampaignOverview
               campaigns={campaignRows}
+              organicBoostCampaigns={organicBoostCampaignViews}
               counts={{
                 campaigns: metaAccount.marketing_campaign_count ?? 0,
                 adSets: metaAccount.marketing_ad_set_count ?? 0,

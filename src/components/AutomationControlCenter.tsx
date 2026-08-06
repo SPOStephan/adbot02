@@ -33,6 +33,7 @@ import {
 } from "@/components/AutomationScopeManager";
 import {
   AutomationBoostSettings,
+  type BoostEligibleAssetView,
   type BoostSettingsView,
 } from "@/components/AutomationBoostSettings";
 
@@ -89,6 +90,7 @@ type AutomationControlCenterProps = {
   canPrepareBudgetCanary: boolean;
   canConfirmBudgetCanary: boolean;
   boostSettings: BoostSettingsView | null;
+  boostEligibleAssets: BoostEligibleAssetView[];
   onboarding: AutomationOnboardingData;
   readiness: {
     writeScopeGranted: boolean;
@@ -259,6 +261,7 @@ export function AutomationControlCenter({
   auditEvents,
   automationScope,
   boostSettings,
+  boostEligibleAssets,
   brandProfile,
   budgetCanaries,
   canPrepareBudgetCanary,
@@ -1024,6 +1027,7 @@ export function AutomationControlCenter({
         </div>
 
         <AutomationBoostSettings
+          eligibleAssets={boostEligibleAssets}
           killSwitchMode={killSwitch?.mode ?? null}
           settings={boostSettings}
           writeScopeGranted={readiness.writeScopeGranted}

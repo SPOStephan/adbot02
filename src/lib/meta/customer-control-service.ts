@@ -1015,6 +1015,13 @@ export async function saveCustomerBoostSettings(
     p_default_countries: command.defaultCountries,
     p_default_cta_type: command.defaultCtaType,
     p_default_destination_url: command.defaultDestinationUrl,
+    p_asset_scope: command.assetScope,
+    p_asset_settings: command.assetSettings.map((asset) => ({
+      meta_asset_id: asset.metaAssetId,
+      included: asset.included,
+      daily_budget_minor: asset.dailyBudgetMinor,
+      duration_days: asset.durationDays,
+    })),
   });
 
   if (error || typeof data !== "string") {

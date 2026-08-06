@@ -1086,6 +1086,7 @@ export function parseLaunchApprovalCommand(value: unknown): LaunchApprovalComman
 const BOOST_SOURCE_FILTERS = ["facebook", "instagram", "both"] as const;
 const BOOST_OBJECTIVES = ["OUTCOME_ENGAGEMENT", "POST_ENGAGEMENT"] as const;
 const BOOST_MODES = ["OFF", "REVIEW", "AUTO"] as const;
+const BOOST_ASSET_SCOPES = ["ALL", "SELECTED"] as const;
 const BOOST_OVERRIDE_MODES = ["INHERIT", "SKIP", "BOOST"] as const;
 const BOOST_COUNTRIES = [
   "DE", "AT", "CH", "NL", "BE", "FR", "IT", "ES", "PL", "US", "GB", "IE",
@@ -1093,6 +1094,14 @@ const BOOST_COUNTRIES = [
 ] as const;
 
 export type BoostMode = (typeof BOOST_MODES)[number];
+export type BoostAssetScope = (typeof BOOST_ASSET_SCOPES)[number];
+
+export type BoostAssetSettingCommand = {
+  metaAssetId: string;
+  included: boolean;
+  dailyBudgetMinor: string | null;
+  durationDays: number | null;
+};
 
 export type BoostSettingsCommand = {
   boostMode: BoostMode;
@@ -1106,6 +1115,8 @@ export type BoostSettingsCommand = {
   defaultCountries: string[];
   defaultCtaType: string | null;
   defaultDestinationUrl: string | null;
+  assetScope: BoostAssetScope;
+  assetSettings: BoostAssetSettingCommand[];
 };
 
 export type BoostOverrideCommand = {
@@ -1170,6 +1181,8 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
       "defaultCountries",
       "defaultCtaType",
       "defaultDestinationUrl",
+      "assetScope",
+      "assetSettings",
     ],
     "Der Beitrag-Push-Befehl",
   );
@@ -1191,6 +1204,11 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
     body.sourceFilter,
     "Der Quellenfilter",
     BOOST_SOURCE_FILTERS,
+  );
+  const assetScope = requiredEnum(
+    body.assetScope,
+    "Der Asset-Umfang",
+    BOOST_ASSET_SCOPES,
   );
   const durationDays = requiredDurationDays(body.durationDays);
 
@@ -1249,6 +1267,69 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
     );
   }
 
+  if (!Array.isArray(body.assetSettings) || body.assetSettings.length > 100) {
+    inputError(
+      "invalid_asset_settings",
+      "Die Asset-Auswahl für den Beitrag-Push ist ungültig.",
+    );
+  }
+
+  const seenAssetIds = new Set<string>();
+  const assetSettings: BoostAssetSettingCommand[] = body.assetSettings.map((entry) => {
+    const asset = asJsonObject(entry);
+    assertExactKeys(
+      asset,
+      ["metaAssetId", "included", "dailyBudgetMinor", "durationDays"],
+      "Die Asset-Einstellung",
+    );
+    const metaAssetId = requiredUuid(asset.metaAssetId, "Das Asset");
+    if (seenAssetIds.has(metaAssetId)) {
+      inputError("duplicate_asset", "Ein Asset wurde mehrfach ausgewählt.");
+    }
+    seenAssetIds.add(metaAssetId);
+    const included = requiredBoolean(asset.included, "Die Asset-Auswahl");
+    let assetDailyBudgetMinor: string | null = null;
+    if (
+      asset.dailyBudgetMinor !== null &&
+      asset.dailyBudgetMinor !== undefined &&
+      asset.dailyBudgetMinor !== ""
+    ) {
+      assetDailyBudgetMinor = parseEuroAmountToMinor(
+        asset.dailyBudgetMinor,
+        "Das Asset-Tagesbudget",
+      );
+    }
+    let assetDurationDays: number | null = null;
+    if (
+      asset.durationDays !== null &&
+      asset.durationDays !== undefined &&
+      asset.durationDays !== ""
+    ) {
+      assetDurationDays = requiredDurationDays(
+        typeof asset.durationDays === "string"
+          ? Number(asset.durationDays)
+          : asset.durationDays,
+      );
+    }
+    return {
+      metaAssetId,
+      included,
+      dailyBudgetMinor: assetDailyBudgetMinor,
+      durationDays: assetDurationDays,
+    };
+  });
+
+  if (
+    boostMode !== "OFF" &&
+    assetScope === "SELECTED" &&
+    !assetSettings.some((asset) => asset.included)
+  ) {
+    inputError(
+      "no_selected_assets",
+      "Bitte mindestens eine Seite oder ein Instagram-Konto für den Beitrag-Push auswählen.",
+    );
+  }
+
   return {
     boostMode,
     budgetMode,
@@ -1261,6 +1342,8 @@ export function parseBoostSettingsCommand(value: unknown): BoostSettingsCommand 
     defaultCountries,
     defaultCtaType,
     defaultDestinationUrl,
+    assetScope,
+    assetSettings,
   };
 }
 
