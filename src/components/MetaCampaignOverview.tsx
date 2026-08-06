@@ -561,7 +561,15 @@ export function MetaCampaignOverview({
                 </p>
                 {organicBoostConfigured &&
                 (organicPlannerStatus || organicPlannerLastError) ? (
-                  <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">
+                  <p
+                    className={`mt-2 text-xs font-semibold leading-5 ${
+                      organicPlannerLastError ||
+                      organicPlannerStatus === "MATERIALIZE_FAILED" ||
+                      organicPlannerStatus === "NO_ELIGIBLE_CANDIDATES"
+                        ? "text-amber-800"
+                        : "text-slate-600"
+                    }`}
+                  >
                     Letzter Planner-Status: {organicPlannerStatus ?? "—"}
                     {organicPlannerLastError
                       ? ` · ${organicPlannerLastError}`

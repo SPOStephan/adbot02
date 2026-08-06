@@ -23,6 +23,7 @@ import {
   type OrganicBoostPrepareCommand,
   type PolicyCommand,
 } from "@/lib/meta/customer-control-input";
+import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import { runOrganicBoostPlannerForAccount } from "@/lib/meta/organic-boost-runner";
 import {
   claimMetaReadOperation,
@@ -1109,14 +1110,111 @@ export async function saveCustomerBoostSettings(
   return { settingsId: data, organicBoost };
 }
 
+export type PlanCustomerOrganicBoostResult = MetaOrganicBoostPlannerResult & {
+  executorRuns: number;
+  executorSucceeded: number;
+  executorFailed: number;
+  executorLastOutcome: string | null;
+};
+
+async function repairOrphanInstagramPageLinks(input: {
+  userId: string;
+  platformAccountId: string;
+}): Promise<void> {
+  const admin = createAdminClient();
+  const [{ data: pages }, { data: orphans }] = await Promise.all([
+    admin
+      .from("meta_assets")
+      .select("meta_asset_id")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("asset_type", "facebook_page")
+      .limit(5),
+    admin
+      .from("meta_assets")
+      .select("id,parent_meta_asset_id")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("asset_type", "instagram_account")
+      .limit(20),
+  ]);
+
+  if (!pages || pages.length !== 1 || !orphans?.length) {
+    return;
+  }
+
+  const pageId = String(pages[0]?.meta_asset_id ?? "");
+  if (!pageId || pageId.length < 5) {
+    return;
+  }
+
+  const orphanIds = orphans
+    .filter((row) => {
+      const parent = row.parent_meta_asset_id;
+      return parent == null || String(parent).length < 5;
+    })
+    .map((row) => String(row.id));
+
+  if (!orphanIds.length) {
+    return;
+  }
+
+  await admin
+    .from("meta_assets")
+    .update({
+      parent_meta_asset_id: pageId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", input.userId)
+    .eq("platform_account_id", input.platformAccountId)
+    .in("id", orphanIds);
+}
+
 export async function planCustomerOrganicBoost(
   customer: MetaCustomer,
-): Promise<MetaOrganicBoostPlannerResult> {
-  return runOrganicBoostPlannerForAccount({
+): Promise<PlanCustomerOrganicBoostResult> {
+  await repairOrphanInstagramPageLinks({
+    userId: customer.userId,
+    platformAccountId: customer.platformAccountId,
+  }).catch(() => undefined);
+
+  const organicBoost = await runOrganicBoostPlannerForAccount({
     platformAccountId: customer.platformAccountId,
     userId: customer.userId,
     ownerPrefix: "organic-boost-plan",
   });
+
+  let executorRuns = 0;
+  let executorSucceeded = 0;
+  let executorFailed = 0;
+  let executorLastOutcome: string | null = null;
+
+  if (organicBoost.plansCreated + organicBoost.plansExisting > 0) {
+    try {
+      const drain = await drainOrganicBoostExecutionsForAccount({
+        platformAccountId: customer.platformAccountId,
+        userId: customer.userId,
+        maxRuns: Math.min(
+          8,
+          Math.max(1, organicBoost.plansCreated + organicBoost.plansExisting),
+        ),
+      });
+      executorRuns = drain.runs;
+      executorSucceeded = drain.succeeded;
+      executorFailed = drain.failed;
+      executorLastOutcome = drain.lastOutcome;
+    } catch {
+      executorLastOutcome = "executor_drain_failed";
+    }
+  }
+
+  return {
+    ...organicBoost,
+    executorRuns,
+    executorSucceeded,
+    executorFailed,
+    executorLastOutcome,
+  };
 }
 
 export async function saveCustomerBoostOverride(

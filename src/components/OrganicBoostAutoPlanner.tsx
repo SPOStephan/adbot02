@@ -103,6 +103,7 @@ export function OrganicBoostAutoPlanner({
 
           if (!response.ok || body.ok !== true) {
             inFlightRef.current = false;
+            router.refresh();
             const delay = Math.min(
               RETRY_DELAY_MS * attemptRef.current,
               MAX_RETRY_DELAY_MS,
@@ -121,9 +122,9 @@ export function OrganicBoostAutoPlanner({
             return;
           }
 
-          // Planner ran but created nothing yet — keep retrying while pending.
-          // Do not refresh here: refresh would cancel the retry timer.
+          // Surface planner status/errors in the dashboard, then retry.
           inFlightRef.current = false;
+          router.refresh();
           const delay = Math.min(
             RETRY_DELAY_MS * attemptRef.current,
             MAX_RETRY_DELAY_MS,

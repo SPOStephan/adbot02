@@ -12,7 +12,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,6 +31,10 @@ export async function POST(request: NextRequest) {
         candidatesSkipped: organicBoost.candidatesSkipped,
         candidatesConsidered: organicBoost.candidatesConsidered,
         lastError: organicBoost.lastError,
+        executorRuns: organicBoost.executorRuns,
+        executorSucceeded: organicBoost.executorSucceeded,
+        executorFailed: organicBoost.executorFailed,
+        executorLastOutcome: organicBoost.executorLastOutcome,
       },
     });
   } catch (error) {

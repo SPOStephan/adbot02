@@ -733,7 +733,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }),
         supabase
           .from("platform_accounts")
-          .select("sync_usage")
+          .select(
+            "sync_usage,organic_boost_planner_status,organic_boost_planner_detail,organic_boost_planner_last_run_at",
+          )
           .eq("id", metaAccount.id)
           .eq("user_id", user.id)
           .maybeSingle(),
@@ -843,14 +845,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     syncUsage?.organic_boost && typeof syncUsage.organic_boost === "object"
       ? (syncUsage.organic_boost as Record<string, unknown>)
       : null;
+  const organicFromColumns =
+    organicBoostPlannerRow?.organic_boost_planner_detail &&
+    typeof organicBoostPlannerRow.organic_boost_planner_detail === "object"
+      ? (organicBoostPlannerRow.organic_boost_planner_detail as Record<
+          string,
+          unknown
+        >)
+      : null;
   const organicPlannerStatus =
-    typeof organicFromUsage?.status === "string"
-      ? organicFromUsage.status
-      : null;
+    typeof organicBoostPlannerRow?.organic_boost_planner_status === "string"
+      ? organicBoostPlannerRow.organic_boost_planner_status
+      : typeof organicFromUsage?.status === "string"
+        ? organicFromUsage.status
+        : typeof organicFromColumns?.status === "string"
+          ? organicFromColumns.status
+          : null;
+  const organicPlannerLastErrorRaw =
+    organicFromColumns?.last_error ?? organicFromUsage?.last_error ?? null;
   const organicPlannerLastError =
-    typeof organicFromUsage?.last_error === "string"
-      ? organicFromUsage.last_error
-      : null;
+    typeof organicPlannerLastErrorRaw === "string"
+      ? organicPlannerLastErrorRaw
+      : organicPlannerLastErrorRaw == null
+        ? null
+        : String(organicPlannerLastErrorRaw);
   const boostSettingsView: BoostSettingsView | null = boostSettingsRow
     ? {
         id: String(boostSettingsRow.id),

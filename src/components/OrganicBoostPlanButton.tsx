@@ -38,7 +38,13 @@ export function OrganicBoostPlanButton({
           plansCreated?: number;
           plansExisting?: number;
           candidatesConsidered?: number;
+          candidatesFailed?: number;
+          candidatesSkipped?: number;
           lastError?: string | null;
+          executorRuns?: number;
+          executorSucceeded?: number;
+          executorFailed?: number;
+          executorLastOutcome?: string | null;
         };
       };
       if (!response.ok || body.ok !== true) {
@@ -51,12 +57,18 @@ export function OrganicBoostPlanButton({
         (body.organicBoost?.plansExisting ?? 0);
       const status = body.organicBoost?.status ?? "unbekannt";
       const error = body.organicBoost?.lastError?.trim();
+      const written = body.organicBoost?.executorSucceeded ?? 0;
+      const execFailed = body.organicBoost?.executorFailed ?? 0;
       setNotice(
         created > 0
-          ? `${created} Boost-Plan/Pläne angelegt (Status ${status}). Meta-Versand folgt automatisch.`
+          ? written > 0
+            ? `${created} Plan/Pläne bereit, ${written} bereits an Meta gesendet.`
+            : execFailed > 0
+              ? `${created} Plan/Pläne bereit, Meta-Versand fehlgeschlagen (${body.organicBoost?.executorLastOutcome ?? "Fehler"}).`
+              : `${created} Boost-Plan/Pläne angelegt (Status ${status}). Meta-Versand folgt automatisch.`
           : error
             ? `Kein Plan angelegt (${status}): ${error}`
-            : `Kein Plan angelegt (Status ${status}, geprüft: ${body.organicBoost?.candidatesConsidered ?? 0}).`,
+            : `Kein Plan angelegt (Status ${status}, geprüft: ${body.organicBoost?.candidatesConsidered ?? 0}, übersprungen: ${body.organicBoost?.candidatesSkipped ?? 0}, fehlgeschlagen: ${body.organicBoost?.candidatesFailed ?? 0}).`,
       );
       router.refresh();
     } catch (error) {
