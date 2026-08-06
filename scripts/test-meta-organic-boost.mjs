@@ -247,6 +247,26 @@ assert.match(ensureSnapshotMigration, /organic_boost_planner_status/);
 assert.match(ensureSnapshotMigration, /MATERIALIZE_FAILED/);
 assert.match(ensureSnapshotMigration, /NO_ELIGIBLE_CANDIDATES/);
 
+const stableExposureMigration = read(
+  "supabase/migrations/20260806160000_meta_organic_boost_stable_exposure_keys.sql",
+);
+assert.match(
+  stableExposureMigration,
+  /boost:campaign:' \|\| p_content_candidate_id::text/,
+);
+assert.match(
+  stableExposureMigration,
+  /cannot stack hard-cap reservations/,
+);
+assert.match(
+  stableExposureMigration,
+  /reserved % \/ cap % minor units/,
+);
+assert.match(
+  stableExposureMigration,
+  /Paused\/archived Meta campaigns must not block/,
+);
+
 assert.doesNotMatch(read("src/lib/meta/sync.ts"), /processNextMetaMutation/);
 assert.match(
   read("src/lib/meta/sync.ts"),
