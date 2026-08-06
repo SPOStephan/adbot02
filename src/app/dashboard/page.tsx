@@ -1602,6 +1602,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
                   <MetaConnectedAssets
                     assets={connectedAssetViews}
+                    extendHref="/api/connectors/meta/start"
                     showExtraHint={showExtraAssetHint}
                   />
                 </div>

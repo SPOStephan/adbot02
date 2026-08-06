@@ -49,7 +49,8 @@ assert.match(cardSource, /connected && showMetaConnectionActions/);
 assert.match(cardSource, /<form action=\{actionHref\} method="post">/);
 
 assert.match(actionsSource, /"use client"/);
-assert.match(actionsSource, /Meta neu verbinden/);
+assert.match(actionsSource, /Assets erweitern/);
+assert.match(actionsSource, /bestehende und neue Assets gemeinsam auswählen/);
 assert.match(actionsSource, /Meta trennen/);
 assert.match(actionsSource, /window\.confirm\(/);
 assert.match(actionsSource, /\/api\/connectors\/meta\/disconnect/);
@@ -58,6 +59,8 @@ assert.match(actionsSource, /confirmation: "disconnect_meta"/);
 assert.match(actionsSource, /router\.refresh\(\)/);
 assert.match(actionsSource, /Meta wurde vollständig widerrufen/);
 assert.match(actionsSource, /alle aktuell verbundenen Assets vollständig entfernt/);
+assert.match(actionsSource, /action=\{reconnectHref\}/);
+assert.match(actionsSource, /onSubmit=\{confirmExtend\}/);
 assert.doesNotMatch(actionsSource, /Gespeicherte Daten und Einstellungen bleiben erhalten\./);
 assert.doesNotMatch(
   actionsSource,
