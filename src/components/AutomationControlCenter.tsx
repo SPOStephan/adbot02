@@ -113,21 +113,24 @@ const KILL_SWITCH_OPTIONS = [
   {
     mode: "ALLOW" as const,
     label: "Freigeben",
-    description: "Policy-gedeckte Schreibvorgänge dürfen wieder geplant werden.",
+    description:
+      "Adbot darf policy-gedeckte Änderungen an Meta senden — z. B. automatische Beitragswerbung.",
     icon: PlayCircle,
     className: "border-emerald-200 bg-emerald-50 text-emerald-900",
   },
   {
     mode: "FREEZE_WRITES" as const,
-    label: "Writes einfrieren",
-    description: "Keine neuen Meta-Schreibvorgänge; bestehende Auslieferung bleibt unverändert.",
+    label: "Schreibvorgänge stoppen",
+    description:
+      "Adbot plant und sendet nichts Neues an Meta. Laufende Anzeigen bleiben unverändert.",
     icon: CirclePause,
     className: "border-amber-200 bg-amber-50 text-amber-950",
   },
   {
     mode: "PAUSE_MANAGED" as const,
-    label: "Managed pausieren",
-    description: "Verwaltete Kampagnen werden fail-closed in Richtung PAUSED überführt.",
+    label: "Verwaltete Kampagnen pausieren",
+    description:
+      "Adbot pausiert die von Adbot verwalteten Kampagnen und stoppt weitere Schreibvorgänge.",
     icon: Ban,
     className: "border-red-200 bg-red-50 text-red-950",
   },
@@ -328,7 +331,6 @@ export function AutomationControlCenter({
   const [killMode, setKillMode] = useState<
     "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED"
   >(killSwitch?.mode ?? "FREEZE_WRITES");
-  const [killReason, setKillReason] = useState("");
 
   const currentKillOption =
     KILL_SWITCH_OPTIONS.find((option) => option.mode === killSwitch?.mode) ??
@@ -456,12 +458,13 @@ export function AutomationControlCenter({
     try {
       await postControl("/api/meta/automation/kill-switch", {
         mode: killMode,
-        reason: killReason,
       });
-      setKillReason("");
       setKillNotice({
         tone: "success",
-        message: "Der Sicherheitsmodus wurde unveränderlich protokolliert.",
+        message:
+          killMode === "ALLOW"
+            ? "Freigabe gespeichert. Adbot darf jetzt automatische Meta-Schreibvorgänge ausführen."
+            : "Der Sicherheitsmodus wurde gespeichert.",
       });
       refresh();
     } catch (error) {
@@ -877,10 +880,16 @@ export function AutomationControlCenter({
                 <ShieldAlert className="size-5" />
               </span>
               <div>
-                <h3 className="font-extrabold">Kill-Switch</h3>
+                <h3 className="font-extrabold">Sicherheitsschranke</h3>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
                   Aktuell: <strong className="text-slate-800">{currentKillOption.label}</strong>
-                  {killSwitch ? ` · ${killSwitch.reason}` : " · Fail-closed bis zur ersten ausdrücklichen Freigabe"}
+                  {killSwitch
+                    ? ` · ${killSwitch.reason}`
+                    : " · Noch nicht freigegeben — Modus wählen und speichern"}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  Auswahl allein ändert nichts. Erst nach dem Speichern gilt der
+                  neue Modus.
                 </p>
               </div>
             </div>
@@ -911,19 +920,6 @@ export function AutomationControlCenter({
               ))}
             </fieldset>
 
-            <label className="mt-4 block text-sm font-bold text-slate-800">
-              Begründung
-              <textarea
-                className="mt-2 min-h-24 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 leading-6 outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-200"
-                maxLength={500}
-                minLength={8}
-                onChange={(event) => setKillReason(event.target.value)}
-                placeholder="Warum wird dieser Sicherheitsmodus jetzt gesetzt?"
-                required
-                value={killReason}
-              />
-            </label>
-
             {killNotice ? (
               <p
                 className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
@@ -943,13 +939,16 @@ export function AutomationControlCenter({
               }`}
               disabled={
                 disabled ||
-                killReason.trim().length < 8 ||
                 (killMode === "ALLOW" && !readiness.writeScopeGranted)
               }
               type="submit"
             >
               <LockKeyhole className="size-4" />
-              {killPending ? "Wird protokolliert …" : "Sicherheitsmodus setzen"}
+              {killPending
+                ? "Wird gespeichert …"
+                : killMode === "ALLOW"
+                  ? "Freigabe speichern"
+                  : "Sicherheitsmodus setzen"}
             </button>
           </form>
 

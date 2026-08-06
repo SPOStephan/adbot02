@@ -160,6 +160,12 @@ export type KillSwitchCommand = {
   reason: string;
 };
 
+const DEFAULT_KILL_SWITCH_REASONS: Record<KillSwitchMode, string> = {
+  ALLOW: "Kunde hat automatische Meta-Schreibvorgänge freigegeben",
+  FREEZE_WRITES: "Kunde hat neue Meta-Schreibvorgänge gestoppt",
+  PAUSE_MANAGED: "Kunde hat verwaltete Kampagnen pausiert",
+};
+
 export function parseKillSwitchCommand(value: unknown): KillSwitchCommand {
   const body = asJsonObject(value);
 
@@ -170,9 +176,16 @@ export function parseKillSwitchCommand(value: unknown): KillSwitchCommand {
     inputError("invalid_kill_switch_mode", "Der gewählte Sicherheitsmodus ist ungültig.");
   }
 
+  const mode = body.mode as KillSwitchMode;
+  const provided =
+    typeof body.reason === "string" ? body.reason.trim() : "";
+
   return {
-    mode: body.mode as KillSwitchMode,
-    reason: requiredText(body.reason, "Die Begründung", 8, 500),
+    mode,
+    reason:
+      provided.length >= 8
+        ? requiredText(body.reason, "Die Begründung", 8, 500)
+        : DEFAULT_KILL_SWITCH_REASONS[mode],
   };
 }
 

@@ -114,7 +114,7 @@ export function AutomationBoostSettings({
 
   const modeHint = useMemo(() => {
     if (boostMode === "AUTO") {
-      return "Werbeziel ist Interaktionen/Likes (POST_ENGAGEMENT). Für den Live-Write muss der Kill-Switch auf ALLOW stehen.";
+      return "Werbeziel: Interaktionen/Likes. Neue Beiträge werden automatisch beworben, sobald die Sicherheitsschranke oben auf „Freigeben“ steht und gespeichert ist.";
     }
     if (boostMode === "REVIEW") {
       return "Neue Beiträge erscheinen zur Freigabe. Erst nach „BEITRAG BEWERBEN“ schreibt Adbot zu Meta.";
@@ -158,7 +158,9 @@ export function AutomationBoostSettings({
         tone: "success",
         message:
           boostMode === "AUTO"
-            ? "Vollautomatik gespeichert: Neue Beiträge werden mit Interaktionsziel geplant und ausgeführt."
+            ? killSwitchMode === "ALLOW"
+              ? "Vollautomatik gespeichert. Neue Beiträge werden automatisch beworben."
+              : "Vollautomatik gespeichert. Noch kein automatischer Boost: Oben bei der Sicherheitsschranke „Freigeben“ wählen und auf „Freigabe speichern“ klicken."
             : boostMode === "REVIEW"
               ? "Freigabe-Modus gespeichert: Neue Beiträge werden zur einzelnen Freigabe vorbereitet."
               : "Beitrag-Push ist ausgeschaltet.",
@@ -227,9 +229,11 @@ export function AutomationBoostSettings({
 
       <p className="mt-3 text-xs leading-5 text-slate-500">{modeHint}</p>
       {autoNeedsAllow ? (
-        <p className="mt-2 rounded-xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-950">
-          Vollautomatik speichern ist möglich, Meta-Writes starten aber erst, wenn der Kill-Switch
-          auf „Freigeben / ALLOW“ steht.
+        <p className="mt-2 rounded-xl bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-950">
+          Fast fertig: Vollautomatik kannst du schon speichern. Automatische Werbung startet
+          aber erst, wenn du oben bei der Sicherheitsschranke{" "}
+          <strong>Freigeben</strong> auswählst und auf{" "}
+          <strong>Freigabe speichern</strong> klickst. Nur auswählen reicht nicht.
         </p>
       ) : null}
 
