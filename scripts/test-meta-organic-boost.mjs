@@ -297,9 +297,27 @@ assert.match(
   read("src/app/api/meta/automation/policy/route.ts"),
   /organicBoost/,
 );
+assert.doesNotMatch(
+  read("src/lib/meta/organic-boost-runner.ts"),
+  /claimMetaReadOperation/,
+);
 assert.match(
   read("src/lib/meta/organic-boost-runner.ts"),
-  /ORGANIC_BOOST_READ_LEASE_SECONDS/,
+  /readLeaseToken: null/,
+);
+assert.match(
+  read("src/components/AutomationControlCenter.tsx"),
+  /Beitrag-Push wird automatisch nachgeholt/,
+);
+
+const noReadLeaseMigration = read(
+  "supabase/migrations/20260806194500_meta_organic_boost_no_read_lease.sql",
+);
+assert.match(noReadLeaseMigration, /pg_advisory_xact_lock/);
+assert.match(noReadLeaseMigration, /READ_SYNC optional/);
+assert.match(
+  noReadLeaseMigration,
+  /must not compete with Abruf READ_SYNC/,
 );
 assert.match(
   read("src/lib/meta/sync.ts"),
