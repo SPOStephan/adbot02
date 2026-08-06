@@ -330,17 +330,33 @@ function assertMinorUnits(value: number, label: string): void {
   }
 }
 
+function coerceMinorUnits(value: unknown, label: string): number {
+  if (typeof value === "number") {
+    assertMinorUnits(value, label);
+    return value;
+  }
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    const parsed = Number(value.trim());
+    assertMinorUnits(parsed, label);
+    return parsed;
+  }
+  throw new TypeError(`${label} must be a positive integer in minor currency units`);
+}
+
 function assertExclusiveBudget(payload: MetaWritePayload): void {
   if (payload.daily_budget !== undefined && payload.lifetime_budget !== undefined) {
     throw new TypeError("daily_budget and lifetime_budget are mutually exclusive");
   }
 
   if (payload.daily_budget !== undefined) {
-    assertMinorUnits(payload.daily_budget as number, "daily_budget");
+    assertMinorUnits(coerceMinorUnits(payload.daily_budget, "daily_budget"), "daily_budget");
   }
 
   if (payload.lifetime_budget !== undefined) {
-    assertMinorUnits(payload.lifetime_budget as number, "lifetime_budget");
+    assertMinorUnits(
+      coerceMinorUnits(payload.lifetime_budget, "lifetime_budget"),
+      "lifetime_budget",
+    );
   }
 }
 
@@ -448,12 +464,13 @@ function encodePayload(payload: MetaWritePayload): URLSearchParams {
 
   for (const key of Object.keys(payload).sort()) {
     const value = payload[key];
-    encoded.set(
-      key,
-      typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    // Meta form posts expect 0/1 for booleans (e.g. is_adset_budget_sharing_enabled).
+    const encodedValue = typeof value === "boolean"
+      ? (value ? "1" : "0")
+      : typeof value === "string" || typeof value === "number"
         ? String(value)
-        : JSON.stringify(value),
-    );
+        : JSON.stringify(value);
+    encoded.set(key, encodedValue);
   }
 
   if (new TextEncoder().encode(encoded.toString()).byteLength > META_MAX_ENCODED_PAYLOAD_BYTES) {
@@ -682,14 +699,33 @@ export function createMetaCampaign(input: MetaAccountMutationInput): Promise<Met
     throw new TypeError("special_ad_categories is required for campaign creation");
   }
 
-  assertExclusiveBudget(input.payload);
+  const dailyBudget = input.payload.daily_budget === undefined
+    ? undefined
+    : coerceMinorUnits(input.payload.daily_budget, "daily_budget");
+  const lifetimeBudget = input.payload.lifetime_budget === undefined
+    ? undefined
+    : coerceMinorUnits(input.payload.lifetime_budget, "lifetime_budget");
+  const hasCampaignBudget = dailyBudget !== undefined || lifetimeBudget !== undefined;
+  const sharingEnabled = typeof input.payload.is_adset_budget_sharing_enabled === "boolean"
+    ? input.payload.is_adset_budget_sharing_enabled
+    : !hasCampaignBudget;
+
+  const payload: MetaWritePayload = {
+    ...input.payload,
+    ...(dailyBudget === undefined ? {} : { daily_budget: dailyBudget }),
+    ...(lifetimeBudget === undefined ? {} : { lifetime_budget: lifetimeBudget }),
+    // Meta Marketing API v24+: required when ad-set budgets are used.
+    is_adset_budget_sharing_enabled: sharingEnabled,
+  };
+
+  assertExclusiveBudget(payload);
 
   return mutateAccountEdge({
     auth: input,
     adAccountId: input.adAccountId,
     edge: "campaigns",
     operation: "create_campaign",
-    payload: input.payload,
+    payload,
     mode: input.mode,
     requireId: true,
   });
@@ -707,14 +743,26 @@ export function createMetaAdSet(input: MetaAccountMutationInput): Promise<MetaMu
     throw new TypeError("targeting is required for ad set creation");
   }
 
-  assertExclusiveBudget(input.payload);
+  const dailyBudget = input.payload.daily_budget === undefined
+    ? undefined
+    : coerceMinorUnits(input.payload.daily_budget, "daily_budget");
+  const lifetimeBudget = input.payload.lifetime_budget === undefined
+    ? undefined
+    : coerceMinorUnits(input.payload.lifetime_budget, "lifetime_budget");
 
-  // Engagement post boosts require destination_type=ON_POST.
-  const optimizationGoal = String(input.payload.optimization_goal ?? "");
-  const payload = optimizationGoal === "POST_ENGAGEMENT"
-    && input.payload.destination_type === undefined
-    ? { ...input.payload, destination_type: "ON_POST" }
-    : input.payload;
+  const payload: MetaWritePayload = {
+    ...input.payload,
+    ...(dailyBudget === undefined ? {} : { daily_budget: dailyBudget }),
+    ...(lifetimeBudget === undefined ? {} : { lifetime_budget: lifetimeBudget }),
+    ...(
+      String(input.payload.optimization_goal ?? "") === "POST_ENGAGEMENT"
+        && input.payload.destination_type === undefined
+        ? { destination_type: "ON_POST" }
+        : {}
+    ),
+  };
+
+  assertExclusiveBudget(payload);
 
   return mutateAccountEdge({
     auth: input,
