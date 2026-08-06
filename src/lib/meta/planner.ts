@@ -184,6 +184,8 @@ export type MetaOrganicBoostPlannerResult = {
   plansExisting: number;
   candidatesSkipped: number;
   candidatesFailed: number;
+  candidatesConsidered: number;
+  lastError: string | null;
 };
 
 export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
@@ -216,6 +218,13 @@ export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
   const plansExisting = integer(record.plans_existing) ?? 0;
   const candidatesSkipped = integer(record.candidates_skipped) ?? 0;
   const candidatesFailed = integer(record.candidates_failed) ?? 0;
+  const candidatesConsidered = integer(record.candidates_considered) ?? 0;
+  const lastError =
+    typeof record.last_error === "string"
+      ? record.last_error
+      : record.last_error === null
+        ? null
+        : null;
 
   if (typeof record.status !== "string") {
     throw new MetaBudgetPlannerError("planner_result_invalid");
@@ -227,6 +236,8 @@ export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
     plansExisting,
     candidatesSkipped,
     candidatesFailed,
+    candidatesConsidered,
+    lastError,
   };
 }
 

@@ -133,7 +133,34 @@ assert.match(
 
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /Bewerbung startet automatisch/,
+  /Bewerbung steht aus/,
+);
+assert.match(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Bewerbung konnte nicht starten/,
+);
+assert.doesNotMatch(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Beim nächsten Abruf startet Adbot/,
+);
+
+const ensureSnapshotMigration = read(
+  "supabase/migrations/20260806150000_meta_organic_boost_ensure_snapshot_and_status.sql",
+);
+assert.match(ensureSnapshotMigration, /ensure_meta_organic_boost_exposure_snapshot/);
+assert.match(ensureSnapshotMigration, /organic_boost_planner_status/);
+assert.match(ensureSnapshotMigration, /MATERIALIZE_FAILED/);
+assert.match(ensureSnapshotMigration, /NO_ELIGIBLE_CANDIDATES/);
+
+assert.match(read("src/lib/meta/sync.ts"), /processNextMetaMutation/);
+assert.match(read("src/lib/meta/sync.ts"), /meta-sync-organic/);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /organic_boost_planner_status/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /organicPlannerStatus/,
 );
 
 const snapshotFallbackMigration = read(
