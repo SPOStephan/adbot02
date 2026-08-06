@@ -89,8 +89,8 @@ export function formatOrganicBoostFailureDetail(input: {
   }
 
   const reason = input.planBlockedReason?.trim() || null;
-  if (reason === "organic_preflight_kill_switch") {
-    return "Kill-Switch blockiert Meta-Schreiben";
+  if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
+    return "Kill-Switch blockiert Meta-Schreiben — bitte „Freigeben“ speichern, danach startet der Versand automatisch";
   }
   if (reason === "organic_preflight_marketing_sync_stale") {
     return "Marketing-Abruf zu alt — Meta-Versand wartet";

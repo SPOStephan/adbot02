@@ -336,6 +336,16 @@ export async function setCustomerKillSwitch(
       customer,
       ownerPrefix: "organic-boost-kill-switch",
     });
+    // Freigeben must immediately drain already queued Beitrag-Push plans.
+    try {
+      await drainOrganicBoostExecutionsForAccount({
+        userId: customer.userId,
+        platformAccountId: customer.platformAccountId,
+        maxRuns: 8,
+      });
+    } catch {
+      // Planner result still surfaces; cron retries Meta writes within a minute.
+    }
   }
 
   return { eventId: data, organicBoost };
