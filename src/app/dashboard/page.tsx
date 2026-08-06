@@ -60,6 +60,7 @@ import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import {
   MetaCampaignOverview,
   deriveOrganicBoostDelivery,
+  formatOrganicBoostFailureDetail,
   type OrganicBoostCampaignView,
 } from "@/components/MetaCampaignOverview";
 import {
@@ -937,6 +938,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       status,
       effectiveStatus,
     });
+    const failureDetail = formatOrganicBoostFailureDetail({
+      planErrorClass: row.plan_error_class
+        ? String(row.plan_error_class)
+        : null,
+      planBlockedReason: row.plan_blocked_reason
+        ? String(row.plan_blocked_reason)
+        : null,
+      failedStepKey: row.failed_step_key
+        ? String(row.failed_step_key)
+        : null,
+      failedStepErrorCode: row.failed_step_error_code
+        ? String(row.failed_step_error_code)
+        : null,
+    });
     return [
       {
         planId,
@@ -946,6 +961,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         effectiveStatus,
         deliveryState: delivery.deliveryState,
         deliveryLabel: delivery.deliveryLabel,
+        failureDetail:
+          delivery.deliveryState === "failed" ||
+          delivery.deliveryState === "starting" ||
+          delivery.deliveryState === "waiting_meta"
+            ? failureDetail
+            : null,
         budgetMode: row.budget_mode === "LIFETIME" ? "LIFETIME" : "DAILY",
         dailyBudgetMinor: toFiniteNumber(row.daily_budget_minor),
         lifetimeBudgetMinor: toFiniteNumber(row.lifetime_budget_minor),
@@ -1006,6 +1027,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       status: null,
       effectiveStatus: null,
     });
+    const failureDetail = formatOrganicBoostFailureDetail({
+      planErrorClass: plan.error_class ? String(plan.error_class) : null,
+      planBlockedReason: plan.blocked_reason
+        ? String(plan.blocked_reason)
+        : null,
+    });
     const campaignName =
       typeof payload.campaign === "object" &&
       payload.campaign !== null &&
@@ -1021,6 +1048,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         effectiveStatus: null,
         deliveryState: delivery.deliveryState,
         deliveryLabel: delivery.deliveryLabel,
+        failureDetail:
+          delivery.deliveryState === "failed" ||
+          delivery.deliveryState === "starting" ||
+          delivery.deliveryState === "waiting_meta"
+            ? failureDetail
+            : null,
         budgetMode: payload.budget_mode === "LIFETIME" ? "LIFETIME" : "DAILY",
         dailyBudgetMinor: toFiniteNumber(payload.daily_budget_minor),
         lifetimeBudgetMinor: toFiniteNumber(payload.lifetime_budget_minor),
@@ -1373,6 +1406,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           delivery.deliveryState === "unknown"
             ? "Boost aktiv"
             : delivery.deliveryLabel,
+        failureDetail: null,
         budgetMode: campaign.lifetimeBudgetMinor != null ? "LIFETIME" : "DAILY",
         dailyBudgetMinor: campaign.dailyBudgetMinor,
         lifetimeBudgetMinor: campaign.lifetimeBudgetMinor,

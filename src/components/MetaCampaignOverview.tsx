@@ -48,8 +48,15 @@ export type OrganicBoostCampaignView = {
   status: string | null;
   effectiveStatus: string | null;
   /** Customer-facing delivery state for traffic-light UI */
-  deliveryState: "active" | "waiting_meta" | "starting" | "paused" | "unknown";
+  deliveryState:
+    | "active"
+    | "waiting_meta"
+    | "starting"
+    | "paused"
+    | "failed"
+    | "unknown";
   deliveryLabel: string;
+  failureDetail: string | null;
   budgetMode: "DAILY" | "LIFETIME";
   dailyBudgetMinor: number | null;
   lifetimeBudgetMinor: number | null;
@@ -63,6 +70,41 @@ export type OrganicBoostCampaignView = {
   currency: string;
   createdAt: string;
 };
+
+export function formatOrganicBoostFailureDetail(input: {
+  planErrorClass?: string | null;
+  planBlockedReason?: string | null;
+  failedStepKey?: string | null;
+  failedStepErrorCode?: string | null;
+}): string | null {
+  const stepCode = input.failedStepErrorCode?.trim() || null;
+  const stepKey = input.failedStepKey?.trim() || null;
+  if (stepCode) {
+    if (stepCode.startsWith("meta_graph_")) {
+      return stepKey
+        ? `Meta hat „${stepKey}“ abgelehnt (${stepCode.replace("meta_graph_", "#")})`
+        : `Meta hat den Schreibschritt abgelehnt (${stepCode.replace("meta_graph_", "#")})`;
+    }
+    return stepKey ? `${stepKey}: ${stepCode}` : stepCode;
+  }
+
+  const reason = input.planBlockedReason?.trim() || null;
+  if (reason === "organic_preflight_kill_switch") {
+    return "Kill-Switch blockiert Meta-Schreiben";
+  }
+  if (reason === "organic_preflight_marketing_sync_stale") {
+    return "Marketing-Abruf zu alt — Meta-Versand wartet";
+  }
+  if (reason === "organic_preflight_not_ready") {
+    return "Voraussetzungen für Meta-Versand noch nicht erfüllt";
+  }
+  if (reason) {
+    return reason;
+  }
+
+  const errorClass = input.planErrorClass?.trim() || null;
+  return errorClass || null;
+}
 
 export function deriveOrganicBoostDelivery(input: {
   planStatus: string | null | undefined;
@@ -99,10 +141,23 @@ export function deriveOrganicBoostDelivery(input: {
   }
 
   if (
+    plan === "FAILED" ||
+    plan === "STALE" ||
+    plan === "PREFLIGHT_FAILED" ||
+    plan === "COMPENSATION_REQUIRED"
+  ) {
+    return {
+      deliveryState: "failed",
+      deliveryLabel: "Fehlgeschlagen",
+    };
+  }
+
+  if (
     plan === "PENDING" ||
     plan === "RETRYABLE" ||
     plan === "CLAIMED" ||
     plan === "RUNNING" ||
+    plan === "EXECUTING" ||
     plan === "RECONCILING"
   ) {
     return {
@@ -334,6 +389,12 @@ function boostDeliveryStyle(state: OrganicBoostCampaignView["deliveryState"]) {
       dot: "bg-amber-400",
     };
   }
+  if (state === "failed") {
+    return {
+      badge: "bg-red-50 text-red-800 ring-red-200",
+      dot: "bg-red-500",
+    };
+  }
   if (state === "paused") {
     return {
       badge: "bg-slate-100 text-slate-700 ring-slate-200",
@@ -505,15 +566,22 @@ export function MetaCampaignOverview({
                               {(() => {
                                 const style = boostDeliveryStyle(campaign.deliveryState);
                                 return (
-                                  <span
-                                    className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${style.badge}`}
-                                  >
+                                  <div className="min-w-0">
                                     <span
-                                      aria-hidden
-                                      className={`size-2.5 shrink-0 rounded-full ${style.dot}`}
-                                    />
-                                    {campaign.deliveryLabel}
-                                  </span>
+                                      className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${style.badge}`}
+                                    >
+                                      <span
+                                        aria-hidden
+                                        className={`size-2.5 shrink-0 rounded-full ${style.dot}`}
+                                      />
+                                      {campaign.deliveryLabel}
+                                    </span>
+                                    {campaign.failureDetail ? (
+                                      <span className="mt-1 block max-w-[16rem] text-xs font-medium leading-5 text-slate-500">
+                                        {campaign.failureDetail}
+                                      </span>
+                                    ) : null}
+                                  </div>
                                 );
                               })()}
                             </td>

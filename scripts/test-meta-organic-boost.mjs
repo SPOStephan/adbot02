@@ -428,6 +428,39 @@ assert.match(
 const writeClient = read("src/lib/meta/write-client.ts");
 assert.match(writeClient, /isInstagramOrganicMediaCreative/);
 assert.match(writeClient, /source_instagram_media_id/);
+assert.match(writeClient, /call_to_action_type/);
+assert.match(writeClient, /destination_type: "ON_POST"/);
+
+const payloadFixMigration = read(
+  "supabase/migrations/20260806190000_meta_organic_boost_meta_payload_fix.sql",
+);
+assert.match(payloadFixMigration, /destination_type', 'ON_POST'/);
+assert.match(
+  payloadFixMigration,
+  /Organic post boosts must not attach top-level CTA\/link fields/,
+);
+assert.match(payloadFixMigration, /create-ad-set-paused/);
+assert.match(payloadFixMigration, /plan_blocked_reason/);
+assert.match(payloadFixMigration, /failed_step_error_code/);
+assert.match(payloadFixMigration, /organic_preflight_kill_switch/);
+assert.match(payloadFixMigration, /drop function if exists public\.list_meta_organic_boost_campaigns/);
+assert.doesNotMatch(
+  payloadFixMigration,
+  /v_creative_payload := v_creative_payload \|\| jsonb_build_object\(\s*'call_to_action_type'/,
+);
+
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /formatOrganicBoostFailureDetail/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Fehlgeschlagen/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /formatOrganicBoostFailureDetail/,
+);
 
 const executor = read("src/lib/meta/executor.ts");
 assert.match(executor, /step\.operation === "VALIDATE" \? "validate_only"/);
