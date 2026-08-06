@@ -55,6 +55,10 @@ import {
 } from "@/components/ContentCandidateBoostControls";
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
+import {
+  MetaConnectedAssets,
+  type MetaConnectedAssetView,
+} from "@/components/MetaConnectedAssets";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
@@ -473,6 +477,34 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const adAccountAssets = (metaAssets ?? []).filter(
     (asset) => asset.asset_type === "ad_account",
   );
+  const connectedAssetViews: MetaConnectedAssetView[] = [
+    ...pageAssets.map((asset) => ({
+      id: asset.id,
+      assetType: "facebook_page" as const,
+      label: `Facebook: ${asset.name?.trim() || asset.meta_asset_id}`,
+      removable: pageAssets.length > 1,
+    })),
+    ...instagramAssets.map((asset) => ({
+      id: asset.id,
+      assetType: "instagram_account" as const,
+      label: `Instagram: ${
+        asset.username
+          ? `@${asset.username}`
+          : asset.name?.trim() || asset.meta_asset_id
+      }`,
+      removable: instagramAssets.length > 1,
+    })),
+    ...adAccountAssets.map((asset) => ({
+      id: asset.id,
+      assetType: "ad_account" as const,
+      label: `Werbekonto: ${asset.name?.trim() || asset.meta_asset_id}`,
+      removable: adAccountAssets.length > 1,
+    })),
+  ];
+  const showExtraAssetHint =
+    pageAssets.length > 1
+    || instagramAssets.length > 1
+    || adAccountAssets.length > 1;
   const metaNotice = getMetaNotice(
     firstQueryValue(query.meta),
     firstQueryValue(query.meta_error),
@@ -1568,35 +1600,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </div>
                   </dl>
 
-                  <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
-                    {pageAssets.map((asset) => (
-                      <span
-                        className="rounded-full bg-slate-100 px-3 py-1.5"
-                        key={asset.id}
-                      >
-                        Facebook: {asset.name?.trim() || asset.meta_asset_id}
-                      </span>
-                    ))}
-                    {instagramAssets.map((asset) => (
-                      <span
-                        className="rounded-full bg-slate-100 px-3 py-1.5"
-                        key={asset.id}
-                      >
-                        Instagram:{" "}
-                        {asset.username
-                          ? `@${asset.username}`
-                          : asset.name?.trim() || asset.meta_asset_id}
-                      </span>
-                    ))}
-                    {adAccountAssets.map((asset) => (
-                      <span
-                        className="rounded-full bg-slate-100 px-3 py-1.5"
-                        key={asset.id}
-                      >
-                        Werbekonto: {asset.name?.trim() || asset.meta_asset_id}
-                      </span>
-                    ))}
-                  </div>
+                  <MetaConnectedAssets
+                    assets={connectedAssetViews}
+                    showExtraHint={showExtraAssetHint}
+                  />
                 </div>
 
                 <div className="lg:min-w-60">
