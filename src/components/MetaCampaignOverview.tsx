@@ -536,7 +536,7 @@ export function MetaCampaignOverview({
                 </p>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
                   {organicBoostConfigured
-                    ? "Automatischer Beitrag-Push ist eingeschaltet, aber für diese Beiträge liegt noch kein Boost-Plan vor. Nach dem nächsten erfolgreichen Sync erscheinen gestartete Push-Kampagnen hier mit Ampel-Status."
+                    ? "Automatischer Beitrag-Push ist eingeschaltet, aber es liegt noch kein Boost-Plan vor. Bewerbungen starten unabhängig vom Beitrags-Abruf (Vollautomatik + Freigeben). Sobald Pläne angelegt und vom Executor geschrieben sind, erscheinen sie hier mit Ampel-Status."
                     : "Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben, Restbudget und Laufzeit."}
                 </p>
               </div>
@@ -578,6 +578,20 @@ export function MetaCampaignOverview({
               <p className="text-sm font-bold">Der letzte Kampagnenabruf war unvollständig.</p>
               <p className="mt-1 text-sm leading-6 text-red-800">
                 Die zuletzt vollständig gespeicherten Live-Daten bleiben unverändert erhalten. Fehlercode: {errorCode ?? "marketing_sync_failed"}.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {status !== "error" &&
+        (errorCode === "marketing_operation_locked" ||
+          errorCode === "marketing_operation_lease_failed") ? (
+          <div className="mt-5 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950" role="status">
+            <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-bold">Kampagnenabruf kurz übersprungen</p>
+              <p className="mt-1 text-sm leading-6 text-amber-900">
+                Ein paralleler Vorgang (z.&nbsp;B. Beitrag-Push) hatte die Konto-Lease. Die letzten erfolgreichen Kampagnendaten bleiben gültig; Beitrag-Push läuft unabhängig weiter.
               </p>
             </div>
           </div>

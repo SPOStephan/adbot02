@@ -7,48 +7,69 @@ type Props = {
   enabled: boolean;
 };
 
+const SESSION_KEY = "adbot.organicBoostAutoPlan.v1";
+const START_DELAY_MS = 3_500;
+
 /**
  * Starts Beitrag-Push for already-recognized posts without requiring another
- * content Abruf. Runs once per mount when Vollautomatik + Freigabe are ready.
+ * content Abruf. Delayed slightly so a concurrent Abruf can finish its lease
+ * claim first; uses a short exclusive lease on the server.
  */
 export function OrganicBoostAutoPlanner({ enabled }: Props) {
   const router = useRouter();
-  const startedRef = useRef(false);
+  const kickoffRef = useRef(false);
   const [ran, setRan] = useState(false);
 
   useEffect(() => {
-    if (!enabled || startedRef.current || ran) {
+    if (!enabled || ran || kickoffRef.current) {
       return;
     }
 
-    startedRef.current = true;
-    const controller = new AbortController();
-
-    void (async () => {
-      try {
-        const response = await fetch("/api/meta/automation/organic-boost/plan", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: "{}",
-          signal: controller.signal,
-        });
-        if (response.ok) {
-          setRan(true);
-          router.refresh();
-        } else {
-          startedRef.current = false;
-        }
-      } catch {
-        startedRef.current = false;
+    if (typeof window !== "undefined") {
+      const last = Number(window.sessionStorage.getItem(SESSION_KEY) ?? "0");
+      if (Number.isFinite(last) && Date.now() - last < 5 * 60_000) {
+        return;
       }
-    })();
+    }
+
+    let cancelled = false;
+
+    const timer = window.setTimeout(() => {
+      kickoffRef.current = true;
+      void (async () => {
+        try {
+          const response = await fetch("/api/meta/automation/organic-boost/plan", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: "{}",
+          });
+          if (cancelled) {
+            return;
+          }
+          if (response.ok) {
+            window.sessionStorage.setItem(SESSION_KEY, String(Date.now()));
+            setRan(true);
+            router.refresh();
+          } else {
+            kickoffRef.current = false;
+          }
+        } catch {
+          if (!cancelled) {
+            kickoffRef.current = false;
+          }
+        }
+      })();
+    }, START_DELAY_MS);
 
     return () => {
-      controller.abort();
+      cancelled = true;
+      window.clearTimeout(timer);
+      // Do not abort an in-flight plan request — that would leave the READ_SYNC
+      // lease held while Abruf tries to claim it (marketing_operation_locked).
     };
   }, [enabled, ran, router]);
 

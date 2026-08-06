@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  ORGANIC_BOOST_READ_LEASE_SECONDS,
   claimMetaReadOperation,
   releaseMetaAccountOperation,
   runMetaOrganicBoostPlannerAfterSnapshot,
@@ -131,6 +132,9 @@ export async function runOrganicBoostPlannerForAccount(input: {
       platformAccountId: input.platformAccountId,
       userId: input.userId,
       ownerId,
+      leaseSeconds: ORGANIC_BOOST_READ_LEASE_SECONDS,
+      retries: 5,
+      retryDelayMs: 2_000,
     });
   } catch {
     const result: MetaOrganicBoostPlannerResult = {

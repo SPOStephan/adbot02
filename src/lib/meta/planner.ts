@@ -4,8 +4,16 @@ import { createAdminClient } from "../supabase/admin";
 import type { MetaCampaignBudgetSharingSnapshot } from "./marketing-sync";
 
 const META_ACCOUNT_READ_LEASE_SECONDS = 15 * 60;
+/** Short exclusive lease for Beitrag-Push planning only (DB work, not Meta Graph). */
+export const ORGANIC_BOOST_READ_LEASE_SECONDS = 90;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 export type MetaBudgetPlannerStatus =
   | "READ_LEASE_REQUIRED"
@@ -117,26 +125,47 @@ export async function claimMetaReadOperation(input: {
   platformAccountId: string;
   userId: string;
   ownerId: string;
+  leaseSeconds?: number;
+  retries?: number;
+  retryDelayMs?: number;
 }): Promise<string | null> {
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("claim_meta_account_operation", {
-    p_platform_account_id: input.platformAccountId,
-    p_user_id: input.userId,
-    p_lease_kind: "READ_SYNC",
-    p_owner_id: input.ownerId,
-    p_lease_seconds: META_ACCOUNT_READ_LEASE_SECONDS,
-  });
+  const leaseSeconds = Math.max(
+    30,
+    Math.min(900, input.leaseSeconds ?? META_ACCOUNT_READ_LEASE_SECONDS),
+  );
+  const retries = Math.max(0, input.retries ?? 0);
+  const retryDelayMs = Math.max(0, input.retryDelayMs ?? 1_500);
 
-  if (error) {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const { data, error } = await admin.rpc("claim_meta_account_operation", {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+      p_lease_kind: "READ_SYNC",
+      p_owner_id: input.ownerId,
+      p_lease_seconds: leaseSeconds,
+    });
+
+    if (error) {
+      throw new MetaBudgetPlannerError("lease_claim_failed");
+    }
+
+    if (typeof data === "string" && UUID_PATTERN.test(data)) {
+      return data;
+    }
+
+    if (data === null) {
+      if (attempt < retries) {
+        await sleep(retryDelayMs);
+        continue;
+      }
+      return null;
+    }
+
     throw new MetaBudgetPlannerError("lease_claim_failed");
   }
 
-  if (data === null) return null;
-  if (typeof data !== "string" || !UUID_PATTERN.test(data)) {
-    throw new MetaBudgetPlannerError("lease_claim_failed");
-  }
-
-  return data;
+  return null;
 }
 
 export async function runMetaBudgetPlannerAfterSnapshot(input: {

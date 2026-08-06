@@ -15,6 +15,7 @@ import {
   syncMetaMarketingSnapshot,
   type MetaMarketingSyncResult,
 } from "./marketing-sync";
+import { runOrganicBoostPlannerForAccount } from "./organic-boost-runner";
 import {
   claimMetaReadOperation,
   MetaBudgetPlannerError,
@@ -795,6 +796,8 @@ export async function syncMetaConnector(
           platformAccountId: connector.id,
           userId: connector.user_id,
           ownerId: `meta-sync:${connector.id}:${marketingStartedAt}`,
+          retries: 5,
+          retryDelayMs: 2_000,
         });
       } catch {
         marketingErrorCode = "marketing_operation_lease_failed";
@@ -894,6 +897,26 @@ export async function syncMetaConnector(
 
           marketingErrorCode = classifyMarketingError(error);
         }
+      } else {
+        // Lease held by another job (often Beitrag-Push). Do not skip boost —
+        // wait briefly via the independent runner after the other lease releases.
+        try {
+          organicBoostResult = await runOrganicBoostPlannerForAccount({
+            platformAccountId: connector.id,
+            userId: connector.user_id,
+            ownerPrefix: "organic-boost-after-locked-sync",
+          });
+        } catch {
+          organicBoostResult = {
+            status: "LEASE_REQUIRED",
+            plansCreated: 0,
+            plansExisting: 0,
+            candidatesSkipped: 0,
+            candidatesFailed: 0,
+            candidatesConsidered: 0,
+            lastError: "read_lease_locked",
+          };
+        }
       }
     } finally {
       if (readLeaseToken) {
@@ -934,19 +957,26 @@ export async function syncMetaConnector(
       };
     }
 
+    const marketingLeaseBlocked =
+      marketingErrorCode === "marketing_operation_locked" ||
+      marketingErrorCode === "marketing_operation_lease_failed";
     const status =
-      failedAssetCount || marketingErrorCode || plannerErrorCode
+      failedAssetCount ||
+      (marketingErrorCode && !marketingLeaseBlocked) ||
+      plannerErrorCode
         ? "partial"
         : "success";
     const syncErrorCode = plannerErrorCode
-      ? failedAssetCount || marketingErrorCode
+      ? failedAssetCount || (marketingErrorCode && !marketingLeaseBlocked)
         ? "content_marketing_or_planner_partial"
         : plannerErrorCode
-      : failedAssetCount && marketingErrorCode
+      : failedAssetCount && marketingErrorCode && !marketingLeaseBlocked
         ? "content_and_marketing_partial"
         : failedAssetCount
           ? "asset_partial"
-          : marketingErrorCode;
+          : marketingLeaseBlocked
+            ? null
+            : marketingErrorCode;
     const nextSyncAt = nextHourlyRun().toISOString();
     const organicBoostForStorage: MetaOrganicBoostPlannerResult =
       organicBoostResult ?? {
@@ -962,6 +992,10 @@ export async function syncMetaConnector(
             : "organic_planner_not_invoked"
           : marketingErrorCode ?? "read_lease_unavailable",
       };
+    const preserveMarketingSuccess =
+      !marketingResult &&
+      marketingLeaseBlocked &&
+      connector.marketing_sync_status === "success";
     await updateConnector(connector.id, {
       baseline_completed_at:
         failedAssetCount === 0 ? new Date().toISOString() : undefined,
@@ -975,8 +1009,18 @@ export async function syncMetaConnector(
       last_sync_seen_count: seenCount,
       last_sync_new_count: newCount,
       sync_usage: usageForStorage(usage, organicBoostForStorage),
-      marketing_sync_status: marketingResult ? "success" : "error",
-      marketing_sync_error_code: marketingErrorCode,
+      marketing_sync_status: marketingResult
+        ? "success"
+        : preserveMarketingSuccess
+          ? "success"
+          : marketingLeaseBlocked
+            ? (connector.marketing_sync_status ?? "error")
+            : "error",
+      marketing_sync_error_code: marketingResult
+        ? null
+        : preserveMarketingSuccess
+          ? null
+          : marketingErrorCode,
       marketing_last_sync_started_at: marketingStartedAt,
       marketing_next_sync_at: nextSyncAt,
       automation_planner_status: plannerErrorCode
@@ -1002,7 +1046,10 @@ export async function syncMetaConnector(
       newCount,
       syncedAssetCount,
       failedAssetCount,
-      ...marketingFields(marketingResult, marketingErrorCode !== null),
+      ...marketingFields(
+        marketingResult,
+        Boolean(marketingErrorCode && !marketingLeaseBlocked),
+      ),
       ...plannerFields(plannerResult, plannerErrorCode !== null),
       ...organicBoostFields(organicBoostForStorage),
       nextSyncAt,
