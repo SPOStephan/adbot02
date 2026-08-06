@@ -23,9 +23,11 @@ import {
   type OrganicBoostPrepareCommand,
   type PolicyCommand,
 } from "@/lib/meta/customer-control-input";
+import { runOrganicBoostPlannerForAccount } from "@/lib/meta/organic-boost-runner";
 import {
   claimMetaReadOperation,
   releaseMetaAccountOperation,
+  type MetaOrganicBoostPlannerResult,
 } from "@/lib/meta/planner";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -261,7 +263,10 @@ export async function saveCustomerBrandProfile(
 export async function setCustomerKillSwitch(
   customer: MetaCustomer,
   command: KillSwitchCommand,
-): Promise<{ eventId: string }> {
+): Promise<{
+  eventId: string;
+  organicBoost: MetaOrganicBoostPlannerResult | null;
+}> {
   if (command.mode === "ALLOW" && !customer.writeScopeGranted) {
     serviceError(
       "write_scope_required",
@@ -282,7 +287,20 @@ export async function setCustomerKillSwitch(
     rpcFailure("Der Sicherheitsmodus");
   }
 
-  return { eventId: data };
+  let organicBoost: MetaOrganicBoostPlannerResult | null = null;
+  if (command.mode === "ALLOW") {
+    try {
+      organicBoost = await runOrganicBoostPlannerForAccount({
+        platformAccountId: customer.platformAccountId,
+        userId: customer.userId,
+        ownerPrefix: "organic-boost-kill-switch",
+      });
+    } catch {
+      organicBoost = null;
+    }
+  }
+
+  return { eventId: data, organicBoost };
 }
 
 function requireWriteReadyCustomer(customer: MetaCustomer, operation: string): void {
@@ -991,7 +1009,10 @@ export async function approveCustomerLaunch(
 export async function saveCustomerBoostSettings(
   customer: MetaCustomer,
   command: BoostSettingsCommand,
-): Promise<{ settingsId: string }> {
+): Promise<{
+  settingsId: string;
+  organicBoost: MetaOrganicBoostPlannerResult | null;
+}> {
   if (customer.currency !== "EUR") {
     serviceError(
       "eur_account_required",
@@ -1028,7 +1049,42 @@ export async function saveCustomerBoostSettings(
     rpcFailure("Die Beitrag-Push-Einstellungen");
   }
 
-  return { settingsId: data };
+  let organicBoost: MetaOrganicBoostPlannerResult | null = null;
+  if (command.boostMode === "AUTO") {
+    const { data: killRow } = await admin
+      .from("kill_switch_state")
+      .select("mode")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("scope_type", "ACCOUNT")
+      .order("sequence", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (killRow?.mode === "ALLOW") {
+      try {
+        organicBoost = await runOrganicBoostPlannerForAccount({
+          platformAccountId: customer.platformAccountId,
+          userId: customer.userId,
+          ownerPrefix: "organic-boost-settings",
+        });
+      } catch {
+        organicBoost = null;
+      }
+    }
+  }
+
+  return { settingsId: data, organicBoost };
+}
+
+export async function planCustomerOrganicBoost(
+  customer: MetaCustomer,
+): Promise<MetaOrganicBoostPlannerResult> {
+  return runOrganicBoostPlannerForAccount({
+    platformAccountId: customer.platformAccountId,
+    userId: customer.userId,
+    ownerPrefix: "organic-boost-plan",
+  });
 }
 
 export async function saveCustomerBoostOverride(

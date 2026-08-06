@@ -466,7 +466,7 @@ export function AutomationControlCenter({
         tone: "success",
         message:
           killMode === "ALLOW"
-            ? "Freigabe gespeichert. Adbot darf jetzt automatische Meta-Schreibvorgänge ausführen."
+            ? "Freigabe gespeichert. Beitrag-Push und andere Writes dürfen jetzt laufen — auch für bereits erkannte Beiträge, ohne weiteren Abruf."
             : "Der Sicherheitsmodus wurde gespeichert.",
       });
       refresh();

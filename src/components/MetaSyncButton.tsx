@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
+import { AlertCircle, CheckCircle2, Info, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type MetaSyncButtonProps = {
@@ -28,8 +28,20 @@ type SyncResponse = {
   organicBoost?: OrganicBoostResponse | null;
 };
 
+type NoticeKind = "success" | "info" | "error";
+
 const MANUAL_COOLDOWN_SECONDS = 60;
 const SYNC_FETCH_TIMEOUT_MS = 110_000;
+
+const BOOST_FAILURE_STATUSES = new Set([
+  "MATERIALIZE_FAILED",
+  "PLANNER_RPC_FAILED",
+  "STALE_OR_INVALID_SNAPSHOT",
+  "ACCOUNT_UNAVAILABLE",
+  "LEASE_REQUIRED",
+  "INVALID_INPUT",
+  "ERROR",
+]);
 
 function safeJson(response: Response): Promise<SyncResponse> {
   return response.json().catch(() => ({})) as Promise<SyncResponse>;
@@ -51,14 +63,17 @@ function initialRetryAt(lastSyncStartedAt: string | null): string | null {
 
 function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): string | null {
   if (!boost || !boost.status) {
-    return "Beitrag-Push: beim Abruf nicht gelaufen (Lease/SQL prüfen).";
+    return "Beitrag-Push: beim Abruf nicht gelaufen (läuft unabhängig nach, sobald Freigabe aktiv ist).";
   }
 
   const created = boost.plansCreated ?? 0;
   const existing = boost.plansExisting ?? 0;
   const failed = boost.candidatesFailed ?? 0;
   const skipped = boost.candidatesSkipped ?? 0;
-  const considered = boost.candidatesConsidered ?? 0;
+  const considered =
+    typeof boost.candidatesConsidered === "number"
+      ? boost.candidatesConsidered
+      : null;
   const error = boost.lastError?.trim();
 
   if (created + existing > 0) {
@@ -87,8 +102,12 @@ function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): str
     return "Beitrag-Push: Einstellungen nicht auf Vollautomatisch aktiv.";
   }
 
-  if (boost.status === "NO_ELIGIBLE_CANDIDATES" || considered === 0) {
-    return "Beitrag-Push: keine passenden neuen Beiträge (Filter/Assets).";
+  if (boost.status === "NO_ELIGIBLE_CANDIDATES") {
+    return "Beitrag-Push: keine passenden Beiträge für die aktuellen Filter/Assets.";
+  }
+
+  if (considered === 0) {
+    return "Beitrag-Push: keine passenden Beiträge für die aktuellen Filter/Assets.";
   }
 
   if (skipped > 0) {
@@ -97,7 +116,44 @@ function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): str
       : `Beitrag-Push: ${skipped} Beitrag(e) übersprungen.`;
   }
 
+  if (boost.status === "PLANNED" || boost.status === "OK") {
+    return "Beitrag-Push geprüft — keine neue Bewerbung nötig.";
+  }
+
   return `Beitrag-Push-Status: ${boost.status}`;
+}
+
+function organicBoostNoticeKind(boost: OrganicBoostResponse | null | undefined): NoticeKind {
+  if (!boost?.status) {
+    return "info";
+  }
+
+  const created = (boost.plansCreated ?? 0) + (boost.plansExisting ?? 0);
+  if (created > 0) {
+    return "success";
+  }
+
+  if (
+    BOOST_FAILURE_STATUSES.has(boost.status) ||
+    ((boost.candidatesFailed ?? 0) > 0 && created === 0)
+  ) {
+    return "error";
+  }
+
+  // DISABLED / NO_ELIGIBLE / NO_ACTIVE_POLICY / PLANNED with nothing to do
+  return "info";
+}
+
+function combineNoticeKind(contentOk: boolean, boostKind: NoticeKind): NoticeKind {
+  if (!contentOk) {
+    return "error";
+  }
+  if (boostKind === "error") {
+    return "error";
+  }
+  // Abruf ohne neue Beiträge ist Erfolg — auch wenn Boost nur informiert
+  // (keine Treffer / noch nicht aktiv), nicht rot.
+  return "success";
 }
 
 export function MetaSyncButton({
@@ -111,7 +167,7 @@ export function MetaSyncButton({
     initialRetryAt(lastSyncStartedAt),
   );
   const [notice, setNotice] = useState<{
-    kind: "success" | "error";
+    kind: NoticeKind;
     text: string;
   } | null>(null);
 
@@ -189,12 +245,9 @@ export function MetaSyncButton({
             ? `${newCount} neue Beiträge wurden gefunden.`
             : "Abruf abgeschlossen. Es gibt aktuell keine neuen Beiträge.";
       const boostText = organicBoostNotice(body.organicBoost);
-      const boostOk =
-        (body.organicBoost?.plansCreated ?? 0) +
-          (body.organicBoost?.plansExisting ?? 0) >
-        0;
+      const boostKind = organicBoostNoticeKind(body.organicBoost);
       setNotice({
-        kind: boostOk || !body.organicBoost?.status ? "success" : "error",
+        kind: combineNoticeKind(true, boostKind),
         text: boostText ? `${contentText} ${boostText}` : contentText,
       });
       router.refresh();
@@ -213,6 +266,13 @@ export function MetaSyncButton({
       setLoading(false);
     }
   }
+
+  const noticeClass =
+    notice?.kind === "success"
+      ? "text-emerald-700"
+      : notice?.kind === "info"
+        ? "text-slate-600"
+        : "text-rose-700";
 
   return (
     <div className="flex flex-col items-start gap-2">
@@ -235,12 +295,12 @@ export function MetaSyncButton({
       {notice ? (
         <p
           aria-live="polite"
-          className={`flex items-start gap-1.5 text-sm ${
-            notice.kind === "success" ? "text-emerald-700" : "text-rose-700"
-          }`}
+          className={`flex items-start gap-1.5 text-sm ${noticeClass}`}
         >
           {notice.kind === "success" ? (
             <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+          ) : notice.kind === "info" ? (
+            <Info className="mt-0.5 size-4 shrink-0" />
           ) : (
             <AlertCircle className="mt-0.5 size-4 shrink-0" />
           )}
