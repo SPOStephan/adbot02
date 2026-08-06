@@ -234,6 +234,34 @@ assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
   /OrganicBoostLiveRefresh/,
 );
+
+const executorPreflightMigration = read(
+  "supabase/migrations/20260806170000_meta_organic_boost_executor_preflight.sql",
+);
+assert.match(
+  executorPreflightMigration,
+  /meta_organic_boost_executor_preflight_ok/,
+);
+assert.match(
+  executorPreflightMigration,
+  /launch_canary_preflight_drift/,
+);
+assert.match(
+  executorPreflightMigration,
+  /meta_organic_boost_canary_approvals/,
+);
+assert.match(
+  executorPreflightMigration,
+  /source_rule_key is distinct from 'organic-boost'/,
+);
+assert.match(
+  read("src/lib/meta/executor.ts"),
+  /marketing_meta_ad_account_id/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /eligiblePendingBoostCandidates/,
+);
 assert.match(
   read("src/app/dashboard/page.tsx"),
   /pendingBoostCandidateCount/,
