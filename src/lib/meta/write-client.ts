@@ -709,12 +709,19 @@ export function createMetaAdSet(input: MetaAccountMutationInput): Promise<MetaMu
 
   assertExclusiveBudget(input.payload);
 
+  // Engagement post boosts require destination_type=ON_POST.
+  const optimizationGoal = String(input.payload.optimization_goal ?? "");
+  const payload = optimizationGoal === "POST_ENGAGEMENT"
+    && input.payload.destination_type === undefined
+    ? { ...input.payload, destination_type: "ON_POST" }
+    : input.payload;
+
   return mutateAccountEdge({
     auth: input,
     adAccountId: input.adAccountId,
     edge: "adsets",
     operation: "create_ad_set",
-    payload: input.payload,
+    payload,
     mode: input.mode,
     requireId: true,
   });
@@ -744,10 +751,22 @@ export function createMetaAdCreative(input: MetaAccountMutationInput): Promise<M
     );
   }
 
-  if (isInstagramOrganicMediaCreative(input.payload)) {
-    normalizeMetaObjectId(String(input.payload.object_id));
-    normalizeMetaObjectId(String(input.payload.instagram_user_id));
-    normalizeMetaObjectId(String(input.payload.source_instagram_media_id));
+  // Organic boost creatives must not send top-level CTA/link next to
+  // object_story_id / Instagram media fields — Meta Graph rejects that (#100).
+  const organicStoryBoost = typeof input.payload.object_story_id === "string"
+    || isInstagramOrganicMediaCreative(input.payload);
+  const payload = organicStoryBoost
+    ? Object.fromEntries(
+      Object.entries(input.payload).filter(
+        ([key]) => key !== "call_to_action_type" && key !== "link_url",
+      ),
+    )
+    : input.payload;
+
+  if (isInstagramOrganicMediaCreative(payload)) {
+    normalizeMetaObjectId(String(payload.object_id));
+    normalizeMetaObjectId(String(payload.instagram_user_id));
+    normalizeMetaObjectId(String(payload.source_instagram_media_id));
   }
 
   return mutateAccountEdge({
@@ -755,7 +774,7 @@ export function createMetaAdCreative(input: MetaAccountMutationInput): Promise<M
     adAccountId: input.adAccountId,
     edge: "adcreatives",
     operation: "create_creative",
-    payload: input.payload,
+    payload,
     mode: input.mode,
     requireId: true,
   });
