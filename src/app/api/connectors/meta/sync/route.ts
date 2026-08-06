@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0",

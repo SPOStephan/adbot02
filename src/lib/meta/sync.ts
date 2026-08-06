@@ -24,7 +24,6 @@ import {
   type MetaBudgetPlannerResult,
   type MetaOrganicBoostPlannerResult,
 } from "./planner";
-import { processNextMetaMutation } from "./executor";
 import { decryptAccessToken } from "./crypto";
 import { getMetaSyncEnv } from "./env";
 import { createAdminClient } from "../supabase/admin";
@@ -894,29 +893,9 @@ export async function syncMetaConnector(
       }
     }
 
-    // Write organic boost plans to Meta in the same Abruf (best-effort).
-    const organicPlansToWrite =
-      (organicBoostResult?.plansCreated ?? 0) +
-      (organicBoostResult?.plansExisting ?? 0);
-    if (
-      organicPlansToWrite > 0 &&
-      organicBoostResult?.status === "PLANNED" &&
-      !isHighUsage(usage)
-    ) {
-      const executorRuns = Math.min(Math.max(organicPlansToWrite, 1), 6);
-      for (let index = 0; index < executorRuns; index += 1) {
-        try {
-          const executed = await processNextMetaMutation(
-            `meta-sync-organic:${connector.id}:${index}`,
-          );
-          if (!executed.processed) {
-            break;
-          }
-        } catch {
-          break;
-        }
-      }
-    }
+    // Meta writes stay on the executor cron. Running them inline here can
+    // exceed the Abruf request timeout and surface as "nicht erreichbar".
+    // Plans are PENDING after materialize; cron picks them up within a minute.
 
     if (isHighUsage(usage)) {
       const rateLimitedResult = await markFailed({

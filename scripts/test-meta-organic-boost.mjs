@@ -162,8 +162,19 @@ assert.match(ensureSnapshotMigration, /organic_boost_planner_status/);
 assert.match(ensureSnapshotMigration, /MATERIALIZE_FAILED/);
 assert.match(ensureSnapshotMigration, /NO_ELIGIBLE_CANDIDATES/);
 
-assert.match(read("src/lib/meta/sync.ts"), /processNextMetaMutation/);
-assert.match(read("src/lib/meta/sync.ts"), /meta-sync-organic/);
+assert.doesNotMatch(read("src/lib/meta/sync.ts"), /processNextMetaMutation/);
+assert.match(
+  read("src/lib/meta/sync.ts"),
+  /Meta writes stay on the executor cron/,
+);
+assert.match(
+  read("src/app/api/connectors/meta/sync/route.ts"),
+  /maxDuration = 120/,
+);
+assert.match(
+  read("src/components/MetaSyncButton.tsx"),
+  /SYNC_FETCH_TIMEOUT_MS/,
+);
 assert.match(
   read("src/app/dashboard/page.tsx"),
   /organic_boost_planner_status/,
