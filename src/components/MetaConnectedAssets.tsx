@@ -1,8 +1,8 @@
 "use client";
 
-import { LoaderCircle, X } from "lucide-react";
+import { ArrowUpRight, LoaderCircle, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 
 export type MetaConnectedAssetView = {
   id: string;
@@ -29,11 +29,21 @@ const PRUNE_ERROR_MESSAGES: Record<string, string> = {
 type MetaConnectedAssetsProps = {
   assets: MetaConnectedAssetView[];
   showExtraHint: boolean;
+  extendHref?: string;
 };
+
+const EXTEND_CONFIRM_MESSAGE =
+  "Adbot öffnet den Meta-Dialog.\n\n" +
+  "Wähle dort ALLE Assets, die Adbot nutzen soll:\n" +
+  "• die bereits verbundenen Seiten, Instagram- und Werbekonten\n" +
+  "• plus die neuen Assets aus deinem Portfolio\n\n" +
+  "Wenn Meta zusätzlich ältere „zuvor verbundene“ Assets mitliefert, " +
+  "entfernst du die unerwünschten danach wieder in Adbot.";
 
 export function MetaConnectedAssets({
   assets,
   showExtraHint,
+  extendHref,
 }: MetaConnectedAssetsProps) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -151,6 +161,26 @@ export function MetaConnectedAssets({
         >
           {notice.message}
         </p>
+      ) : null}
+      {extendHref ? (
+        <form
+          action={extendHref}
+          className="pt-1"
+          method="post"
+          onSubmit={(event: FormEvent<HTMLFormElement>) => {
+            if (!window.confirm(EXTEND_CONFIRM_MESSAGE)) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <button
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            type="submit"
+          >
+            Weitere Seiten oder Konten hinzufügen
+            <ArrowUpRight className="size-3.5" />
+          </button>
+        </form>
       ) : null}
     </div>
   );

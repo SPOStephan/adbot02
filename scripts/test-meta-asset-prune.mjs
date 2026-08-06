@@ -59,9 +59,12 @@ assert.match(assetsComponentSource, /\/api\/connectors\/meta\/assets\/prune/);
 assert.match(assetsComponentSource, /confirmation: "prune_meta_asset"/);
 assert.match(assetsComponentSource, /router\.refresh\(\)/);
 assert.match(assetsComponentSource, /zuvor verbundene Assets/);
+assert.match(assetsComponentSource, /Weitere Seiten oder Konten hinzufügen/);
+assert.match(assetsComponentSource, /extendHref/);
 
 assert.match(dashboardSource, /MetaConnectedAssets/);
 assert.match(dashboardSource, /showExtraAssetHint/);
+assert.match(dashboardSource, /extendHref="\/api\/connectors\/meta\/start"/);
 assert.match(dashboardSource, /removable: pageAssets\.length > 1/);
 assert.match(dashboardSource, /removable: adAccountAssets\.length > 1/);
 
