@@ -1077,6 +1077,13 @@ end;
 $$;
 
 -- Repair + re-queue existing organic AUTO plans with corrected payloads.
+-- Intent columns are normally immutable; disable only the intent guards for
+-- this one-time payload repair (rolled back automatically if the txn fails).
+alter table public.mutation_plans
+  disable trigger guard_meta_mutation_plan_update;
+alter table public.mutation_plan_steps
+  disable trigger guard_meta_mutation_step_update;
+
 with repaired as (
   select
     mp.id,
@@ -1166,6 +1173,11 @@ where mps.plan_id = mp.id
   and mp.status = 'PENDING'
   and coalesce((mp.planned_payload->>'require_manual_approval')::boolean, true) = false
   and mps.status <> 'SKIPPED';
+
+alter table public.mutation_plan_steps
+  enable trigger guard_meta_mutation_step_update;
+alter table public.mutation_plans
+  enable trigger guard_meta_mutation_plan_update;
 
 -- Abandon in-flight executions so repaired plans can be claimed again.
 update public.mutation_executions me

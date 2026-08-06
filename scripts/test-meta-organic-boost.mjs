@@ -444,6 +444,18 @@ assert.match(payloadFixMigration, /plan_blocked_reason/);
 assert.match(payloadFixMigration, /failed_step_error_code/);
 assert.match(payloadFixMigration, /organic_preflight_kill_switch/);
 assert.match(payloadFixMigration, /drop function if exists public\.list_meta_organic_boost_campaigns/);
+assert.match(
+  payloadFixMigration,
+  /disable trigger guard_meta_mutation_plan_update/,
+);
+assert.match(
+  payloadFixMigration,
+  /disable trigger guard_meta_mutation_step_update/,
+);
+assert.match(
+  payloadFixMigration,
+  /enable trigger guard_meta_mutation_plan_update/,
+);
 assert.doesNotMatch(
   payloadFixMigration,
   /v_creative_payload := v_creative_payload \|\| jsonb_build_object\(\s*'call_to_action_type'/,
