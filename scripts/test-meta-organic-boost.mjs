@@ -470,8 +470,28 @@ assert.match(
   /Fehlgeschlagen/,
 );
 assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Freigeben/,
+);
+assert.match(
   read("src/app/dashboard/page.tsx"),
   /formatOrganicBoostFailureDetail/,
+);
+
+const killSwitchSoftMigration = read(
+  "supabase/migrations/20260806193000_meta_organic_boost_kill_switch_soft.sql",
+);
+assert.match(killSwitchSoftMigration, /meta_claim_apply_kill_switch_gate/);
+assert.match(killSwitchSoftMigration, /never terminal-BLOCK organic/);
+assert.match(killSwitchSoftMigration, /organic_preflight_kill_switch/);
+assert.match(killSwitchSoftMigration, /set_meta_customer_kill_switch/);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /drainOrganicBoostExecutionsForAccount/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /command\.mode === "ALLOW"/,
 );
 
 const executor = read("src/lib/meta/executor.ts");
