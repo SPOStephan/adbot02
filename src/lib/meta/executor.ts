@@ -890,7 +890,7 @@ async function loadExecutorCredentials(
   const { data, error } = await admin
     .from("platform_accounts")
     .select(
-      "id,user_id,account_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at",
+      "id,user_id,account_id,marketing_meta_ad_account_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at",
     )
     .eq("id", platformAccountId)
     .eq("user_id", userId)
@@ -927,10 +927,16 @@ async function loadExecutorCredentials(
       },
       env.tokenEncryptionKey,
     );
+    // Prefer the marketing ad account used by claim_next_meta_mutation_execution.
+    // Falling back to account_id keeps older connectors working.
+    const adAccountId = normalizeMetaWriteAdAccountId(
+      optionalString(row.marketing_meta_ad_account_id) ??
+        requiredString(row.account_id),
+    );
     return {
       accessToken,
       appSecret: env.appSecret,
-      adAccountId: normalizeMetaWriteAdAccountId(requiredString(row.account_id)),
+      adAccountId,
     };
   } catch {
     throw new MetaMutationExecutorError("credential_invalid");

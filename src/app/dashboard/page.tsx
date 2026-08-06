@@ -446,7 +446,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           supabase
             .from("meta_content_candidates")
             .select(
-              "id, source, content_type, caption_excerpt, permalink_url, preview_url, published_at, first_seen_at",
+              "id, source, meta_asset_id, content_type, caption_excerpt, permalink_url, preview_url, published_at, first_seen_at",
             )
             .eq("platform_account_id", metaAccount.id)
             .eq("user_id", user.id)
@@ -1079,6 +1079,37 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       status: String(plan.status ?? "PENDING"),
     });
   }
+  const eligiblePendingBoostCandidates = (contentCandidates ?? []).filter(
+    (candidate) => {
+      if (organicBoostPlanByCandidate.has(String(candidate.id))) {
+        return false;
+      }
+      const override = boostOverrideByCandidate.get(String(candidate.id));
+      if (override?.mode === "SKIP") {
+        return false;
+      }
+      if (!boostSettingsView) {
+        return true;
+      }
+      const source = String(candidate.source ?? "");
+      if (
+        boostSettingsView.sourceFilter !== "both" &&
+        source !== boostSettingsView.sourceFilter
+      ) {
+        return false;
+      }
+      if (boostSettingsView.assetScope === "SELECTED") {
+        const assetId = String(candidate.meta_asset_id ?? "");
+        const included = boostSettingsView.assetSettings.some(
+          (asset) => asset.metaAssetId === assetId && asset.included,
+        );
+        if (!included) {
+          return false;
+        }
+      }
+      return true;
+    },
+  );
   const shouldAutoPlanOrganicBoost = Boolean(
     writeScopeGranted &&
       boostSettingsView?.boostMode === "AUTO" &&
@@ -1087,13 +1118,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       policyView?.status === "ACTIVE" &&
       policyView.allowNewLaunches &&
       policyView.allowStatusChanges &&
-      (contentCandidates ?? []).some(
-        (candidate) => !organicBoostPlanByCandidate.has(String(candidate.id)),
-      ),
+      eligiblePendingBoostCandidates.length > 0,
   );
-  const pendingBoostCandidateCount = (contentCandidates ?? []).filter(
-    (candidate) => !organicBoostPlanByCandidate.has(String(candidate.id)),
-  ).length;
+  const pendingBoostCandidateCount = eligiblePendingBoostCandidates.length;
   const automationAuditViews: AutomationAuditView[] = (
     controlAuditEvents ?? []
   ).map((event) => ({
