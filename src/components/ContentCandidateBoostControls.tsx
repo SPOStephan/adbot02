@@ -123,11 +123,11 @@ function statusCopy(input: {
           : "Beim Abruf konnte Adbot die Meta-Bewerbung nicht anlegen. Bitte erneut abrufen.",
       };
     }
-    if (planner === "NO_ACTIVE_POLICY" || planner === "ACCOUNT_UNAVAILABLE") {
+    if (planner === "NO_ACTIVE_POLICY" || planner === "ACCOUNT_UNAVAILABLE" || planner === "LEASE_REQUIRED") {
       return {
         tone: "amber" as const,
         title: "Bewerbung blockiert",
-        body: "Autonomie, Schreibrechte oder Kontostatus verhindern den Start. Prüfe Autonomie und Meta-Verbindung.",
+        body: "Autonomie, Schreibrechte, Lease oder Kontostatus verhindern den Start. Prüfe Autonomie und Meta-Verbindung.",
       };
     }
     if (planner === "NO_ELIGIBLE_CANDIDATES") {
@@ -144,11 +144,27 @@ function statusCopy(input: {
         body: "Speichere Beitrag-Push erneut auf „Vollautomatisch“.",
       };
     }
+    if (planner === "PLANNED") {
+      return {
+        tone: "amber" as const,
+        title: "Bewerbung nicht angelegt",
+        body: input.organicPlannerLastError
+          ? `Abruf lief, aber ohne Kampagne: ${input.organicPlannerLastError}`
+          : "Abruf lief, aber für diesen Beitrag wurde keine Meta-Kampagne erzeugt.",
+      };
+    }
+    if (!planner) {
+      return {
+        tone: "amber" as const,
+        title: "Boost-Status fehlt",
+        body: "Kein Planner-Ergebnis vom Abruf. SQL-Migration 20260806150000 in Supabase ausführen, deployen, dann erneut abrufen.",
+      };
+    }
 
     return {
       tone: "amber" as const,
       title: "Bewerbung steht aus",
-      body: "Einstellungen sind bereit, aber dieser Abruf hat noch keine Meta-Kampagne angelegt. Bitte den Abruf erneut auslösen.",
+      body: `Einstellungen sind bereit. Letzter Planner-Status: ${planner}. Bitte Abruf erneut auslösen.`,
     };
   }
 

@@ -116,5 +116,14 @@ export async function POST() {
     failedAssetCount: result.failedAssetCount,
     nextSyncAt: result.nextSyncAt,
     retryAt: result.retryAt,
+    organicBoost: {
+      status: result.organicBoostStatus,
+      plansCreated: result.organicBoostPlansCreated,
+      plansExisting: result.organicBoostPlansExisting,
+      candidatesFailed: result.organicBoostCandidatesFailed,
+      candidatesSkipped: result.organicBoostCandidatesSkipped,
+      candidatesConsidered: result.organicBoostCandidatesConsidered,
+      lastError: result.organicBoostLastError,
+    },
   });
 }

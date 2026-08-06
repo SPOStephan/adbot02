@@ -60,7 +60,7 @@ assert.match(plannerSource, /runMetaOrganicBoostPlannerAfterSnapshot/);
 assert.match(syncSource, /runMetaOrganicBoostPlannerAfterSnapshot/);
 assert.match(
   syncSource,
-  /Run Beitrag-Push as soon as new posts are recorded/,
+  /Beitrag-Push planning is DB-only/,
 );
 
 assert.match(
@@ -133,8 +133,18 @@ assert.match(
 
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /Bewerbung steht aus/,
+  /Boost-Status fehlt/,
 );
+assert.match(
+  read("src/components/MetaSyncButton.tsx"),
+  /Beitrag-Push:/,
+);
+assert.match(
+  read("src/app/api/connectors/meta/sync/route.ts"),
+  /organicBoost/,
+);
+assert.match(read("src/lib/meta/sync.ts"), /organicBoostFields/);
+assert.match(read("src/lib/meta/sync.ts"), /organic_boost:/);
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
   /Bewerbung konnte nicht starten/,
