@@ -1086,14 +1086,27 @@ function parseAssignedPageAsset(
     return null;
   }
 
+  const instagram = isRecord(value.instagram_business_account)
+    ? value.instagram_business_account
+    : null;
+  const instagramId = instagram ? asMetaAssetId(instagram.id) : null;
+
   return {
     id,
     name:
       asNonEmptyString(value.name)?.slice(0, 255)
       ?? `Facebook-Seite ${id}`,
     // Not persisted. Later syncs resolve the page again by assigned ID.
-    accessToken: systemUserAccessToken,
-    instagramAccount: null,
+    accessToken:
+      asNonEmptyString(value.access_token) ?? systemUserAccessToken,
+    instagramAccount: instagramId
+      ? {
+          id: instagramId,
+          name: asNonEmptyString(instagram?.name)?.slice(0, 255) ?? null,
+          username:
+            asNonEmptyString(instagram?.username)?.slice(0, 255) ?? null,
+        }
+      : null,
   };
 }
 
@@ -1204,6 +1217,16 @@ export async function getMetaInstagramAccountAssets(input: {
   return { instagramAccounts, usage };
 }
 
+/**
+ * Business Login for Business system-user tokens with empty granular
+ * target_ids. Production (2026-08-05/06) showed that the three documented
+ * `/{system-user-id}/assigned_*` edges return Graph code 100 even when called
+ * fully parameterless (no fields/limit/appsecret_proof). After a proven
+ * `DELETE /permissions` reset, Meta re-binds only the dialog-selected assets
+ * to this token — so `/me/accounts` and `/me/adaccounts` are the live
+ * selection. Instagram comes from the linked business account on those pages
+ * (safe only because this mode requires authorizationReset).
+ */
 async function getMetaSystemUserAssignedAssets(input: {
   systemUserId: string;
   accessToken: string;
@@ -1215,73 +1238,80 @@ async function getMetaSystemUserAssignedAssets(input: {
     throw new MetaGraphError(400, {});
   }
 
-  // Meta documents these three System User edges as parameterless. Passing
-  // fields or limit produces Graph code 100 for Business Login system users.
-  const assignedPagesUrl = new URL(
-    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_pages`,
+  const pageUrl = new URL(
+    `/${META_GRAPH_VERSION}/me/accounts`,
     META_GRAPH_ORIGIN,
   );
-  const assignedInstagramUrl = new URL(
-    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_instagram_accounts`,
-    META_GRAPH_ORIGIN,
+  pageUrl.searchParams.set(
+    "fields",
+    "id,name,access_token,instagram_business_account{id,name,username}",
   );
-  const assignedAdAccountsUrl = new URL(
-    `/${META_GRAPH_VERSION}/${systemUserId}/assigned_ad_accounts`,
-    META_GRAPH_ORIGIN,
-  );
+  pageUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
 
-  if (
-    assignedPagesUrl.search ||
-    assignedInstagramUrl.search ||
-    assignedAdAccountsUrl.search
-  ) {
-    throw new MetaGraphError(400, {
-      error: { message: "assigned_edges_must_be_parameterless" },
-    });
-  }
+  const adAccountUrl = new URL(
+    `/${META_GRAPH_VERSION}/me/adaccounts`,
+    META_GRAPH_ORIGIN,
+  );
+  adAccountUrl.searchParams.set("fields", "id,name");
+  adAccountUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
 
-  const [pagesResult, instagramResult, adAccountsResult] = await Promise.all([
+  const [pagesResult, adAccountsResult] = await Promise.all([
     fetchMetaCollection({
-      initialUrl: assignedPagesUrl,
+      initialUrl: pageUrl,
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+      parseItem: (value) => {
+        const withToken = parsePageAsset(value);
+        if (withToken) {
+          return withToken;
+        }
+        // System-user /me/accounts sometimes omit page access_token; the
+        // system-user token remains the call credential for later syncs.
+        return parseAssignedPageAsset(value, input.accessToken);
+      },
+      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
+      requireComplete: true,
+    }),
+    fetchMetaCollection({
+      initialUrl: adAccountUrl,
       accessToken: input.accessToken,
       appSecret: input.appSecret,
       parseItem: (value) =>
-        parseAssignedPageAsset(value, input.accessToken),
+        parseAdAccount(value) ?? parseAssignedAdAccount(value),
       maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
       requireComplete: true,
-      includeAppSecretProof: false,
-    }),
-    fetchMetaCollection({
-      initialUrl: assignedInstagramUrl,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: parseInstagramAccountAsset,
-      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-      requireComplete: true,
-      includeAppSecretProof: false,
-    }),
-    fetchMetaCollection({
-      initialUrl: assignedAdAccountsUrl,
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-      parseItem: parseAssignedAdAccount,
-      maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
-      requireComplete: true,
-      includeAppSecretProof: false,
     }),
   ]);
 
+  const instagramById = new Map<string, MetaInstagramAccountAsset>();
+  for (const page of pagesResult.items) {
+    const linked = page.instagramAccount;
+    if (!linked) {
+      continue;
+    }
+    instagramById.set(linked.id, {
+      id: linked.id,
+      name: linked.name ?? linked.username ?? "Instagram-Profil",
+      username: linked.username,
+    });
+  }
+  const instagramAccounts = [...instagramById.values()];
+
+  console.info("[meta-oauth] System-User-Assets über /me nach Widerruf", {
+    systemUserId,
+    pages: pagesResult.items.length,
+    adAccounts: adAccountsResult.items.length,
+    instagramAccounts: instagramAccounts.length,
+  });
+
   return {
     pages: pagesResult.items,
-    instagramAccounts: instagramResult.items,
-    instagramDiscovery: instagramResult.items.length
+    instagramAccounts,
+    instagramDiscovery: instagramAccounts.length
       ? "system_user_token"
       : "none",
     adAccounts: adAccountsResult.items,
-    usage: mergeMetaUsage(
-      mergeMetaUsage(pagesResult.usage, instagramResult.usage),
-      adAccountsResult.usage,
-    ),
+    usage: mergeMetaUsage(pagesResult.usage, adAccountsResult.usage),
   };
 }
 

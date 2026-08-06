@@ -1,10 +1,10 @@
 # Meta-Connect Live-Vertrag
 
-Stand: 5. August 2026
+Stand: 6. August 2026
 
 ## Ziel
 
-Stabiler Production-Connect über Facebook Login for Business, unabhängig vom Business-Portfolio. Keine Heuristiken, keine Altzuweisungen, kein Erfinden von Assets.
+Stabiler Production-Connect über Facebook Login for Business, unabhängig vom Business-Portfolio. Keine Heuristiken, keine Altzuweisungen, kein Erfinden von Assets außerhalb der Dialogauswahl.
 
 ## Ablauf
 
@@ -17,17 +17,21 @@ Stabiler Production-Connect über Facebook Login for Business, unabhängig vom B
 | Modus | Bedingung | Asset-Quelle |
 | --- | --- | --- |
 | Granular | Mindestens eine `target_ids`-Liste nicht leer | Nur die jeweiligen `target_ids` |
-| System-User Assigned | Token ist System User, **alle** `target_ids` leer, `authorizationReset === true` | Nur `/{system-user-id}/assigned_pages`, `assigned_instagram_accounts`, `assigned_ad_accounts` — **ohne** Query-Parameter |
+| System-User nach Widerruf | Token ist System User, **alle** `target_ids` leer, `authorizationReset === true` | Token-sichtbare Assets nach frischem Widerruf: `/me/accounts`, `/me/adaccounts`, Instagram über die auf diesen Seiten verknüpften Business-Konten |
 
 3. **Persistenz**  
    `replace_meta_connection` ersetzt Assets vollständig.
 
+## Warum nicht `assigned_*`
+
+Production (5.–6. August 2026) zeigte: `/{system-user-id}/assigned_pages|assigned_instagram_accounts|assigned_ad_accounts` liefern für Business-Login-System-User Graph **Code 100**, auch vollständig parameterlos (ohne `fields`/`limit`/`appsecret_proof`). Nach nachgewiesenem Vollwiderruf ist das System-User-Token bereits auf die Dialogauswahl begrenzt — `/me/*` ist dann die live-geeignete Quelle.
+
 ## Verbote
 
-- `/me/accounts` / `/me/adaccounts` als Dialogauswahl
-- Instagram aus `page.instagram_business_account`
-- System-User-Assigned-Modus ohne nachweislichen Vollwiderruf
-- Jede Query an den drei `assigned_*`-Edges — inkl. `fields`, `limit` und `appsecret_proof` (Graph Code 100). Auth nur per `Authorization: Bearer`.
+- `/me/accounts` / `/me/adaccounts` als Dialogauswahl **ohne** nachweislichen Vollwiderruf
+- Instagram aus Seitenverknüpfungen im **granularen** Modus (dort nur `instagram_basic` `target_ids`)
+- System-User-Direktmodus ohne nachweislichen Vollwiderruf
+- Vermischen von granularen Ziel-IDs mit unfiltered `/me/*`
 
 ## Abnahme
 

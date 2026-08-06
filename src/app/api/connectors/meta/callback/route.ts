@@ -440,16 +440,6 @@ export async function GET(request: Request) {
       name: error instanceof Error ? error.name : "unknown",
     });
 
-    if (
-      stage === "asset_discovery" &&
-      error instanceof MetaGraphError &&
-      error.code === 100
-    ) {
-      return dashboardRedirect("error", "assigned_assets_invalid_parameter", {
-        stage,
-      });
-    }
-
     return dashboardRedirect("error", "callback", { stage });
   }
 }

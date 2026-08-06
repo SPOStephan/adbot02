@@ -37,20 +37,24 @@ try {
     .replace('from "./crypto";', 'from "./crypto.mjs";');
   const callbackSource = await readFile(callbackSourcePath, "utf8");
 
-  assert.match(clientSource, /\/assigned_pages/);
-  assert.match(clientSource, /\/assigned_instagram_accounts/);
-  assert.match(clientSource, /\/assigned_ad_accounts/);
   assert.match(clientSource, /requireComplete:\s*true/);
   const assignedAssetsSource = clientSource.slice(
     clientSource.indexOf("async function getMetaSystemUserAssignedAssets"),
     clientSource.indexOf("export async function getMetaConnectionAssets"),
   );
-  assert.doesNotMatch(
-    assignedAssetsSource,
-    /searchParams\.set\(\s*"(?:fields|limit)"/,
-  );
+  // Production: assigned_* edges return Graph 100 for Login-for-Business
+  // system users — after revoke, /me/accounts + /me/adaccounts are authoritative.
+  assert.match(assignedAssetsSource, /\/me\/accounts/);
+  assert.match(assignedAssetsSource, /\/me\/adaccounts/);
+  assert.doesNotMatch(assignedAssetsSource, /\/assigned_pages/);
+  assert.doesNotMatch(assignedAssetsSource, /\/assigned_instagram_accounts/);
+  assert.doesNotMatch(assignedAssetsSource, /\/assigned_ad_accounts/);
   assert.match(assignedAssetsSource, /parseAssignedPageAsset/);
   assert.match(assignedAssetsSource, /parseAssignedAdAccount/);
+  assert.match(
+    assignedAssetsSource,
+    /instagram_business_account\{id,name,username\}/,
+  );
   assert.doesNotMatch(clientSource, /candidateInstagramAccountIds/);
   assert.match(clientSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
   assert.match(clientSource, /isSystemUserTokenType/);
@@ -608,13 +612,19 @@ try {
     const url = new URL(String(input));
     requests.push({ url, init });
 
-    if (url.pathname === "/v25.0/999999999999999/assigned_pages") {
+    if (url.pathname === "/v25.0/me/accounts") {
       return new Response(
         JSON.stringify({
           data: [
             {
               id: "111111111111112",
               name: "Boncred Facebook-Seite",
+              access_token: "ephemeral-page-token-boncred",
+              instagram_business_account: {
+                id: "17841400000000002",
+                name: "Boncred",
+                username: "boncred.official",
+              },
             },
           ],
         }),
@@ -622,22 +632,7 @@ try {
       );
     }
 
-    if (url.pathname === "/v25.0/999999999999999/assigned_instagram_accounts") {
-      return new Response(
-        JSON.stringify({
-          data: [
-            {
-              id: "17841400000000002",
-              name: "Boncred",
-              username: "boncred.official",
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (url.pathname === "/v25.0/999999999999999/assigned_ad_accounts") {
+    if (url.pathname === "/v25.0/me/adaccounts") {
       return new Response(
         JSON.stringify({
           data: [
@@ -684,22 +679,15 @@ try {
   );
   assert.deepEqual(
     requests.map((entry) => entry.url.pathname).sort(),
-    [
-      "/v25.0/999999999999999/assigned_ad_accounts",
-      "/v25.0/999999999999999/assigned_instagram_accounts",
-      "/v25.0/999999999999999/assigned_pages",
-    ],
+    ["/v25.0/me/accounts", "/v25.0/me/adaccounts"],
   );
   assert.ok(requests.every((entry) => entry.init.method === "GET"));
-  // Assigned edges must stay fully parameterless — including no appsecret_proof
-  // query (Graph code 100 in production when any query was present).
   assert.ok(
     requests.every(
       (entry) =>
-        entry.url.search === ""
-        && !entry.url.searchParams.has("fields")
-        && !entry.url.searchParams.has("limit")
-        && !entry.url.searchParams.has("appsecret_proof"),
+        entry.url.searchParams.has("fields")
+        && entry.url.searchParams.has("limit")
+        && entry.url.searchParams.has("appsecret_proof"),
     ),
   );
   assert.ok(
@@ -708,10 +696,6 @@ try {
         entry.init.headers.Authorization ===
         "Bearer business-integration-system-user-token",
     ),
-  );
-  assert.match(
-    await readFile(clientSourcePath, "utf8"),
-    /includeAppSecretProof:\s*false/,
   );
 
   // Empty page/ad allow-lists must not fall open to every token-visible asset

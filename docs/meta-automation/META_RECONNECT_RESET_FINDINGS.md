@@ -31,13 +31,9 @@ Der Widerruf beseitigt die bestehende Autorisierung. Die nachfolgende Assetmenge
 
 ## Autoritative System-User-Assetquellen
 
-Die aktuellen offiziellen Meta-v25-Referenzen definieren für einen Business System User drei direkte Assigned-Edges:
+Meta dokumentiert für Business System User die Edges `assigned_pages`, `assigned_ad_accounts` und `assigned_instagram_accounts`. In Production (5.–6. August 2026) lieferten diese Edges für Login-for-Business-System-User durchgängig Graph Code `100` — zuerst mit `fields`/`limit`, danach mit `appsecret_proof`, danach vollständig parameterlos.
 
-- `GET /{system-user-id}/assigned_pages`: ausschließlich diesem Business-System-User zugewiesene Seiten.
-- `GET /{system-user-id}/assigned_ad_accounts`: ausschließlich diesem Business-System-User zugewiesene Werbekonten.
-- `GET /{system-user-id}/assigned_instagram_accounts`: ausschließlich diesem Business-System-User erlaubte Instagram-Konten.
-
-Diese Edges sind gegenüber `/me/accounts`, `/me/adaccounts` und `page.instagram_business_account` die präzisere Quelle für die vom Business-Login delegierten Assets. Nach einem nachweislich frischen Vollwiderruf muss Adbot deshalb zuerst die drei `assigned_*`-Edges verwenden. Eine Instagram-Seitenverknüpfung darf keine Auswahl mehr erzeugen.
+**Live-Vertrag nach diesen Belegen:** Nach nachgewiesenem Vollwiderruf ist das System-User-Token bereits auf die Dialogauswahl begrenzt. Adbot liest deshalb `/me/accounts` und `/me/adaccounts` und übernimmt Instagram über die auf diesen Seiten verknüpften Business-Konten. Ohne Widerrufsnachweis bleibt `/me/*` verboten.
 
 Quellen:
 
@@ -45,8 +41,6 @@ Quellen:
 5. https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user/assigned_ad_accounts
 6. https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/system-user/assigned_instagram_accounts
 
-## Production-Beleg vom 5. August 2026, 16:26 MESZ
+## Production-Beleg vom 5.–6. August 2026
 
-Der frische, signierte Reconnect erreichte den vorgesehenen System-User-Modus (`tokenType: SYSTEM_USER`, `authorizationReset: true`, alle fünf granularen Ziel-ID-Listen leer). Der Callback scheiterte danach in `asset_discovery` mit Meta Graph Code `100` (`Invalid parameter`).
-
-Die drei oben verlinkten offiziellen Meta-v25-Referenzen beschreiben die System-User-Edges ausdrücklich als **parameterlos**. Der fehlgeschlagene Adbot-Request ergänzte an jede Edge `fields=...` und `limit=25`. Diese Parameter werden entfernt. Die Edges bleiben die alleinige Quelle der gewählten IDs; `/me/accounts`, `/me/adaccounts` und `page.instagram_business_account` dürfen im System-User-Auswahlmodus weiterhin nicht als Auswahlquelle dienen.
+Der frische, signierte Reconnect erreichte den System-User-Modus (`tokenType: SYSTEM_USER`, `authorizationReset: true`, alle granularen Ziel-ID-Listen leer). `assigned_*` scheiterte in `asset_discovery` mit Graph Code `100` trotz Entfernung aller Query-Parameter. Der Connect-Pfad verwendet seither `/me/accounts` + `/me/adaccounts` nur hinter dem Widerrufsnachweis.
