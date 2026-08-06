@@ -77,11 +77,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const navigation = [
-  { label: "Übersicht", icon: LayoutDashboard, active: true },
-  { label: "Kampagnen", icon: Megaphone },
-  { label: "Creatives", icon: ImageIcon },
-  { label: "Zielgruppen", icon: Target },
-  { label: "Autonomie", icon: ShieldCheck },
+  { label: "Übersicht", icon: LayoutDashboard, href: "/dashboard", active: true },
+  { label: "Kampagnen", icon: Megaphone, href: "#kampagnen" },
+  { label: "Creatives", icon: ImageIcon, href: null },
+  { label: "Zielgruppen", icon: Target, href: null },
+  { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center" },
 ];
 
 type DashboardPageProps = {
@@ -1348,19 +1348,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </Link>
 
         <nav className="mt-10 space-y-1">
-          {navigation.map(({ label, icon: Icon, active }) => (
-            <span
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${
-                active
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
-              }`}
-              key={label}
-            >
-              <Icon className="size-5" />
-              {label}
-            </span>
-          ))}
+          {navigation.map(({ label, icon: Icon, href, active }) =>
+            href ? (
+              <Link
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${
+                  active
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
+                }`}
+                href={href}
+                key={label}
+              >
+                <Icon className="size-5" />
+                {label}
+              </Link>
+            ) : (
+              <span
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400"
+                key={label}
+              >
+                <Icon className="size-5" />
+                {label}
+              </span>
+            ),
+          )}
         </nav>
 
         <div className="mt-auto space-y-1 border-t border-slate-100 pt-5">
@@ -1585,7 +1596,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             />
           ) : null}
 
-          <section className="mt-10" id="plattformen">
+          <section className="mt-10 scroll-mt-24" id="plattformen">
             <div>
               <h2 className="text-xl font-extrabold">Werbeplattformen</h2>
               <p className="mt-1 text-sm text-slate-500">
@@ -1722,7 +1733,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ) : null}
 
           {metaConnected ? (
-            <section className="mt-10">
+            <section className="mt-10 scroll-mt-24" id="beitragskandidaten">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
@@ -1733,8 +1744,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </h2>
                 </div>
                 <p className="max-w-xl text-sm leading-6 text-slate-500">
-                  Neue Beiträge werden stündlich erkannt. Mit aktivem Beitrag-Push kannst du sie
-                  mit Fixed Budget bewerben – Standards gelten pro Konto, Overrides pro Beitrag.
+                  Neue Beiträge werden erkannt und — bei aktivem automatischem Beitrag-Push —
+                  sofort mit den Konto-Standards beworben. Anpassungen je Beitrag sind optional.
                 </p>
               </div>
 
@@ -1789,6 +1800,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             </span>
                           )}
                           <ContentCandidateBoostControls
+                            boostMode={boostSettingsView?.boostMode ?? "OFF"}
                             canApprove={Boolean(
                               writeScopeGranted &&
                                 killSwitchView?.mode === "FREEZE_WRITES" &&
@@ -1805,9 +1817,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             heldPlan={
                               organicBoostPlanByCandidate.get(String(candidate.id)) ?? null
                             }
+                            killSwitchMode={killSwitchView?.mode ?? null}
                             override={
                               boostOverrideByCandidate.get(String(candidate.id)) ?? null
                             }
+                            policyActive={Boolean(
+                              policyView?.status === "ACTIVE" &&
+                                policyView.allowNewLaunches &&
+                                policyView.allowStatusChanges,
+                            )}
                             source={
                               candidate.source === "instagram" ? "instagram" : "facebook"
                             }
