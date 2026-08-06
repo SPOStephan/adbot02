@@ -110,6 +110,13 @@ export type MetaSyncResult = {
   plannerPlansExisting: number;
   plannerCandidatesBlocked: number;
   plannerHardCapBreach: boolean;
+  organicBoostStatus: string | null;
+  organicBoostPlansCreated: number;
+  organicBoostPlansExisting: number;
+  organicBoostCandidatesFailed: number;
+  organicBoostCandidatesSkipped: number;
+  organicBoostCandidatesConsidered: number;
+  organicBoostLastError: string | null;
   nextSyncAt: string | null;
   retryAt: string | null;
 };
@@ -169,6 +176,43 @@ const EMPTY_PLANNER_RESULT: MetaSyncPlannerFields = {
   plannerCandidatesBlocked: 0,
   plannerHardCapBreach: false,
 };
+
+type MetaSyncOrganicBoostFields = Pick<
+  MetaSyncResult,
+  | "organicBoostStatus"
+  | "organicBoostPlansCreated"
+  | "organicBoostPlansExisting"
+  | "organicBoostCandidatesFailed"
+  | "organicBoostCandidatesSkipped"
+  | "organicBoostCandidatesConsidered"
+  | "organicBoostLastError"
+>;
+
+const EMPTY_ORGANIC_BOOST_RESULT: MetaSyncOrganicBoostFields = {
+  organicBoostStatus: null,
+  organicBoostPlansCreated: 0,
+  organicBoostPlansExisting: 0,
+  organicBoostCandidatesFailed: 0,
+  organicBoostCandidatesSkipped: 0,
+  organicBoostCandidatesConsidered: 0,
+  organicBoostLastError: null,
+};
+
+function organicBoostFields(
+  result: MetaOrganicBoostPlannerResult | null,
+): MetaSyncOrganicBoostFields {
+  return result
+    ? {
+        organicBoostStatus: result.status,
+        organicBoostPlansCreated: result.plansCreated,
+        organicBoostPlansExisting: result.plansExisting,
+        organicBoostCandidatesFailed: result.candidatesFailed,
+        organicBoostCandidatesSkipped: result.candidatesSkipped,
+        organicBoostCandidatesConsidered: result.candidatesConsidered,
+        organicBoostLastError: result.lastError,
+      }
+    : EMPTY_ORGANIC_BOOST_RESULT;
+}
 
 function marketingFields(
   result: MetaMarketingSyncResult | null,
@@ -287,7 +331,10 @@ function isHighUsage(usage: MetaUsageSnapshot): boolean {
   return highestUsage(usage) >= RATE_LIMIT_USAGE_THRESHOLD;
 }
 
-function usageForStorage(usage: MetaUsageSnapshot) {
+function usageForStorage(
+  usage: MetaUsageSnapshot,
+  organicBoost: MetaOrganicBoostPlannerResult | null = null,
+) {
   return {
     app_percent: usage.appPercent,
     page_percent: usage.pagePercent,
@@ -296,6 +343,17 @@ function usageForStorage(usage: MetaUsageSnapshot) {
     insights_percent: usage.insightsPercent ?? null,
     retry_after_seconds: usage.retryAfterSeconds,
     observed_at: new Date().toISOString(),
+    organic_boost: organicBoost
+      ? {
+          status: organicBoost.status,
+          plans_created: organicBoost.plansCreated,
+          plans_existing: organicBoost.plansExisting,
+          candidates_skipped: organicBoost.candidatesSkipped,
+          candidates_failed: organicBoost.candidatesFailed,
+          candidates_considered: organicBoost.candidatesConsidered,
+          last_error: organicBoost.lastError,
+        }
+      : null,
   };
 }
 
@@ -379,6 +437,7 @@ function blockedResult(
     failedAssetCount: 0,
     ...EMPTY_MARKETING_RESULT,
     ...EMPTY_PLANNER_RESULT,
+    ...EMPTY_ORGANIC_BOOST_RESULT,
     nextSyncAt: null,
     retryAt,
   };
@@ -454,6 +513,7 @@ async function markReconnectRequired(
     failedAssetCount: 0,
     ...EMPTY_MARKETING_RESULT,
     ...EMPTY_PLANNER_RESULT,
+    ...EMPTY_ORGANIC_BOOST_RESULT,
     nextSyncAt: null,
     retryAt: null,
   };
@@ -465,6 +525,7 @@ async function markFailed(input: {
   errorCode: string;
   usage: MetaUsageSnapshot;
   requestedBackoffSeconds?: number | null;
+  organicBoost?: MetaOrganicBoostPlannerResult | null;
 }): Promise<MetaSyncResult> {
   const failures = Math.max(0, input.connector.sync_consecutive_failures ?? 0);
   const backoffSeconds =
@@ -490,7 +551,7 @@ async function markFailed(input: {
     sync_backoff_until: retryAt,
     next_sync_at: retryAt,
     sync_consecutive_failures: failures + 1,
-    sync_usage: usageForStorage(input.usage),
+    sync_usage: usageForStorage(input.usage, input.organicBoost ?? null),
   });
 
   return {
@@ -503,6 +564,7 @@ async function markFailed(input: {
     failedAssetCount: 0,
     ...EMPTY_MARKETING_RESULT,
     ...EMPTY_PLANNER_RESULT,
+    ...organicBoostFields(input.organicBoost ?? null),
     nextSyncAt: retryAt,
     retryAt,
   };
@@ -744,10 +806,9 @@ export async function syncMetaConnector(
       }
 
       if (readLeaseToken) {
-        // Run Beitrag-Push as soon as new posts are recorded, using the last
-        // successful marketing snapshot — do not wait for the marketing refresh.
+        // Beitrag-Push planning is DB-only: run even near Meta usage limits.
+        // Meta writes (executor) stay gated on usage below.
         if (
-          !isHighUsage(usage) &&
           connector.marketing_sync_status === "success" &&
           typeof connector.marketing_sync_id === "string" &&
           connector.marketing_sync_id.length > 0
@@ -791,19 +852,19 @@ export async function syncMetaConnector(
             } catch (error) {
               plannerErrorCode = classifyPlannerError(error);
             }
+          }
 
-            // Beitrag-Push must start in this Abruf; snapshot is ensured in SQL.
-            try {
-              organicBoostResult = await runMetaOrganicBoostPlannerAfterSnapshot({
-                platformAccountId: connector.id,
-                userId: connector.user_id,
-                marketingSyncId: marketingResult.syncId,
-                readLeaseToken,
-                plannedAt: plannerAttemptedAt ?? new Date().toISOString(),
-              });
-            } catch {
-              // Failures must not roll back a successful marketing sync.
-            }
+          plannerAttemptedAt = plannerAttemptedAt ?? new Date().toISOString();
+          try {
+            organicBoostResult = await runMetaOrganicBoostPlannerAfterSnapshot({
+              platformAccountId: connector.id,
+              userId: connector.user_id,
+              marketingSyncId: marketingResult.syncId,
+              readLeaseToken,
+              plannedAt: plannerAttemptedAt,
+            });
+          } catch {
+            // Failures must not roll back a successful marketing sync.
           }
         } catch (error) {
           if (error instanceof MetaGraphError) {
@@ -865,6 +926,7 @@ export async function syncMetaConnector(
         usage,
         requestedBackoffSeconds:
           usage.retryAfterSeconds ?? DEFAULT_RATE_LIMIT_BACKOFF_SECONDS,
+        organicBoost: organicBoostResult,
       });
       return {
         ...rateLimitedResult,
@@ -873,6 +935,7 @@ export async function syncMetaConnector(
         syncedAssetCount,
         failedAssetCount,
         ...marketingFields(marketingResult, marketingErrorCode !== null),
+        ...organicBoostFields(organicBoostResult),
       };
     }
 
@@ -902,7 +965,7 @@ export async function syncMetaConnector(
       sync_consecutive_failures: 0,
       last_sync_seen_count: seenCount,
       last_sync_new_count: newCount,
-      sync_usage: usageForStorage(usage),
+      sync_usage: usageForStorage(usage, organicBoostResult),
       marketing_sync_status: marketingResult ? "success" : "error",
       marketing_sync_error_code: marketingErrorCode,
       marketing_last_sync_started_at: marketingStartedAt,
@@ -932,6 +995,7 @@ export async function syncMetaConnector(
       failedAssetCount,
       ...marketingFields(marketingResult, marketingErrorCode !== null),
       ...plannerFields(plannerResult, plannerErrorCode !== null),
+      ...organicBoostFields(organicBoostResult),
       nextSyncAt,
       retryAt: null,
     };

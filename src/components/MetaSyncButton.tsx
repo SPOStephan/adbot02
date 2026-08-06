@@ -9,12 +9,23 @@ type MetaSyncButtonProps = {
   reconnectRequired?: boolean;
 };
 
+type OrganicBoostResponse = {
+  status?: string | null;
+  plansCreated?: number;
+  plansExisting?: number;
+  candidatesFailed?: number;
+  candidatesSkipped?: number;
+  candidatesConsidered?: number;
+  lastError?: string | null;
+};
+
 type SyncResponse = {
   ok?: boolean;
   error?: string;
   status?: string;
   newCount?: number;
   retryAt?: string | null;
+  organicBoost?: OrganicBoostResponse | null;
 };
 
 const MANUAL_COOLDOWN_SECONDS = 60;
@@ -35,6 +46,57 @@ function initialRetryAt(lastSyncStartedAt: string | null): string | null {
   }
 
   return new Date(startedAt + MANUAL_COOLDOWN_SECONDS * 1000).toISOString();
+}
+
+function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): string | null {
+  if (!boost || !boost.status) {
+    return "Beitrag-Push: beim Abruf nicht gelaufen (Lease/SQL prüfen).";
+  }
+
+  const created = boost.plansCreated ?? 0;
+  const existing = boost.plansExisting ?? 0;
+  const failed = boost.candidatesFailed ?? 0;
+  const skipped = boost.candidatesSkipped ?? 0;
+  const considered = boost.candidatesConsidered ?? 0;
+  const error = boost.lastError?.trim();
+
+  if (created + existing > 0) {
+    return `Beitrag-Push: ${created + existing} Bewerbung(en) angelegt/übernommen.`;
+  }
+
+  if (boost.status === "MATERIALIZE_FAILED" || failed > 0) {
+    return error
+      ? `Beitrag-Push fehlgeschlagen: ${error}`
+      : "Beitrag-Push fehlgeschlagen beim Anlegen der Meta-Kampagne.";
+  }
+
+  if (boost.status === "STALE_OR_INVALID_SNAPSHOT") {
+    return "Beitrag-Push: kein gültiger Budget-Snapshot — SQL-Migration 20260806150000 prüfen.";
+  }
+
+  if (boost.status === "NO_ACTIVE_POLICY") {
+    return "Beitrag-Push: Autonomie nicht aktiv (Launches + Statusänderungen).";
+  }
+
+  if (boost.status === "ACCOUNT_UNAVAILABLE") {
+    return "Beitrag-Push: Konto/Scope nicht bereit (EUR + ads_management).";
+  }
+
+  if (boost.status === "DISABLED") {
+    return "Beitrag-Push: Einstellungen nicht auf Vollautomatisch aktiv.";
+  }
+
+  if (boost.status === "NO_ELIGIBLE_CANDIDATES" || considered === 0) {
+    return "Beitrag-Push: keine passenden neuen Beiträge (Filter/Assets).";
+  }
+
+  if (skipped > 0) {
+    return error
+      ? `Beitrag-Push übersprungen: ${error}`
+      : `Beitrag-Push: ${skipped} Beitrag(e) übersprungen.`;
+  }
+
+  return `Beitrag-Push-Status: ${boost.status}`;
 }
 
 export function MetaSyncButton({
@@ -89,6 +151,7 @@ export function MetaSyncButton({
           setRetryAt(body.retryAt);
         }
 
+        const boostHint = organicBoostNotice(body.organicBoost);
         const message =
           body.error === "cooldown"
             ? "Der letzte Abruf ist noch zu frisch. Bitte kurz warten."
@@ -98,7 +161,9 @@ export function MetaSyncButton({
                 ? "Meta bittet um eine kurze Pause. Der nächste Abruf ist bereits geplant."
                 : body.status === "reconnect_required"
                   ? "Die Meta-Verbindung muss erneuert werden."
-                  : "Neue Beiträge konnten gerade nicht abgerufen werden.";
+                  : body.status === "rate_limited"
+                    ? `Meta-Nutzungslimit erreicht.${boostHint ? ` ${boostHint}` : ""}`
+                    : "Neue Beiträge konnten gerade nicht abgerufen werden.";
         setNotice({ kind: "error", text: message });
         router.refresh();
         return;
@@ -108,14 +173,20 @@ export function MetaSyncButton({
       setRetryAt(
         new Date(Date.now() + MANUAL_COOLDOWN_SECONDS * 1000).toISOString(),
       );
+      const contentText =
+        newCount === 1
+          ? "1 neuer Beitrag wurde gefunden."
+          : newCount > 1
+            ? `${newCount} neue Beiträge wurden gefunden.`
+            : "Abruf abgeschlossen. Es gibt aktuell keine neuen Beiträge.";
+      const boostText = organicBoostNotice(body.organicBoost);
+      const boostOk =
+        (body.organicBoost?.plansCreated ?? 0) +
+          (body.organicBoost?.plansExisting ?? 0) >
+        0;
       setNotice({
-        kind: "success",
-        text:
-          newCount === 1
-            ? "1 neuer Beitrag wurde gefunden."
-            : newCount > 1
-              ? `${newCount} neue Beiträge wurden gefunden.`
-              : "Abruf abgeschlossen. Es gibt aktuell keine neuen Beiträge.",
+        kind: boostOk || !body.organicBoost?.status ? "success" : "error",
+        text: boostText ? `${contentText} ${boostText}` : contentText,
       });
       router.refresh();
     } catch {
