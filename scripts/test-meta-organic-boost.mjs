@@ -200,7 +200,7 @@ assert.match(
 );
 assert.match(
   read("src/components/OrganicBoostAutoPlanner.tsx"),
-  /MAX_ATTEMPTS/,
+  /MAX_RETRY_DELAY_MS/,
 );
 assert.match(
   read("src/components/OrganicBoostAutoPlanner.tsx"),
@@ -212,7 +212,7 @@ assert.doesNotMatch(
 );
 assert.match(
   read("src/components/OrganicBoostPlanButton.tsx"),
-  /Beitrag-Push jetzt starten/,
+  /Manuell erneut prüfen/,
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
@@ -220,11 +220,19 @@ assert.match(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /pendingBoostCandidateCount/,
+  /Kein Extra-Klick nötig/,
 );
 assert.match(
   read("src/app/dashboard/page.tsx"),
   /pendingBoostCandidateCount/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /organic-boost-policy/,
+);
+assert.match(
+  read("src/app/api/meta/automation/policy/route.ts"),
+  /organicBoost/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-runner.ts"),
