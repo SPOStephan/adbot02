@@ -29,6 +29,7 @@ type SyncResponse = {
 };
 
 const MANUAL_COOLDOWN_SECONDS = 60;
+const SYNC_FETCH_TIMEOUT_MS = 110_000;
 
 function safeJson(response: Response): Promise<SyncResponse> {
   return response.json().catch(() => ({})) as Promise<SyncResponse>;
@@ -61,7 +62,7 @@ function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): str
   const error = boost.lastError?.trim();
 
   if (created + existing > 0) {
-    return `Beitrag-Push: ${created + existing} Bewerbung(en) angelegt/übernommen.`;
+    return `Beitrag-Push: ${created + existing} Bewerbung(en) angelegt — Meta-Schreiben folgt über den Executor.`;
   }
 
   if (boost.status === "MATERIALIZE_FAILED" || failed > 0) {
@@ -135,6 +136,11 @@ export function MetaSyncButton({
   async function handleSync() {
     setLoading(true);
     setNotice(null);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      SYNC_FETCH_TIMEOUT_MS,
+    );
 
     try {
       const response = await fetch("/api/connectors/meta/sync", {
@@ -143,6 +149,7 @@ export function MetaSyncButton({
         headers: {
           Accept: "application/json",
         },
+        signal: controller.signal,
       });
       const body = await safeJson(response);
 
@@ -163,7 +170,9 @@ export function MetaSyncButton({
                   ? "Die Meta-Verbindung muss erneuert werden."
                   : body.status === "rate_limited"
                     ? `Meta-Nutzungslimit erreicht.${boostHint ? ` ${boostHint}` : ""}`
-                    : "Neue Beiträge konnten gerade nicht abgerufen werden.";
+                    : response.status >= 500
+                      ? `Abruf-Serverfehler (${response.status}). Bitte kurz warten und erneut versuchen.`
+                      : "Neue Beiträge konnten gerade nicht abgerufen werden.";
         setNotice({ kind: "error", text: message });
         router.refresh();
         return;
@@ -189,12 +198,18 @@ export function MetaSyncButton({
         text: boostText ? `${contentText} ${boostText}` : contentText,
       });
       router.refresh();
-    } catch {
+    } catch (error) {
+      const aborted =
+        (error instanceof DOMException && error.name === "AbortError") ||
+        (error instanceof Error && error.name === "AbortError");
       setNotice({
         kind: "error",
-        text: "Der Abruf ist gerade nicht erreichbar. Bitte später erneut versuchen.",
+        text: aborted
+          ? "Der Abruf hat zu lange gedauert und wurde abgebrochen. Bitte in einer Minute erneut versuchen."
+          : "Der Abruf ist gerade nicht erreichbar. Bitte später erneut versuchen.",
       });
     } finally {
+      window.clearTimeout(timeout);
       setLoading(false);
     }
   }
