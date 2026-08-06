@@ -223,6 +223,18 @@ assert.match(
   /Kein Extra-Klick nötig/,
 );
 assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Meta-Versand/,
+);
+assert.match(
+  read("src/components/OrganicBoostLiveRefresh.tsx"),
+  /router\.refresh/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /OrganicBoostLiveRefresh/,
+);
+assert.match(
   read("src/app/dashboard/page.tsx"),
   /pendingBoostCandidateCount/,
 );
