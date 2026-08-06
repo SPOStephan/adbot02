@@ -81,6 +81,9 @@ function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): str
   }
 
   if (boost.status === "MATERIALIZE_FAILED" || failed > 0) {
+    if (error?.includes("hard cap would be exceeded")) {
+      return `Beitrag-Push blockiert: Tageslimit (Autonomie) reicht nicht für die aktuelle Budget-Reserve — oft durch frühere Plan-Versuche oder pausierte Meta-Kampagnen mit Restbudget. Fehler: ${error}`;
+    }
     return error
       ? `Beitrag-Push fehlgeschlagen: ${error}`
       : "Beitrag-Push fehlgeschlagen beim Anlegen der Meta-Kampagne.";
