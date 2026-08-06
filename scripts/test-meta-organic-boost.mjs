@@ -195,6 +195,34 @@ assert.match(
   /organic-boost\/plan/,
 );
 assert.match(
+  read("src/components/OrganicBoostAutoPlanner.tsx"),
+  /START_DELAY_MS/,
+);
+assert.doesNotMatch(
+  read("src/components/OrganicBoostAutoPlanner.tsx"),
+  /controller\.abort/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-runner.ts"),
+  /ORGANIC_BOOST_READ_LEASE_SECONDS/,
+);
+assert.match(
+  read("src/lib/meta/sync.ts"),
+  /preserveMarketingSuccess/,
+);
+assert.match(
+  read("src/lib/meta/sync.ts"),
+  /runOrganicBoostPlannerForAccount/,
+);
+assert.doesNotMatch(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Nach dem nächsten erfolgreichen Sync/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /unabh[^"]*ngig vom Beitrags-Abruf/,
+);
+assert.match(
   read("src/app/dashboard/page.tsx"),
   /OrganicBoostAutoPlanner/,
 );

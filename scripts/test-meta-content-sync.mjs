@@ -204,6 +204,7 @@ try {
     .replace('from "./crypto";', 'from "./crypto.mjs";')
     .replace('from "./env";', 'from "./env.mjs";')
     .replace('from "./marketing-sync";', 'from "./marketing-sync.mjs";')
+    .replace('from "./organic-boost-runner";', 'from "./organic-boost-runner.mjs";')
     .replace('from "./planner";', 'from "./planner.mjs";')
     .replace('from "./executor";', 'from "./executor.mjs";')
     .replace('from "./schedule";', 'from "./schedule.mjs";')
@@ -350,6 +351,26 @@ export async function releaseMetaAccountOperation(input) {
 }
 `;
 
+  const organicBoostRunnerStub = `
+export async function runOrganicBoostPlannerForAccount(input) {
+  globalThis.__metaTest.calls.push({
+    name: "runOrganicBoostPlannerForAccount",
+    input,
+  });
+  return (
+    globalThis.__metaTest.independentOrganicBoostResult ?? {
+      status: "LEASE_REQUIRED",
+      plansCreated: 0,
+      plansExisting: 0,
+      candidatesSkipped: 0,
+      candidatesFailed: 0,
+      candidatesConsidered: 0,
+      lastError: "read_lease_locked",
+    }
+  );
+}
+`;
+
   const executorStub = `
 export async function processNextMetaMutation(workerId) {
   globalThis.__metaTest.calls.push({ name: "processNextMetaMutation", workerId });
@@ -389,6 +410,11 @@ export function createAdminClient() {
     "utf8",
   );
   await writeFile(join(temporaryDirectory, "planner.mjs"), plannerStub, "utf8");
+  await writeFile(
+    join(temporaryDirectory, "organic-boost-runner.mjs"),
+    organicBoostRunnerStub,
+    "utf8",
+  );
   await writeFile(join(temporaryDirectory, "executor.mjs"), executorStub, "utf8");
   await writeFile(join(temporaryDirectory, "crypto.mjs"), cryptoStub, "utf8");
   await writeFile(join(temporaryDirectory, "env.mjs"), envStub, "utf8");
@@ -669,18 +695,33 @@ export function createAdminClient() {
     "string",
   );
 
-  const operationLockedHarness = makeAdminHarness();
+  const operationLockedHarness = makeAdminHarness({
+    connector: connector({
+      marketing_sync_id: "20000000-0000-4000-8000-000000000099",
+      marketing_sync_status: "success",
+    }),
+  });
   configureMeta(operationLockedHarness.admin, { readLeaseToken: null });
   const operationLockedResult = await syncModule.syncMetaConnector({
     platformAccountId: operationLockedHarness.state.connector.id,
     mode: "cron",
   });
-  assert.equal(operationLockedResult.status, "partial");
-  assert.equal(operationLockedResult.marketingStatus, "error");
+  // Lease contention must not poison a previously successful marketing snapshot
+  // or block Beitrag-Push (independent runner still runs).
+  assert.equal(operationLockedResult.status, "success");
+  assert.equal(operationLockedResult.marketingStatus, "not_run");
   assert.equal(operationLockedResult.plannerStatus, "not_run");
   assert.equal(
     operationLockedHarness.state.updates.at(-1).values.sync_error_code,
-    "marketing_operation_locked",
+    null,
+  );
+  assert.equal(
+    operationLockedHarness.state.updates.at(-1).values.marketing_sync_status,
+    "success",
+  );
+  assert.equal(
+    operationLockedHarness.state.updates.at(-1).values.marketing_sync_error_code,
+    null,
   );
   assert.deepEqual(
     globalThis.__metaTest.calls
@@ -689,11 +730,12 @@ export function createAdminClient() {
           "claimMetaReadOperation",
           "syncMetaMarketingSnapshot",
           "runMetaBudgetPlannerAfterSnapshot",
+          "runOrganicBoostPlannerForAccount",
           "releaseMetaAccountOperation",
         ].includes(call.name),
       )
       .map((call) => call.name),
-    ["claimMetaReadOperation"],
+    ["claimMetaReadOperation", "runOrganicBoostPlannerForAccount"],
   );
 
   const plannerFailureHarness = makeAdminHarness();
