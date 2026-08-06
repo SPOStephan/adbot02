@@ -329,7 +329,13 @@ export function AutomationBoostSettings({
               name="boostMode"
               onChange={() => {
                 setBoostMode(option.mode);
-                if (option.mode === "AUTO") setBudgetMode("DAILY");
+                if (option.mode === "AUTO") {
+                  setBudgetMode("DAILY");
+                  // Vollautomatik bewirbt FB + IG, sofern nicht bewusst eingeschränkt.
+                  if (sourceFilter === "facebook") {
+                    setSourceFilter("both");
+                  }
+                }
               }}
               type="radio"
               value={option.mode}

@@ -248,12 +248,13 @@ export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
   const candidatesSkipped = integer(record.candidates_skipped) ?? 0;
   const candidatesFailed = integer(record.candidates_failed) ?? 0;
   const candidatesConsidered = integer(record.candidates_considered) ?? 0;
+  const rawLastError = record.last_error;
   const lastError =
-    typeof record.last_error === "string"
-      ? record.last_error
-      : record.last_error === null
+    typeof rawLastError === "string"
+      ? rawLastError
+      : rawLastError == null
         ? null
-        : null;
+        : String(rawLastError);
 
   if (typeof record.status !== "string") {
     throw new MetaBudgetPlannerError("planner_result_invalid");

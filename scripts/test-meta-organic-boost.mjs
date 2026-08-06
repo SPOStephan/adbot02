@@ -262,6 +262,29 @@ assert.match(
   read("src/app/dashboard/page.tsx"),
   /eligiblePendingBoostCandidates/,
 );
+
+const unblockMigration = read(
+  "supabase/migrations/20260806180000_meta_organic_boost_unblock.sql",
+);
+assert.match(unblockMigration, /meta_launch_chain_preflight_action/);
+assert.match(unblockMigration, /source_filter = 'both'/);
+assert.match(unblockMigration, /parent_meta_asset_id/);
+assert.match(
+  read("src/lib/meta/organic-boost-execute.ts"),
+  /drainOrganicBoostExecutionsForAccount/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /drainOrganicBoostExecutionsForAccount/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /repairOrphanInstagramPageLinks/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /organic_boost_planner_status/,
+);
 assert.match(
   read("src/app/dashboard/page.tsx"),
   /pendingBoostCandidateCount/,
