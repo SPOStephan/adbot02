@@ -133,15 +133,31 @@ assert.match(
 
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /Boost-Status fehlt/,
+  /Bewerbung startet automatisch/,
 );
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /Beitrag-Push nicht gelaufen/,
+  /unabh[^"]*ngig vom Abruf/,
+);
+assert.doesNotMatch(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Bitte erneut abrufen/,
+);
+assert.doesNotMatch(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Bitte Abruf erneut auslösen/,
+);
+assert.match(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Beitrag-Push startet automatisch/,
 );
 assert.match(
   read("src/components/MetaSyncButton.tsx"),
   /Beitrag-Push:/,
+);
+assert.match(
+  read("src/components/MetaSyncButton.tsx"),
+  /NoticeKind/,
 );
 assert.match(
   read("src/app/api/connectors/meta/sync/route.ts"),
@@ -156,6 +172,43 @@ assert.match(
 assert.doesNotMatch(
   read("src/components/ContentCandidateBoostControls.tsx"),
   /Beim nächsten Abruf startet Adbot/,
+);
+
+assert.match(
+  read("src/lib/meta/organic-boost-runner.ts"),
+  /runOrganicBoostPlannerForAccount/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /planCustomerOrganicBoost/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /runOrganicBoostPlannerForAccount/,
+);
+assert.match(
+  read("src/app/api/meta/automation/organic-boost/plan/route.ts"),
+  /planCustomerOrganicBoost/,
+);
+assert.match(
+  read("src/components/OrganicBoostAutoPlanner.tsx"),
+  /organic-boost\/plan/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /OrganicBoostAutoPlanner/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /shouldAutoPlanOrganicBoost/,
+);
+assert.match(
+  read("src/components/MetaSyncButton.tsx"),
+  /text-slate-600/,
+);
+assert.doesNotMatch(
+  read("src/components/MetaSyncButton.tsx"),
+  /boostOk \|\| !body\.organicBoost\?\.status \? "success" : "error"/,
 );
 
 const ensureSnapshotMigration = read(

@@ -67,6 +67,7 @@ import {
   type MetaConnectedAssetView,
 } from "@/components/MetaConnectedAssets";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
+import { OrganicBoostAutoPlanner } from "@/components/OrganicBoostAutoPlanner";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { SignOutButton } from "@/components/SignOutButton";
@@ -1078,6 +1079,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       status: String(plan.status ?? "PENDING"),
     });
   }
+  const shouldAutoPlanOrganicBoost = Boolean(
+    writeScopeGranted &&
+      boostSettingsView?.boostMode === "AUTO" &&
+      boostSettingsView.autoBoostNewCandidates &&
+      killSwitchView?.mode === "ALLOW" &&
+      policyView?.status === "ACTIVE" &&
+      policyView.allowNewLaunches &&
+      policyView.allowStatusChanges &&
+      (contentCandidates ?? []).some(
+        (candidate) => !organicBoostPlanByCandidate.has(String(candidate.id)),
+      ),
+  );
   const automationAuditViews: AutomationAuditView[] = (
     controlAuditEvents ?? []
   ).map((event) => ({
@@ -1919,6 +1932,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           {metaConnected ? (
             <section className="mt-10 scroll-mt-24" id="beitragskandidaten">
+              <OrganicBoostAutoPlanner enabled={shouldAutoPlanOrganicBoost} />
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">

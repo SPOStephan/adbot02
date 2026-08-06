@@ -185,7 +185,7 @@ export function AutomationBoostSettings({
 
   const modeHint = useMemo(() => {
     if (boostMode === "AUTO") {
-      return "Werbeziel: Interaktionen/Likes. Neue Beiträge werden automatisch beworben, sobald die Sicherheitsschranke oben auf „Freigeben“ steht und gespeichert ist.";
+      return "Werbeziel: Interaktionen/Likes. Erkannte Beiträge werden ohne weiteren Abruf beworben, sobald die Sicherheitsschranke oben auf „Freigeben“ steht und gespeichert ist.";
     }
     if (boostMode === "REVIEW") {
       return "Neue Beiträge erscheinen zur Freigabe. Erst nach „BEITRAG BEWERBEN“ schreibt Adbot zu Meta.";
@@ -256,7 +256,7 @@ export function AutomationBoostSettings({
         message:
           boostMode === "AUTO"
             ? killSwitchMode === "ALLOW"
-              ? "Vollautomatik gespeichert. Neue Beiträge werden automatisch beworben."
+              ? "Vollautomatik gespeichert. Erkannte Beiträge werden jetzt ohne weiteren Abruf beworben."
               : "Vollautomatik gespeichert. Noch kein automatischer Boost: Oben bei der Sicherheitsschranke „Freigeben“ wählen und auf „Freigabe speichern“ klicken."
             : boostMode === "REVIEW"
               ? "Freigabe-Modus gespeichert: Neue Beiträge werden zur einzelnen Freigabe vorbereitet."

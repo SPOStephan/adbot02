@@ -119,8 +119,8 @@ function statusCopy(input: {
         tone: "amber" as const,
         title: "Bewerbung konnte nicht starten",
         body: input.organicPlannerLastError
-          ? `Beim Abruf ist der Start gescheitert: ${input.organicPlannerLastError}`
-          : "Beim Abruf konnte Adbot die Meta-Bewerbung nicht anlegen. Bitte erneut abrufen.",
+          ? `Start gescheitert: ${input.organicPlannerLastError}`
+          : "Adbot konnte die Meta-Bewerbung nicht anlegen. Prüfe Autonomie, Freigabe und SQL-Migration 20260806150000.",
       };
     }
     if (planner === "NO_ACTIVE_POLICY" || planner === "ACCOUNT_UNAVAILABLE" || planner === "LEASE_REQUIRED") {
@@ -149,8 +149,8 @@ function statusCopy(input: {
         tone: "amber" as const,
         title: "Bewerbung nicht angelegt",
         body: input.organicPlannerLastError
-          ? `Abruf lief, aber ohne Kampagne: ${input.organicPlannerLastError}`
-          : "Abruf lief, aber für diesen Beitrag wurde keine Meta-Kampagne erzeugt.",
+          ? `Planner ohne Kampagne für diesen Beitrag: ${input.organicPlannerLastError}`
+          : "Planner ist gelaufen, aber für diesen Beitrag wurde keine Meta-Kampagne erzeugt (Filter/Assets oder Skip).",
       };
     }
     if (planner === "PLANNER_RPC_FAILED") {
@@ -165,24 +165,24 @@ function statusCopy(input: {
     if (planner === "NOT_RUN") {
       return {
         tone: "amber" as const,
-        title: "Beitrag-Push nicht gelaufen",
+        title: "Beitrag-Push startet automatisch",
         body: input.organicPlannerLastError
-          ? `Abruf ok, aber Boost-Planner nicht gestartet: ${input.organicPlannerLastError}`
-          : "Abruf ok, aber der Boost-Planner wurde nicht gestartet (Lease/Marketing).",
+          ? `Noch nicht gestartet: ${input.organicPlannerLastError}. Läuft unabhängig vom Beitrags-Abruf nach.`
+          : "Läuft unabhängig vom Beitrags-Abruf, sobald Lease und Marketing-Sync bereit sind.",
       };
     }
     if (!planner) {
       return {
         tone: "amber" as const,
-        title: "Boost-Status fehlt",
-        body: "Beim letzten Abruf wurde kein Beitrag-Push-Ergebnis gespeichert. Bitte erneut abrufen.",
+        title: "Bewerbung startet automatisch",
+        body: "Beitrag ist erkannt. Beitrag-Push läuft unabhängig vom Abruf — kein erneuter Abruf nötig.",
       };
     }
 
     return {
       tone: "amber" as const,
       title: "Bewerbung steht aus",
-      body: `Einstellungen sind bereit. Letzter Planner-Status: ${planner}. Bitte Abruf erneut auslösen.`,
+      body: `Einstellungen sind bereit. Letzter Planner-Status: ${planner}. Läuft unabhängig vom Abruf.`,
     };
   }
 
