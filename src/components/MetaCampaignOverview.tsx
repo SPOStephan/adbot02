@@ -8,6 +8,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import { OrganicBoostPlanButton } from "@/components/OrganicBoostPlanButton";
+
 type CampaignPerformance = {
   id: string;
   name: string;
@@ -132,6 +134,9 @@ type MetaCampaignOverviewProps = {
   campaigns: CampaignPerformance[];
   organicBoostCampaigns: OrganicBoostCampaignView[];
   organicBoostConfigured: boolean;
+  organicPlannerStatus?: string | null;
+  organicPlannerLastError?: string | null;
+  pendingBoostCandidateCount?: number;
   counts: {
     campaigns: number;
     adSets: number;
@@ -368,6 +373,9 @@ export function MetaCampaignOverview({
   campaigns,
   organicBoostCampaigns,
   organicBoostConfigured,
+  organicPlannerStatus = null,
+  organicPlannerLastError = null,
+  pendingBoostCandidateCount = 0,
   counts,
   currency,
   errorCode,
@@ -530,15 +538,27 @@ export function MetaCampaignOverview({
           ) : (
             <div className="mt-5 flex gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
               <Megaphone className="mt-0.5 size-5 shrink-0 text-slate-400" />
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-slate-900">
                   Noch keine Beitrag-Push-Kampagnen
                 </p>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
                   {organicBoostConfigured
-                    ? "Automatischer Beitrag-Push ist eingeschaltet, aber es liegt noch kein Boost-Plan vor. Bewerbungen starten unabhängig vom Beitrags-Abruf (Vollautomatik + Freigeben). Sobald Pläne angelegt und vom Executor geschrieben sind, erscheinen sie hier mit Ampel-Status."
+                    ? pendingBoostCandidateCount > 0
+                      ? `${pendingBoostCandidateCount} erkannte Beiträge warten auf einen Boost-Plan. Bewerbungen starten unabhängig vom Abruf — du kannst den Start hier direkt auslösen.`
+                      : "Automatischer Beitrag-Push ist eingeschaltet, aber aktuell liegt kein Boost-Plan vor. Sobald Pläne angelegt und vom Executor geschrieben sind, erscheinen sie hier mit Ampel-Status."
                     : "Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben, Restbudget und Laufzeit."}
                 </p>
+                {organicBoostConfigured &&
+                (organicPlannerStatus || organicPlannerLastError) ? (
+                  <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">
+                    Letzter Planner-Status: {organicPlannerStatus ?? "—"}
+                    {organicPlannerLastError
+                      ? ` · ${organicPlannerLastError}`
+                      : ""}
+                  </p>
+                ) : null}
+                {organicBoostConfigured ? <OrganicBoostPlanButton /> : null}
               </div>
             </div>
           )}
