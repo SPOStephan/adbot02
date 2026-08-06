@@ -1,11 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-
 import {
-  ORGANIC_BOOST_READ_LEASE_SECONDS,
-  claimMetaReadOperation,
-  releaseMetaAccountOperation,
   runMetaOrganicBoostPlannerAfterSnapshot,
   type MetaOrganicBoostPlannerResult,
 } from "@/lib/meta/planner";
@@ -70,7 +65,8 @@ async function persistOrganicBoostResult(input: {
 
 /**
  * Runs Beitrag-Push planning for already-recognized is_new candidates.
- * Independent of content Abruf: uses the latest successful marketing sync id.
+ * Independent of content Abruf and of the shared Abruf/Executor account lease;
+ * the planner RPC serializes via advisory lock.
  */
 export async function runOrganicBoostPlannerForAccount(input: {
   platformAccountId: string;
@@ -124,92 +120,32 @@ export async function runOrganicBoostPlannerForAccount(input: {
     return result;
   }
 
-  const ownerId = `${input.ownerPrefix ?? "organic-boost"}:${input.platformAccountId}:${randomUUID()}`;
-  let readLeaseToken: string | null = null;
-
+  let result: MetaOrganicBoostPlannerResult;
   try {
-    readLeaseToken = await claimMetaReadOperation({
+    result = await runMetaOrganicBoostPlannerAfterSnapshot({
       platformAccountId: input.platformAccountId,
       userId: input.userId,
-      ownerId,
-      leaseSeconds: ORGANIC_BOOST_READ_LEASE_SECONDS,
-      retries: 5,
-      retryDelayMs: 2_000,
+      marketingSyncId,
+      readLeaseToken: null,
+      plannedAt: new Date().toISOString(),
     });
   } catch {
-    const result: MetaOrganicBoostPlannerResult = {
-      status: "LEASE_REQUIRED",
+    result = {
+      status: "PLANNER_RPC_FAILED",
       plansCreated: 0,
       plansExisting: 0,
       candidatesSkipped: 0,
       candidatesFailed: 0,
       candidatesConsidered: 0,
-      lastError: "read_lease_claim_failed",
+      lastError: "run_meta_organic_boost_planner failed",
     };
-    await persistOrganicBoostResult({
-      platformAccountId: input.platformAccountId,
-      userId: input.userId,
-      result,
-    }).catch(() => undefined);
-    return result;
   }
 
-  if (!readLeaseToken) {
-    const result: MetaOrganicBoostPlannerResult = {
-      status: "LEASE_REQUIRED",
-      plansCreated: 0,
-      plansExisting: 0,
-      candidatesSkipped: 0,
-      candidatesFailed: 0,
-      candidatesConsidered: 0,
-      lastError: "read_lease_locked",
-    };
-    await persistOrganicBoostResult({
-      platformAccountId: input.platformAccountId,
-      userId: input.userId,
-      result,
-    }).catch(() => undefined);
-    return result;
-  }
+  await persistOrganicBoostResult({
+    platformAccountId: input.platformAccountId,
+    userId: input.userId,
+    result,
+  });
 
-  try {
-    let result: MetaOrganicBoostPlannerResult;
-    try {
-      result = await runMetaOrganicBoostPlannerAfterSnapshot({
-        platformAccountId: input.platformAccountId,
-        userId: input.userId,
-        marketingSyncId,
-        readLeaseToken,
-        plannedAt: new Date().toISOString(),
-      });
-    } catch {
-      result = {
-        status: "PLANNER_RPC_FAILED",
-        plansCreated: 0,
-        plansExisting: 0,
-        candidatesSkipped: 0,
-        candidatesFailed: 0,
-        candidatesConsidered: 0,
-        lastError: "run_meta_organic_boost_planner failed",
-      };
-    }
-
-    await persistOrganicBoostResult({
-      platformAccountId: input.platformAccountId,
-      userId: input.userId,
-      result,
-    });
-
-    return result;
-  } finally {
-    try {
-      await releaseMetaAccountOperation({
-        platformAccountId: input.platformAccountId,
-        userId: input.userId,
-        leaseToken: readLeaseToken,
-      });
-    } catch {
-      // Lease expiry is the safety net; planner result already persisted.
-    }
-  }
+  return result;
 }

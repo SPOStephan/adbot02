@@ -221,7 +221,8 @@ export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
   platformAccountId: string;
   userId: string;
   marketingSyncId: string;
-  readLeaseToken: string;
+  /** Optional Abruf READ_SYNC token; Autonomie planning may pass null. */
+  readLeaseToken?: string | null;
   plannedAt: string;
 }): Promise<MetaOrganicBoostPlannerResult> {
   const admin = createAdminClient();
@@ -229,7 +230,7 @@ export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
     p_platform_account_id: input.platformAccountId,
     p_user_id: input.userId,
     p_source_marketing_sync_id: input.marketingSyncId,
-    p_read_lease_token: input.readLeaseToken,
+    p_read_lease_token: input.readLeaseToken ?? null,
     p_planned_at: input.plannedAt,
   });
 
