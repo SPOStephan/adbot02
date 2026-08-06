@@ -109,13 +109,28 @@ assert.deepEqual(
     reason: "Kundenseitiger Sicherheitsstopp",
   },
 );
+assert.deepEqual(
+  parseKillSwitchCommand({
+    mode: "ALLOW",
+  }),
+  {
+    mode: "ALLOW",
+    reason: "Kunde hat automatische Meta-Schreibvorgänge freigegeben",
+  },
+);
+assert.deepEqual(
+  parseKillSwitchCommand({
+    mode: "FREEZE_WRITES",
+    reason: "kurz",
+  }),
+  {
+    mode: "FREEZE_WRITES",
+    reason: "Kunde hat neue Meta-Schreibvorgänge gestoppt",
+  },
+);
 expectInputError(
   () => parseKillSwitchCommand({ mode: "DELETE_ALL", reason: "Nicht erlaubt" }),
   "invalid_kill_switch_mode",
-);
-expectInputError(
-  () => parseKillSwitchCommand({ mode: "ALLOW", reason: "kurz" }),
-  "invalid_text",
 );
 
 assert.deepEqual(

@@ -331,7 +331,6 @@ export function AutomationControlCenter({
   const [killMode, setKillMode] = useState<
     "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED"
   >(killSwitch?.mode ?? "FREEZE_WRITES");
-  const [killReason, setKillReason] = useState("");
 
   const currentKillOption =
     KILL_SWITCH_OPTIONS.find((option) => option.mode === killSwitch?.mode) ??
@@ -459,12 +458,13 @@ export function AutomationControlCenter({
     try {
       await postControl("/api/meta/automation/kill-switch", {
         mode: killMode,
-        reason: killReason,
       });
-      setKillReason("");
       setKillNotice({
         tone: "success",
-        message: "Der Sicherheitsmodus wurde unveränderlich protokolliert.",
+        message:
+          killMode === "ALLOW"
+            ? "Freigabe gespeichert. Adbot darf jetzt automatische Meta-Schreibvorgänge ausführen."
+            : "Der Sicherheitsmodus wurde gespeichert.",
       });
       refresh();
     } catch (error) {
@@ -885,11 +885,11 @@ export function AutomationControlCenter({
                   Aktuell: <strong className="text-slate-800">{currentKillOption.label}</strong>
                   {killSwitch
                     ? ` · ${killSwitch.reason}`
-                    : " · Noch nicht freigegeben — bitte Modus wählen, begründen und speichern"}
+                    : " · Noch nicht freigegeben — Modus wählen und speichern"}
                 </p>
                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                  Auswahl allein ändert nichts. Erst nach Klick auf „Sicherheitsmodus setzen“
-                  gilt der neue Modus.
+                  Auswahl allein ändert nichts. Erst nach dem Speichern gilt der
+                  neue Modus.
                 </p>
               </div>
             </div>
@@ -920,19 +920,6 @@ export function AutomationControlCenter({
               ))}
             </fieldset>
 
-            <label className="mt-4 block text-sm font-bold text-slate-800">
-              Begründung
-              <textarea
-                className="mt-2 min-h-24 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 leading-6 outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-200"
-                maxLength={500}
-                minLength={8}
-                onChange={(event) => setKillReason(event.target.value)}
-                placeholder="Warum wird dieser Sicherheitsmodus jetzt gesetzt?"
-                required
-                value={killReason}
-              />
-            </label>
-
             {killNotice ? (
               <p
                 className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
@@ -952,7 +939,6 @@ export function AutomationControlCenter({
               }`}
               disabled={
                 disabled ||
-                killReason.trim().length < 8 ||
                 (killMode === "ALLOW" && !readiness.writeScopeGranted)
               }
               type="submit"

@@ -160,7 +160,7 @@ export function AutomationBoostSettings({
           boostMode === "AUTO"
             ? killSwitchMode === "ALLOW"
               ? "Vollautomatik gespeichert. Neue Beiträge werden automatisch beworben."
-              : "Vollautomatik gespeichert. Noch kein automatischer Boost: Oben bei der Sicherheitsschranke „Freigeben“ wählen, kurz begründen und auf „Sicherheitsmodus setzen“ klicken."
+              : "Vollautomatik gespeichert. Noch kein automatischer Boost: Oben bei der Sicherheitsschranke „Freigeben“ wählen und auf „Freigabe speichern“ klicken."
             : boostMode === "REVIEW"
               ? "Freigabe-Modus gespeichert: Neue Beiträge werden zur einzelnen Freigabe vorbereitet."
               : "Beitrag-Push ist ausgeschaltet.",
@@ -232,8 +232,8 @@ export function AutomationBoostSettings({
         <p className="mt-2 rounded-xl bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-950">
           Fast fertig: Vollautomatik kannst du schon speichern. Automatische Werbung startet
           aber erst, wenn du oben bei der Sicherheitsschranke{" "}
-          <strong>Freigeben</strong> auswählst, eine kurze Begründung einträgst und auf{" "}
-          <strong>Sicherheitsmodus setzen</strong> klickst. Nur auswählen reicht nicht.
+          <strong>Freigeben</strong> auswählst und auf{" "}
+          <strong>Freigabe speichern</strong> klickst. Nur auswählen reicht nicht.
         </p>
       ) : null}
 
