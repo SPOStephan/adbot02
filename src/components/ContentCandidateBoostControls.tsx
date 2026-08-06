@@ -153,11 +153,29 @@ function statusCopy(input: {
           : "Abruf lief, aber für diesen Beitrag wurde keine Meta-Kampagne erzeugt.",
       };
     }
+    if (planner === "PLANNER_RPC_FAILED") {
+      return {
+        tone: "amber" as const,
+        title: "Boost-Planner fehlgeschlagen",
+        body: input.organicPlannerLastError
+          ? `SQL/RPC-Fehler: ${input.organicPlannerLastError}. Migration 20260806150000 in Supabase prüfen.`
+          : "run_meta_organic_boost_planner ist fehlgeschlagen. SQL-Migration in Supabase prüfen.",
+      };
+    }
+    if (planner === "NOT_RUN") {
+      return {
+        tone: "amber" as const,
+        title: "Beitrag-Push nicht gelaufen",
+        body: input.organicPlannerLastError
+          ? `Abruf ok, aber Boost-Planner nicht gestartet: ${input.organicPlannerLastError}`
+          : "Abruf ok, aber der Boost-Planner wurde nicht gestartet (Lease/Marketing).",
+      };
+    }
     if (!planner) {
       return {
         tone: "amber" as const,
         title: "Boost-Status fehlt",
-        body: "Kein Planner-Ergebnis vom Abruf. SQL-Migration 20260806150000 in Supabase ausführen, deployen, dann erneut abrufen.",
+        body: "Beim letzten Abruf wurde kein Beitrag-Push-Ergebnis gespeichert. Bitte erneut abrufen.",
       };
     }
 

@@ -732,9 +732,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }),
         supabase
           .from("platform_accounts")
-          .select(
-            "organic_boost_planner_status,organic_boost_planner_detail,organic_boost_planner_last_run_at",
-          )
+          .select("sync_usage")
           .eq("id", metaAccount.id)
           .eq("user_id", user.id)
           .maybeSingle(),
@@ -835,21 +833,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       }`,
     })),
   ];
-  const organicPlannerStatus =
-    typeof organicBoostPlannerRow?.organic_boost_planner_status === "string"
-      ? organicBoostPlannerRow.organic_boost_planner_status
+  const syncUsage =
+    organicBoostPlannerRow?.sync_usage &&
+    typeof organicBoostPlannerRow.sync_usage === "object"
+      ? (organicBoostPlannerRow.sync_usage as Record<string, unknown>)
       : null;
-  const organicPlannerDetail =
-    organicBoostPlannerRow?.organic_boost_planner_detail &&
-    typeof organicBoostPlannerRow.organic_boost_planner_detail === "object"
-      ? (organicBoostPlannerRow.organic_boost_planner_detail as Record<
-          string,
-          unknown
-        >)
+  const organicFromUsage =
+    syncUsage?.organic_boost && typeof syncUsage.organic_boost === "object"
+      ? (syncUsage.organic_boost as Record<string, unknown>)
+      : null;
+  const organicPlannerStatus =
+    typeof organicFromUsage?.status === "string"
+      ? organicFromUsage.status
       : null;
   const organicPlannerLastError =
-    typeof organicPlannerDetail?.last_error === "string"
-      ? organicPlannerDetail.last_error
+    typeof organicFromUsage?.last_error === "string"
+      ? organicFromUsage.last_error
       : null;
   const boostSettingsView: BoostSettingsView | null = boostSettingsRow
     ? {
