@@ -59,6 +59,7 @@ import {
 import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import {
   MetaCampaignOverview,
+  deriveOrganicBoostDelivery,
   type OrganicBoostCampaignView,
 } from "@/components/MetaCampaignOverview";
 import {
@@ -529,7 +530,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       ? await Promise.all([
           supabase
             .from("campaigns")
-            .select("id, name, objective, status, effective_status, platform_updated_time")
+            .select(
+              "id, name, objective, status, effective_status, platform_updated_time, daily_budget_minor, lifetime_budget_minor, budget_remaining_minor, start_time, stop_time",
+            )
             .eq("platform_account_id", metaAccount.id)
             .eq("user_id", user.id)
             .eq("is_current", true)
@@ -575,6 +578,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: readyBrandAssets },
     { data: syncedCreatives },
     { data: recentLaunchPlans },
+    { data: organicBoostPlans },
     { data: recentExposureSnapshots },
     { data: automationTargets },
     { data: budgetCanaryPlans },
@@ -656,12 +660,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }),
         supabase
           .from("mutation_plans")
-          .select("id,status,created_at,payload_hash,planned_payload")
+          .select("id,status,created_at,payload_hash,planned_payload,source_rule_key")
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .eq("action_type", "LAUNCH_CHAIN")
           .order("created_at", { ascending: false })
-          .limit(20),
+          .limit(50),
+        supabase
+          .from("mutation_plans")
+          .select("id,status,created_at,payload_hash,planned_payload,source_rule_key")
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("source_rule_key", "organic-boost")
+          .order("created_at", { ascending: false })
+          .limit(50),
         supabase
           .from("daily_budget_exposure_snapshots")
           .select(
@@ -703,7 +715,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .limit(50),
         supabase
           .from("meta_organic_boost_links")
-          .select("content_candidate_id,plan_id,object_story_id")
+          .select("content_candidate_id,plan_id,object_story_id,created_at")
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .order("created_at", { ascending: false })
@@ -722,6 +734,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         { data: null },
         { data: null },
         { data: null },
+        { data: [] },
         { data: [] },
         { data: [] },
         { data: [] },
@@ -865,20 +878,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           : null,
       }
     : null;
-  const organicBoostCampaignViews: OrganicBoostCampaignView[] = (
+  const organicBoostCampaignViewsFromRpc: OrganicBoostCampaignView[] = (
     (organicBoostCampaignRows ?? []) as Record<string, unknown>[]
   ).flatMap((row) => {
     const planId = String(row.plan_id ?? "");
     if (!/^[0-9a-f-]{36}$/i.test(planId)) return [];
+    const planStatus = String(row.plan_status ?? "UNKNOWN");
+    const status = row.status ? String(row.status) : null;
+    const effectiveStatus = row.effective_status
+      ? String(row.effective_status)
+      : null;
+    const delivery = deriveOrganicBoostDelivery({
+      planStatus,
+      status,
+      effectiveStatus,
+    });
     return [
       {
         planId,
-        planStatus: String(row.plan_status ?? "UNKNOWN"),
+        planStatus,
         campaignName: String(row.campaign_name ?? "Beitrag-Push"),
-        status: row.status ? String(row.status) : null,
-        effectiveStatus: row.effective_status
-          ? String(row.effective_status)
-          : null,
+        status,
+        effectiveStatus,
+        deliveryState: delivery.deliveryState,
+        deliveryLabel: delivery.deliveryLabel,
         budgetMode: row.budget_mode === "LIFETIME" ? "LIFETIME" : "DAILY",
         dailyBudgetMinor: toFiniteNumber(row.daily_budget_minor),
         lifetimeBudgetMinor: toFiniteNumber(row.lifetime_budget_minor),
@@ -896,6 +919,85 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       },
     ];
   });
+  const organicBoostPlanRows = [
+    ...((organicBoostPlans ?? []) as Record<string, unknown>[]),
+    ...((recentLaunchPlans ?? []) as Record<string, unknown>[]).filter(
+      (plan) => {
+        const payload =
+          plan.planned_payload && typeof plan.planned_payload === "object"
+            ? (plan.planned_payload as Record<string, unknown>)
+            : {};
+        return (
+          plan.source_rule_key === "organic-boost" ||
+          payload.launch_kind === "ORGANIC_BOOST"
+        );
+      },
+    ),
+  ];
+  const organicBoostPlanById = new Map<string, Record<string, unknown>>();
+  for (const plan of organicBoostPlanRows) {
+    const id = String(plan.id ?? "");
+    if (id && !organicBoostPlanById.has(id)) {
+      organicBoostPlanById.set(id, plan);
+    }
+  }
+  const organicBoostCampaignViewsFallback: OrganicBoostCampaignView[] = (
+    organicBoostLinks ?? []
+  ).flatMap((link) => {
+    const plan = organicBoostPlanById.get(String(link.plan_id));
+    if (!plan) return [];
+    const payload =
+      plan.planned_payload && typeof plan.planned_payload === "object"
+        ? (plan.planned_payload as Record<string, unknown>)
+        : {};
+    if (
+      payload.launch_kind !== "ORGANIC_BOOST" &&
+      plan.source_rule_key !== "organic-boost"
+    ) {
+      return [];
+    }
+    const planStatus = String(plan.status ?? "UNKNOWN");
+    const delivery = deriveOrganicBoostDelivery({
+      planStatus,
+      status: null,
+      effectiveStatus: null,
+    });
+    const campaignName =
+      typeof payload.campaign === "object" &&
+      payload.campaign !== null &&
+      typeof (payload.campaign as Record<string, unknown>).name === "string"
+        ? String((payload.campaign as Record<string, unknown>).name)
+        : "Beitrag-Push";
+    return [
+      {
+        planId: String(plan.id),
+        planStatus,
+        campaignName,
+        status: null,
+        effectiveStatus: null,
+        deliveryState: delivery.deliveryState,
+        deliveryLabel: delivery.deliveryLabel,
+        budgetMode: payload.budget_mode === "LIFETIME" ? "LIFETIME" : "DAILY",
+        dailyBudgetMinor: toFiniteNumber(payload.daily_budget_minor),
+        lifetimeBudgetMinor: toFiniteNumber(payload.lifetime_budget_minor),
+        budgetRemainingMinor: null,
+        durationDays: toFiniteNumber(payload.duration_days),
+        startTime: payload.start_time ? String(payload.start_time) : null,
+        endTime: payload.end_time ? String(payload.end_time) : null,
+        spend: null,
+        impressions: null,
+        postEngagements: null,
+        currency: metaAccount?.marketing_currency ?? "EUR",
+        createdAt: String(
+          link.created_at ?? plan.created_at ?? new Date().toISOString(),
+        ),
+      },
+    ];
+  });
+  const organicBoostCampaignViews =
+    organicBoostCampaignViewsFromRpc.length > 0
+      ? organicBoostCampaignViewsFromRpc
+      : organicBoostCampaignViewsFallback;
   const boostOverrideByCandidate = new Map<string, ContentBoostOverrideView>(
     (boostOverrideRows ?? []).map((row) => [
       String(row.content_candidate_id),
@@ -917,15 +1019,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   );
   const organicBoostPlanByCandidate = new Map<string, HeldOrganicBoostPlanView>();
   for (const link of organicBoostLinks ?? []) {
-    const plan = (recentLaunchPlans ?? []).find(
-      (entry) => String(entry.id) === String(link.plan_id),
-    );
+    const plan = organicBoostPlanById.get(String(link.plan_id));
     if (!plan) continue;
     const payload =
       plan.planned_payload && typeof plan.planned_payload === "object"
         ? (plan.planned_payload as Record<string, unknown>)
         : {};
-    if (payload.launch_kind !== "ORGANIC_BOOST") continue;
+    if (
+      payload.launch_kind !== "ORGANIC_BOOST" &&
+      plan.source_rule_key !== "organic-boost"
+    ) {
+      continue;
+    }
     organicBoostPlanByCandidate.set(String(link.content_candidate_id), {
       planId: String(plan.id),
       payloadHash: String(plan.payload_hash ?? ""),
@@ -1139,6 +1244,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         objective: campaign.objective,
         status: campaign.status,
         effectiveStatus: campaign.effective_status,
+        dailyBudgetMinor: toFiniteNumber(campaign.daily_budget_minor),
+        lifetimeBudgetMinor: toFiniteNumber(campaign.lifetime_budget_minor),
+        budgetRemainingMinor: toFiniteNumber(campaign.budget_remaining_minor),
+        startTime: campaign.start_time ? String(campaign.start_time) : null,
+        stopTime: campaign.stop_time ? String(campaign.stop_time) : null,
         spend: toFiniteNumber(performance?.spend),
         impressions: toFiniteNumber(performance?.impressions),
         linkClicks: toFiniteNumber(performance?.inline_link_clicks),
@@ -1150,6 +1260,51 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       };
     })
     .sort((left, right) => (right.spend ?? -1) - (left.spend ?? -1));
+  const organicBoostCampaignViewsFromLive = campaignRows
+    .filter(
+      (campaign) =>
+        typeof campaign.name === "string" &&
+        campaign.name.startsWith("Organic Boost"),
+    )
+    .map((campaign) => {
+      const delivery = deriveOrganicBoostDelivery({
+        planStatus: null,
+        status: campaign.status ? String(campaign.status) : null,
+        effectiveStatus: campaign.effectiveStatus
+          ? String(campaign.effectiveStatus)
+          : null,
+      });
+      return {
+        planId: String(campaign.id),
+        planStatus: "SYNCED",
+        campaignName: String(campaign.name),
+        status: campaign.status ? String(campaign.status) : null,
+        effectiveStatus: campaign.effectiveStatus
+          ? String(campaign.effectiveStatus)
+          : null,
+        deliveryState: delivery.deliveryState,
+        deliveryLabel:
+          delivery.deliveryState === "unknown"
+            ? "Boost aktiv"
+            : delivery.deliveryLabel,
+        budgetMode: campaign.lifetimeBudgetMinor != null ? "LIFETIME" : "DAILY",
+        dailyBudgetMinor: campaign.dailyBudgetMinor,
+        lifetimeBudgetMinor: campaign.lifetimeBudgetMinor,
+        budgetRemainingMinor: campaign.budgetRemainingMinor,
+        durationDays: null,
+        startTime: campaign.startTime,
+        endTime: campaign.stopTime,
+        spend: campaign.spend,
+        impressions: campaign.impressions,
+        postEngagements: null,
+        currency: campaign.currency,
+        createdAt: new Date().toISOString(),
+      } satisfies OrganicBoostCampaignView;
+    });
+  const organicBoostCampaignViewsResolved =
+    organicBoostCampaignViews.length > 0
+      ? organicBoostCampaignViews
+      : organicBoostCampaignViewsFromLive;
   const budgetOwnersByCampaign = new Map<
     string,
     AutomationScopeCampaignView["budgetOwners"]
@@ -1578,7 +1733,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {metaConnected && metaAccount ? (
             <MetaCampaignOverview
               campaigns={campaignRows}
-              organicBoostCampaigns={organicBoostCampaignViews}
+              organicBoostCampaigns={organicBoostCampaignViewsResolved}
+              organicBoostConfigured={Boolean(
+                boostSettingsView &&
+                  boostSettingsView.boostMode !== "OFF" &&
+                  boostSettingsView.enabled,
+              )}
               counts={{
                 campaigns: metaAccount.marketing_campaign_count ?? 0,
                 adSets: metaAccount.marketing_ad_set_count ?? 0,

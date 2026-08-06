@@ -133,7 +133,7 @@ assert.match(
 
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /Automatischer Boost aktiv/,
+  /Boost noch nicht gestartet/,
 );
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
@@ -142,6 +142,18 @@ assert.match(
 assert.match(
   read("src/app/dashboard/page.tsx"),
   /href: "#kampagnen"/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /deriveOrganicBoostDelivery/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Wartet auf Freigabe durch Meta/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Boost aktiv/,
 );
 
 const writeClient = read("src/lib/meta/write-client.ts");

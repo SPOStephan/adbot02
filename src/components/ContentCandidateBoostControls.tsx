@@ -62,16 +62,25 @@ function statusCopy(input: {
   }
 
   if (input.heldPlan) {
-    const waiting =
-      input.heldPlan.status === "HELD" ||
-      input.heldPlan.status === "PENDING" ||
-      input.heldPlan.status === "BLOCKED";
+    const plan = input.heldPlan.status.toUpperCase();
+    if (plan === "SUCCEEDED" || plan === "RECONCILED") {
+      return {
+        tone: "success" as const,
+        title: "Boost aktiv",
+        body: "Für diesen Beitrag läuft ein Beitrag-Push. Details siehst du unter Kampagnen.",
+      };
+    }
+    if (plan === "PENDING" || plan === "RETRYABLE" || plan === "RUNNING" || plan === "CLAIMED") {
+      return {
+        tone: "amber" as const,
+        title: "Boost wird gestartet",
+        body: "Der Push-Plan ist angelegt. Adbot schreibt gerade an Meta bzw. wartet auf die Auslieferung.",
+      };
+    }
     return {
-      tone: waiting ? ("amber" as const) : ("success" as const),
-      title: waiting ? "Boost vorbereitet" : "Boost geplant",
-      body: waiting
-        ? "Der Plan liegt bereit. Nach Freigabe schreibt Adbot die Kampagne an Meta."
-        : "Dieser Beitrag ist mit einem Beitrag-Push-Plan verknüpft.",
+      tone: "amber" as const,
+      title: "Boost vorbereitet",
+      body: "Der Plan liegt bereit. Nach Freigabe schreibt Adbot die Kampagne an Meta.",
     };
   }
 
@@ -100,9 +109,9 @@ function statusCopy(input: {
       };
     }
     return {
-      tone: "success" as const,
-      title: "Automatischer Boost aktiv",
-      body: "Neue Beiträge werden mit den Konto-Standards beworben. Keine weitere Aktion nötig.",
+      tone: "amber" as const,
+      title: "Boost noch nicht gestartet",
+      body: "Einstellungen sind bereit. Für diesen Beitrag gibt es noch keinen Push-Plan — er erscheint unter Kampagnen, sobald der Boost wirklich gestartet wurde.",
     };
   }
 
