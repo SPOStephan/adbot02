@@ -39,6 +39,8 @@ type Props = {
   boostMode: BoostMode;
   killSwitchMode: "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED" | null;
   policyActive: boolean;
+  organicPlannerStatus?: string | null;
+  organicPlannerLastError?: string | null;
 };
 
 function minorToEuro(value: number | null | undefined) {
@@ -52,6 +54,8 @@ function statusCopy(input: {
   policyActive: boolean;
   heldPlan: HeldOrganicBoostPlanView | null;
   overrideMode: "INHERIT" | "SKIP" | "BOOST";
+  organicPlannerStatus?: string | null;
+  organicPlannerLastError?: string | null;
 }) {
   if (input.overrideMode === "SKIP") {
     return {
@@ -108,10 +112,43 @@ function statusCopy(input: {
         body: "Vollautomatik ist an. Noch blockiert: oben Sicherheitsschranke auf „Freigeben“ stellen und speichern.",
       };
     }
+
+    const planner = (input.organicPlannerStatus ?? "").toUpperCase();
+    if (planner === "MATERIALIZE_FAILED" || planner === "STALE_OR_INVALID_SNAPSHOT") {
+      return {
+        tone: "amber" as const,
+        title: "Bewerbung konnte nicht starten",
+        body: input.organicPlannerLastError
+          ? `Beim Abruf ist der Start gescheitert: ${input.organicPlannerLastError}`
+          : "Beim Abruf konnte Adbot die Meta-Bewerbung nicht anlegen. Bitte erneut abrufen.",
+      };
+    }
+    if (planner === "NO_ACTIVE_POLICY" || planner === "ACCOUNT_UNAVAILABLE") {
+      return {
+        tone: "amber" as const,
+        title: "Bewerbung blockiert",
+        body: "Autonomie, Schreibrechte oder Kontostatus verhindern den Start. Prüfe Autonomie und Meta-Verbindung.",
+      };
+    }
+    if (planner === "NO_ELIGIBLE_CANDIDATES") {
+      return {
+        tone: "amber" as const,
+        title: "Kein Boost für diesen Beitrag",
+        body: "Quellenfilter oder Asset-Auswahl schließt diesen Beitrag aus.",
+      };
+    }
+    if (planner === "DISABLED") {
+      return {
+        tone: "amber" as const,
+        title: "Beitrag-Push nicht aktiv",
+        body: "Speichere Beitrag-Push erneut auf „Vollautomatisch“.",
+      };
+    }
+
     return {
       tone: "amber" as const,
-      title: "Bewerbung startet automatisch",
-      body: "Einstellungen sind bereit. Beim nächsten Abruf startet Adbot die Bewerbung von selbst — du musst nichts weiter klicken.",
+      title: "Bewerbung steht aus",
+      body: "Einstellungen sind bereit, aber dieser Abruf hat noch keine Meta-Kampagne angelegt. Bitte den Abruf erneut auslösen.",
     };
   }
 
@@ -133,6 +170,8 @@ export function ContentCandidateBoostControls({
   boostMode,
   killSwitchMode,
   policyActive,
+  organicPlannerStatus = null,
+  organicPlannerLastError = null,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
@@ -170,6 +209,8 @@ export function ContentCandidateBoostControls({
     policyActive,
     heldPlan: preparedPlan,
     overrideMode: mode,
+    organicPlannerStatus,
+    organicPlannerLastError,
   });
 
   const statusClass =

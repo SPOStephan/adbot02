@@ -22,7 +22,9 @@ import {
   runMetaBudgetPlannerAfterSnapshot,
   runMetaOrganicBoostPlannerAfterSnapshot,
   type MetaBudgetPlannerResult,
+  type MetaOrganicBoostPlannerResult,
 } from "./planner";
+import { processNextMetaMutation } from "./executor";
 import { decryptAccessToken } from "./crypto";
 import { getMetaSyncEnv } from "./env";
 import { createAdminClient } from "../supabase/admin";
@@ -722,6 +724,7 @@ export async function syncMetaConnector(
     let plannerResult: MetaBudgetPlannerResult | null = null;
     let plannerErrorCode: string | null = null;
     let plannerAttemptedAt: string | null = null;
+    let organicBoostResult: MetaOrganicBoostPlannerResult | null = null;
     const marketingStartedAt = new Date().toISOString();
     let readLeaseToken: string | null = null;
 
@@ -751,7 +754,7 @@ export async function syncMetaConnector(
         ) {
           plannerAttemptedAt = new Date().toISOString();
           try {
-            await runMetaOrganicBoostPlannerAfterSnapshot({
+            organicBoostResult = await runMetaOrganicBoostPlannerAfterSnapshot({
               platformAccountId: connector.id,
               userId: connector.user_id,
               marketingSyncId: connector.marketing_sync_id,
@@ -789,10 +792,9 @@ export async function syncMetaConnector(
               plannerErrorCode = classifyPlannerError(error);
             }
 
-            // Beitrag-Push must not depend on budget-planner success: the SQL
-            // planner falls back to the latest COMPLETE exposure snapshot.
+            // Beitrag-Push must start in this Abruf; snapshot is ensured in SQL.
             try {
-              await runMetaOrganicBoostPlannerAfterSnapshot({
+              organicBoostResult = await runMetaOrganicBoostPlannerAfterSnapshot({
                 platformAccountId: connector.id,
                 userId: connector.user_id,
                 marketingSyncId: marketingResult.syncId,
@@ -800,7 +802,6 @@ export async function syncMetaConnector(
                 plannedAt: plannerAttemptedAt ?? new Date().toISOString(),
               });
             } catch {
-              // Organic boost planning is best-effort after marketing sync.
               // Failures must not roll back a successful marketing sync.
             }
           }
@@ -828,6 +829,30 @@ export async function syncMetaConnector(
           });
         } catch (error) {
           plannerErrorCode ??= classifyPlannerError(error);
+        }
+      }
+    }
+
+    // Write organic boost plans to Meta in the same Abruf (best-effort).
+    const organicPlansToWrite =
+      (organicBoostResult?.plansCreated ?? 0) +
+      (organicBoostResult?.plansExisting ?? 0);
+    if (
+      organicPlansToWrite > 0 &&
+      organicBoostResult?.status === "PLANNED" &&
+      !isHighUsage(usage)
+    ) {
+      const executorRuns = Math.min(Math.max(organicPlansToWrite, 1), 6);
+      for (let index = 0; index < executorRuns; index += 1) {
+        try {
+          const executed = await processNextMetaMutation(
+            `meta-sync-organic:${connector.id}:${index}`,
+          );
+          if (!executed.processed) {
+            break;
+          }
+        } catch {
+          break;
         }
       }
     }

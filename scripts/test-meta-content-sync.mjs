@@ -205,6 +205,7 @@ try {
     .replace('from "./env";', 'from "./env.mjs";')
     .replace('from "./marketing-sync";', 'from "./marketing-sync.mjs";')
     .replace('from "./planner";', 'from "./planner.mjs";')
+    .replace('from "./executor";', 'from "./executor.mjs";')
     .replace('from "./schedule";', 'from "./schedule.mjs";')
     .replace('from "../supabase/admin";', 'from "./admin.mjs";');
 
@@ -323,8 +324,22 @@ export async function runMetaBudgetPlannerAfterSnapshot(input) {
   return globalThis.__metaTest.plannerResult;
 }
 
-export async function runMetaOrganicBoostPlannerAfterSnapshot() {
-  return undefined;
+export async function runMetaOrganicBoostPlannerAfterSnapshot(input) {
+  globalThis.__metaTest.calls.push({
+    name: "runMetaOrganicBoostPlannerAfterSnapshot",
+    input,
+  });
+  return (
+    globalThis.__metaTest.organicBoostResult ?? {
+      status: "PLANNED",
+      plansCreated: 0,
+      plansExisting: 0,
+      candidatesSkipped: 0,
+      candidatesFailed: 0,
+      candidatesConsidered: 0,
+      lastError: null,
+    }
+  );
 }
 
 export async function releaseMetaAccountOperation(input) {
@@ -332,6 +347,17 @@ export async function releaseMetaAccountOperation(input) {
   if (globalThis.__metaTest.plannerReleaseError) {
     throw globalThis.__metaTest.plannerReleaseError;
   }
+}
+`;
+
+  const executorStub = `
+export async function processNextMetaMutation(workerId) {
+  globalThis.__metaTest.calls.push({ name: "processNextMetaMutation", workerId });
+  return globalThis.__metaTest.executorResult ?? {
+    processed: false,
+    outcome: "idle",
+    stepsProcessed: 0,
+  };
 }
 `;
 
@@ -363,6 +389,7 @@ export function createAdminClient() {
     "utf8",
   );
   await writeFile(join(temporaryDirectory, "planner.mjs"), plannerStub, "utf8");
+  await writeFile(join(temporaryDirectory, "executor.mjs"), executorStub, "utf8");
   await writeFile(join(temporaryDirectory, "crypto.mjs"), cryptoStub, "utf8");
   await writeFile(join(temporaryDirectory, "env.mjs"), envStub, "utf8");
   await writeFile(join(temporaryDirectory, "admin.mjs"), adminStub, "utf8");

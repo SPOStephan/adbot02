@@ -587,6 +587,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { data: organicBoostLinks },
     { data: boostAssetSettingRows },
     { data: organicBoostCampaignRows },
+    { data: organicBoostPlannerRow },
   ] = metaConnected && metaAccount
     ? await Promise.all([
         supabase
@@ -729,6 +730,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         supabase.rpc("list_meta_organic_boost_campaigns", {
           p_platform_account_id: metaAccount.id,
         }),
+        supabase
+          .from("platform_accounts")
+          .select(
+            "organic_boost_planner_status,organic_boost_planner_detail,organic_boost_planner_last_run_at",
+          )
+          .eq("id", metaAccount.id)
+          .eq("user_id", user.id)
+          .maybeSingle(),
       ])
     : [
         { data: null },
@@ -749,6 +758,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         { data: [] },
         { data: [] },
         { data: [] },
+        { data: null },
       ];
   const policyView: AutomationPolicyView | null = currentPolicy
     ? {
@@ -825,6 +835,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       }`,
     })),
   ];
+  const organicPlannerStatus =
+    typeof organicBoostPlannerRow?.organic_boost_planner_status === "string"
+      ? organicBoostPlannerRow.organic_boost_planner_status
+      : null;
+  const organicPlannerDetail =
+    organicBoostPlannerRow?.organic_boost_planner_detail &&
+    typeof organicBoostPlannerRow.organic_boost_planner_detail === "object"
+      ? (organicBoostPlannerRow.organic_boost_planner_detail as Record<
+          string,
+          unknown
+        >)
+      : null;
+  const organicPlannerLastError =
+    typeof organicPlannerDetail?.last_error === "string"
+      ? organicPlannerDetail.last_error
+      : null;
   const boostSettingsView: BoostSettingsView | null = boostSettingsRow
     ? {
         id: String(boostSettingsRow.id),
@@ -1978,6 +2004,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                               organicBoostPlanByCandidate.get(String(candidate.id)) ?? null
                             }
                             killSwitchMode={killSwitchView?.mode ?? null}
+                            organicPlannerLastError={organicPlannerLastError}
+                            organicPlannerStatus={organicPlannerStatus}
                             override={
                               boostOverrideByCandidate.get(String(candidate.id)) ?? null
                             }
