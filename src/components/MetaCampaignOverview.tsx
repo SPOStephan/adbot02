@@ -100,11 +100,14 @@ export function formatOrganicBoostFailureDetail(input: {
 
   const reason = input.planBlockedReason?.trim() || null;
   if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
-    // Sticky plan reason after Freigeben was already saved — do not re-nag.
+    // Never claim Meta is writing while the kill-switch soft-block is still set.
     if (input.writesAllowed) {
-      return "Meta-Versand wird gestartet";
+      return "Warteschlange — Executor stößt den Versand erneut an";
     }
-    return "Sicherheitsschranke blockiert Meta-Schreiben — unter Autonomie „Freigeben“ wählen und „Freigabe speichern“";
+    return "Schreiben gestoppt (Sicherheitsschranke). Freigabe wurde ggf. systemseitig widerrufen.";
+  }
+  if (reason === "meta_graph_100") {
+    return "Meta hat den Boost abgelehnt (Graph #100) — Payload/Post-Verknüpfung prüfen";
   }
   if (reason === "superseded_by_marketing_snapshot") {
     return "Wird automatisch neu angestoßen";
