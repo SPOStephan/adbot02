@@ -707,6 +707,30 @@ begin
   if second_token is null then
     raise exception 'Released account lease could not be reacquired';
   end if;
+
+  -- Idle lease with drifted user_id must be realigned and reclaimable.
+  perform public.release_meta_account_operation(
+    '20000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000001',
+    second_token
+  );
+  -- Simulate historical drift (tenant guard would block ordinary writes).
+  alter table public.meta_account_operation_leases
+    disable trigger guard_meta_account_operation_leases_tenant_scope;
+  update public.meta_account_operation_leases
+  set user_id = '10000000-0000-4000-8000-000000000002'
+  where platform_account_id = '20000000-0000-4000-8000-000000000001';
+  alter table public.meta_account_operation_leases
+    enable trigger guard_meta_account_operation_leases_tenant_scope;
+
+  second_token := public.claim_meta_account_operation(
+    '20000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000001',
+    'WRITE_EXECUTION', 'write-worker-reclaim', 300
+  );
+  if second_token is null then
+    raise exception 'Idle lease with drifted user_id could not be reclaimed';
+  end if;
 end;
 $$;
 

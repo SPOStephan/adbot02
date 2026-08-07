@@ -45,6 +45,7 @@ export function OrganicBoostPlanButton({
           executorSucceeded?: number;
           executorFailed?: number;
           executorLastOutcome?: string | null;
+          executorLastError?: string | null;
         };
       };
       if (!response.ok || body.ok !== true) {
@@ -59,13 +60,16 @@ export function OrganicBoostPlanButton({
       const error = body.organicBoost?.lastError?.trim();
       const written = body.organicBoost?.executorSucceeded ?? 0;
       const execFailed = body.organicBoost?.executorFailed ?? 0;
+      const drainError = body.organicBoost?.executorLastError?.trim();
       setNotice(
         created > 0
           ? written > 0
             ? `${created} Plan/Pläne bereit, ${written} bereits an Meta gesendet.`
             : execFailed > 0
-              ? `${created} Plan/Pläne bereit, Meta-Versand fehlgeschlagen (${body.organicBoost?.executorLastOutcome ?? "Fehler"}).`
-              : `${created} Boost-Plan/Pläne angelegt (Status ${status}). Meta-Versand folgt automatisch.`
+              ? `${created} Plan/Pläne bereit, Meta-Versand fehlgeschlagen (${body.organicBoost?.executorLastOutcome ?? "Fehler"}${drainError ? `: ${drainError}` : ""}).`
+              : drainError
+                ? `${created} Plan/Pläne bereit, Meta-Versand blockiert (${drainError}).`
+                : `${created} Boost-Plan/Pläne angelegt (Status ${status}). Meta-Versand folgt automatisch.`
           : error
             ? `Kein Plan angelegt (${status}): ${error}`
             : `Kein Plan angelegt (Status ${status}, geprüft: ${body.organicBoost?.candidatesConsidered ?? 0}, übersprungen: ${body.organicBoost?.candidatesSkipped ?? 0}, fehlgeschlagen: ${body.organicBoost?.candidatesFailed ?? 0}).`,

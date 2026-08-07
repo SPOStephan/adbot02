@@ -808,4 +808,30 @@ assert.match(
   /Vollautomatisch/,
 );
 
+const idleLeaseReclaimMigration = read(
+  "supabase/migrations/20260806270000_meta_operation_lease_idle_reclaim.sql",
+);
+assert.match(idleLeaseReclaimMigration, /user_id is distinct from p_user_id/);
+assert.match(idleLeaseReclaimMigration, /Idle leases with drifted user_id/);
+assert.match(
+  read("src/lib/meta/organic-boost-execute.ts"),
+  /claim_idle_with_due_plans/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-execute.ts"),
+  /lastError: string \| null/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /executorLastError/,
+);
+assert.match(
+  read("src/app/api/meta/automation/organic-boost/plan/route.ts"),
+  /executorLastError/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /organic_boost_dashboard_drain/,
+);
+
 console.log("test-meta-organic-boost: ok");

@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
             candidatesConsidered: result.organicBoost.candidatesConsidered,
             pendingPlans: result.organicBoost.pendingPlans ?? 0,
             executorSucceeded: result.organicBoost.executorSucceeded ?? 0,
+            executorLastOutcome: result.organicBoost.executorLastOutcome ?? null,
+            executorLastError: result.organicBoost.executorLastError ?? null,
             lastError: result.organicBoost.lastError,
           }
         : null,
