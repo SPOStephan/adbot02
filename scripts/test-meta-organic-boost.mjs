@@ -422,7 +422,47 @@ assert.match(
 );
 assert.match(
   read("src/lib/meta/customer-control-service.ts"),
-  /Revive \+ Meta drain/,
+  /reviveAndDrainOrganicBoost/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /countPendingOrganicBoostPlans/,
+);
+assert.match(
+  read("src/components/AutomationControlCenter.tsx"),
+  /Meta-Versand läuft automatisch/,
+);
+assert.match(
+  read("src/components/AutomationControlCenter.tsx"),
+  /killSwitch\?\.mode/,
+);
+
+const autonomieAllowMigration = read(
+  "supabase/migrations/20260806230000_meta_autonomie_ensures_writes_allow.sql",
+);
+assert.match(
+  autonomieAllowMigration,
+  /never auto-FREEZE/,
+);
+assert.match(
+  autonomieAllowMigration,
+  /Autonomie mit Launches aktiv/,
+);
+assert.match(
+  autonomieAllowMigration,
+  /revive_meta_organic_boost_superseded_plans/,
+);
+assert.match(
+  autonomieAllowMigration,
+  /kein erneutes Speichern nötig/,
+);
+assert.match(
+  autonomieAllowMigration,
+  /Freigeben wiederhergestellt/,
+);
+assert.match(
+  read("src/app/api/meta/automation/policy/route.ts"),
+  /pendingPlans/,
 );
 
 const noReadLeaseMigration = read(

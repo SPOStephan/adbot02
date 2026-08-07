@@ -148,6 +148,90 @@ async function tryRunOrganicBoostPlanner(input: {
   }
 }
 
+async function countPendingOrganicBoostPlans(input: {
+  userId: string;
+  platformAccountId: string;
+}): Promise<number> {
+  const admin = createAdminClient();
+  const { count, error } = await admin
+    .from("mutation_plans")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", input.userId)
+    .eq("platform_account_id", input.platformAccountId)
+    .eq("source_rule_key", "organic-boost")
+    .eq("action_type", "LAUNCH_CHAIN")
+    .in("status", ["PENDING", "RETRYABLE", "CLAIMED", "EXECUTING", "RECONCILING"]);
+  if (error || typeof count !== "number") {
+    return 0;
+  }
+  return count;
+}
+
+/** Revive soft-blocked/superseded plans, then push Meta writes immediately. */
+async function reviveAndDrainOrganicBoost(input: {
+  customer: MetaCustomer;
+  organicBoost: MetaOrganicBoostPlannerResult | null;
+}): Promise<MetaOrganicBoostPlannerResult | null> {
+  const admin = createAdminClient();
+  try {
+    await admin.rpc("revive_meta_organic_boost_superseded_plans", {
+      p_user_id: input.customer.userId,
+      p_platform_account_id: input.customer.platformAccountId,
+    });
+  } catch {
+    // Function may be absent before migration; drain still helps claimable plans.
+  }
+
+  const pendingPlans = await countPendingOrganicBoostPlans({
+    userId: input.customer.userId,
+    platformAccountId: input.customer.platformAccountId,
+  });
+
+  let executorRuns = 0;
+  let executorSucceeded = 0;
+  let executorFailed = 0;
+  if (pendingPlans > 0) {
+    try {
+      const drain = await drainOrganicBoostExecutionsForAccount({
+        userId: input.customer.userId,
+        platformAccountId: input.customer.platformAccountId,
+        maxRuns: Math.min(8, Math.max(1, pendingPlans)),
+      });
+      executorRuns = drain.runs;
+      executorSucceeded = drain.succeeded;
+      executorFailed = drain.failed;
+    } catch {
+      // Cron retries within a minute.
+    }
+  }
+
+  const base = input.organicBoost ?? {
+    status: pendingPlans > 0 ? "PLANNED" : "NO_ELIGIBLE_CANDIDATES",
+    plansCreated: 0,
+    plansExisting: pendingPlans,
+    candidatesSkipped: 0,
+    candidatesFailed: 0,
+    candidatesConsidered: 0,
+    lastError: null,
+  };
+
+  // Planner reports NO_ELIGIBLE when candidates are already linked — surface queues.
+  const status =
+    base.status === "NO_ELIGIBLE_CANDIDATES" && pendingPlans > 0
+      ? "PLANNED"
+      : base.status;
+
+  return {
+    ...base,
+    status,
+    plansExisting: Math.max(base.plansExisting, pendingPlans),
+    pendingPlans,
+    executorRuns,
+    executorSucceeded,
+    executorFailed,
+  };
+}
+
 export async function saveCustomerPolicy(
   customer: MetaCustomer,
   command: PolicyCommand,
@@ -194,8 +278,8 @@ export async function saveCustomerPolicy(
     rpcFailure("Die Autonomie-Policy");
   }
 
-  // Autonomie aktivieren muss Beitrag-Push ohne Extra-Klick anstoßen, sobald
-  // Vollautomatik + Freigeben schon stehen (Planner selbst prüft die Gates).
+  // Autonomie + Launches = Writes freigeben + Beitrag-Push anstoßen.
+  // Kein zweiter Klick auf Sicherheitsschranke nötig.
   let organicBoost: MetaOrganicBoostPlannerResult | null = null;
   if (
     command.enableAutomation &&
@@ -206,16 +290,10 @@ export async function saveCustomerPolicy(
       customer,
       ownerPrefix: "organic-boost-policy",
     });
-    // Revive + Meta drain: Autonomie alone must push superseded/soft-blocked plans.
-    try {
-      await drainOrganicBoostExecutionsForAccount({
-        userId: customer.userId,
-        platformAccountId: customer.platformAccountId,
-        maxRuns: 8,
-      });
-    } catch {
-      // Cron retries within a minute.
-    }
+    organicBoost = await reviveAndDrainOrganicBoost({
+      customer,
+      organicBoost,
+    });
   }
 
   return {
@@ -346,16 +424,10 @@ export async function setCustomerKillSwitch(
       customer,
       ownerPrefix: "organic-boost-kill-switch",
     });
-    // Freigeben must immediately drain already queued Beitrag-Push plans.
-    try {
-      await drainOrganicBoostExecutionsForAccount({
-        userId: customer.userId,
-        platformAccountId: customer.platformAccountId,
-        maxRuns: 8,
-      });
-    } catch {
-      // Planner result still surfaces; cron retries Meta writes within a minute.
-    }
+    organicBoost = await reviveAndDrainOrganicBoost({
+      customer,
+      organicBoost,
+    });
   }
 
   return { eventId: data, organicBoost };
@@ -1124,6 +1196,10 @@ export async function saveCustomerBoostSettings(
         customer,
         ownerPrefix: "organic-boost-settings",
       });
+      organicBoost = await reviveAndDrainOrganicBoost({
+        customer,
+        organicBoost,
+      });
     }
   }
 
@@ -1198,42 +1274,23 @@ export async function planCustomerOrganicBoost(
     platformAccountId: customer.platformAccountId,
   }).catch(() => undefined);
 
-  const organicBoost = await runOrganicBoostPlannerForAccount({
+  const planned = await runOrganicBoostPlannerForAccount({
     platformAccountId: customer.platformAccountId,
     userId: customer.userId,
     ownerPrefix: "organic-boost-plan",
   });
 
-  let executorRuns = 0;
-  let executorSucceeded = 0;
-  let executorFailed = 0;
-  let executorLastOutcome: string | null = null;
-
-  if (organicBoost.plansCreated + organicBoost.plansExisting > 0) {
-    try {
-      const drain = await drainOrganicBoostExecutionsForAccount({
-        platformAccountId: customer.platformAccountId,
-        userId: customer.userId,
-        maxRuns: Math.min(
-          8,
-          Math.max(1, organicBoost.plansCreated + organicBoost.plansExisting),
-        ),
-      });
-      executorRuns = drain.runs;
-      executorSucceeded = drain.succeeded;
-      executorFailed = drain.failed;
-      executorLastOutcome = drain.lastOutcome;
-    } catch {
-      executorLastOutcome = "executor_drain_failed";
-    }
-  }
+  const organicBoost = await reviveAndDrainOrganicBoost({
+    customer,
+    organicBoost: planned,
+  });
 
   return {
-    ...organicBoost,
-    executorRuns,
-    executorSucceeded,
-    executorFailed,
-    executorLastOutcome,
+    ...(organicBoost ?? planned),
+    executorRuns: organicBoost?.executorRuns ?? 0,
+    executorSucceeded: organicBoost?.executorSucceeded ?? 0,
+    executorFailed: organicBoost?.executorFailed ?? 0,
+    executorLastOutcome: null,
   };
 }
 

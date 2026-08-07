@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
             candidatesFailed: result.organicBoost.candidatesFailed,
             candidatesSkipped: result.organicBoost.candidatesSkipped,
             candidatesConsidered: result.organicBoost.candidatesConsidered,
+            pendingPlans: result.organicBoost.pendingPlans ?? 0,
+            executorSucceeded: result.organicBoost.executorSucceeded ?? 0,
             lastError: result.organicBoost.lastError,
           }
         : null,

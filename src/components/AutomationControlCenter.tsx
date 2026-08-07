@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, useTransition } from "react";
+import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -109,6 +109,8 @@ type ApiResponse = {
     plansCreated?: number;
     plansExisting?: number;
     candidatesConsidered?: number;
+    pendingPlans?: number;
+    executorSucceeded?: number;
     lastError?: string | null;
   } | null;
 };
@@ -124,10 +126,18 @@ function organicBoostFollowUp(
   if (!boost) {
     return "";
   }
+  const pending = boost.pendingPlans ?? 0;
   const ready =
     (boost.plansCreated ?? 0) + (boost.plansExisting ?? 0);
-  if (ready > 0) {
-    return ` Beitrag-Push läuft automatisch: ${ready} Plan/Pläne angelegt.`;
+  const sent = boost.executorSucceeded ?? 0;
+  if (sent > 0) {
+    return ` Beitrag-Push: ${sent} Plan/Pläne an Meta gesendet.`;
+  }
+  if (pending > 0 || ready > 0) {
+    return ` Beitrag-Push: ${Math.max(pending, ready)} Plan/Pläne in der Warteschlange — Meta-Versand läuft automatisch.`;
+  }
+  if (boost.status === "NO_ELIGIBLE_CANDIDATES") {
+    return " Beitrag-Push: keine neuen Beiträge zu planen (bereits verknüpfte Pläne laufen ggf. separat).";
   }
   if (boost.status === "LEASE_REQUIRED" || boost.lastError === "read_lease_locked") {
     return " Beitrag-Push wird automatisch nachgeholt.";
@@ -138,7 +148,7 @@ function organicBoostFollowUp(
   if (boost.lastError) {
     return ` Beitrag-Push noch nicht gestartet (${boost.status ?? "Fehler"}: ${boost.lastError}).`;
   }
-  if (boost.status) {
+  if (boost.status && boost.status !== "PLANNED" && boost.status !== "OK") {
     return ` Beitrag-Push-Status: ${boost.status} (geprüft: ${boost.candidatesConsidered ?? 0}).`;
   }
   return "";
@@ -367,6 +377,13 @@ export function AutomationControlCenter({
   const [killMode, setKillMode] = useState<
     "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED"
   >(killSwitch?.mode ?? "FREEZE_WRITES");
+
+  // Autonomie-Save kann ALLOW setzen — UI-State muss dem Server folgen.
+  useEffect(() => {
+    if (killSwitch?.mode) {
+      setKillMode(killSwitch.mode);
+    }
+  }, [killSwitch?.mode]);
 
   const currentKillOption =
     KILL_SWITCH_OPTIONS.find((option) => option.mode === killSwitch?.mode) ??
