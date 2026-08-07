@@ -453,6 +453,14 @@ assert.match(
   /revive_meta_organic_boost_superseded_plans/,
 );
 assert.match(
+  autonomieAllowMigration,
+  /kein erneutes Speichern nötig/,
+);
+assert.match(
+  autonomieAllowMigration,
+  /Freigeben wiederhergestellt/,
+);
+assert.match(
   read("src/app/api/meta/automation/policy/route.ts"),
   /pendingPlans/,
 );

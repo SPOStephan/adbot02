@@ -247,4 +247,59 @@ grant execute on function public.put_meta_customer_budget_autonomy_policy(
   uuid, uuid, bigint, bigint, boolean, boolean, boolean, boolean
 ) to service_role;
 
+-- ---------------------------------------------------------------------------
+-- One-shot heal: no customer re-save required
+-- Restore ACCOUNT ALLOW for already-active Autonomie+Launches, revive plans.
+-- ---------------------------------------------------------------------------
+do $heal$
+declare
+  v_row record;
+  v_latest_mode text;
+begin
+  for v_row in
+    select distinct
+      policy.user_id,
+      policy.platform_account_id
+    from public.automation_policies policy
+    join public.platform_accounts account
+      on account.id = policy.platform_account_id
+     and account.user_id = policy.user_id
+    where policy.is_current
+      and policy.status = 'ACTIVE'
+      and policy.allow_new_launches
+      and account.platform = 'meta'
+      and account.revoked_at is null
+      and 'ads_management' = any(account.meta_scopes)
+  loop
+    select state.mode
+    into v_latest_mode
+    from public.kill_switch_state state
+    where state.scope_type = 'ACCOUNT'
+      and state.user_id = v_row.user_id
+      and state.platform_account_id = v_row.platform_account_id
+    order by state.sequence desc
+    limit 1;
+
+    -- Persist Freigeben if Autonomie+Launches already active but ALLOW was lost.
+    if v_latest_mode is distinct from 'ALLOW' then
+      perform public.append_meta_kill_switch_state(
+        'ACCOUNT',
+        v_row.user_id,
+        v_row.platform_account_id,
+        null,
+        'ALLOW',
+        'Heal: Autonomie mit Launches war aktiv — Freigeben wiederhergestellt (kein erneutes Speichern nötig)',
+        'SYSTEM',
+        'meta-autonomie-ensures-writes-allow'
+      );
+    end if;
+
+    perform public.revive_meta_organic_boost_superseded_plans(
+      v_row.user_id,
+      v_row.platform_account_id
+    );
+  end loop;
+end;
+$heal$;
+
 commit;
