@@ -406,7 +406,7 @@ assert.match(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /Meta-Versand wird gestartet/,
+  /Schreiben gestoppt \(Sicherheitsschranke\)/,
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
@@ -463,6 +463,34 @@ assert.match(
 assert.match(
   read("src/app/api/meta/automation/policy/route.ts"),
   /pendingPlans/,
+);
+
+const noAccountRefreezeMigration = read(
+  "supabase/migrations/20260806240000_meta_organic_boost_no_account_refreeze.sql",
+);
+assert.match(
+  noAccountRefreezeMigration,
+  /source_rule_key = 'organic-boost'/,
+);
+assert.match(
+  noAccountRefreezeMigration,
+  /never freeze ACCOUNT for organic-boost|never revokes account Freigeben/,
+);
+assert.match(
+  noAccountRefreezeMigration,
+  /organic-boost skips account refreeze after reconcile/,
+);
+assert.match(
+  noAccountRefreezeMigration,
+  /meta-organic-boost-no-account-refreeze/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Warteschlange — Executor stößt den Versand erneut an/,
+);
+assert.doesNotMatch(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /return "Meta-Versand wird gestartet"/,
 );
 
 const noReadLeaseMigration = read(
