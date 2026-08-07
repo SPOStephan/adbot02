@@ -87,18 +87,18 @@ export const maxDuration = 300;
 
 const baseNavigation = [
   { label: "Übersicht", icon: LayoutDashboard, href: "/dashboard", active: true },
-  { label: "Kampagnen", icon: Megaphone, href: "#kampagnen" },
-  { label: "Creatives", icon: ImageIcon, href: null },
-  { label: "Zielgruppen", icon: Target, href: null },
-  { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center" },
-] as const;
+  { label: "Kampagnen", icon: Megaphone, href: "#kampagnen", active: false },
+  { label: "Creatives", icon: ImageIcon, href: null, active: false },
+  { label: "Zielgruppen", icon: Target, href: null, active: false },
+  { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center", active: false },
+];
 
 const adminNavigationItem = {
   label: "Rechtliches",
   icon: Scale,
   href: "/dashboard/rechtliches",
   active: false,
-} as const;
+};
 
 type DashboardPageProps = {
   searchParams: Promise<{
