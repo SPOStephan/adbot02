@@ -206,6 +206,16 @@ export async function saveCustomerPolicy(
       customer,
       ownerPrefix: "organic-boost-policy",
     });
+    // Revive + Meta drain: Autonomie alone must push superseded/soft-blocked plans.
+    try {
+      await drainOrganicBoostExecutionsForAccount({
+        userId: customer.userId,
+        platformAccountId: customer.platformAccountId,
+        maxRuns: 8,
+      });
+    } catch {
+      // Cron retries within a minute.
+    }
   }
 
   return {

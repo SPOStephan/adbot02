@@ -100,6 +100,9 @@ export function formatOrganicBoostFailureDetail(input: {
   if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
     return "Sicherheitsschranke blockiert Meta-Schreiben — unter Autonomie „Freigeben“ wählen und „Freigabe speichern“";
   }
+  if (reason === "superseded_by_marketing_snapshot") {
+    return "Wird nach Marketing-Abruf automatisch neu angestoßen";
+  }
   if (reason === "organic_preflight_marketing_sync_stale") {
     return "Marketing-Abruf zu alt — Meta-Versand wartet";
   }
@@ -198,6 +201,8 @@ type MetaCampaignOverviewProps = {
   campaigns: CampaignPerformance[];
   organicBoostCampaigns: OrganicBoostCampaignView[];
   organicBoostConfigured: boolean;
+  /** Effective ACCOUNT kill-switch; banner must not nag Freigeben when already ALLOW */
+  killSwitchMode?: "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED" | null;
   organicPlannerStatus?: string | null;
   organicPlannerLastError?: string | null;
   pendingBoostCandidateCount?: number;
@@ -443,6 +448,7 @@ export function MetaCampaignOverview({
   campaigns,
   organicBoostCampaigns,
   organicBoostConfigured,
+  killSwitchMode = null,
   organicPlannerStatus = null,
   organicPlannerLastError = null,
   pendingBoostCandidateCount = 0,
@@ -461,11 +467,14 @@ export function MetaCampaignOverview({
       organicBoostCampaigns.some(
         (campaign) => campaign.deliveryState === "starting",
       ));
-  const organicBoostKillSwitchBlocked = organicBoostCampaigns.some(
-    (campaign) =>
-      typeof campaign.failureDetail === "string" &&
-      campaign.failureDetail.includes("Sicherheitsschranke"),
-  );
+  // Sticky plan blocked_reason must not contradict Autonomie when already ALLOW.
+  const organicBoostKillSwitchBlocked =
+    killSwitchMode !== "ALLOW" &&
+    organicBoostCampaigns.some(
+      (campaign) =>
+        typeof campaign.failureDetail === "string" &&
+        campaign.failureDetail.includes("Sicherheitsschranke"),
+    );
   const statusLabel =
     status === "success"
       ? "Meta Live"

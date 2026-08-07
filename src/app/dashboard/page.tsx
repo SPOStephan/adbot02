@@ -1859,6 +1859,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   boostSettingsView.boostMode !== "OFF" &&
                   boostSettingsView.enabled,
               )}
+              killSwitchMode={killSwitchView?.mode ?? null}
               organicPlannerLastError={organicPlannerLastError}
               organicPlannerStatus={organicPlannerStatus}
               pendingBoostCandidateCount={pendingBoostCandidateCount}
