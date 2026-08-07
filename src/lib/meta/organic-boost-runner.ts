@@ -64,6 +64,46 @@ async function persistOrganicBoostResult(input: {
 }
 
 /**
+ * Prefer the account's last marketing_sync_id even when a later Abruf marked
+ * marketing_sync_status as error. Fall back to the newest COMPLETE snapshot.
+ */
+async function resolveLastGoodMarketingSyncId(input: {
+  platformAccountId: string;
+  userId: string;
+  marketingSyncId: string | null;
+}): Promise<string | null> {
+  if (
+    typeof input.marketingSyncId === "string" &&
+    UUID_PATTERN.test(input.marketingSyncId)
+  ) {
+    return input.marketingSyncId;
+  }
+
+  const admin = createAdminClient();
+  const { data: snapshot } = await admin
+    .from("daily_budget_exposure_snapshots")
+    .select("source_marketing_sync_id")
+    .eq("platform_account_id", input.platformAccountId)
+    .eq("user_id", input.userId)
+    .eq("status", "COMPLETE")
+    .eq("currency", "EUR")
+    .not("source_marketing_sync_id", "is", null)
+    .order("completed_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (
+    typeof snapshot?.source_marketing_sync_id === "string" &&
+    UUID_PATTERN.test(snapshot.source_marketing_sync_id)
+  ) {
+    return snapshot.source_marketing_sync_id;
+  }
+
+  return null;
+}
+
+/**
  * Runs Beitrag-Push planning for already-recognized is_new candidates.
  * Independent of content Abruf and of the shared Abruf/Executor account lease;
  * the planner RPC serializes via advisory lock.
@@ -95,12 +135,14 @@ export async function runOrganicBoostPlannerForAccount(input: {
     };
   }
 
-  const marketingSyncId =
-    account.marketing_sync_status === "success" &&
-    typeof account.marketing_sync_id === "string" &&
-    UUID_PATTERN.test(account.marketing_sync_id)
-      ? account.marketing_sync_id
-      : null;
+  const marketingSyncId = await resolveLastGoodMarketingSyncId({
+    platformAccountId: input.platformAccountId,
+    userId: input.userId,
+    marketingSyncId:
+      typeof account.marketing_sync_id === "string"
+        ? account.marketing_sync_id
+        : null,
+  });
 
   if (!marketingSyncId) {
     const result: MetaOrganicBoostPlannerResult = {

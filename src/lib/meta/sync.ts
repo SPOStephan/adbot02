@@ -810,8 +810,8 @@ export async function syncMetaConnector(
       if (readLeaseToken) {
         // Beitrag-Push planning is DB-only: run even near Meta usage limits.
         // Meta writes (executor) stay gated on usage below.
+        // Last-known marketing_sync_id is enough — do not wait for status=success.
         if (
-          connector.marketing_sync_status === "success" &&
           typeof connector.marketing_sync_id === "string" &&
           connector.marketing_sync_id.length > 0
         ) {
@@ -833,6 +833,24 @@ export async function syncMetaConnector(
               candidatesFailed: 0,
               candidatesConsidered: 0,
               lastError: "run_meta_organic_boost_planner failed",
+            };
+          }
+        } else {
+          try {
+            organicBoostResult = await runOrganicBoostPlannerForAccount({
+              platformAccountId: connector.id,
+              userId: connector.user_id,
+              ownerPrefix: "organic-boost-during-sync",
+            });
+          } catch {
+            organicBoostResult = {
+              status: "ACCOUNT_UNAVAILABLE",
+              plansCreated: 0,
+              plansExisting: 0,
+              candidatesSkipped: 0,
+              candidatesFailed: 0,
+              candidatesConsidered: 0,
+              lastError: "marketing_sync_required",
             };
           }
         }
@@ -992,10 +1010,13 @@ export async function syncMetaConnector(
             : "organic_planner_not_invoked"
           : marketingErrorCode ?? "read_lease_unavailable",
       };
+    // Keep the last good marketing snapshot usable for Beitrag-Push Autonomie
+    // even when this Abruf's marketing pass fails (lease, rate limit, partial).
     const preserveMarketingSuccess =
       !marketingResult &&
-      marketingLeaseBlocked &&
-      connector.marketing_sync_status === "success";
+      connector.marketing_sync_status === "success" &&
+      typeof connector.marketing_sync_id === "string" &&
+      connector.marketing_sync_id.length > 0;
     await updateConnector(connector.id, {
       baseline_completed_at:
         failedAssetCount === 0 ? new Date().toISOString() : undefined,
@@ -1018,9 +1039,7 @@ export async function syncMetaConnector(
             : "error",
       marketing_sync_error_code: marketingResult
         ? null
-        : preserveMarketingSuccess
-          ? null
-          : marketingErrorCode,
+        : marketingErrorCode,
       marketing_last_sync_started_at: marketingStartedAt,
       marketing_next_sync_at: nextSyncAt,
       automation_planner_status: plannerErrorCode

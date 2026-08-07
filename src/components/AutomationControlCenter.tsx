@@ -132,6 +132,9 @@ function organicBoostFollowUp(
   if (boost.status === "LEASE_REQUIRED" || boost.lastError === "read_lease_locked") {
     return " Beitrag-Push wird automatisch nachgeholt.";
   }
+  if (boost.lastError === "marketing_sync_required") {
+    return " Beitrag-Push nutzt den letzten gültigen Marketing-Stand und startet automatisch.";
+  }
   if (boost.lastError) {
     return ` Beitrag-Push noch nicht gestartet (${boost.status ?? "Fehler"}: ${boost.lastError}).`;
   }
