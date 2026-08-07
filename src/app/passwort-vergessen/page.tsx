@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BarChart3, KeyRound } from "lucide-react";
 
 import { ForgotPasswordForm } from "@/components/ForgotPasswordForm";
+import { SiteFooter } from "@/components/SiteFooter";
 import { MARKETING_SITE_URL } from "@/lib/site-urls";
 
 export default function ForgotPasswordPage() {
@@ -44,6 +45,7 @@ export default function ForgotPasswordPage() {
           </div>
         </section>
       </div>
+      <SiteFooter tone="dark" />
     </main>
   );
 }

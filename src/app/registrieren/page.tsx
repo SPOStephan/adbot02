@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BarChart3, CircleCheckBig, Sparkles } from "lucide-react";
 
 import { AuthForm } from "@/components/AuthForm";
+import { SiteFooter } from "@/components/SiteFooter";
 import { MARKETING_SITE_URL } from "@/lib/site-urls";
 
 export default function RegisterPage() {
@@ -58,6 +59,7 @@ export default function RegisterPage() {
           </div>
         </section>
       </div>
+      <SiteFooter tone="dark" />
     </main>
   );
 }

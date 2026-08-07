@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BarChart3, CheckCircle2, ShieldCheck } from "lucide-react";
 
 import { AuthForm } from "@/components/AuthForm";
+import { SiteFooter } from "@/components/SiteFooter";
 import { MARKETING_SITE_URL } from "@/lib/site-urls";
 
 type LoginPageProps = {
@@ -64,6 +65,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
         </section>
       </div>
+      <SiteFooter tone="dark" />
     </main>
   );
 }

@@ -8,7 +8,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { APP_SITE_URL } from "@/lib/site-urls";
+import { SiteFooter } from "@/components/SiteFooter";
+import { APP_SITE_URL, MARKETING_SITE_URL } from "@/lib/site-urls";
 
 const benefits = [
   "Meta, Google, TikTok und weitere Kanäle in einer Oberfläche",
@@ -27,6 +28,18 @@ export default function HomePage() {
           <span>AdPilot</span>
         </Link>
         <div className="flex items-center gap-3">
+          <Link
+            className="hidden px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white md:block"
+            href={`${MARKETING_SITE_URL}/impressum`}
+          >
+            Impressum
+          </Link>
+          <Link
+            className="hidden px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white md:block"
+            href={`${MARKETING_SITE_URL}/datenschutz`}
+          >
+            Datenschutz
+          </Link>
           <Link className="hidden px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white sm:block" href={`${APP_SITE_URL}/login`}>
             Anmelden
           </Link>
@@ -135,6 +148,8 @@ export default function HomePage() {
           })}
         </div>
       </section>
+
+      <SiteFooter tone="dark" />
     </main>
   );
 }
