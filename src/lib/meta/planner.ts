@@ -215,6 +215,11 @@ export type MetaOrganicBoostPlannerResult = {
   candidatesFailed: number;
   candidatesConsidered: number;
   lastError: string | null;
+  /** Already-queued organic plans (PENDING/…), even when planner finds 0 new candidates */
+  pendingPlans?: number;
+  executorRuns?: number;
+  executorSucceeded?: number;
+  executorFailed?: number;
 };
 
 export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
