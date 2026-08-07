@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BarChart3, ShieldCheck } from "lucide-react";
 
 import { UpdatePasswordForm } from "@/components/UpdatePasswordForm";
+import { SiteFooter } from "@/components/SiteFooter";
 import { MARKETING_SITE_URL } from "@/lib/site-urls";
 
 export default function UpdatePasswordPage() {
@@ -43,6 +44,7 @@ export default function UpdatePasswordPage() {
           </div>
         </section>
       </div>
+      <SiteFooter tone="dark" />
     </main>
   );
 }

@@ -21,6 +21,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Scale,
   Search,
   Settings,
   ShieldCheck,
@@ -72,6 +73,7 @@ import { OrganicBoostAutoPlanner } from "@/components/OrganicBoostAutoPlanner";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { SignOutButton } from "@/components/SignOutButton";
+import { SiteFooter } from "@/components/SiteFooter";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
@@ -88,6 +90,7 @@ const navigation = [
   { label: "Creatives", icon: ImageIcon, href: null },
   { label: "Zielgruppen", icon: Target, href: null },
   { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center" },
+  { label: "Rechtliches", icon: Scale, href: "/dashboard/rechtliches", active: false },
 ];
 
 type DashboardPageProps = {
@@ -2190,6 +2193,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </section>
           ) : null}
         </div>
+        <SiteFooter tone="light" />
       </div>
     </main>
   );
