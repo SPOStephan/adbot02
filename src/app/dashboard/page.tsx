@@ -440,7 +440,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       await drainOrganicBoostExecutionsForAccount({
         userId: user.id,
         platformAccountId: metaAccount.id,
-        maxRuns: 4,
+        maxRuns: 2,
       });
     } catch {
       // Claim/executor may be busy; LiveRefresh retries on the next render.
