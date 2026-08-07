@@ -67,24 +67,38 @@ function statusCopy(input: {
 
   if (input.heldPlan) {
     const plan = input.heldPlan.status.toUpperCase();
+    if (plan === "FAILED" || plan === "STALE" || plan === "PREFLIGHT_FAILED") {
+      return {
+        tone: "amber" as const,
+        title: "Boost fehlgeschlagen",
+        body: "Der Plan ist fehlgeschlagen. Den genauen Meta-/Fehlerstand siehst du unter Kampagnen.",
+      };
+    }
     if (plan === "SUCCEEDED" || plan === "RECONCILED") {
       return {
         tone: "success" as const,
-        title: "Boost aktiv",
-        body: "Dieser Beitrag wird beworben. Status und Budget siehst du unter Kampagnen.",
+        title: "Plan lokal fertig",
+        body: "Ob Meta wirklich ausliefert, zeigt nur die Ampel unter Kampagnen (mit Remote-Binding).",
       };
     }
-    if (plan === "PENDING" || plan === "RETRYABLE" || plan === "RUNNING" || plan === "CLAIMED") {
+    if (plan === "PENDING" || plan === "RETRYABLE") {
       return {
-        tone: "amber" as const,
-        title: "Bewerbung wird gestartet",
-        body: "Adbot legt die Meta-Kampagne an bzw. wartet auf die Freigabe/Auslieferung bei Meta.",
+        tone: "neutral" as const,
+        title: "In Warteschlange",
+        body: "Noch kein bestätigter Meta-Versand. Die Ampel unter Kampagnen zeigt den echten Stand.",
+      };
+    }
+    if (plan === "CLAIMED" || plan === "RUNNING" || plan === "EXECUTING" || plan === "RECONCILING") {
+      return {
+        tone: "neutral" as const,
+        title: "Executor arbeitet",
+        body: "Lokal in Bearbeitung — Meta-Versand erst bestätigt, wenn die Ampel „Meta-Versand läuft“ oder „Boost aktiv“ zeigt.",
       };
     }
     return {
-      tone: "amber" as const,
+      tone: "neutral" as const,
       title: "Boost vorbereitet",
-      body: "Die Bewerbung liegt bereit und wartet auf die letzte Freigabe.",
+      body: "Plan vorhanden. Meta-Stand nur über die Ampel unter Kampagnen verifizieren.",
     };
   }
 

@@ -52,6 +52,7 @@ export type OrganicBoostCampaignView = {
     | "active"
     | "waiting_meta"
     | "starting"
+    | "queued"
     | "paused"
     | "failed"
     | "unknown";
@@ -102,7 +103,7 @@ export function formatOrganicBoostFailureDetail(input: {
   if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
     // Never claim Meta is writing while the kill-switch soft-block is still set.
     if (input.writesAllowed) {
-      return "Warteschlange — Executor stößt den Versand erneut an";
+      return "Lokal in Warteschlange — noch kein Meta-Versand";
     }
     return "Schreiben gestoppt (Sicherheitsschranke). Freigabe wurde ggf. systemseitig widerrufen.";
   }
@@ -113,10 +114,10 @@ export function formatOrganicBoostFailureDetail(input: {
     return "Wird automatisch neu angestoßen";
   }
   if (reason === "organic_preflight_marketing_sync_stale") {
-    return "Marketing-Abruf zu alt — Meta-Versand wartet";
+    return "Marketing-Abruf zu alt — noch kein Meta-Versand";
   }
   if (reason === "organic_preflight_not_ready") {
-    return "Voraussetzungen für Meta-Versand noch nicht erfüllt";
+    return "Voraussetzungen noch nicht erfüllt — noch kein Meta-Versand";
   }
   if (reason) {
     return reason;
@@ -126,38 +127,57 @@ export function formatOrganicBoostFailureDetail(input: {
   return errorClass || null;
 }
 
+/**
+ * Ampel labels must be wire-verified. PENDING alone never means Meta was contacted.
+ */
 export function deriveOrganicBoostDelivery(input: {
   planStatus: string | null | undefined;
   status: string | null | undefined;
   effectiveStatus: string | null | undefined;
+  /** True only when remote_object_bindings has a CAMPAIGN row for this plan */
+  hasRemoteCampaignBinding?: boolean | null;
+  /** True when any step reached REMOTE_APPLIED */
+  anyStepRemoteApplied?: boolean | null;
+  /** True when any step left NOT_DISPATCHED / has dispatch_started_at */
+  anyStepDispatchStarted?: boolean | null;
 }): Pick<OrganicBoostCampaignView, "deliveryState" | "deliveryLabel"> {
   const plan = (input.planStatus ?? "").toUpperCase();
   const effective = (input.effectiveStatus ?? input.status ?? "").toUpperCase();
+  const hasBinding = input.hasRemoteCampaignBinding === true;
+  const wireStarted =
+    input.anyStepDispatchStarted === true || input.anyStepRemoteApplied === true;
 
-  if (
-    effective === "PENDING_REVIEW" ||
-    effective === "IN_PROCESS" ||
-    effective === "PREAPPROVED" ||
-    effective === "PENDING"
-  ) {
-    return {
-      deliveryState: "waiting_meta",
-      deliveryLabel: "Wartet auf Freigabe durch Meta",
-    };
-  }
+  // Meta-facing campaign states require a verified remote campaign binding.
+  if (hasBinding) {
+    if (
+      effective === "PENDING_REVIEW" ||
+      effective === "IN_PROCESS" ||
+      effective === "PREAPPROVED" ||
+      effective === "PENDING"
+    ) {
+      return {
+        deliveryState: "waiting_meta",
+        deliveryLabel: "Wartet auf Freigabe durch Meta",
+      };
+    }
 
-  if (effective === "ACTIVE") {
-    return {
-      deliveryState: "active",
-      deliveryLabel: "Boost aktiv",
-    };
-  }
+    if (effective === "ACTIVE") {
+      return {
+        deliveryState: "active",
+        deliveryLabel: "Boost aktiv",
+      };
+    }
 
-  if (effective === "PAUSED" || effective === "CAMPAIGN_PAUSED" || effective === "ADSET_PAUSED") {
-    return {
-      deliveryState: "paused",
-      deliveryLabel: "Pausiert",
-    };
+    if (
+      effective === "PAUSED" ||
+      effective === "CAMPAIGN_PAUSED" ||
+      effective === "ADSET_PAUSED"
+    ) {
+      return {
+        deliveryState: "paused",
+        deliveryLabel: "Pausiert",
+      };
+    }
   }
 
   if (
@@ -172,28 +192,47 @@ export function deriveOrganicBoostDelivery(input: {
     };
   }
 
+  if (plan === "BLOCKED" || plan === "HELD") {
+    return {
+      deliveryState: "failed",
+      deliveryLabel: "Blockiert",
+    };
+  }
+
+  if (wireStarted) {
+    return {
+      deliveryState: "starting",
+      deliveryLabel: "Meta-Versand läuft",
+    };
+  }
+
   if (
-    plan === "PENDING" ||
-    plan === "RETRYABLE" ||
     plan === "CLAIMED" ||
     plan === "RUNNING" ||
     plan === "EXECUTING" ||
     plan === "RECONCILING"
   ) {
     return {
-      deliveryState: "starting",
-      deliveryLabel: "Boost wird gestartet",
+      deliveryState: "queued",
+      deliveryLabel: "Executor arbeitet — noch kein Meta-Versand",
     };
   }
 
-  if (plan === "BLOCKED" || plan === "HELD") {
+  if (plan === "PENDING" || plan === "RETRYABLE") {
+    return {
+      deliveryState: "queued",
+      deliveryLabel: "In Warteschlange — noch kein Meta-Versand",
+    };
+  }
+
+  if (plan === "SUCCEEDED" && !hasBinding) {
     return {
       deliveryState: "waiting_meta",
-      deliveryLabel: "Wartet auf Freigabe",
+      deliveryLabel: "Plan lokal fertig — Meta-Kampagne noch nicht sichtbar",
     };
   }
 
-  if (plan === "SUCCEEDED" && !effective) {
+  if (plan === "SUCCEEDED" && hasBinding && !effective) {
     return {
       deliveryState: "waiting_meta",
       deliveryLabel: "Wartet auf Freigabe durch Meta",
@@ -411,6 +450,12 @@ function boostDeliveryStyle(state: OrganicBoostCampaignView["deliveryState"]) {
       dot: "bg-amber-400",
     };
   }
+  if (state === "queued") {
+    return {
+      badge: "bg-slate-100 text-slate-700 ring-slate-200",
+      dot: "bg-slate-400",
+    };
+  }
   if (state === "failed") {
     return {
       badge: "bg-red-50 text-red-800 ring-red-200",
@@ -474,7 +519,9 @@ export function MetaCampaignOverview({
     organicBoostConfigured &&
     (pendingBoostCandidateCount > 0 ||
       organicBoostCampaigns.some(
-        (campaign) => campaign.deliveryState === "starting",
+        (campaign) =>
+          campaign.deliveryState === "starting" ||
+          campaign.deliveryState === "queued",
       ));
   // Sticky plan blocked_reason must not contradict Autonomie when already ALLOW.
   const organicBoostKillSwitchBlocked =

@@ -134,7 +134,7 @@ function organicBoostFollowUp(
     return ` Beitrag-Push: ${sent} Plan/Pläne an Meta gesendet.`;
   }
   if (pending > 0 || ready > 0) {
-    return ` Beitrag-Push: ${Math.max(pending, ready)} Plan/Pläne in der Warteschlange — Meta-Versand läuft automatisch.`;
+    return ` Beitrag-Push: ${Math.max(pending, ready)} Plan/Pläne lokal in der Warteschlange — Meta-Versand noch nicht bestätigt.`;
   }
   if (boost.status === "NO_ELIGIBLE_CANDIDATES") {
     return " Beitrag-Push: keine neuen Beiträge zu planen (bereits verknüpfte Pläne laufen ggf. separat).";

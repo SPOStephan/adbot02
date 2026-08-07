@@ -950,9 +950,8 @@ export async function syncMetaConnector(
       }
     }
 
-    // Meta writes stay on the executor cron. Running them inline here can
-    // exceed the Abruf request timeout and surface as "nicht erreichbar".
-    // Plans are PENDING after materialize; cron picks them up within a minute.
+    // Meta writes stay off the Abruf request path (timeout risk). Plans stay
+    // PENDING here; dashboard load + LiveRefresh + minutely cron drain them.
 
     if (isHighUsage(usage)) {
       const rateLimitedResult = await markFailed({

@@ -81,6 +81,9 @@ export type MetaExecutorRunResult = {
   processed: boolean;
   outcome: MetaExecutorOutcome;
   stepsProcessed: number;
+  /** Set when a plan was claimed this tick (for account-scoped drain). */
+  planId?: string;
+  platformAccountId?: string;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -714,6 +717,11 @@ export async function runMetaMutationExecutorOnce(input: {
     return { processed: false, outcome: "idle", stepsProcessed: 0 };
   }
 
+  const claimed = {
+    planId: claim.planId,
+    platformAccountId: claim.platformAccountId,
+  } as const;
+
   let credentials: MetaExecutorCredentials;
   try {
     credentials = await input.dependencies.credentials(
@@ -728,7 +736,12 @@ export async function runMetaMutationExecutorOnce(input: {
       leaseToken: claim.leaseToken,
       failure,
     });
-    return { processed: true, outcome: terminalOutcome(status), stepsProcessed: 0 };
+    return {
+      processed: true,
+      outcome: terminalOutcome(status),
+      stepsProcessed: 0,
+      ...claimed,
+    };
   }
 
   let step: MetaExecutorStep | null = claim.firstStep;
@@ -775,6 +788,7 @@ export async function runMetaMutationExecutorOnce(input: {
           processed: true,
           outcome: terminalOutcome(status),
           stepsProcessed,
+          ...claimed,
         };
       }
     } else if (step.operation === "RECONCILE") {
@@ -788,6 +802,7 @@ export async function runMetaMutationExecutorOnce(input: {
           processed: true,
           outcome: outcome === "SUCCEEDED" ? "succeeded" : "mismatch",
           stepsProcessed: stepsProcessed + 1,
+          ...claimed,
         };
       } catch (error) {
         const invalidResult = error instanceof TypeError;
@@ -809,6 +824,7 @@ export async function runMetaMutationExecutorOnce(input: {
           processed: true,
           outcome: terminalOutcome(status),
           stepsProcessed,
+          ...claimed,
         };
       }
     } else {
@@ -864,6 +880,7 @@ export async function runMetaMutationExecutorOnce(input: {
           processed: true,
           outcome: terminalOutcome(status),
           stepsProcessed,
+          ...claimed,
         };
       }
     }
@@ -878,7 +895,12 @@ export async function runMetaMutationExecutorOnce(input: {
     throw new MetaMutationExecutorError("step_limit_reached");
   }
 
-  return { processed: true, outcome: "deferred", stepsProcessed };
+  return {
+    processed: true,
+    outcome: "deferred",
+    stepsProcessed,
+    ...claimed,
+  };
 }
 
 async function rpcData(name: string, args: JsonRecord): Promise<unknown> {
