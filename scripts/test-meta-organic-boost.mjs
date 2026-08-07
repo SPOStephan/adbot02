@@ -811,8 +811,16 @@ assert.match(
 const idleLeaseReclaimMigration = read(
   "supabase/migrations/20260806270000_meta_operation_lease_idle_reclaim.sql",
 );
-assert.match(idleLeaseReclaimMigration, /user_id is distinct from p_user_id/);
-assert.match(idleLeaseReclaimMigration, /Idle leases with drifted user_id/);
+assert.match(
+  idleLeaseReclaimMigration,
+  /Idle lease: always take it as the verified owner/,
+);
+assert.match(idleLeaseReclaimMigration, /heal_meta_account_operation_lease/);
+assert.match(idleLeaseReclaimMigration, /account_operation_lease_busy/);
+assert.match(
+  read("src/lib/meta/organic-boost-execute.ts"),
+  /heal_meta_account_operation_lease/,
+);
 assert.match(
   read("src/lib/meta/organic-boost-execute.ts"),
   /claim_idle_with_due_plans/,
@@ -832,6 +840,10 @@ assert.match(
 assert.match(
   read("src/app/dashboard/page.tsx"),
   /organic_boost_dashboard_drain/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /account_operation_lease_busy/,
 );
 
 console.log("test-meta-organic-boost: ok");

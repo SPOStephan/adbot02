@@ -13,7 +13,26 @@ export type OrganicBoostExecuteDrainResult = {
   lastOutcome: string | null;
   divertedToOtherAccount: boolean;
   lastError: string | null;
+  leaseHealed: boolean;
 };
+
+async function healAccountOperationLease(input: {
+  platformAccountId: string;
+  userId: string;
+}): Promise<{ healed: boolean; error: string | null }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("heal_meta_account_operation_lease", {
+    p_platform_account_id: input.platformAccountId,
+    p_user_id: input.userId,
+  });
+
+  if (error) {
+    // Migration may not be applied yet; claim_meta_account_operation heal still helps after SQL.
+    return { healed: false, error: error.message || "lease_heal_failed" };
+  }
+
+  return { healed: data === true, error: null };
+}
 
 async function countDueOrganicBoostPlans(input: {
   platformAccountId: string;
@@ -55,6 +74,13 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
   let divertedToOtherAccount = false;
   let lastError: string | null = null;
   let duePlans = 0;
+
+  const heal = await healAccountOperationLease(input);
+  const leaseHealed = heal.healed;
+  if (heal.error && !heal.error.includes("Could not find the function")) {
+    // Non-missing-function errors are diagnostic only; still attempt claim.
+    lastError = heal.error;
+  }
 
   for (let index = 0; index < maxRuns; index += 1) {
     const due = await countDueOrganicBoostPlans(input);
@@ -111,5 +137,6 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
     lastOutcome,
     divertedToOtherAccount,
     lastError,
+    leaseHealed,
   };
 }
