@@ -75,22 +75,15 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_sync_id uuid;
   v_count integer := 0;
 begin
-  select account.marketing_sync_id into v_sync_id
-  from public.platform_accounts account
-  where account.id = p_platform_account_id
-    and account.user_id = p_user_id
-    and account.platform = 'meta'
-    and account.revoked_at is null;
-
+  -- Do not touch source_marketing_sync_id / payload: guard_meta_mutation_plan_update
+  -- treats them as immutable intent. Organic preflight no longer requires sync match.
   update public.mutation_plans mp
   set
     status = 'PENDING',
     attempt_count = 0,
     max_attempts = greatest(coalesce(mp.max_attempts, 1), 3),
-    source_marketing_sync_id = coalesce(v_sync_id, mp.source_marketing_sync_id),
     lease_token = null,
     lease_owner = null,
     lease_expires_at = null,

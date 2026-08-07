@@ -381,6 +381,21 @@ assert.match(
   surviveSnapshotMigration,
   /never auto-freeze Freigeben/,
 );
+assert.doesNotMatch(
+  surviveSnapshotMigration,
+  /source_marketing_sync_id = coalesce/,
+);
+const reviveNoIntentMigration = read(
+  "supabase/migrations/20260806221000_meta_organic_boost_revive_no_intent_mutate.sql",
+);
+assert.match(
+  reviveNoIntentMigration,
+  /Does not mutate immutable plan intent/,
+);
+assert.doesNotMatch(
+  reviveNoIntentMigration,
+  /source_marketing_sync_id =/,
+);
 assert.match(
   surviveSnapshotMigration,
   /set_meta_customer_budget_autonomy/,
