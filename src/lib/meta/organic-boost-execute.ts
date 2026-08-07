@@ -14,24 +14,78 @@ export type OrganicBoostExecuteDrainResult = {
   divertedToOtherAccount: boolean;
   lastError: string | null;
   leaseHealed: boolean;
+  prepareDetail: string | null;
+  preflightOkCount: number | null;
+  killSwitchMode: string | null;
 };
 
-async function healAccountOperationLease(input: {
+async function prepareOrganicBoostWriteNow(input: {
   platformAccountId: string;
   userId: string;
-}): Promise<{ healed: boolean; error: string | null }> {
+}): Promise<{
+  duePlans: number;
+  leaseHealed: boolean;
+  preflightOkCount: number | null;
+  killSwitchMode: string | null;
+  detail: string | null;
+  error: string | null;
+}> {
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("heal_meta_account_operation_lease", {
+  const { data, error } = await admin.rpc("prepare_meta_organic_boost_write_now", {
     p_platform_account_id: input.platformAccountId,
     p_user_id: input.userId,
   });
 
   if (error) {
-    // Migration may not be applied yet; claim_meta_account_operation heal still helps after SQL.
-    return { healed: false, error: error.message || "lease_heal_failed" };
+    // Fall back to heal-only when 06280000 is not applied yet.
+    const heal = await admin.rpc("heal_meta_account_operation_lease", {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+    });
+    return {
+      duePlans: -1,
+      leaseHealed: heal.data === true,
+      preflightOkCount: null,
+      killSwitchMode: null,
+      detail: null,
+      error: error.message || "prepare_write_now_failed",
+    };
   }
 
-  return { healed: data === true, error: null };
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") {
+    return {
+      duePlans: 0,
+      leaseHealed: false,
+      preflightOkCount: null,
+      killSwitchMode: null,
+      detail: "prepare_result_empty",
+      error: null,
+    };
+  }
+
+  const record = row as Record<string, unknown>;
+  const duePlans = Number(record.due_plans ?? 0);
+  const preflightOkCount = Number(record.preflight_ok_count ?? 0);
+  const killSwitchMode =
+    typeof record.kill_switch_mode === "string" ? record.kill_switch_mode : null;
+  const leaseMatches = record.lease_user_matches === true;
+  const leaseIdle = record.lease_idle === true;
+
+  return {
+    duePlans: Number.isFinite(duePlans) ? duePlans : 0,
+    leaseHealed: leaseMatches && leaseIdle,
+    preflightOkCount: Number.isFinite(preflightOkCount) ? preflightOkCount : null,
+    killSwitchMode,
+    detail: [
+      `due=${duePlans}`,
+      `preflight_ok=${preflightOkCount}`,
+      `kill=${killSwitchMode ?? "?"}`,
+      `lease_idle=${leaseIdle}`,
+      `lease_match=${leaseMatches}`,
+    ].join(" "),
+    error: null,
+  };
 }
 
 async function countDueOrganicBoostPlans(input: {
@@ -75,11 +129,23 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
   let lastError: string | null = null;
   let duePlans = 0;
 
-  const heal = await healAccountOperationLease(input);
-  const leaseHealed = heal.healed;
-  if (heal.error && !heal.error.includes("Could not find the function")) {
-    // Non-missing-function errors are diagnostic only; still attempt claim.
-    lastError = heal.error;
+  const prepared = await prepareOrganicBoostWriteNow(input);
+  if (
+    prepared.error &&
+    !prepared.error.includes("Could not find the function") &&
+    !prepared.error.includes("prepare_write_now_failed")
+  ) {
+    lastError = prepared.error;
+  }
+  if (prepared.duePlans >= 0) {
+    duePlans = prepared.duePlans;
+  }
+  if (
+    prepared.preflightOkCount === 0 &&
+    prepared.duePlans > 0 &&
+    !lastError
+  ) {
+    lastError = "preflight_zero_with_due_plans";
   }
 
   for (let index = 0; index < maxRuns; index += 1) {
@@ -101,7 +167,6 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
       lastOutcome = result.outcome;
 
       if (!result.processed || result.outcome === "idle") {
-        // Claim returned nothing despite due plans — surface for diagnosis.
         if (result.outcome === "idle") {
           lastError = "claim_idle_with_due_plans";
         }
@@ -137,6 +202,9 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
     lastOutcome,
     divertedToOtherAccount,
     lastError,
-    leaseHealed,
+    leaseHealed: prepared.leaseHealed,
+    prepareDetail: prepared.detail,
+    preflightOkCount: prepared.preflightOkCount,
+    killSwitchMode: prepared.killSwitchMode,
   };
 }
