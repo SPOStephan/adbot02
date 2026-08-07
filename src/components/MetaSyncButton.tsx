@@ -98,6 +98,9 @@ function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): str
   }
 
   if (boost.status === "ACCOUNT_UNAVAILABLE") {
+    if (boost.lastError === "marketing_sync_required") {
+      return "Beitrag-Push: wartet auf letzten gültigen Marketing-Stand (startet automatisch).";
+    }
     return "Beitrag-Push: Konto/Scope nicht bereit (EUR + ads_management).";
   }
 

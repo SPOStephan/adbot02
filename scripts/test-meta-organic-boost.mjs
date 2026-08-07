@@ -309,6 +309,54 @@ assert.match(
   read("src/components/AutomationControlCenter.tsx"),
   /Beitrag-Push wird automatisch nachgeholt/,
 );
+assert.match(
+  read("src/components/AutomationControlCenter.tsx"),
+  /letzten gültigen Marketing-Stand/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-runner.ts"),
+  /resolveLastGoodMarketingSyncId/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-runner.ts"),
+  /daily_budget_exposure_snapshots/,
+);
+assert.doesNotMatch(
+  read("src/lib/meta/organic-boost-runner.ts"),
+  /marketing_sync_status === "success"/,
+);
+assert.match(
+  read("src/lib/meta/sync.ts"),
+  /Keep the last good marketing snapshot usable/,
+);
+
+const lastGoodMarketingMigration = read(
+  "supabase/migrations/20260806210000_meta_organic_boost_last_good_marketing_sync.sql",
+);
+assert.match(
+  lastGoodMarketingMigration,
+  /last good marketing sync/,
+);
+assert.match(
+  lastGoodMarketingMigration,
+  /marketing_last_success_at >= now\(\) - interval '48 hours'/,
+);
+assert.match(
+  lastGoodMarketingMigration,
+  /meta_organic_boost_executor_preflight_ok/,
+);
+assert.match(
+  lastGoodMarketingMigration,
+  /organic_preflight_marketing_sync_stale/,
+);
+assert.match(
+  lastGoodMarketingMigration,
+  /a later Abruf error must not block Autonomie/,
+);
+assert.match(
+  lastGoodMarketingMigration,
+  /not current marketing_sync_status=success/,
+);
 
 const noReadLeaseMigration = read(
   "supabase/migrations/20260806194500_meta_organic_boost_no_read_lease.sql",
