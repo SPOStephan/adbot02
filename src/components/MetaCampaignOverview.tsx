@@ -734,6 +734,9 @@ export function MetaCampaignOverview({
                 </div>
               </div>
               <OrganicBoostLiveRefresh active={awaitingOrganicBoostProgress} />
+              {organicBoostConfigured ? (
+                <OrganicBoostPlanButton label="Manuell erneut prüfen" />
+              ) : null}
             </div>
           ) : (
             <div className="mt-5 flex gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
