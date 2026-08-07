@@ -98,7 +98,7 @@ export function formatOrganicBoostFailureDetail(input: {
 
   const reason = input.planBlockedReason?.trim() || null;
   if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
-    return "Kill-Switch blockiert Meta-Schreiben — bitte „Freigeben“ speichern, danach startet der Versand automatisch";
+    return "Sicherheitsschranke blockiert Meta-Schreiben — unter Autonomie „Freigeben“ wählen und „Freigabe speichern“";
   }
   if (reason === "organic_preflight_marketing_sync_stale") {
     return "Marketing-Abruf zu alt — Meta-Versand wartet";
@@ -461,6 +461,11 @@ export function MetaCampaignOverview({
       organicBoostCampaigns.some(
         (campaign) => campaign.deliveryState === "starting",
       ));
+  const organicBoostKillSwitchBlocked = organicBoostCampaigns.some(
+    (campaign) =>
+      typeof campaign.failureDetail === "string" &&
+      campaign.failureDetail.includes("Sicherheitsschranke"),
+  );
   const statusLabel =
     status === "success"
       ? "Meta Live"
@@ -517,6 +522,21 @@ export function MetaCampaignOverview({
 
           {organicBoostCampaigns.length ? (
             <div className="mt-5 space-y-3">
+              {organicBoostKillSwitchBlocked ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+                  Meta-Schreiben ist über die{" "}
+                  <strong>Sicherheitsschranke</strong> gestoppt. Öffne{" "}
+                  <a
+                    className="font-bold underline underline-offset-2"
+                    href="#automation-control-center"
+                  >
+                    Autonomie
+                  </a>
+                  , wähle dort <strong>Freigeben</strong> und klicke{" "}
+                  <strong>Freigabe speichern</strong>. Danach startet der
+                  Beitrag-Push automatisch.
+                </p>
+              ) : null}
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <div className="overflow-x-auto">
                   <table className="min-w-[1080px] divide-y divide-slate-200 text-left text-sm">
