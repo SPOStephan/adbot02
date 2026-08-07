@@ -80,6 +80,14 @@ export function formatOrganicBoostFailureDetail(input: {
   const stepCode = input.failedStepErrorCode?.trim() || null;
   const stepKey = input.failedStepKey?.trim() || null;
   if (stepCode) {
+    if (stepCode === "meta_graph_adset_budget_sharing") {
+      return stepKey
+        ? `Meta verlangt is_adset_budget_sharing_enabled bei „${stepKey}“`
+        : "Meta verlangt is_adset_budget_sharing_enabled für die Kampagne";
+    }
+    if (stepCode === "meta_graph_special_ad_categories") {
+      return "Meta verlangt special_ad_categories an der Kampagne";
+    }
     if (stepCode.startsWith("meta_graph_")) {
       return stepKey
         ? `Meta hat „${stepKey}“ abgelehnt (${stepCode.replace("meta_graph_", "#")})`

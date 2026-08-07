@@ -638,13 +638,19 @@ function classifyFailure(
   }
 
   if (error instanceof MetaGraphError) {
+    const graphMessage = (error.graphMessage ?? "").toLowerCase();
+    const graphErrorCode = error.reconnectRequired
+      ? "meta_auth_reconnect_required"
+      : error.rateLimited
+        ? `meta_rate_limit_${error.code ?? error.status}`
+        : graphMessage.includes("is_adset_budget_sharing")
+          ? "meta_graph_adset_budget_sharing"
+          : graphMessage.includes("special_ad_categories")
+            ? "meta_graph_special_ad_categories"
+            : `meta_graph_${error.code ?? error.status}`;
     return {
       errorClass: error.rateLimited ? "RATE_LIMIT" : error.reconnectRequired ? "AUTH" : "META",
-      errorCode: error.reconnectRequired
-        ? "meta_auth_reconnect_required"
-        : error.rateLimited
-          ? `meta_rate_limit_${error.code ?? error.status}`
-          : `meta_graph_${error.code ?? error.status}`,
+      errorCode: graphErrorCode,
       remoteOutcome: "NOT_APPLIED",
       retryAfterSeconds: error.usage.retryAfterSeconds ?? (error.rateLimited ? 900 : 120),
     };

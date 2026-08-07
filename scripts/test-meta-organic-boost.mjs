@@ -448,6 +448,20 @@ assert.match(writeClient, /isInstagramOrganicMediaCreative/);
 assert.match(writeClient, /source_instagram_media_id/);
 assert.match(writeClient, /call_to_action_type/);
 assert.match(writeClient, /destination_type: "ON_POST"/);
+assert.match(writeClient, /is_adset_budget_sharing_enabled/);
+assert.match(writeClient, /value \? "1" : "0"/);
+assert.match(writeClient, /coerceMinorUnits/);
+
+const adsetBudgetSharingMigration = read(
+  "supabase/migrations/20260806200000_meta_organic_boost_adset_budget_sharing.sql",
+);
+assert.match(adsetBudgetSharingMigration, /is_adset_budget_sharing_enabled/);
+assert.match(adsetBudgetSharingMigration, /validate-campaign/);
+assert.match(adsetBudgetSharingMigration, /create-campaign-paused/);
+assert.match(
+  read("src/lib/meta/executor.ts"),
+  /meta_graph_adset_budget_sharing/,
+);
 
 const payloadFixMigration = read(
   "supabase/migrations/20260806190000_meta_organic_boost_meta_payload_fix.sql",
