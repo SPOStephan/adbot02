@@ -506,6 +506,14 @@ assert.match(
   /Freigeben/,
 );
 assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /#automation-control-center/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Sicherheitsschranke/,
+);
+assert.match(
   read("src/app/dashboard/page.tsx"),
   /formatOrganicBoostFailureDetail/,
 );
