@@ -358,6 +358,58 @@ assert.match(
   /not current marketing_sync_status=success/,
 );
 
+const surviveSnapshotMigration = read(
+  "supabase/migrations/20260806220000_meta_organic_boost_survive_marketing_snapshot.sql",
+);
+assert.match(
+  surviveSnapshotMigration,
+  /source_rule_key is distinct from 'organic-boost'/,
+);
+assert.match(
+  surviveSnapshotMigration,
+  /revive_meta_organic_boost_superseded_plans/,
+);
+assert.match(
+  surviveSnapshotMigration,
+  /superseded_by_marketing_snapshot/,
+);
+assert.match(
+  surviveSnapshotMigration,
+  /permanent candidate_already_linked dead-ends|must survive marketing Abruf/,
+);
+assert.match(
+  surviveSnapshotMigration,
+  /never auto-freeze Freigeben/,
+);
+assert.match(
+  surviveSnapshotMigration,
+  /set_meta_customer_budget_autonomy/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /writesAllowed/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Meta-Versand wird gestartet/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /killSwitchMode !== "ALLOW"/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Wird automatisch neu angestoßen/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /killSwitchMode=\{killSwitchView\?\.mode/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /Revive \+ Meta drain/,
+);
+
 const noReadLeaseMigration = read(
   "supabase/migrations/20260806194500_meta_organic_boost_no_read_lease.sql",
 );

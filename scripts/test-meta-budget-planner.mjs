@@ -67,6 +67,22 @@ try {
     /Same-day exposure row was not relinked to the latest snapshot/,
   );
 
+  const organicSurviveMigration = await readFile(
+    join(
+      projectRoot,
+      "supabase/migrations/20260806220000_meta_organic_boost_survive_marketing_snapshot.sql",
+    ),
+    "utf8",
+  );
+  assert.match(
+    organicSurviveMigration,
+    /source_rule_key is distinct from 'organic-boost'/,
+  );
+  assert.match(
+    organicSurviveMigration,
+    /run_meta_budget_planner/,
+  );
+
   const sourcePath = join(projectRoot, "src/lib/meta/planner.ts");
   const source = (await readFile(sourcePath, "utf8"))
     .replace('import "server-only";', "")

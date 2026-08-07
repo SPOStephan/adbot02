@@ -951,6 +951,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       failedStepErrorCode: row.failed_step_error_code
         ? String(row.failed_step_error_code)
         : null,
+      writesAllowed: killSwitchView?.mode === "ALLOW",
     });
     return [
       {
@@ -1032,6 +1033,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       planBlockedReason: plan.blocked_reason
         ? String(plan.blocked_reason)
         : null,
+      writesAllowed: killSwitchView?.mode === "ALLOW",
     });
     const campaignName =
       typeof payload.campaign === "object" &&
@@ -1859,6 +1861,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   boostSettingsView.boostMode !== "OFF" &&
                   boostSettingsView.enabled,
               )}
+              killSwitchMode={killSwitchView?.mode ?? null}
               organicPlannerLastError={organicPlannerLastError}
               organicPlannerStatus={organicPlannerStatus}
               pendingBoostCandidateCount={pendingBoostCandidateCount}
