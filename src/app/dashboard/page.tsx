@@ -74,6 +74,7 @@ import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { SignOutButton } from "@/components/SignOutButton";
 import { SiteFooter } from "@/components/SiteFooter";
+import { isSiteAdmin } from "@/lib/auth/site-admin";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
@@ -84,14 +85,20 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const maxDuration = 300;
 
-const navigation = [
+const baseNavigation = [
   { label: "Übersicht", icon: LayoutDashboard, href: "/dashboard", active: true },
-  { label: "Kampagnen", icon: Megaphone, href: "#kampagnen" },
-  { label: "Creatives", icon: ImageIcon, href: null },
-  { label: "Zielgruppen", icon: Target, href: null },
-  { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center" },
-  { label: "Rechtliches", icon: Scale, href: "/dashboard/rechtliches", active: false },
+  { label: "Kampagnen", icon: Megaphone, href: "#kampagnen", active: false },
+  { label: "Creatives", icon: ImageIcon, href: null, active: false },
+  { label: "Zielgruppen", icon: Target, href: null, active: false },
+  { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center", active: false },
 ];
+
+const adminNavigationItem = {
+  label: "Rechtliches",
+  icon: Scale,
+  href: "/dashboard/rechtliches",
+  active: false,
+};
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -360,6 +367,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   if (!user) {
     redirect("/login");
   }
+
+  const userIsSiteAdmin = await isSiteAdmin(user.id);
+  const navigation = userIsSiteAdmin
+    ? [...baseNavigation, adminNavigationItem]
+    : [...baseNavigation];
 
   const { data: connectedAccounts, error: connectedAccountsError } = await supabase
     .from("platform_accounts")
