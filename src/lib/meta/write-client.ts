@@ -709,6 +709,13 @@ export function createMetaCampaign(input: MetaAccountMutationInput): Promise<Met
   const sharingEnabled = typeof input.payload.is_adset_budget_sharing_enabled === "boolean"
     ? input.payload.is_adset_budget_sharing_enabled
     : !hasCampaignBudget;
+  // Meta #100/4834005: ad-set budget sharing requires campaign bid_strategy.
+  const bidStrategy =
+    typeof input.payload.bid_strategy === "string" && input.payload.bid_strategy.trim()
+      ? input.payload.bid_strategy.trim()
+      : sharingEnabled
+        ? "LOWEST_COST_WITHOUT_CAP"
+        : undefined;
 
   const payload: MetaWritePayload = {
     ...input.payload,
@@ -716,6 +723,7 @@ export function createMetaCampaign(input: MetaAccountMutationInput): Promise<Met
     ...(lifetimeBudget === undefined ? {} : { lifetime_budget: lifetimeBudget }),
     // Meta Marketing API v24+: required when ad-set budgets are used.
     is_adset_budget_sharing_enabled: sharingEnabled,
+    ...(bidStrategy ? { bid_strategy: bidStrategy } : {}),
   };
 
   assertExclusiveBudget(payload);

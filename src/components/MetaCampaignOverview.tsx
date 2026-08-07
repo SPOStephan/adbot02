@@ -95,6 +95,11 @@ export function formatOrganicBoostFailureDetail(input: {
   const stepKey = input.failedStepKey?.trim() || null;
   const stepDetail = input.failedStepErrorDetail?.trim() || null;
   if (stepCode) {
+    if (stepCode === "meta_graph_adset_budget_sharing_bid_strategy"
+      || stepCode.endsWith("_s4834005")) {
+      return stepDetail
+        ?? "Meta verlangt Gebotsstrategie (bid_strategy) bei Anzeigengruppen-Budgetaufteilung";
+    }
     if (stepCode === "meta_graph_adset_budget_sharing") {
       return stepDetail
         ?? (stepKey

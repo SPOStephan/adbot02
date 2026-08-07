@@ -656,11 +656,16 @@ function classifyFailure(
       ? "meta_auth_reconnect_required"
       : error.rateLimited
         ? `meta_rate_limit_${error.code ?? error.status}`
-        : haystack.includes("is_adset_budget_sharing")
-          ? "meta_graph_adset_budget_sharing"
-          : haystack.includes("special_ad_categories")
-            ? "meta_graph_special_ad_categories"
-            : `meta_graph_${error.code ?? error.status}`;
+        : error.subcode === 4834005
+          || haystack.includes("ohne gebotsstrategie")
+          || haystack.includes("without bid strategy")
+          || haystack.includes("without a bid strategy")
+          ? "meta_graph_adset_budget_sharing_bid_strategy"
+          : haystack.includes("is_adset_budget_sharing")
+            ? "meta_graph_adset_budget_sharing"
+            : haystack.includes("special_ad_categories")
+              ? "meta_graph_special_ad_categories"
+              : `meta_graph_${error.code ?? error.status}`;
     const graphErrorCode =
       !error.reconnectRequired
       && !error.rateLimited
@@ -930,7 +935,14 @@ export async function runMetaMutationExecutorOnce(input: {
 async function rpcData(name: string, args: JsonRecord): Promise<unknown> {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc(name, args);
-  if (error) throw new MetaMutationExecutorError("database_failed");
+  if (error) {
+    const detail = [name, error.message, error.code, error.details]
+      .filter((part): part is string => Boolean(part && String(part).trim()))
+      .join(" | ");
+    const failure = new MetaMutationExecutorError("database_failed");
+    failure.message = `Meta mutation executor failed: database_failed (${detail})`;
+    throw failure;
+  }
   return data;
 }
 
