@@ -867,4 +867,17 @@ assert.match(
   /4834005/,
 );
 
+const attemptCollisionMigration = read(
+  "supabase/migrations/20260806291000_meta_organic_boost_attempt_collision.sql",
+);
+assert.match(
+  attemptCollisionMigration,
+  /mutation_executions_plan_attempt_key/,
+);
+assert.match(attemptCollisionMigration, /max\(me\.attempt_number\)/);
+assert.match(
+  attemptCollisionMigration,
+  /v_attempt := greatest/,
+);
+
 console.log("test-meta-organic-boost: ok");
