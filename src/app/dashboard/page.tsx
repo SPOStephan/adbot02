@@ -72,6 +72,7 @@ import { OrganicBoostAutoPlanner } from "@/components/OrganicBoostAutoPlanner";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { SignOutButton } from "@/components/SignOutButton";
+import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
@@ -432,6 +433,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const writeScopeGranted =
     Array.isArray(metaAccount?.meta_scopes) &&
     metaAccount.meta_scopes.includes("ads_management");
+  // Dashboard load drains due Beitrag-Push plans so Ampel progress does not
+  // depend solely on the minutely cron (which can go silent).
+  if (metaConnected && metaAccount && writeScopeGranted) {
+    try {
+      await drainOrganicBoostExecutionsForAccount({
+        userId: user.id,
+        platformAccountId: metaAccount.id,
+        maxRuns: 4,
+      });
+    } catch {
+      // Claim/executor may be busy; LiveRefresh retries on the next render.
+    }
+  }
   const [
     { data: metaAssets },
     { data: contentCandidates },
@@ -933,10 +947,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const effectiveStatus = row.effective_status
       ? String(row.effective_status)
       : null;
+    const hasRemoteCampaignBinding = row.has_remote_campaign_binding === true;
+    const anyStepRemoteApplied = row.any_step_remote_applied === true;
+    const anyStepDispatchStarted = row.any_step_dispatch_started === true;
     const delivery = deriveOrganicBoostDelivery({
       planStatus,
       status,
       effectiveStatus,
+      hasRemoteCampaignBinding,
+      anyStepRemoteApplied,
+      anyStepDispatchStarted,
     });
     const failureDetail = formatOrganicBoostFailureDetail({
       planErrorClass: row.plan_error_class
@@ -965,6 +985,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         failureDetail:
           delivery.deliveryState === "failed" ||
           delivery.deliveryState === "starting" ||
+          delivery.deliveryState === "queued" ||
           delivery.deliveryState === "waiting_meta"
             ? failureDetail
             : null,
@@ -1027,6 +1048,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       planStatus,
       status: null,
       effectiveStatus: null,
+      hasRemoteCampaignBinding: false,
+      anyStepRemoteApplied: false,
+      anyStepDispatchStarted: false,
     });
     const failureDetail = formatOrganicBoostFailureDetail({
       planErrorClass: plan.error_class ? String(plan.error_class) : null,
@@ -1053,6 +1077,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         failureDetail:
           delivery.deliveryState === "failed" ||
           delivery.deliveryState === "starting" ||
+          delivery.deliveryState === "queued" ||
           delivery.deliveryState === "waiting_meta"
             ? failureDetail
             : null,
@@ -1388,12 +1413,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         campaign.name.startsWith("Organic Boost"),
     )
     .map((campaign) => {
+      // Live marketing rows are Meta-synced objects — treat as bound.
       const delivery = deriveOrganicBoostDelivery({
-        planStatus: null,
+        planStatus: "SUCCEEDED",
         status: campaign.status ? String(campaign.status) : null,
         effectiveStatus: campaign.effectiveStatus
           ? String(campaign.effectiveStatus)
           : null,
+        hasRemoteCampaignBinding: true,
+        anyStepRemoteApplied: true,
+        anyStepDispatchStarted: true,
       });
       return {
         planId: String(campaign.id),
@@ -1404,10 +1433,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ? String(campaign.effectiveStatus)
           : null,
         deliveryState: delivery.deliveryState,
-        deliveryLabel:
-          delivery.deliveryState === "unknown"
-            ? "Boost aktiv"
-            : delivery.deliveryLabel,
+        deliveryLabel: delivery.deliveryLabel,
         failureDetail: null,
         budgetMode: campaign.lifetimeBudgetMinor != null ? "LIFETIME" : "DAILY",
         dailyBudgetMinor: campaign.dailyBudgetMinor,

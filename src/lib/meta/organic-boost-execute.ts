@@ -10,12 +10,13 @@ export type OrganicBoostExecuteDrainResult = {
   succeeded: number;
   failed: number;
   lastOutcome: string | null;
+  divertedToOtherAccount: boolean;
 };
 
 /**
  * Immediately drains pending organic-boost mutation plans for one account
- * instead of waiting solely on the minutely cron. Stops on idle or when the
- * next claimed plan belongs to a different account.
+ * instead of waiting solely on the minutely cron. Stops on idle, when claim
+ * returns a different account, or after maxRuns.
  */
 export async function drainOrganicBoostExecutionsForAccount(input: {
   platformAccountId: string;
@@ -28,6 +29,7 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
   let succeeded = 0;
   let failed = 0;
   let lastOutcome: string | null = null;
+  let divertedToOtherAccount = false;
 
   for (let index = 0; index < maxRuns; index += 1) {
     const { count, error } = await admin
@@ -53,6 +55,15 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
     if (!result.processed || result.outcome === "idle") {
       break;
     }
+
+    if (
+      result.platformAccountId &&
+      result.platformAccountId !== input.platformAccountId
+    ) {
+      divertedToOtherAccount = true;
+      break;
+    }
+
     if (result.outcome === "succeeded") {
       succeeded += 1;
     } else if (result.outcome === "failed" || result.outcome === "mismatch") {
@@ -60,5 +71,5 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
     }
   }
 
-  return { runs, succeeded, failed, lastOutcome };
+  return { runs, succeeded, failed, lastOutcome, divertedToOtherAccount };
 }

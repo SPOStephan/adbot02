@@ -430,7 +430,7 @@ assert.match(
 );
 assert.match(
   read("src/components/AutomationControlCenter.tsx"),
-  /Meta-Versand läuft automatisch/,
+  /Meta-Versand noch nicht bestätigt/,
 );
 assert.match(
   read("src/components/AutomationControlCenter.tsx"),
@@ -486,11 +486,58 @@ assert.match(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /Warteschlange — Executor stößt den Versand erneut an/,
+  /Lokal in Warteschlange — noch kein Meta-Versand/,
 );
 assert.doesNotMatch(
   read("src/components/MetaCampaignOverview.tsx"),
   /return "Meta-Versand wird gestartet"/,
+);
+assert.doesNotMatch(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Boost wird gestartet/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /In Warteschlange — noch kein Meta-Versand/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Meta-Versand läuft/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /hasRemoteCampaignBinding/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /anyStepDispatchStarted/,
+);
+
+const honestStatusMigration = read(
+  "supabase/migrations/20260806250000_meta_organic_boost_honest_status.sql",
+);
+assert.match(honestStatusMigration, /has_remote_campaign_binding/);
+assert.match(honestStatusMigration, /any_step_remote_applied/);
+assert.match(honestStatusMigration, /any_step_dispatch_started/);
+assert.match(
+  honestStatusMigration,
+  /Meta status\/spend only when a CAMPAIGN remote binding exists/,
+);
+assert.doesNotMatch(
+  honestStatusMigration,
+  /binding\.id is null\s+and campaign\.name =/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /drainOrganicBoostExecutionsForAccount/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-execute.ts"),
+  /divertedToOtherAccount/,
+);
+assert.match(
+  read("src/lib/meta/executor.ts"),
+  /platformAccountId\?: string/,
 );
 
 const noReadLeaseMigration = read(
@@ -566,7 +613,7 @@ assert.match(
 assert.doesNotMatch(read("src/lib/meta/sync.ts"), /processNextMetaMutation/);
 assert.match(
   read("src/lib/meta/sync.ts"),
-  /Meta writes stay on the executor cron/,
+  /dashboard load \+ LiveRefresh \+ minutely cron drain/,
 );
 assert.match(
   read("src/app/api/connectors/meta/sync/route.ts"),
