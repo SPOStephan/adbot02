@@ -447,16 +447,21 @@ try {
     },
   );
 
-  globalThis.fetch = async () => jsonResponse({
-    error: {
-      code: 100,
-      error_subcode: 1885154,
-      message: "Invalid parameter",
-      error_user_title: "Ad Set with Promoted Object Is Required",
-      error_user_msg:
-        "Promoted object must be set when creating this ad set for ON_POST.",
-    },
-  }, { status: 400 });
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+    return jsonResponse({
+      error: {
+        code: 100,
+        error_subcode: 1885154,
+        message: "Invalid parameter",
+        error_user_title: "Ad Set with Promoted Object Is Required",
+        error_user_msg:
+          "Promoted object must be set when creating this ad set for ON_POST.",
+      },
+    }, { status: 400 });
+  };
   await assert.rejects(
     () => writeClient.createMetaCampaign({
       ...auth,
@@ -486,6 +491,14 @@ try {
       assert.doesNotMatch(error.diagnosticDetail ?? "", /EAA/);
       return true;
     },
+  );
+  assert.equal(
+    encodedBody(requests[0].init).get("bid_strategy"),
+    "LOWEST_COST_WITHOUT_CAP",
+  );
+  assert.equal(
+    encodedBody(requests[0].init).get("is_adset_budget_sharing_enabled"),
+    "1",
   );
 
   globalThis.fetch = async () => jsonResponse({ success: false });

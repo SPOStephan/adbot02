@@ -846,4 +846,25 @@ assert.match(
   /account_operation_lease_busy/,
 );
 
+const campaignBidStrategyMigration = read(
+  "supabase/migrations/20260806290000_meta_organic_boost_campaign_bid_strategy.sql",
+);
+assert.match(campaignBidStrategyMigration, /4834005/);
+assert.match(
+  campaignBidStrategyMigration,
+  /''bid_strategy'', ''LOWEST_COST_WITHOUT_CAP''/,
+);
+assert.match(
+  read("src/lib/meta/write-client.ts"),
+  /ad-set budget sharing requires campaign bid_strategy/,
+);
+assert.match(
+  read("src/lib/meta/executor.ts"),
+  /meta_graph_adset_budget_sharing_bid_strategy/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /4834005/,
+);
+
 console.log("test-meta-organic-boost: ok");
