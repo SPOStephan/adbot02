@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isSiteAdmin } from "@/lib/auth/site-admin";
 import { saveLegalPage } from "@/lib/legal/pages";
 import { isLegalSlug } from "@/lib/legal/types";
 import { createClient } from "@/lib/supabase/server";
@@ -22,6 +23,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { ok: false, message: "Nicht angemeldet." },
         { status: 401, headers: NO_STORE },
+      );
+    }
+
+    if (!(await isSiteAdmin(user.id))) {
+      return NextResponse.json(
+        { ok: false, message: "Nur Admins dürfen Rechtstexte bearbeiten." },
+        { status: 403, headers: NO_STORE },
       );
     }
 

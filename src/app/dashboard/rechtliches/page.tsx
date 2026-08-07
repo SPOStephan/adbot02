@@ -5,6 +5,7 @@ import { ArrowLeft, Scale } from "lucide-react";
 import { LegalPagesEditor } from "@/components/LegalPagesEditor";
 import { SignOutButton } from "@/components/SignOutButton";
 import { SiteFooter } from "@/components/SiteFooter";
+import { isSiteAdmin } from "@/lib/auth/site-admin";
 import { getLegalPage } from "@/lib/legal/pages";
 import { LEGAL_SLUGS } from "@/lib/legal/types";
 import { createClient } from "@/lib/supabase/server";
@@ -20,6 +21,10 @@ export default async function DashboardLegalPage() {
 
   if (!user) {
     redirect("/login?next=/dashboard/rechtliches");
+  }
+
+  if (!(await isSiteAdmin(user.id))) {
+    redirect("/dashboard");
   }
 
   const pages = await Promise.all(
