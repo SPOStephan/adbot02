@@ -203,7 +203,9 @@ async function reviveAndDrainOrganicBoost(input: {
       executorSucceeded = drain.succeeded;
       executorFailed = drain.failed;
       executorLastOutcome = drain.lastOutcome;
-      executorLastError = drain.lastError;
+      executorLastError =
+        drain.lastError ??
+        (drain.prepareDetail ? `prepare: ${drain.prepareDetail}` : null);
     } catch (error) {
       executorLastError =
         error instanceof Error

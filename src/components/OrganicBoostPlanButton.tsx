@@ -21,16 +21,19 @@ export function OrganicBoostPlanButton({
     try {
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v1");
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v2");
-      const response = await fetch("/api/meta/automation/organic-boost/plan", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
+      const planResponse = await fetch(
+        "/api/meta/automation/organic-boost/plan",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: "{}",
         },
-        body: "{}",
-      });
-      const body = (await response.json().catch(() => ({}))) as {
+      );
+      const planBody = (await planResponse.json().catch(() => ({}))) as {
         ok?: boolean;
         message?: string;
         organicBoost?: {
@@ -48,31 +51,68 @@ export function OrganicBoostPlanButton({
           executorLastError?: string | null;
         };
       };
-      if (!response.ok || body.ok !== true) {
+      if (!planResponse.ok || planBody.ok !== true) {
         throw new Error(
-          body.message ?? "Beitrag-Push konnte nicht gestartet werden.",
+          planBody.message ?? "Beitrag-Push konnte nicht gestartet werden.",
         );
       }
+
+      const executeResponse = await fetch(
+        "/api/meta/automation/organic-boost/execute",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: "{}",
+        },
+      );
+      const executeBody = (await executeResponse.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        drain?: {
+          duePlans?: number;
+          runs?: number;
+          succeeded?: number;
+          failed?: number;
+          lastOutcome?: string | null;
+          lastError?: string | null;
+          prepareDetail?: string | null;
+          preflightOkCount?: number | null;
+        };
+      };
+
       const created =
-        (body.organicBoost?.plansCreated ?? 0) +
-        (body.organicBoost?.plansExisting ?? 0);
-      const status = body.organicBoost?.status ?? "unbekannt";
-      const error = body.organicBoost?.lastError?.trim();
-      const written = body.organicBoost?.executorSucceeded ?? 0;
-      const execFailed = body.organicBoost?.executorFailed ?? 0;
-      const drainError = body.organicBoost?.executorLastError?.trim();
+        (planBody.organicBoost?.plansCreated ?? 0) +
+        (planBody.organicBoost?.plansExisting ?? 0);
+      const written = executeBody.drain?.succeeded ??
+        planBody.organicBoost?.executorSucceeded ??
+        0;
+      const execFailed = executeBody.drain?.failed ??
+        planBody.organicBoost?.executorFailed ??
+        0;
+      const drainError =
+        executeBody.drain?.lastError?.trim() ||
+        planBody.organicBoost?.executorLastError?.trim() ||
+        null;
+      const prepare = executeBody.drain?.prepareDetail?.trim();
+      const status = planBody.organicBoost?.status ?? "unbekannt";
+      const error = planBody.organicBoost?.lastError?.trim();
+
       setNotice(
-        created > 0
-          ? written > 0
-            ? `${created} Plan/Pläne bereit, ${written} bereits an Meta gesendet.`
-            : execFailed > 0
-              ? `${created} Plan/Pläne bereit, Meta-Versand fehlgeschlagen (${body.organicBoost?.executorLastOutcome ?? "Fehler"}${drainError ? `: ${drainError}` : ""}).`
-              : drainError
-                ? `${created} Plan/Pläne bereit, Meta-Versand blockiert (${drainError}).`
-                : `${created} Boost-Plan/Pläne angelegt (Status ${status}). Meta-Versand folgt automatisch.`
-          : error
-            ? `Kein Plan angelegt (${status}): ${error}`
-            : `Kein Plan angelegt (Status ${status}, geprüft: ${body.organicBoost?.candidatesConsidered ?? 0}, übersprungen: ${body.organicBoost?.candidatesSkipped ?? 0}, fehlgeschlagen: ${body.organicBoost?.candidatesFailed ?? 0}).`,
+        written > 0
+          ? `Meta-Kontakt: ${written} Plan/Pläne gesendet.`
+          : execFailed > 0
+            ? `Meta hat abgelehnt (${executeBody.drain?.lastOutcome ?? "failed"}${drainError ? `: ${drainError}` : ""}).`
+            : drainError
+              ? `Kein Meta-Kontakt (${drainError}${prepare ? ` · ${prepare}` : ""}).`
+              : created > 0
+                ? `Pläne bereit, aber kein Meta-Kontakt${prepare ? ` (${prepare})` : ""}.`
+                : error
+                  ? `Kein Plan angelegt (${status}): ${error}`
+                  : `Kein Plan angelegt (Status ${status}).`,
       );
       router.refresh();
     } catch (error) {

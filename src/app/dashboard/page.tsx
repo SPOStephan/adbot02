@@ -77,8 +77,10 @@ import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const maxDuration = 300;
 
 const navigation = [
   { label: "Übersicht", icon: LayoutDashboard, href: "/dashboard", active: true },
@@ -440,15 +442,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       const drain = await drainOrganicBoostExecutionsForAccount({
         userId: user.id,
         platformAccountId: metaAccount.id,
-        maxRuns: 2,
+        maxRuns: 4,
       });
-      if (drain.lastError) {
+      if (drain.lastError || drain.runs > 0 || (drain.duePlans ?? 0) > 0) {
         console.error("organic_boost_dashboard_drain", {
           platformAccountId: metaAccount.id,
           duePlans: drain.duePlans,
           runs: drain.runs,
+          succeeded: drain.succeeded,
+          failed: drain.failed,
           lastOutcome: drain.lastOutcome,
           lastError: drain.lastError,
+          prepareDetail: drain.prepareDetail,
+          preflightOkCount: drain.preflightOkCount,
+          killSwitchMode: drain.killSwitchMode,
           divertedToOtherAccount: drain.divertedToOtherAccount,
         });
       }
