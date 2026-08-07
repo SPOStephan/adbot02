@@ -527,6 +527,42 @@ assert.doesNotMatch(
   honestStatusMigration,
   /binding\.id is null\s+and campaign\.name =/,
 );
+
+const graphErrorDetailMigration = read(
+  "supabase/migrations/20260806260000_meta_graph_error_detail.sql",
+);
+assert.match(graphErrorDetailMigration, /error_detail text/);
+assert.match(graphErrorDetailMigration, /p_error_detail/);
+assert.match(graphErrorDetailMigration, /failed_step_error_detail/);
+assert.match(graphErrorDetailMigration, /meta_executor_safe_error_detail/);
+assert.match(
+  read("src/lib/meta/client.ts"),
+  /error_user_msg/,
+);
+assert.match(
+  read("src/lib/meta/client.ts"),
+  /sanitizeMetaGraphDiagnosticDetail/,
+);
+assert.match(
+  read("src/lib/meta/executor.ts"),
+  /errorDetail: error\.diagnosticDetail/,
+);
+assert.match(
+  read("src/lib/meta/executor.ts"),
+  /p_error_detail: input\.failure\.errorDetail/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /failedStepErrorDetail/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /formatMetaGraphCodeLabel/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /failed_step_error_detail/,
+);
 assert.match(
   read("src/app/dashboard/page.tsx"),
   /drainOrganicBoostExecutionsForAccount/,

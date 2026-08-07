@@ -151,6 +151,8 @@ type FailureClassification = {
     | "PREFLIGHT"
     | "RECONCILIATION";
   errorCode: string;
+  /** Secret-safe Meta diagnostic (error_user_msg / title); never raw Graph body. */
+  errorDetail: string | null;
   remoteOutcome: "NOT_APPLIED" | "UNKNOWN" | "PERMANENT";
   retryAfterSeconds: number;
 };
@@ -635,25 +637,42 @@ function classifyFailure(
     return {
       errorClass: "TRANSPORT",
       errorCode: `meta_${error.operation}_transport`,
+      errorDetail: null,
       remoteOutcome: error.outcome === "unknown" ? "UNKNOWN" : "NOT_APPLIED",
       retryAfterSeconds: 120,
     };
   }
 
   if (error instanceof MetaGraphError) {
-    const graphMessage = (error.graphMessage ?? "").toLowerCase();
-    const graphErrorCode = error.reconnectRequired
+    const haystack = [
+      error.errorUserMessage,
+      error.errorUserTitle,
+      error.graphMessage,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join(" ")
+      .toLowerCase();
+    const baseCode = error.reconnectRequired
       ? "meta_auth_reconnect_required"
       : error.rateLimited
         ? `meta_rate_limit_${error.code ?? error.status}`
-        : graphMessage.includes("is_adset_budget_sharing")
+        : haystack.includes("is_adset_budget_sharing")
           ? "meta_graph_adset_budget_sharing"
-          : graphMessage.includes("special_ad_categories")
+          : haystack.includes("special_ad_categories")
             ? "meta_graph_special_ad_categories"
             : `meta_graph_${error.code ?? error.status}`;
+    const graphErrorCode =
+      !error.reconnectRequired
+      && !error.rateLimited
+      && baseCode.startsWith("meta_graph_")
+      && error.subcode != null
+      && Number.isFinite(error.subcode)
+        ? `${baseCode}_s${error.subcode}`
+        : baseCode;
     return {
       errorClass: error.rateLimited ? "RATE_LIMIT" : error.reconnectRequired ? "AUTH" : "META",
       errorCode: graphErrorCode,
+      errorDetail: error.diagnosticDetail,
       remoteOutcome: "NOT_APPLIED",
       retryAfterSeconds: error.usage.retryAfterSeconds ?? (error.rateLimited ? 900 : 120),
     };
@@ -667,6 +686,7 @@ function classifyFailure(
     return {
       errorClass: "PROTOCOL",
       errorCode: `meta_${error.operation}_protocol`,
+      errorDetail: null,
       remoteOutcome: isExecutedMutation ? "UNKNOWN" : "NOT_APPLIED",
       retryAfterSeconds: 120,
     };
@@ -677,6 +697,7 @@ function classifyFailure(
     return {
       errorClass: databaseFailure ? "TRANSPORT" : "PREFLIGHT",
       errorCode: error.code,
+      errorDetail: null,
       remoteOutcome: databaseFailure ? "NOT_APPLIED" : dispatchPersisted ? "PERMANENT" : "NOT_APPLIED",
       retryAfterSeconds: 120,
     };
@@ -685,6 +706,7 @@ function classifyFailure(
   return {
     errorClass: "PREFLIGHT",
     errorCode: error instanceof TypeError ? "invalid_planned_request" : "executor_local_failure",
+    errorDetail: null,
     remoteOutcome: dispatchPersisted ? "PERMANENT" : "NOT_APPLIED",
     retryAfterSeconds: 120,
   };
@@ -811,6 +833,7 @@ export async function runMetaMutationExecutorOnce(input: {
           errorCode: invalidResult
             ? "reconciliation_result_invalid"
             : "reconciliation_rpc_failed",
+          errorDetail: null,
           remoteOutcome: invalidResult ? "PERMANENT" : "NOT_APPLIED",
           retryAfterSeconds: 120,
         };
@@ -866,6 +889,7 @@ export async function runMetaMutationExecutorOnce(input: {
           ? {
             errorClass: "TRANSPORT" as const,
             errorCode: "remote_completion_persist_failed",
+            errorDetail: null,
             remoteOutcome: step.operation === "VALIDATE" ? "NOT_APPLIED" as const : "UNKNOWN" as const,
             retryAfterSeconds: 120,
           }
@@ -1139,6 +1163,7 @@ export function createMetaMutationExecutorDependencies(): MetaMutationExecutorDe
           30,
           Math.min(86_400, input.failure.retryAfterSeconds),
         ),
+        p_error_detail: input.failure.errorDetail,
       });
       return requiredString(result);
     },

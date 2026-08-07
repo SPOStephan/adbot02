@@ -447,6 +447,47 @@ try {
     },
   );
 
+  globalThis.fetch = async () => jsonResponse({
+    error: {
+      code: 100,
+      error_subcode: 1885154,
+      message: "Invalid parameter",
+      error_user_title: "Ad Set with Promoted Object Is Required",
+      error_user_msg:
+        "Promoted object must be set when creating this ad set for ON_POST.",
+    },
+  }, { status: 400 });
+  await assert.rejects(
+    () => writeClient.createMetaCampaign({
+      ...auth,
+      adAccountId: "123456789",
+      mode: "validate_only",
+      payload: {
+        name: "Diagnose",
+        objective: "OUTCOME_ENGAGEMENT",
+        status: "PAUSED",
+        special_ad_categories: [],
+        is_adset_budget_sharing_enabled: true,
+      },
+    }),
+    (error) => {
+      assert.ok(error instanceof client.MetaGraphError);
+      assert.equal(error.code, 100);
+      assert.equal(error.subcode, 1885154);
+      assert.equal(error.errorUserTitle, "Ad Set with Promoted Object Is Required");
+      assert.match(
+        error.errorUserMessage ?? "",
+        /Promoted object must be set/,
+      );
+      assert.match(
+        error.diagnosticDetail ?? "",
+        /Promoted object must be set/,
+      );
+      assert.doesNotMatch(error.diagnosticDetail ?? "", /EAA/);
+      return true;
+    },
+  );
+
   globalThis.fetch = async () => jsonResponse({ success: false });
   await assert.rejects(
     () => writeClient.createMetaAd({

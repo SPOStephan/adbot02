@@ -971,6 +971,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       failedStepErrorCode: row.failed_step_error_code
         ? String(row.failed_step_error_code)
         : null,
+      failedStepErrorDetail: row.failed_step_error_detail
+        ? String(row.failed_step_error_detail)
+        : null,
       writesAllowed: killSwitchView?.mode === "ALLOW",
     });
     return [
