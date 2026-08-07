@@ -220,6 +220,10 @@ export type MetaOrganicBoostPlannerResult = {
   executorRuns?: number;
   executorSucceeded?: number;
   executorFailed?: number;
+  /** Last processNextMetaMutation outcome from the immediate drain. */
+  executorLastOutcome?: string | null;
+  /** Drain-side diagnosis (e.g. claim_idle_with_due_plans), not planner lastError. */
+  executorLastError?: string | null;
 };
 
 export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {

@@ -190,6 +190,8 @@ async function reviveAndDrainOrganicBoost(input: {
   let executorRuns = 0;
   let executorSucceeded = 0;
   let executorFailed = 0;
+  let executorLastOutcome: string | null = null;
+  let executorLastError: string | null = null;
   if (pendingPlans > 0) {
     try {
       const drain = await drainOrganicBoostExecutionsForAccount({
@@ -200,8 +202,13 @@ async function reviveAndDrainOrganicBoost(input: {
       executorRuns = drain.runs;
       executorSucceeded = drain.succeeded;
       executorFailed = drain.failed;
-    } catch {
-      // Cron retries within a minute.
+      executorLastOutcome = drain.lastOutcome;
+      executorLastError = drain.lastError;
+    } catch (error) {
+      executorLastError =
+        error instanceof Error
+          ? error.message
+          : "organic_boost_drain_exception";
     }
   }
 
@@ -229,6 +236,8 @@ async function reviveAndDrainOrganicBoost(input: {
     executorRuns,
     executorSucceeded,
     executorFailed,
+    executorLastOutcome,
+    executorLastError,
   };
 }
 
@@ -1211,6 +1220,7 @@ export type PlanCustomerOrganicBoostResult = MetaOrganicBoostPlannerResult & {
   executorSucceeded: number;
   executorFailed: number;
   executorLastOutcome: string | null;
+  executorLastError: string | null;
 };
 
 async function repairOrphanInstagramPageLinks(input: {
@@ -1290,7 +1300,8 @@ export async function planCustomerOrganicBoost(
     executorRuns: organicBoost?.executorRuns ?? 0,
     executorSucceeded: organicBoost?.executorSucceeded ?? 0,
     executorFailed: organicBoost?.executorFailed ?? 0,
-    executorLastOutcome: null,
+    executorLastOutcome: organicBoost?.executorLastOutcome ?? null,
+    executorLastError: organicBoost?.executorLastError ?? null,
   };
 }
 

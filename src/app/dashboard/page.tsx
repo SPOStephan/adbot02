@@ -437,13 +437,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // depend solely on the minutely cron (which can go silent).
   if (metaConnected && metaAccount && writeScopeGranted) {
     try {
-      await drainOrganicBoostExecutionsForAccount({
+      const drain = await drainOrganicBoostExecutionsForAccount({
         userId: user.id,
         platformAccountId: metaAccount.id,
         maxRuns: 2,
       });
-    } catch {
-      // Claim/executor may be busy; LiveRefresh retries on the next render.
+      if (drain.lastError) {
+        console.error("organic_boost_dashboard_drain", {
+          platformAccountId: metaAccount.id,
+          duePlans: drain.duePlans,
+          runs: drain.runs,
+          lastOutcome: drain.lastOutcome,
+          lastError: drain.lastError,
+          divertedToOtherAccount: drain.divertedToOtherAccount,
+        });
+      }
+    } catch (error) {
+      console.error("organic_boost_dashboard_drain_exception", {
+        platformAccountId: metaAccount.id,
+        message: error instanceof Error ? error.message : "unknown",
+      });
     }
   }
   const [

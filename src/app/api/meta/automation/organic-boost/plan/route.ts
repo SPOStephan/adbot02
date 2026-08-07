@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
         executorSucceeded: organicBoost.executorSucceeded,
         executorFailed: organicBoost.executorFailed,
         executorLastOutcome: organicBoost.executorLastOutcome,
+        executorLastError: organicBoost.executorLastError,
       },
     });
   } catch (error) {

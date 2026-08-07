@@ -123,6 +123,9 @@ export function formatOrganicBoostFailureDetail(input: {
   }
 
   const reason = input.planBlockedReason?.trim() || null;
+  if (reason === "account_operation_lease_busy") {
+    return "Meta-Versand wartet kurz auf freie Account-Schreibfreigabe.";
+  }
   if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
     // Never claim Meta is writing while the kill-switch soft-block is still set.
     if (input.writesAllowed) {
