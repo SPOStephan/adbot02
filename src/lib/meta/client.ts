@@ -115,6 +115,8 @@ type MetaErrorBody = {
     type?: string;
     error_subcode?: number;
     message?: string;
+    error_user_title?: string;
+    error_user_msg?: string;
   };
 };
 
@@ -137,6 +139,10 @@ export class MetaGraphError extends Error {
   readonly code: number | null;
   readonly subcode: number | null;
   readonly graphMessage: string | null;
+  /** Meta's customer-facing title (error_user_title) — often more specific than message. */
+  readonly errorUserTitle: string | null;
+  /** Meta's customer-facing detail (error_user_msg) — the actionable reject reason. */
+  readonly errorUserMessage: string | null;
   readonly usage: MetaUsageSnapshot;
 
   constructor(
@@ -145,13 +151,28 @@ export class MetaGraphError extends Error {
     usage: MetaUsageSnapshot = EMPTY_USAGE,
   ) {
     const graphMessage = asNonEmptyString(body.error?.message);
+    const errorUserTitle = asNonEmptyString(body.error?.error_user_title);
+    const errorUserMessage = asNonEmptyString(body.error?.error_user_msg);
     super("Meta Graph API request failed");
     this.name = "MetaGraphError";
     this.status = status;
     this.code = body.error?.code ?? null;
     this.subcode = body.error?.error_subcode ?? null;
     this.graphMessage = graphMessage;
+    this.errorUserTitle = errorUserTitle;
+    this.errorUserMessage = errorUserMessage;
     this.usage = usage;
+  }
+
+  /** Safe, allowlisted diagnostic text for persistence/UI (no tokens/raw bodies). */
+  get diagnosticDetail(): string | null {
+    return sanitizeMetaGraphDiagnosticDetail({
+      errorUserTitle: this.errorUserTitle,
+      errorUserMessage: this.errorUserMessage,
+      graphMessage: this.graphMessage,
+      code: this.code,
+      subcode: this.subcode,
+    });
   }
 
   get rateLimited() {
@@ -175,6 +196,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asNonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+const META_TOKEN_LIKE = /\bEAA[A-Za-z0-9]+|\bEAAB[A-Za-z0-9]+|\baccess_token=[^&\s]+/gi;
+
+/**
+ * Build a short, secret-safe Meta Graph diagnostic string for DB/UI.
+ * Prefer error_user_msg over the generic "Invalid parameter" message.
+ */
+export function sanitizeMetaGraphDiagnosticDetail(input: {
+  errorUserTitle?: string | null;
+  errorUserMessage?: string | null;
+  graphMessage?: string | null;
+  code?: number | null;
+  subcode?: number | null;
+}): string | null {
+  const title = input.errorUserTitle?.trim() || null;
+  const userMsg = input.errorUserMessage?.trim() || null;
+  const graphMessage = input.graphMessage?.trim() || null;
+  const parts: string[] = [];
+  if (title) parts.push(title);
+  if (userMsg) parts.push(userMsg);
+  else if (graphMessage && graphMessage.toLowerCase() !== "invalid parameter") {
+    parts.push(graphMessage);
+  } else if (graphMessage && !title) {
+    parts.push(graphMessage);
+  }
+  if (parts.length === 0) {
+    if (input.code == null && input.subcode == null) return null;
+    const codeBits = [
+      input.code != null ? `#${input.code}` : null,
+      input.subcode != null ? `sub ${input.subcode}` : null,
+    ].filter(Boolean);
+    return codeBits.length > 0 ? `Meta Graph ${codeBits.join(" ")}` : null;
+  }
+  return parts
+    .join(" — ")
+    .replace(META_TOKEN_LIKE, "[redacted]")
+    .slice(0, 400);
 }
 
 function asFiniteNumber(value: unknown): number | null {

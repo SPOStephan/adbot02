@@ -72,31 +72,54 @@ export type OrganicBoostCampaignView = {
   createdAt: string;
 };
 
+function formatMetaGraphCodeLabel(code: string): string {
+  // meta_graph_100_s1815159 → #100 sub 1815159
+  const match = /^meta_graph_(\d+)(?:_s(\d+))?$/.exec(code);
+  if (!match) {
+    return code.replace(/^meta_graph_/, "#");
+  }
+  return match[2] ? `#${match[1]} sub ${match[2]}` : `#${match[1]}`;
+}
+
 export function formatOrganicBoostFailureDetail(input: {
   planErrorClass?: string | null;
   planBlockedReason?: string | null;
   failedStepKey?: string | null;
   failedStepErrorCode?: string | null;
+  /** Secret-safe Meta error_user_msg / title from the failed step */
+  failedStepErrorDetail?: string | null;
   /** When true, never nag Freigeben — ACCOUNT ALLOW is already saved */
   writesAllowed?: boolean;
 }): string | null {
   const stepCode = input.failedStepErrorCode?.trim() || null;
   const stepKey = input.failedStepKey?.trim() || null;
+  const stepDetail = input.failedStepErrorDetail?.trim() || null;
   if (stepCode) {
     if (stepCode === "meta_graph_adset_budget_sharing") {
-      return stepKey
-        ? `Meta verlangt is_adset_budget_sharing_enabled bei „${stepKey}“`
-        : "Meta verlangt is_adset_budget_sharing_enabled für die Kampagne";
+      return stepDetail
+        ?? (stepKey
+          ? `Meta verlangt is_adset_budget_sharing_enabled bei „${stepKey}“`
+          : "Meta verlangt is_adset_budget_sharing_enabled für die Kampagne");
     }
     if (stepCode === "meta_graph_special_ad_categories") {
-      return "Meta verlangt special_ad_categories an der Kampagne";
+      return stepDetail ?? "Meta verlangt special_ad_categories an der Kampagne";
     }
     if (stepCode.startsWith("meta_graph_")) {
+      const label = formatMetaGraphCodeLabel(stepCode);
+      if (stepDetail) {
+        return stepKey
+          ? `Meta „${stepKey}“: ${stepDetail} (${label})`
+          : `Meta: ${stepDetail} (${label})`;
+      }
       return stepKey
-        ? `Meta hat „${stepKey}“ abgelehnt (${stepCode.replace("meta_graph_", "#")})`
-        : `Meta hat den Schreibschritt abgelehnt (${stepCode.replace("meta_graph_", "#")})`;
+        ? `Meta hat „${stepKey}“ abgelehnt (${label})`
+        : `Meta hat den Schreibschritt abgelehnt (${label})`;
     }
-    return stepKey ? `${stepKey}: ${stepCode}` : stepCode;
+    return stepDetail
+      ? (stepKey ? `${stepKey}: ${stepDetail}` : stepDetail)
+      : stepKey
+        ? `${stepKey}: ${stepCode}`
+        : stepCode;
   }
 
   const reason = input.planBlockedReason?.trim() || null;
@@ -107,8 +130,11 @@ export function formatOrganicBoostFailureDetail(input: {
     }
     return "Schreiben gestoppt (Sicherheitsschranke). Freigabe wurde ggf. systemseitig widerrufen.";
   }
-  if (reason === "meta_graph_100") {
-    return "Meta hat den Boost abgelehnt (Graph #100) — Payload/Post-Verknüpfung prüfen";
+  if (reason?.startsWith("meta_graph_")) {
+    if (stepDetail) {
+      return `Meta: ${stepDetail} (${formatMetaGraphCodeLabel(reason)})`;
+    }
+    return `Meta hat den Boost abgelehnt (${formatMetaGraphCodeLabel(reason)})`;
   }
   if (reason === "superseded_by_marketing_snapshot") {
     return "Wird automatisch neu angestoßen";
