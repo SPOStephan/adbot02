@@ -76,6 +76,8 @@ export function formatOrganicBoostFailureDetail(input: {
   planBlockedReason?: string | null;
   failedStepKey?: string | null;
   failedStepErrorCode?: string | null;
+  /** When true, never nag Freigeben — ACCOUNT ALLOW is already saved */
+  writesAllowed?: boolean;
 }): string | null {
   const stepCode = input.failedStepErrorCode?.trim() || null;
   const stepKey = input.failedStepKey?.trim() || null;
@@ -98,10 +100,14 @@ export function formatOrganicBoostFailureDetail(input: {
 
   const reason = input.planBlockedReason?.trim() || null;
   if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
+    // Sticky plan reason after Freigeben was already saved — do not re-nag.
+    if (input.writesAllowed) {
+      return "Meta-Versand wird gestartet";
+    }
     return "Sicherheitsschranke blockiert Meta-Schreiben — unter Autonomie „Freigeben“ wählen und „Freigabe speichern“";
   }
   if (reason === "superseded_by_marketing_snapshot") {
-    return "Wird nach Marketing-Abruf automatisch neu angestoßen";
+    return "Wird automatisch neu angestoßen";
   }
   if (reason === "organic_preflight_marketing_sync_stale") {
     return "Marketing-Abruf zu alt — Meta-Versand wartet";

@@ -185,13 +185,15 @@ export function AutomationBoostSettings({
 
   const modeHint = useMemo(() => {
     if (boostMode === "AUTO") {
-      return "Werbeziel: Interaktionen/Likes. Erkannte Beiträge werden ohne weiteren Abruf beworben, sobald die Sicherheitsschranke oben auf „Freigeben“ steht und gespeichert ist.";
+      return killSwitchMode === "ALLOW"
+        ? "Werbeziel: Interaktionen/Likes. Freigabe ist aktiv — erkannte Beiträge werden ohne weiteren Abruf beworben."
+        : "Werbeziel: Interaktionen/Likes. Erkannte Beiträge werden ohne weiteren Abruf beworben, sobald die Sicherheitsschranke oben auf „Freigeben“ steht und gespeichert ist.";
     }
     if (boostMode === "REVIEW") {
       return "Neue Beiträge erscheinen zur Freigabe. Erst nach „BEITRAG BEWERBEN“ schreibt Adbot zu Meta.";
     }
     return "Kein Boost-Plan wird erzeugt.";
-  }, [boostMode]);
+  }, [boostMode, killSwitchMode]);
 
   function updateAssetDraft(assetId: string, patch: Partial<AssetDraft>) {
     setAssetDrafts((current) => ({

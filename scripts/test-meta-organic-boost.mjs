@@ -378,12 +378,28 @@ assert.match(
   /permanent candidate_already_linked dead-ends|must survive marketing Abruf/,
 );
 assert.match(
+  surviveSnapshotMigration,
+  /never auto-freeze Freigeben/,
+);
+assert.match(
+  surviveSnapshotMigration,
+  /set_meta_customer_budget_autonomy/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /writesAllowed/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Meta-Versand wird gestartet/,
+);
+assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
   /killSwitchMode !== "ALLOW"/,
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /Wird nach Marketing-Abruf automatisch neu angestoßen/,
+  /Wird automatisch neu angestoßen/,
 );
 assert.match(
   read("src/app/dashboard/page.tsx"),

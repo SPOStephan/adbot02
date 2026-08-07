@@ -321,4 +321,53 @@ begin
 end;
 $heal$;
 
+-- ---------------------------------------------------------------------------
+-- 6) Budget-Autonomie must not undo Freigeben
+-- ---------------------------------------------------------------------------
+-- set_meta_customer_budget_autonomy(false) previously forced FREEZE_WRITES.
+-- Saving Autonomie / disabling budget changes therefore revoked an already
+-- saved Freigeben — UI kept nagging "Freigeben speichern" after the customer
+-- had done it. Only elevate to ALLOW when enabling; never auto-freeze here.
+do $patch$
+declare
+  v_def text;
+  v_updated text;
+begin
+  select pg_get_functiondef(
+    'public.set_meta_customer_budget_autonomy(uuid,uuid,boolean)'::regprocedure
+  ) into v_def;
+
+  if v_def is null then
+    raise exception 'set_meta_customer_budget_autonomy not found';
+  end if;
+
+  if position('never auto-freeze Freigeben' in v_def) > 0
+    or position('Do not revoke Freigeben' in v_def) > 0 then
+    return;
+  end if;
+
+  -- Remove the auto-FREEZE branch; keep optional ALLOW on enable.
+  v_updated := regexp_replace(
+    v_def,
+    E'elsif not p_enable and v_latest_mode is distinct from ''FREEZE_WRITES'' then\\s+v_kill_switch_event_id := public\\.append_meta_kill_switch_state\\(\\s*''ACCOUNT'',\\s*p_user_id,\\s*p_platform_account_id,\\s*null,\\s*''FREEZE_WRITES'',\\s*''Customer disabled autonomous budget management'',\\s*''CUSTOMER'',\\s*p_user_id::text\\s*\\);\\s*end if;',
+    $repl$else
+    -- Do not revoke Freigeben when budget autonomy is disabled or budget
+    -- changes are off. Kill-switch stays under the Sicherheitsschranke control.
+    null; -- never auto-freeze Freigeben from budget-autonomy sync
+  end if;$repl$,
+    1
+  );
+
+  if position('never auto-freeze Freigeben' in v_updated) = 0 then
+    raise exception
+      'Failed to stop set_meta_customer_budget_autonomy from auto-FREEZE_WRITES';
+  end if;
+
+  execute v_updated;
+end;
+$patch$;
+
+comment on function public.set_meta_customer_budget_autonomy(uuid, uuid, boolean) is
+  'Syncs managed targets with bounded budget policy. May elevate to ALLOW when enabling; never auto-FREEZE_WRITES (Freigeben is owned by the kill-switch control).';
+
 commit;
