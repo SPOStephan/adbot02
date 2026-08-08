@@ -139,7 +139,7 @@ export function OrganicBoostPlanButton({
         syncNotice = `Meta-Kennzahlen aktualisiert (Abruf: ${sync?.insightsCount ?? 0} Insights, Summe ${spendLabel}${untilLabel ? `, Fenster bis ${untilLabel}` : ""}).`;
         if (Number.isFinite(spend) && spend <= 0) {
           syncNotice +=
-            " Meta liefert für frische Kampagnen oft erst nach erster Auslieferung Kennzahlen — in Ads Manager prüfen und ggf. später erneut abrufen.";
+            " Noch keine positive Spend-Zeile von Meta — Ampel nutzt zusätzlich Kampagnen-Insights und Budgetrest. In 1–2 Min. erneut prüfen.";
         }
       } else if (sync?.blockedReason === "manual_cooldown" || sync?.retryAt) {
         syncNotice =

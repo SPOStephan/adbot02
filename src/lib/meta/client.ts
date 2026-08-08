@@ -1654,6 +1654,24 @@ export type MetaActionMetric = {
   value: string;
 };
 
+export type MetaCampaignInsight = {
+  accountId: string | null;
+  campaignId: string;
+  campaignName: string | null;
+  dateStart: string;
+  dateStop: string;
+  impressions: string | null;
+  spend: string | null;
+};
+
+export type MetaAccountInsight = {
+  accountId: string | null;
+  dateStart: string;
+  dateStop: string;
+  impressions: string | null;
+  spend: string | null;
+};
+
 export type MetaAdInsight = {
   accountId: string | null;
   campaignId: string;
@@ -1987,6 +2005,57 @@ function parseAdInsight(value: unknown): MetaAdInsight | null {
   };
 }
 
+function parseCampaignInsight(value: unknown): MetaCampaignInsight | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const campaignId = metaObjectId(value.campaign_id);
+  const dateStart = isoDate(value.date_start);
+  const dateStop = isoDate(value.date_stop);
+
+  if (!campaignId || !dateStart || !dateStop) {
+    return null;
+  }
+
+  return {
+    accountId: metaAccountId(value.account_id),
+    campaignId,
+    campaignName: boundedText(value.campaign_name, META_MARKETING_NAME_MAX_LENGTH),
+    dateStart,
+    dateStop,
+    impressions: nonNegativeNumericString(value.impressions),
+    spend: nonNegativeNumericString(value.spend),
+  };
+}
+
+function parseAccountInsight(value: unknown): MetaAccountInsight | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const dateStart = isoDate(value.date_start);
+  const dateStop = isoDate(value.date_stop);
+
+  if (!dateStart || !dateStop) {
+    return null;
+  }
+
+  return {
+    accountId: metaAccountId(value.account_id),
+    dateStart,
+    dateStop,
+    impressions: nonNegativeNumericString(value.impressions),
+    spend: nonNegativeNumericString(value.spend),
+  };
+}
+
+function applyInsightsTimeRange(url: URL, since: string, until: string) {
+  // Meta's documented top-level form. Do not also set time_range[since]
+  // (duplicate params can make Graph ignore the window).
+  url.searchParams.set("time_range", JSON.stringify({ since, until }));
+}
+
 export async function getMetaAdAccountSummary(input: {
   adAccountId: string;
   accessToken: string;
@@ -2206,15 +2275,9 @@ export function getMetaAdCreatives(input: {
   });
 }
 
-export function getMetaAdInsights(input: {
-  adAccountId: string;
-  accessToken: string;
-  appSecret: string;
-  since: string;
-  until: string;
-}): Promise<MetaMarketingCollection<MetaAdInsight>> {
-  const since = isoDate(input.since);
-  const until = isoDate(input.until);
+function assertInsightsDateRange(sinceInput: string, untilInput: string) {
+  const since = isoDate(sinceInput);
+  const until = isoDate(untilInput);
 
   if (!since || !until) {
     throw new TypeError("Invalid Meta insights date range");
@@ -2222,11 +2285,24 @@ export function getMetaAdInsights(input: {
 
   const sinceDate = new Date(`${since}T00:00:00.000Z`);
   const untilDate = new Date(`${until}T00:00:00.000Z`);
-  const durationDays = Math.floor((untilDate.getTime() - sinceDate.getTime()) / 86_400_000) + 1;
+  const durationDays =
+    Math.floor((untilDate.getTime() - sinceDate.getTime()) / 86_400_000) + 1;
 
   if (untilDate < sinceDate || durationDays > 93) {
     throw new RangeError("Meta insights date range must contain 1 to 93 days");
   }
+
+  return { since, until };
+}
+
+export function getMetaAdInsights(input: {
+  adAccountId: string;
+  accessToken: string;
+  appSecret: string;
+  since: string;
+  until: string;
+}): Promise<MetaMarketingCollection<MetaAdInsight>> {
+  const { since, until } = assertInsightsDateRange(input.since, input.until);
 
   const url = marketingCollectionUrl(
     input.adAccountId,
@@ -2235,7 +2311,7 @@ export function getMetaAdInsights(input: {
   );
   url.searchParams.set("level", "ad");
   url.searchParams.set("time_increment", "1");
-  url.searchParams.set("time_range", JSON.stringify({ since, until }));
+  applyInsightsTimeRange(url, since, until);
   url.searchParams.set("use_account_attribution_setting", "true");
 
   return fetchMetaCollection({
@@ -2243,6 +2319,66 @@ export function getMetaAdInsights(input: {
     accessToken: input.accessToken,
     appSecret: input.appSecret,
     parseItem: parseAdInsight,
+    maxPages: META_MARKETING_MAX_PAGES,
+    maxItems: META_INSIGHTS_MAX_ROWS,
+    requireComplete: true,
+  });
+}
+
+export function getMetaCampaignInsights(input: {
+  adAccountId: string;
+  accessToken: string;
+  appSecret: string;
+  since: string;
+  until: string;
+}): Promise<MetaMarketingCollection<MetaCampaignInsight>> {
+  const { since, until } = assertInsightsDateRange(input.since, input.until);
+
+  const url = marketingCollectionUrl(
+    input.adAccountId,
+    "insights",
+    "account_id,campaign_id,campaign_name,date_start,date_stop,impressions,spend",
+  );
+  url.searchParams.set("level", "campaign");
+  url.searchParams.set("time_increment", "1");
+  applyInsightsTimeRange(url, since, until);
+  url.searchParams.set("use_account_attribution_setting", "true");
+
+  return fetchMetaCollection({
+    initialUrl: url,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseCampaignInsight,
+    maxPages: META_MARKETING_MAX_PAGES,
+    maxItems: META_INSIGHTS_MAX_ROWS,
+    requireComplete: true,
+  });
+}
+
+export function getMetaAccountInsights(input: {
+  adAccountId: string;
+  accessToken: string;
+  appSecret: string;
+  since: string;
+  until: string;
+}): Promise<MetaMarketingCollection<MetaAccountInsight>> {
+  const { since, until } = assertInsightsDateRange(input.since, input.until);
+
+  const url = marketingCollectionUrl(
+    input.adAccountId,
+    "insights",
+    "account_id,date_start,date_stop,impressions,spend",
+  );
+  url.searchParams.set("level", "account");
+  url.searchParams.set("time_increment", "1");
+  applyInsightsTimeRange(url, since, until);
+  url.searchParams.set("use_account_attribution_setting", "true");
+
+  return fetchMetaCollection({
+    initialUrl: url,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseAccountInsight,
     maxPages: META_MARKETING_MAX_PAGES,
     maxItems: META_INSIGHTS_MAX_ROWS,
     requireComplete: true,

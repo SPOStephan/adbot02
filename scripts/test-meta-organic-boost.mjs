@@ -997,7 +997,7 @@ assert.match(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /Ausgaben und Impressionen/,
+  /Kampagnen-Insights und Budgetrest|Ad- \+ Kampagnen-Insights/,
 );
 
 const finalizeActiveMigration = read(
@@ -1057,6 +1057,30 @@ assert.match(read("src/lib/meta/marketing-sync.ts"), /sumInsightSpend/);
 assert.match(
   read("src/app/dashboard/page.tsx"),
   /campaignRows\.find\(\(row\) => row\.id === campaign\.campaignId\)/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /marketing_spend_total/,
+);
+
+const realtimeSpendMigration = read(
+  "supabase/migrations/20260808180000_meta_realtime_spend_sources.sql",
+);
+assert.match(realtimeSpendMigration, /apply_meta_campaign_insight_spend/);
+assert.match(realtimeSpendMigration, /campaign_insights_spend/);
+assert.match(realtimeSpendMigration, /derived_spend/);
+assert.match(realtimeSpendMigration, /adset_live/);
+assert.match(
+  read("src/lib/meta/marketing-sync.ts"),
+  /getMetaCampaignInsights/,
+);
+assert.match(
+  read("src/lib/meta/marketing-sync.ts"),
+  /getMetaAccountInsights/,
+);
+assert.match(
+  read("src/lib/meta/client.ts"),
+  /applyInsightsTimeRange/,
 );
 
 console.log("test-meta-organic-boost: ok");

@@ -4,12 +4,14 @@ import { randomUUID } from "node:crypto";
 
 import {
   getMetaAdAccountSummary,
+  getMetaAccountInsights,
   getMetaAdCreatives,
   getMetaAdInsights,
   getMetaAds,
   getMetaAdsByIds,
   getMetaAdSets,
   getMetaAdSetsByIds,
+  getMetaCampaignInsights,
   getMetaCampaigns,
   getMetaCampaignsByIds,
   mergeMetaUsage,
@@ -19,6 +21,7 @@ import {
   type MetaAdInsight,
   type MetaAdSet,
   type MetaCampaign,
+  type MetaCampaignInsight,
   type MetaUsageSnapshot,
 } from "./client";
 import { createAdminClient } from "../supabase/admin";
@@ -114,7 +117,7 @@ export function completeInsightsDateRange(
 }
 
 export function sumInsightSpend(
-  insights: ReadonlyArray<Pick<MetaAdInsight, "spend">>,
+  insights: ReadonlyArray<{ spend: string | null }>,
 ): number {
   let total = 0;
 
@@ -126,6 +129,29 @@ export function sumInsightSpend(
   }
 
   return total;
+}
+
+function countInsightSpendRows(
+  insights: ReadonlyArray<{ spend: string | null }>,
+): number {
+  let count = 0;
+  for (const insight of insights) {
+    const value = Number(insight.spend);
+    if (Number.isFinite(value) && value > 0) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function serializeCampaignInsights(items: MetaCampaignInsight[]) {
+  return items.map((item) => ({
+    platform_campaign_id: item.campaignId,
+    date_start: item.dateStart,
+    date_stop: item.dateStop,
+    spend: item.spend,
+    impressions: item.impressions,
+  }));
 }
 
 function assertUnique<T extends { id: string }>(items: T[]) {
@@ -450,6 +476,21 @@ export async function syncMetaMarketingSnapshot(input: {
   });
   usage = mergeMetaUsage(usage, insightsResult.usage);
 
+  // Campaign + account level: fewer join failure modes than ad grain, and the
+  // source of truth for dashboard totals when ad rows lag behind delivery.
+  const campaignInsightsResult = await getMetaCampaignInsights({
+    ...input,
+    since: dateRange.since,
+    until: dateRange.until,
+  });
+  usage = mergeMetaUsage(usage, campaignInsightsResult.usage);
+  const accountInsightsResult = await getMetaAccountInsights({
+    ...input,
+    since: dateRange.since,
+    until: dateRange.until,
+  });
+  usage = mergeMetaUsage(usage, accountInsightsResult.usage);
+
   const missingAdIds = missingReferencedIds(
     ads.map((ad) => ad.id),
     insightsResult.items.map((insight) => insight.adId),
@@ -603,7 +644,46 @@ export async function syncMetaMarketingSnapshot(input: {
   }
 
   const persisted = Array.isArray(data) ? data[0] : data;
-  const spendTotal = sumInsightSpend(insightsResult.items);
+
+  const adSpendTotal = sumInsightSpend(insightsResult.items);
+  const campaignSpendTotal = sumInsightSpend(campaignInsightsResult.items);
+  const accountSpendTotal = sumInsightSpend(accountInsightsResult.items);
+  const spendToday = sumInsightSpend(
+    accountInsightsResult.items.filter(
+      (row) => row.dateStart === dateRange.until,
+    ),
+  );
+  // Prefer account rollup, then campaign, then ad — never under-report a higher
+  // authoritative Meta total when a finer grain lagged.
+  const spendTotal = Math.max(accountSpendTotal, campaignSpendTotal, adSpendTotal);
+  const insightSpendRows = Math.max(
+    countInsightSpendRows(accountInsightsResult.items),
+    countInsightSpendRows(campaignInsightsResult.items),
+    countInsightSpendRows(insightsResult.items),
+  );
+
+  const { error: spendError } = await admin.rpc(
+    "apply_meta_campaign_insight_spend",
+    {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+      p_campaign_insights: serializeCampaignInsights(
+        campaignInsightsResult.items,
+      ),
+      p_account_spend_total: spendTotal,
+      p_account_spend_today: spendToday,
+      p_insight_spend_rows: insightSpendRows,
+      p_insights_until: dateRange.until,
+    },
+  );
+
+  if (spendError) {
+    console.error(
+      "Meta campaign insight spend persistence failed",
+      persistenceDiagnostic(spendError),
+    );
+    throw new MetaMarketingDataError("persistence_failed");
+  }
 
   return {
     syncId,
