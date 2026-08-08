@@ -309,7 +309,9 @@ try {
       dependencies: harness.dependencies,
     });
 
-    assert.deepEqual(result, { processed: true, outcome: "succeeded", stepsProcessed: 4 });
+    assert.equal(result.processed, true);
+    assert.equal(result.outcome, "succeeded");
+    assert.equal(result.stepsProcessed, 4);
     assert.equal(requests.length, 3);
     assert.equal(requests[0].init.method, "POST");
     assert.equal(requests[1].init.method, "POST");
@@ -552,6 +554,49 @@ try {
     assert.equal(result.outcome, "mismatch");
     assert.equal(harness.snapshots[0].objectId, "222222222");
     assert.equal(harness.events.some((value) => value.startsWith("begin:")), false);
+  }
+
+  {
+    let fetchCalls = 0;
+    let postedUrl = "";
+    globalThis.fetch = async (input, init) => {
+      fetchCalls += 1;
+      postedUrl = String(input);
+      assert.equal(init.method, "POST");
+      const body = init.body;
+      assert.ok(body instanceof URLSearchParams);
+      assert.equal(body.get("status"), "ACTIVE");
+      return jsonResponse({ success: true });
+    };
+    const activate = step({
+      id: IDS.step2,
+      index: 1,
+      operation: "UPDATE",
+      objectType: "AD_SET",
+      request: {
+        operation: "UPDATE_STATUS",
+        mode: "execute",
+        object_id: { $binding_step_id: IDS.step1 },
+        status: "ACTIVE",
+      },
+    });
+    const harness = dependenciesFor({
+      firstStep: activate,
+      bindings: [{
+        stepId: IDS.step1,
+        objectType: "AD_SET",
+        remoteObjectId: "222222222",
+      }],
+    });
+    const result = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-activate-binding",
+      dependencies: harness.dependencies,
+    });
+    assert.equal(result.outcome, "deferred");
+    assert.equal(fetchCalls, 1);
+    assert.match(postedUrl, /222222222/);
+    assert.equal(harness.failures.length, 0);
+    assert.equal(harness.events.some((value) => value.startsWith("begin:")), true);
   }
 
   console.log("Meta mutation executor regression: OK");
