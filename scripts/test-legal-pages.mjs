@@ -23,8 +23,11 @@ assert.match(
 );
 assert.match(read("src/app/dashboard/page.tsx"), /\/dashboard\/rechtliches/);
 assert.match(read("src/app/dashboard/page.tsx"), /userIsSiteAdmin/);
-assert.match(read("content/legal/impressum.md"), /Impressum/);
-assert.match(read("content/legal/datenschutz.md"), /Datenschutzerklärung/);
+assert.match(read("content/legal/impressum.md"), /Anbieter/);
+assert.match(read("content/legal/datenschutz.md"), /Verantwortlicher/);
+assert.doesNotMatch(read("content/legal/impressum.md"), /^#{1,6}\s/m);
+assert.doesNotMatch(read("content/legal/datenschutz.md"), /^#{1,6}\s/m);
 
 console.log("test-legal-pages: ok");
+
 
