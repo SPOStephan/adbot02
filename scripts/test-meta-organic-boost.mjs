@@ -1025,6 +1025,11 @@ assert.doesNotMatch(
   /update public\.mutation_plan_steps/,
 );
 assert.match(
+  finalizeActiveNoStepMigration,
+  /prepare_meta_organic_boost_write_now/,
+);
+assert.match(finalizeActiveNoStepMigration, /finalized_active=/);
+assert.match(
   read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
   /syncMetaConnector/,
 );
