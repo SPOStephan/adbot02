@@ -10,6 +10,7 @@ import type {
   FunnelBrand,
   FunnelConfig,
   FunnelOptionIcon,
+  FunnelOwner,
   FunnelPage,
   FunnelStatus,
   FunnelSummary,
@@ -21,6 +22,7 @@ const memoryStartedAt = new Date().toISOString();
 
 type StoredMemoryFunnel = {
   config: FunnelConfig;
+  owner: FunnelOwner;
   createdAt: string;
   updatedAt: string;
 };
@@ -36,8 +38,22 @@ type LegacyFunnelConfig = Omit<FunnelConfig, "status" | "brand" | "legal" | "pos
   pages: LegacyFunnelPage[];
 };
 
+const emptyOwner = (): FunnelOwner => ({ userId: null, email: null });
+
+function normalizeOwner(owner?: Partial<FunnelOwner> | null): FunnelOwner {
+  return {
+    userId: owner?.userId?.trim() || null,
+    email: owner?.email?.trim() || null,
+  };
+}
+
 let memoryFunnels: StoredMemoryFunnel[] = [
-  { config: structuredClone(defaultFunnel), createdAt: memoryStartedAt, updatedAt: memoryStartedAt },
+  {
+    config: structuredClone(defaultFunnel),
+    owner: emptyOwner(),
+    createdAt: memoryStartedAt,
+    updatedAt: memoryStartedAt,
+  },
 ];
 const memoryApplications: ApplicationRecord[] = [];
 const memoryMetaServerSettings = new Map<string, MetaServerSettings>();
@@ -198,19 +214,33 @@ export async function getUniqueFunnelSlug(value: string, excludeId?: string) {
   }
 }
 
-export async function createFunnel(config: FunnelConfig): Promise<FunnelConfig> {
+export async function createFunnel(config: FunnelConfig, owner?: Partial<FunnelOwner> | null): Promise<FunnelConfig> {
   const normalized = normalizeFunnelConfig(config);
+  const nextOwner = normalizeOwner(owner);
   const supabase = getSupabase();
   if (!supabase) {
     if (memoryFunnels.some(item => item.config.id === normalized.id || item.config.slug === normalized.slug)) {
       throw new Error("Ein Funnel mit dieser ID oder diesem URL-Slug existiert bereits.");
     }
     const now = new Date().toISOString();
-    memoryFunnels.unshift({ config: structuredClone(normalized), createdAt: now, updatedAt: now });
+    memoryFunnels.unshift({
+      config: structuredClone(normalized),
+      owner: nextOwner,
+      createdAt: now,
+      updatedAt: now,
+    });
     return structuredClone(normalized);
   }
 
-  const { data, error } = await supabase.from("funnels").insert(funnelPayload(normalized)).select("*").single();
+  const { data, error } = await supabase
+    .from("funnels")
+    .insert({
+      ...funnelPayload(normalized),
+      owner_user_id: nextOwner.userId,
+      owner_email: nextOwner.email,
+    })
+    .select("*")
+    .single();
   if (error) throw error;
   return normalizeConfig(data);
 }
@@ -227,7 +257,12 @@ export async function saveFunnel(config: FunnelConfig): Promise<FunnelConfig> {
       existing.config = structuredClone(normalized);
       existing.updatedAt = now;
     } else {
-      memoryFunnels.unshift({ config: structuredClone(normalized), createdAt: now, updatedAt: now });
+      memoryFunnels.unshift({
+        config: structuredClone(normalized),
+        owner: emptyOwner(),
+        createdAt: now,
+        updatedAt: now,
+      });
     }
     return structuredClone(normalized);
   }
@@ -336,22 +371,51 @@ async function readAllApplicationCountRows(supabase: SupabaseClient) {
   return rows;
 }
 
-export async function listFunnels(): Promise<FunnelSummary[]> {
+function toFunnelSummary(
+  config: FunnelConfig,
+  owner: FunnelOwner,
+  createdAt: string,
+  updatedAt: string,
+  applicationCount: number,
+  newApplicationCount: number,
+): FunnelSummary {
+  return {
+    id: config.id,
+    slug: config.slug,
+    title: config.title,
+    status: config.status,
+    applicationCount,
+    newApplicationCount,
+    ownerUserId: owner.userId,
+    ownerEmail: owner.email,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function ownerFromRow(row: Record<string, unknown>): FunnelOwner {
+  return normalizeOwner({
+    userId: row.owner_user_id ? String(row.owner_user_id) : null,
+    email: row.owner_email ? String(row.owner_email) : null,
+  });
+}
+
+export async function listFunnels(filter?: { ownerUserId?: string }): Promise<FunnelSummary[]> {
+  const ownerFilter = filter?.ownerUserId?.trim() || undefined;
   const supabase = getSupabase();
   if (!supabase) {
     return memoryFunnels
+      .filter(item => !ownerFilter || item.owner.userId === ownerFilter)
       .map(item => {
         const applications = memoryApplications.filter(application => application.funnelId === item.config.id);
-        return {
-          id: item.config.id,
-          slug: item.config.slug,
-          title: item.config.title,
-          status: item.config.status,
-          applicationCount: applications.length,
-          newApplicationCount: applications.filter(application => application.status === "new").length,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-        } satisfies FunnelSummary;
+        return toFunnelSummary(
+          item.config,
+          item.owner,
+          item.createdAt,
+          item.updatedAt,
+          applications.length,
+          applications.filter(application => application.status === "new").length,
+        );
       })
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
@@ -367,20 +431,73 @@ export async function listFunnels(): Promise<FunnelSummary[]> {
     if (application.status === "new") current.new += 1;
     counts.set(application.funnel_id, current);
   }
-  return funnelRows.map(row => {
-    const config = normalizeConfig(row);
-    const count = counts.get(config.id) ?? { all: 0, new: 0 };
-    return {
-      id: config.id,
-      slug: config.slug,
-      title: config.title,
-      status: config.status,
-      applicationCount: count.all,
-      newApplicationCount: count.new,
-      createdAt: String(row.created_at),
-      updatedAt: String(row.updated_at),
-    } satisfies FunnelSummary;
-  });
+  return funnelRows
+    .map(row => {
+      const config = normalizeConfig(row);
+      const owner = ownerFromRow(row);
+      const count = counts.get(config.id) ?? { all: 0, new: 0 };
+      return toFunnelSummary(config, owner, String(row.created_at), String(row.updated_at), count.all, count.new);
+    })
+    .filter(summary => !ownerFilter || summary.ownerUserId === ownerFilter);
+}
+
+export async function getFunnelOwner(funnelId: string): Promise<FunnelOwner | null> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    const existing = memoryFunnels.find(item => item.config.id === funnelId);
+    return existing ? { ...existing.owner } : null;
+  }
+  const { data, error } = await supabase
+    .from("funnels")
+    .select("owner_user_id,owner_email")
+    .eq("id", funnelId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return ownerFromRow(data as Record<string, unknown>);
+}
+
+export async function setFunnelOwner(funnelId: string, owner: Partial<FunnelOwner> | null): Promise<FunnelSummary | null> {
+  const nextOwner = normalizeOwner(owner);
+  const supabase = getSupabase();
+  if (!supabase) {
+    const existing = memoryFunnels.find(item => item.config.id === funnelId);
+    if (!existing) return null;
+    existing.owner = nextOwner;
+    existing.updatedAt = new Date().toISOString();
+    const applications = memoryApplications.filter(application => application.funnelId === funnelId);
+    return toFunnelSummary(
+      existing.config,
+      existing.owner,
+      existing.createdAt,
+      existing.updatedAt,
+      applications.length,
+      applications.filter(application => application.status === "new").length,
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("funnels")
+    .update({
+      owner_user_id: nextOwner.userId,
+      owner_email: nextOwner.email,
+    })
+    .eq("id", funnelId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const config = normalizeConfig(data as Record<string, unknown>);
+  const counts = await readAllApplicationCountRows(supabase);
+  const forFunnel = counts.filter(row => row.funnel_id === funnelId);
+  return toFunnelSummary(
+    config,
+    ownerFromRow(data as Record<string, unknown>),
+    String((data as Record<string, unknown>).created_at),
+    String((data as Record<string, unknown>).updated_at),
+    forFunnel.length,
+    forFunnel.filter(row => row.status === "new").length,
+  );
 }
 
 function regeneratePages(config: FunnelConfig): FunnelConfig["pages"] {
@@ -521,7 +638,12 @@ export async function updateApplicationStatus(id: string, status: ApplicationSta
 
 export function resetMemoryStoreForTests() {
   const now = new Date().toISOString();
-  memoryFunnels = [{ config: structuredClone(defaultFunnel), createdAt: now, updatedAt: now }];
+  memoryFunnels = [{
+    config: structuredClone(defaultFunnel),
+    owner: emptyOwner(),
+    createdAt: now,
+    updatedAt: now,
+  }];
   memoryApplications.splice(0, memoryApplications.length);
   memoryMetaServerSettings.clear();
   client = undefined;

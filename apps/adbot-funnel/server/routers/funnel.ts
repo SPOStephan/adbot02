@@ -9,6 +9,7 @@ import {
   funnelConfigSchema,
   funnelIdSchema,
   funnelStatusSchema,
+  setFunnelOwnerSchema,
 } from "@shared/funnelSchemas";
 import type { ApplicationSubmission, FunnelConfig, ResumeMetadata } from "@shared/funnel";
 import { storagePut } from "../storage";
@@ -28,6 +29,8 @@ import {
   listFunnels,
   saveFunnel,
   saveMetaServerSettings,
+  getFunnelOwner,
+  setFunnelOwner,
   slugifyFunnel,
   updateApplicationStatus,
 } from "../funnelStore";
@@ -146,7 +149,9 @@ export const funnelRouter = router({
     return { id: application.id, notificationSent, metaConversion: metaConversion.status };
   }),
 
-  funnels: adminProcedure.query(() => listFunnels()),
+  funnels: adminProcedure
+    .input(z.object({ ownerUserId: z.string().uuid().optional() }).optional())
+    .query(({ input }) => listFunnels(input?.ownerUserId ? { ownerUserId: input.ownerUserId } : undefined)),
 
   adminConfig: adminProcedure
     .input(z.object({ id: funnelIdSchema }).optional())
@@ -163,14 +168,31 @@ export const funnelRouter = router({
   create: adminProcedure.input(createFunnelSchema).mutation(async ({ input }) => {
     const slug = await getUniqueFunnelSlug(input.slug || input.title);
     const config = createFunnelFromTemplate(defaultFunnel, input.title, slug);
-    return createFunnel(config);
+    return createFunnel(config, {
+      userId: input.ownerUserId ?? null,
+      email: input.ownerEmail ?? null,
+    });
   }),
 
   duplicate: adminProcedure.input(duplicateFunnelSchema).mutation(async ({ input }) => {
     const source = await requireFunnel(input.sourceId);
     const slug = await getUniqueFunnelSlug(input.slug || input.title);
     const copy = createFunnelFromTemplate(source, input.title, slug);
-    return createFunnel(copy);
+    const sourceOwner = await getFunnelOwner(source.id);
+    return createFunnel(copy, {
+      userId: input.ownerUserId ?? sourceOwner?.userId ?? null,
+      email: input.ownerEmail ?? sourceOwner?.email ?? null,
+    });
+  }),
+
+  setOwner: adminProcedure.input(setFunnelOwnerSchema).mutation(async ({ input }) => {
+    await requireFunnel(input.funnelId);
+    const summary = await setFunnelOwner(input.funnelId, {
+      userId: input.ownerUserId,
+      email: input.ownerEmail === "" ? null : input.ownerEmail ?? null,
+    });
+    if (!summary) throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
+    return summary;
   }),
 
   uploadFavicon: adminProcedure.input(faviconUploadSchema).mutation(async ({ input }) => {

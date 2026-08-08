@@ -1,12 +1,32 @@
+function readEnv(name: string) {
+  return process.env[name] ?? "";
+}
+
 export const ENV = {
-  cookieSecret: process.env.JWT_SECRET ?? "",
-  adminEmail: (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase(),
-  adminPassword: process.env.ADMIN_PASSWORD ?? "",
-  adminName: process.env.ADMIN_NAME?.trim() || "Adbot Admin",
-  supabaseUrl: process.env.SUPABASE_URL ?? "",
-  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
-  storageBucket: process.env.STORAGE_BUCKET?.trim() || "application-resumes",
-  isProduction: process.env.NODE_ENV === "production",
+  get cookieSecret() {
+    return readEnv("JWT_SECRET");
+  },
+  get adminEmail() {
+    return readEnv("ADMIN_EMAIL").trim().toLowerCase();
+  },
+  get adminPassword() {
+    return readEnv("ADMIN_PASSWORD");
+  },
+  get adminName() {
+    return readEnv("ADMIN_NAME").trim() || "Adbot Admin";
+  },
+  get supabaseUrl() {
+    return readEnv("SUPABASE_URL");
+  },
+  get supabaseServiceRoleKey() {
+    return readEnv("SUPABASE_SERVICE_ROLE_KEY");
+  },
+  get storageBucket() {
+    return readEnv("STORAGE_BUCKET").trim() || "application-resumes";
+  },
+  get isProduction() {
+    return process.env.NODE_ENV === "production";
+  },
 };
 
 export function assertAuthConfigured() {

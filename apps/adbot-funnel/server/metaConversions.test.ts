@@ -136,7 +136,7 @@ describe("Meta Conversions API", () => {
     }
   });
 
-  it("überspringt deaktiviertes Tracking oder fehlende Event-ID und macht Meta-Fehler nicht zum Bewerbungsfehler", async () => {
+  it("überspringt deaktiviertes Tracking, DOI-Zeitpunkt oder fehlende Event-ID und macht Meta-Fehler nicht zum Bewerbungsfehler", async () => {
     const fetchMock = vi
       .fn()
       .mockRejectedValue(new Error("Meta nicht erreichbar"));
@@ -149,6 +149,15 @@ describe("Meta Conversions API", () => {
         fetchMock
       )
     ).resolves.toEqual({ status: "skipped", reason: "tracking_disabled" });
+    await expect(
+      sendMetaApplicationConversion(
+        { ...config, metaTracking: { ...config.metaTracking, conversionTrigger: "doi" } },
+        application,
+        submission,
+        {},
+        fetchMock
+      )
+    ).resolves.toEqual({ status: "skipped", reason: "awaiting_doi" });
     await expect(
       sendMetaApplicationConversion(
         config,

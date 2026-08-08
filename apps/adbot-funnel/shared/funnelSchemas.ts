@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, PAGE_TYPES } from "./funnel";
+import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES } from "./funnel";
 
 const iconSchema = z.enum(FUNNEL_OPTION_ICONS);
 const optionalHttpsUrlSchema = z.string().max(2048).refine(value => value === "" || /^https:\/\//i.test(value), "Es ist nur eine absolute HTTPS-Adresse zulässig.");
@@ -110,6 +110,7 @@ export const funnelConfigSchema = z
       enabled: z.boolean(),
       pixelId: z.union([z.literal(""), z.string().regex(/^\d{5,25}$/, "Die Pixel-ID muss aus 5 bis 25 Ziffern bestehen.")]),
       eventName: z.string().trim().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_]*$/, "Der Eventname darf nur Buchstaben, Ziffern und Unterstriche enthalten."),
+      conversionTrigger: z.enum(META_CONVERSION_TRIGGERS).default("submit"),
     }),
     pages: z.array(funnelPageSchema).min(2).max(40),
   })
@@ -138,10 +139,18 @@ export const funnelConfigSchema = z
 export const createFunnelSchema = z.object({
   title: z.string().trim().min(1).max(240),
   slug: z.string().trim().max(120).optional(),
+  ownerUserId: z.string().uuid().nullable().optional(),
+  ownerEmail: z.string().trim().email().max(320).nullable().optional(),
 });
 
 export const duplicateFunnelSchema = createFunnelSchema.extend({
   sourceId: funnelIdSchema,
+});
+
+export const setFunnelOwnerSchema = z.object({
+  funnelId: funnelIdSchema,
+  ownerUserId: z.string().uuid().nullable(),
+  ownerEmail: z.union([z.string().trim().email().max(320), z.literal(""), z.null()]).optional(),
 });
 
 export const applicationSubmissionSchema = z

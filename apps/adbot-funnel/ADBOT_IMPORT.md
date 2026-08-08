@@ -10,9 +10,15 @@ Arbeitskopie des Funnel-Builders im Adbot-Monorepo (`apps/adbot-funnel`).
 
 Siehe `.env.example`: `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SUPABASE_*`, optional Resend.
 
+## Integration in Adbot
+
+- Dashboard-Nav + Workspace-Card → `NEXT_PUBLIC_FUNNEL_URL` (Default `https://funnel.adbot.one`)
+- Mandantenfelder: `funnels.owner_user_id` / `owner_email` (Migration `20260808210000_funnel_owner_binding.sql`)
+- Admin-API: `funnel.setOwner`, optional Filter `funnels({ ownerUserId })`
+- Meta: `metaTracking.conversionTrigger` = `submit` | `doi` (Default `submit`; bei `doi` keine Conversion beim Absenden)
+
 ## Nächste Schritte
 
-- Adbot-Navigation / `funnel.adbot.one`
-- Mandantenfähigkeit an Adbot-User
-- DOI + Meta-Conversion-Schalter
+- Adbot-SSO in den Funnel-Admin (Owner automatisch setzen)
+- DOI-Mailfluss + Conversion nach Bestätigung
 - Freebie-Builder unter `freebie.adbot.one`
