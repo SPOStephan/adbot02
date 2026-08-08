@@ -911,6 +911,10 @@ assert.match(rebindMigration, /app\.meta_organic_rebind/);
 assert.match(rebindMigration, /policy_inactive/);
 assert.match(
   rebindMigration,
+  /drop function if exists public\.prepare_meta_organic_boost_write_now/,
+);
+assert.match(
+  rebindMigration,
   /preflight_blocker/,
 );
 assert.match(

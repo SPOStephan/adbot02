@@ -623,7 +623,10 @@ grant execute on function public.revive_meta_organic_boost_superseded_plans(uuid
 
 -- ---------------------------------------------------------------------------
 -- 5) prepare: rebind + revive before counting preflight
+-- OUT columns changed (rebound_plans, preflight_blocker) → DROP first.
 -- ---------------------------------------------------------------------------
+drop function if exists public.prepare_meta_organic_boost_write_now(uuid, uuid);
+
 create or replace function public.prepare_meta_organic_boost_write_now(
   p_user_id uuid,
   p_platform_account_id uuid
