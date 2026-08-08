@@ -76,6 +76,10 @@ async function prepareOrganicBoostWriteNow(input: {
     typeof record.preflight_blocker === "string" && record.preflight_blocker.trim()
       ? record.preflight_blocker.trim()
       : null;
+  const rebindDetail =
+    typeof record.rebind_detail === "string" && record.rebind_detail.trim()
+      ? record.rebind_detail.trim()
+      : null;
 
   return {
     duePlans: Number.isFinite(duePlans) ? duePlans : 0,
@@ -90,6 +94,7 @@ async function prepareOrganicBoostWriteNow(input: {
       `lease_match=${leaseMatches}`,
       Number.isFinite(reboundPlans) ? `rebound=${reboundPlans}` : null,
       preflightBlocker ? `blocker=${preflightBlocker}` : null,
+      rebindDetail ? `rebind=${rebindDetail}` : null,
     ]
       .filter((part): part is string => Boolean(part))
       .join(" "),
