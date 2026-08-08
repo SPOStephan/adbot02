@@ -1,9 +1,18 @@
-# Adbot Funnel Import
+# Adbot Funnel
 
-Dieses Verzeichnis ist die Adbot-Arbeitskopie des Funnel-Builders.
+Arbeitskopie des Funnel-Builders im Adbot-Monorepo (`apps/adbot-funnel`).
 
-- Quelle: `SPOStephan/social-recruiting-funnel` @ `598f6e1`
-- Paralleles Deploy-Repo: `SPOStephan/adbot-funnel` (Mirror, Original unangetastet)
-- Weiterentwicklung für Adbot erfolgt hier im Monorepo (`adbot02`), damit ein Agent Adbot-Kern und Funnel gemeinsam bearbeiten kann.
+- Quelle ursprünglich: `SPOStephan/social-recruiting-funnel` @ `598f6e1`
+- Separates Deploy-Repo optional: `SPOStephan/adbot-funnel`
+- **Manus entfernt:** Admin-Login per E-Mail/Passwort (JWT), Storage über Supabase
 
-Nächste Schritte: Manus-Auth/Storage ablösen, Adbot-Auth, Resend/DOI, später `funnel.adbot.one`.
+## Erforderliche Env
+
+Siehe `.env.example`: `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SUPABASE_*`, optional Resend.
+
+## Nächste Schritte
+
+- Adbot-Navigation / `funnel.adbot.one`
+- Mandantenfähigkeit an Adbot-User
+- DOI + Meta-Conversion-Schalter
+- Freebie-Builder unter `freebie.adbot.one`

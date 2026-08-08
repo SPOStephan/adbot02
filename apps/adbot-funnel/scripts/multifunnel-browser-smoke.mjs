@@ -5,7 +5,7 @@ import { SignJWT } from "jose";
 const baseUrl = process.argv[2];
 if (!baseUrl?.startsWith("https://")) throw new Error("Als erstes Argument wird die HTTPS-Vorschau-URL erwartet.");
 
-const requiredEnv = ["JWT_SECRET", "OWNER_OPEN_ID", "VITE_APP_ID", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+const requiredEnv = ["JWT_SECRET", "ADMIN_EMAIL", "ADMIN_PASSWORD", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
 for (const key of requiredEnv) {
   if (!process.env[key]) throw new Error(`Fehlende Umgebungsvariable: ${key}`);
 }
@@ -133,12 +133,15 @@ async function main() {
 
   await Promise.all([send("Page.enable"), send("Runtime.enable"), send("Network.enable")]);
 
+  const adminEmail = process.env.ADMIN_EMAIL;
   const token = await new SignJWT({
-    openId: process.env.OWNER_OPEN_ID,
-    appId: process.env.VITE_APP_ID,
-    name: process.env.OWNER_NAME || "Owner",
+    email: adminEmail,
+    name: process.env.ADMIN_NAME || "Adbot Admin",
+    role: "admin",
   })
-    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(`admin:${adminEmail}`)
+    .setIssuedAt()
     .setExpirationTime(Math.floor(Date.now() / 1000) + 600)
     .sign(new TextEncoder().encode(process.env.JWT_SECRET));
 
