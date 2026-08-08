@@ -1074,6 +1074,7 @@ const SNAPSHOT_FIELDS: Record<MetaWriteObjectKind, readonly string[]> = {
     "end_time",
     "updated_time",
   ],
+  // Meta AdCreative nodes reject `updated_time` (#100 nonexisting field).
   creative: [
     "id",
     "account_id",
@@ -1087,7 +1088,6 @@ const SNAPSHOT_FIELDS: Record<MetaWriteObjectKind, readonly string[]> = {
     "authorization_category",
     "instagram_user_id",
     "url_tags",
-    "updated_time",
   ],
   ad: [
     "id",

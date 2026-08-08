@@ -521,6 +521,28 @@ try {
     },
   );
 
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+    return jsonResponse({
+      id: "900000003",
+      account_id: "123456789",
+      name: "Organic boost creative",
+      object_story_id: "111_222",
+    });
+  };
+  const creativeSnapshot = await writeClient.getMetaWriteObjectSnapshot({
+    ...auth,
+    kind: "creative",
+    objectId: "900000003",
+  });
+  assert.equal(creativeSnapshot.kind, "creative");
+  assert.equal(creativeSnapshot.id, "900000003");
+  const creativeFields = requests[0].url.searchParams.get("fields") ?? "";
+  assert.match(creativeFields, /object_story_id/);
+  assert.doesNotMatch(creativeFields, /(^|,)updated_time(,|$)/);
+
   console.log("Meta write client regression passed.");
 } finally {
   globalThis.fetch = originalFetch;
