@@ -123,10 +123,11 @@ export function LegalPagesEditor({ pages }: Props) {
       </label>
 
       <label className="mt-4 block text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-        Inhalt (einfach einkopieren)
+        Inhalt (Klartext, ohne # / Markdown)
         <textarea
           className="mt-2 min-h-[28rem] w-full rounded-xl border border-slate-200 px-3 py-3 font-mono text-sm leading-6 text-slate-900"
           onChange={(event) => setBody(event.target.value)}
+          placeholder="Einfach Text einfügen. Abschnitte mit Leerzeilen trennen — keine # oder ## nötig."
           spellCheck
           value={body}
         />

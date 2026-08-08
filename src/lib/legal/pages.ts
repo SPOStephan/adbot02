@@ -3,12 +3,14 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { normalizeLegalPlainText } from "@/lib/legal/plain-text";
 import type { LegalPage, LegalSlug } from "@/lib/legal/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type { LegalPage, LegalSlug };
 export { isLegalSlug, LEGAL_SLUGS } from "@/lib/legal/types";
+export { normalizeLegalPlainText } from "@/lib/legal/plain-text";
 
 const DEFAULT_TITLES: Record<LegalSlug, string> = {
   impressum: "Impressum",
@@ -17,7 +19,7 @@ const DEFAULT_TITLES: Record<LegalSlug, string> = {
 
 async function readFallbackFile(slug: LegalSlug): Promise<string> {
   const filePath = path.join(process.cwd(), "content", "legal", `${slug}.md`);
-  return readFile(filePath, "utf8");
+  return normalizeLegalPlainText(await readFile(filePath, "utf8"));
 }
 
 export async function getLegalPage(slug: LegalSlug): Promise<LegalPage> {
@@ -36,7 +38,7 @@ export async function getLegalPage(slug: LegalSlug): Promise<LegalPage> {
           typeof data.title === "string" && data.title.trim()
             ? data.title.trim()
             : DEFAULT_TITLES[slug],
-        body: data.body,
+        body: normalizeLegalPlainText(data.body),
         source: "database",
         updatedAt:
           typeof data.updated_at === "string" ? data.updated_at : null,
@@ -63,7 +65,7 @@ export async function saveLegalPage(input: {
   userId: string;
 }): Promise<LegalPage> {
   const title = input.title.trim();
-  const body = input.body.trim();
+  const body = normalizeLegalPlainText(input.body);
   if (!title || title.length > 120) {
     throw new Error("Titel ungültig (1–120 Zeichen).");
   }

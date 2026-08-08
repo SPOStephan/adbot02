@@ -1,28 +1,26 @@
-# Impressum
-
 Bitte ersetzen Sie diesen Platzhaltertext durch Ihr vollständiges Impressum
 (Angaben gemäß § 5 TMG / § 18 MStV).
 
-## Anbieter
-Firma / Name  
-Straße und Hausnummer  
-PLZ Ort  
+Anbieter
+Firma / Name
+Straße und Hausnummer
+PLZ Ort
 Land
 
-## Kontakt
-E-Mail:  
+Kontakt
+E-Mail:
 Telefon:
 
-## Vertretungsberechtigte Person
+Vertretungsberechtigte Person
 …
 
-## Registereintrag
-Registergericht:  
+Registereintrag
+Registergericht:
 Registernummer:
 
-## Umsatzsteuer-ID
+Umsatzsteuer-ID
 Umsatzsteuer-Identifikationsnummer gemäß § 27 a Umsatzsteuergesetz:
 …
 
-## Verantwortlich für den Inhalt
+Verantwortlich für den Inhalt
 …
