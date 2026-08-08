@@ -87,12 +87,15 @@ export function OrganicBoostPlanButton({
       const created =
         (planBody.organicBoost?.plansCreated ?? 0) +
         (planBody.organicBoost?.plansExisting ?? 0);
-      const written = executeBody.drain?.succeeded ??
+      const written =
+        executeBody.drain?.succeeded ??
         planBody.organicBoost?.executorSucceeded ??
         0;
-      const execFailed = executeBody.drain?.failed ??
+      const execFailed =
+        executeBody.drain?.failed ??
         planBody.organicBoost?.executorFailed ??
         0;
+      const duePlans = executeBody.drain?.duePlans ?? 0;
       const drainError =
         executeBody.drain?.lastError?.trim() ||
         planBody.organicBoost?.executorLastError?.trim() ||
@@ -101,6 +104,36 @@ export function OrganicBoostPlanButton({
       const status = planBody.organicBoost?.status ?? "unbekannt";
       const error = planBody.organicBoost?.lastError?.trim();
 
+      // Kennzahlen (Spend/Imp.) kommen aus dem Marketing-Abruf, nicht aus dem
+      // Executor. Wenn nichts mehr zu schreiben ist: Abruf nachziehen.
+      let syncNotice: string | null = null;
+      const shouldRefreshMetrics =
+        written === 0 && execFailed === 0 && !drainError && duePlans < 1;
+      if (shouldRefreshMetrics) {
+        const syncResponse = await fetch("/api/connectors/meta/sync", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+        const syncBody = (await syncResponse.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          status?: string;
+          retryAt?: string | null;
+          marketingInsightCount?: number;
+        };
+        if (syncResponse.ok && syncBody.ok === true) {
+          syncNotice =
+            "Meta-Kennzahlen aktualisiert (Abruf). Ausgaben/Impressionen erscheinen in der Ampel.";
+        } else if (syncResponse.status === 429) {
+          syncNotice =
+            "Kampagnen laufen — Abruf kurz im Cooldown. Gleich nochmal oder den Abruf-Button nutzen.";
+        } else {
+          syncNotice =
+            "Kampagnen bereit — Kennzahlen-Abruf fehlgeschlagen. Bitte Abruf-Button nutzen.";
+        }
+      }
+
       setNotice(
         written > 0
           ? `Meta-Kontakt: ${written} Plan/Pläne gesendet.`
@@ -108,11 +141,13 @@ export function OrganicBoostPlanButton({
             ? `Meta hat abgelehnt (${executeBody.drain?.lastOutcome ?? "failed"}${drainError ? `: ${drainError}` : ""}).`
             : drainError
               ? `Kein Meta-Kontakt (${drainError}${prepare ? ` · ${prepare}` : ""}).`
-              : created > 0
-                ? `Pläne bereit, aber kein Meta-Kontakt${prepare ? ` (${prepare})` : ""}.`
-                : error
-                  ? `Kein Plan angelegt (${status}): ${error}`
-                  : `Kein Plan angelegt (Status ${status}).`,
+              : syncNotice
+                ? syncNotice
+                : created > 0
+                  ? `Kampagnen bereit — kein neuer Versand nötig.${prepare ? ` (${prepare})` : ""}`
+                  : error
+                    ? `Kein Plan angelegt (${status}): ${error}`
+                    : `Kein Plan angelegt (Status ${status}).`,
       );
       router.refresh();
     } catch (error) {
@@ -135,7 +170,7 @@ export function OrganicBoostPlanButton({
         type="button"
       >
         <RefreshCw className={`size-3.5 ${pending ? "animate-spin" : ""}`} />
-        {pending ? "Startet …" : label}
+        {pending ? "Aktualisiert …" : label}
       </button>
       {notice ? (
         <p className="text-xs font-semibold leading-5 text-slate-700" role="status">

@@ -739,6 +739,11 @@ export function MetaCampaignOverview({
                 </div>
               </div>
               <OrganicBoostLiveRefresh active={awaitingOrganicBoostProgress} />
+              <p className="mt-3 text-xs font-medium leading-5 text-slate-500">
+                Status „Boost aktiv“ kommt vom Versand. Ausgaben und Impressionen
+                kommen vom Meta-Abruf — bei leeren/0-Werten Abruf oder „Manuell
+                erneut prüfen“ nutzen.
+              </p>
               {organicBoostConfigured ? (
                 <OrganicBoostPlanButton label="Manuell erneut prüfen" />
               ) : null}
