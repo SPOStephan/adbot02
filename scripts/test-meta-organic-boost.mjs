@@ -915,6 +915,10 @@ assert.match(
 );
 assert.match(
   rebindMigration,
+  /drop function if exists public\.diagnose_meta_organic_boost_write_now/,
+);
+assert.match(
+  rebindMigration,
   /preflight_blocker/,
 );
 assert.match(
