@@ -38,12 +38,14 @@ try {
       /import \{\n  getMetaAdAccountSummary,[\s\S]*?\n\} from "\.\/client";/,
       `import {
   getMetaAdAccountSummary,
+  getMetaAccountInsights,
   getMetaAdCreatives,
   getMetaAdInsights,
   getMetaAds,
   getMetaAdsByIds,
   getMetaAdSets,
   getMetaAdSetsByIds,
+  getMetaCampaignInsights,
   getMetaCampaigns,
   getMetaCampaignsByIds,
   mergeMetaUsage,
@@ -326,6 +328,70 @@ export async function getMetaAdInsights() {
     usage,
   };
 }
+
+export async function getMetaCampaignInsights() {
+  return {
+    items: [
+      {
+        accountId: "123",
+        campaignId: "campaign-1",
+        campaignName: "Campaign 1",
+        dateStart: "2026-07-27",
+        dateStop: "2026-07-27",
+        impressions: "1000",
+        spend: "25.50",
+      },
+      {
+        accountId: "123",
+        campaignId: "campaign-1",
+        campaignName: "Campaign 1",
+        dateStart: "2026-07-28",
+        dateStop: "2026-07-28",
+        impressions: "1000",
+        spend: "25.50",
+      },
+      {
+        accountId: "123",
+        campaignId: "historical-campaign",
+        campaignName: "Historical Campaign",
+        dateStart: "2026-07-28",
+        dateStop: "2026-07-28",
+        impressions: "1000",
+        spend: "25.50",
+      },
+    ],
+    usage,
+  };
+}
+
+export async function getMetaAccountInsights() {
+  return {
+    items: [
+      {
+        accountId: "123",
+        dateStart: "2026-07-27",
+        dateStop: "2026-07-27",
+        impressions: "1000",
+        spend: "25.50",
+      },
+      {
+        accountId: "123",
+        dateStart: "2026-07-28",
+        dateStop: "2026-07-28",
+        impressions: "2000",
+        spend: "51.00",
+      },
+      {
+        accountId: "123",
+        dateStart: "2026-07-29",
+        dateStop: "2026-07-29",
+        impressions: "100",
+        spend: "5.00",
+      },
+    ],
+    usage,
+  };
+}
 `;
 
   const adminStub = `
@@ -397,9 +463,15 @@ export function createAdminClient() {
     "creative-1",
     "historical-creative",
   ]]);
-  assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 1);
+  assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 2);
   const call = globalThis.__marketingSyncTest.rpcCalls[0];
   assert.equal(call.name, "replace_meta_marketing_snapshot");
+  const spendCall = globalThis.__marketingSyncTest.rpcCalls[1];
+  assert.equal(spendCall.name, "apply_meta_campaign_insight_spend");
+  assert.equal(spendCall.args.p_account_spend_total, 81.5);
+  assert.equal(spendCall.args.p_account_spend_today, 5);
+  assert.ok(Array.isArray(spendCall.args.p_campaign_insights));
+  assert.equal(spendCall.args.p_campaign_insights.length, 3);
   assert.equal(
     call.args.p_campaigns[0].is_adset_budget_sharing_enabled,
     false,

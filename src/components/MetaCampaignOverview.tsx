@@ -742,11 +742,9 @@ export function MetaCampaignOverview({
               </div>
               <OrganicBoostLiveRefresh active={awaitingOrganicBoostProgress} />
               <p className="mt-3 text-xs font-medium leading-5 text-slate-500">
-                Status „Boost aktiv“ kommt vom Versand. Ausgaben und Impressionen
-                kommen vom Meta-Abruf (inkl. heutiger Tag in der Kontozone). Bei
-                €0 trotz aktiver Auslieferung: in Meta Ads Manager prüfen — oft
-                verzögert Meta die erste Insight-Zeile um Minuten bis Stunden —
-                dann Abruf oder „Manuell erneut prüfen“.
+                Status „Boost aktiv“ kommt vom Versand. Ausgaben kommen aus dem
+                Meta-Abruf (Ad- + Kampagnen-Insights, inkl. heute) und — wenn
+                Insights noch nachlaufen — aus dem Budgetrest der Ad Sets.
               </p>
               {organicBoostConfigured ? (
                 <OrganicBoostPlanButton label="Manuell erneut prüfen" />
