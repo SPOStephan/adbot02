@@ -1,5 +1,6 @@
 const DEFAULT_MARKETING_SITE_URL = "https://adbot.one";
 const DEFAULT_APP_SITE_URL = "https://app.adbot.one";
+const DEFAULT_FUNNEL_SITE_URL = "https://funnel.adbot.one";
 
 function normalizeBaseUrl(value: string | undefined, fallback: string) {
   return (value?.trim() || fallback).replace(/\/+$/, "");
@@ -13,6 +14,11 @@ export const MARKETING_SITE_URL = normalizeBaseUrl(
 export const APP_SITE_URL = normalizeBaseUrl(
   process.env.NEXT_PUBLIC_APP_URL,
   DEFAULT_APP_SITE_URL,
+);
+
+export const FUNNEL_SITE_URL = normalizeBaseUrl(
+  process.env.NEXT_PUBLIC_FUNNEL_URL,
+  DEFAULT_FUNNEL_SITE_URL,
 );
 
 const marketingHostname = new URL(MARKETING_SITE_URL).hostname.toLowerCase();
@@ -53,4 +59,13 @@ export function isPortalPath(pathname: string) {
 
 export function createPortalUrl(pathname: string, search = "") {
   return new URL(`${pathname}${search}`, `${APP_SITE_URL}/`);
+}
+
+export function createFunnelUrl(pathname = "/", search = "") {
+  const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return new URL(`${normalizedPath}${search}`, `${FUNNEL_SITE_URL}/`);
+}
+
+export function createFunnelAdminUrl() {
+  return createFunnelUrl("/admin");
 }

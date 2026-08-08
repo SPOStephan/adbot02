@@ -16,6 +16,7 @@ const siteUrlsSource = await readFile(siteUrlsSourcePath, "utf8");
 const temporaryDirectory = await mkdtemp(join(tmpdir(), "adbot-staging-routing-"));
 const originalMarketingUrl = process.env.NEXT_PUBLIC_MARKETING_URL;
 const originalAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+const originalFunnelUrl = process.env.NEXT_PUBLIC_FUNNEL_URL;
 
 function setEnvironmentValue(name, value) {
   if (value === undefined) {
@@ -26,9 +27,10 @@ function setEnvironmentValue(name, value) {
   process.env[name] = value;
 }
 
-async function importSiteUrls(filename, marketingUrl, appUrl) {
+async function importSiteUrls(filename, marketingUrl, appUrl, funnelUrl) {
   setEnvironmentValue("NEXT_PUBLIC_MARKETING_URL", marketingUrl);
   setEnvironmentValue("NEXT_PUBLIC_APP_URL", appUrl);
+  setEnvironmentValue("NEXT_PUBLIC_FUNNEL_URL", funnelUrl);
 
   const compiled = ts.transpileModule(siteUrlsSource, {
     compilerOptions: {
@@ -57,6 +59,7 @@ try {
     "site-urls-equal-hosts.mjs",
     "https://staging.app.adbot.one",
     "https://staging.app.adbot.one",
+    "https://staging.funnel.adbot.one",
   );
   assert.equal(
     equalHostUrls.isMarketingHostname("staging.app.adbot.one"),
@@ -66,6 +69,10 @@ try {
   assert.equal(
     equalHostUrls.createPortalUrl("/login").toString(),
     "https://staging.app.adbot.one/login",
+  );
+  assert.equal(
+    equalHostUrls.createFunnelAdminUrl().toString(),
+    "https://staging.funnel.adbot.one/admin",
   );
 
   const separateHostUrls = await importSiteUrls(
@@ -78,10 +85,16 @@ try {
   assert.equal(separateHostUrls.isPortalHostname("app.adbot.one"), true);
   assert.equal(separateHostUrls.isPortalPath("/passwort-vergessen"), true);
   assert.equal(separateHostUrls.isPortalPath("/passwort-neu"), true);
+  assert.equal(separateHostUrls.FUNNEL_SITE_URL, "https://funnel.adbot.one");
+  assert.equal(
+    separateHostUrls.createFunnelUrl("/f/karriere").toString(),
+    "https://funnel.adbot.one/f/karriere",
+  );
 
   console.log("Staging-Routing-Regressionstests erfolgreich.");
 } finally {
   setEnvironmentValue("NEXT_PUBLIC_MARKETING_URL", originalMarketingUrl);
   setEnvironmentValue("NEXT_PUBLIC_APP_URL", originalAppUrl);
+  setEnvironmentValue("NEXT_PUBLIC_FUNNEL_URL", originalFunnelUrl);
   await rm(temporaryDirectory, { force: true, recursive: true });
 }

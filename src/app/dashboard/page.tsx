@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   Clock3,
   ExternalLink,
+  Filter,
   HelpCircle,
   ImageIcon,
   LayoutDashboard,
@@ -42,6 +43,7 @@ import {
   CampaignAssistantBrief,
   type CampaignBriefView,
 } from "@/components/CampaignAssistantBrief";
+import { FunnelWorkspaceCard } from "@/components/FunnelWorkspaceCard";
 import type {
   AllowedDomainView,
   AutomationOnboardingData,
@@ -84,6 +86,7 @@ import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
+import { createFunnelAdminUrl } from "@/lib/site-urls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,17 +94,25 @@ export const revalidate = 0;
 export const maxDuration = 300;
 
 const baseNavigation = [
-  { label: "Übersicht", icon: LayoutDashboard, href: "/dashboard", active: true },
-  { label: "Kampagnen", icon: Megaphone, href: "#kampagnen", active: false },
+  { label: "Übersicht", icon: LayoutDashboard, href: "/dashboard", active: true, external: false },
+  { label: "Kampagnen", icon: Megaphone, href: "#kampagnen", active: false, external: false },
   {
     label: "Assistent",
     icon: Sparkles,
     href: "#kampagnen-assistent",
     active: false,
+    external: false,
   },
-  { label: "Creatives", icon: ImageIcon, href: null, active: false },
-  { label: "Zielgruppen", icon: Target, href: null, active: false },
-  { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center", active: false },
+  {
+    label: "Funnel",
+    icon: Filter,
+    href: createFunnelAdminUrl().toString(),
+    active: false,
+    external: true,
+  },
+  { label: "Creatives", icon: ImageIcon, href: null, active: false, external: false },
+  { label: "Zielgruppen", icon: Target, href: null, active: false, external: false },
+  { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center", active: false, external: false },
 ];
 
 const adminNavigationItems = [
@@ -110,12 +121,14 @@ const adminNavigationItems = [
     icon: Images,
     href: "/dashboard/logo",
     active: false,
+    external: false,
   },
   {
     label: "Rechtliches",
     icon: Scale,
     href: "/dashboard/rechtliches",
     active: false,
+    external: false,
   },
 ];
 
@@ -1782,20 +1795,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
 
         <nav className="mt-10 space-y-1">
-          {navigation.map(({ label, icon: Icon, href, active }) =>
+          {navigation.map(({ label, icon: Icon, href, active, external }) =>
             href ? (
-              <Link
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${
-                  active
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
-                }`}
-                href={href}
-                key={label}
-              >
-                <Icon className="size-5" />
-                {label}
-              </Link>
+              external ? (
+                <a
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${
+                    active
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                  href={href}
+                  key={label}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  <Icon className="size-5" />
+                  <span className="flex-1">{label}</span>
+                  <ExternalLink className="size-3.5 opacity-60" aria-hidden="true" />
+                </a>
+              ) : (
+                <Link
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${
+                    active
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                  href={href}
+                  key={label}
+                >
+                  <Icon className="size-5" />
+                  {label}
+                </Link>
+              )
             ) : (
               <span
                 className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400"
@@ -1977,6 +2008,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             </article>
           </section>
+
+          <FunnelWorkspaceCard userEmail={user.email} />
 
           {metaConnected && metaAccount ? (
             <CampaignAssistantBrief briefs={campaignBriefViews} />

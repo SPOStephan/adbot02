@@ -44,6 +44,7 @@ export const defaultFunnel: FunnelConfig = {
     enabled: false,
     pixelId: "",
     eventName: "Lead",
+    conversionTrigger: "submit",
   },
   pages: [
     {

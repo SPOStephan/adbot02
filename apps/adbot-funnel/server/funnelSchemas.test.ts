@@ -41,6 +41,14 @@ describe("Funnel-Validierung", () => {
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, legal: { ...defaultFunnel.legal, imprintContent: "\n  \t" } }).success).toBe(false);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, postSubmit: { mode: "redirect", redirectUrl: "http://example.org" } }).success).toBe(false);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, metaTracking: { ...defaultFunnel.metaTracking, enabled: true, pixelId: "" } }).success).toBe(false);
+    expect(funnelConfigSchema.safeParse({
+      ...defaultFunnel,
+      metaTracking: { ...defaultFunnel.metaTracking, enabled: true, pixelId: "123456789012345", conversionTrigger: "doi" },
+    }).success).toBe(true);
+    expect(funnelConfigSchema.parse({
+      ...defaultFunnel,
+      metaTracking: { enabled: false, pixelId: "", eventName: "Lead" },
+    }).metaTracking.conversionTrigger).toBe("submit");
   });
 
   it("akzeptiert Meta-Kennungen ohne separates Checkbox-Feld und ignoriert den Legacy-Wert", () => {

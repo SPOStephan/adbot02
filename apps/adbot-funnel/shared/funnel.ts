@@ -191,10 +191,15 @@ export type FunnelPostSubmit = {
   redirectUrl: string;
 };
 
+export const META_CONVERSION_TRIGGERS = ["submit", "doi"] as const;
+export type MetaConversionTrigger = (typeof META_CONVERSION_TRIGGERS)[number];
+
 export type FunnelMetaTracking = {
   enabled: boolean;
   pixelId: string;
   eventName: string;
+  /** Wann die Meta-Conversion gemeldet wird. Standard: beim Absenden. Optional erst nach DOI. */
+  conversionTrigger: MetaConversionTrigger;
 };
 
 export type FunnelConfig = {
@@ -223,8 +228,15 @@ export type FunnelSummary = {
   status: FunnelStatus;
   applicationCount: number;
   newApplicationCount: number;
+  ownerUserId: string | null;
+  ownerEmail: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type FunnelOwner = {
+  userId: string | null;
+  email: string | null;
 };
 
 export type FunnelAnswers = Record<string, string[]>;

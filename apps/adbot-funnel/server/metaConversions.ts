@@ -128,6 +128,8 @@ export async function sendMetaApplicationConversion(
 ): Promise<MetaSendResult> {
   if (!config.metaTracking.enabled)
     return { status: "skipped", reason: "tracking_disabled" };
+  if (config.metaTracking.conversionTrigger === "doi")
+    return { status: "skipped", reason: "awaiting_doi" };
   if (!submission.metaEventId)
     return { status: "skipped", reason: "event_id_missing" };
   const settings = await getMetaServerSettings(config.id);

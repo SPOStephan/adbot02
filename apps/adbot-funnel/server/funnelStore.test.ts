@@ -7,12 +7,14 @@ import {
   createFunnelFromTemplate,
   getApplication,
   getFunnel,
+  getFunnelOwner,
   getUniqueFunnelSlug,
   listApplications,
   listFunnels,
   normalizeFunnelConfig,
   resetMemoryStoreForTests,
   saveFunnel,
+  setFunnelOwner,
   slugifyFunnel,
   updateApplicationStatus,
 } from "./funnelStore";
@@ -127,5 +129,28 @@ describe("Mehr-Funnel-Speicher", () => {
 
     expect(application).toMatchObject({ funnelId: defaultFunnel.id, funnelSlug: defaultFunnel.slug });
     expect(await listApplications(defaultFunnel.id)).toEqual([expect.objectContaining({ id: application.id })]);
+    expect(normalized.metaTracking.conversionTrigger).toBe("submit");
+  });
+
+  it("bindet Funnel an Adbot-Owner und filtert die Bibliothek", async () => {
+    const ownerId = "11111111-1111-4111-8111-111111111111";
+    const otherOwnerId = "22222222-2222-4222-8222-222222222222";
+    const owned = await createFunnel(
+      createFunnelFromTemplate(defaultFunnel, "Owner Funnel", "owner-funnel"),
+      { userId: ownerId, email: "kunde@example.org" },
+    );
+    await createFunnel(
+      createFunnelFromTemplate(defaultFunnel, "Fremd Funnel", "fremd-funnel"),
+      { userId: otherOwnerId, email: "fremd@example.org" },
+    );
+
+    expect(await getFunnelOwner(owned.id)).toEqual({ userId: ownerId, email: "kunde@example.org" });
+    expect(await listFunnels({ ownerUserId: ownerId })).toEqual([
+      expect.objectContaining({ id: owned.id, ownerUserId: ownerId, ownerEmail: "kunde@example.org" }),
+    ]);
+
+    const reassigned = await setFunnelOwner(owned.id, { userId: otherOwnerId, email: "neu@example.org" });
+    expect(reassigned).toMatchObject({ ownerUserId: otherOwnerId, ownerEmail: "neu@example.org" });
+    expect(await listFunnels({ ownerUserId: ownerId })).toEqual([]);
   });
 });

@@ -80,7 +80,9 @@ export default function Funnel() {
     if (currentPage.consentRequired && !consent) { setValidationError("Bitte bestätige die Datenschutz-Einwilligung."); return; }
     if (currentPage.resumeRequired && !resume) { setValidationError("Bitte lade deinen Lebenslauf hoch."); return; }
     setValidationError("");
-    const metaEventId = config.metaTracking.enabled
+    const trackOnSubmit =
+      config.metaTracking.enabled && config.metaTracking.conversionTrigger !== "doi";
+    const metaEventId = trackOnSubmit
       ? (pendingMetaEventId.current ??= createMetaEventId())
       : undefined;
     const metaBrowserIdentifiers = metaEventId ? readMetaBrowserIdentifiers() : {};
