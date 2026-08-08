@@ -954,4 +954,29 @@ assert.match(rebindAttemptClampMigration, /v_max_attempts := least/);
 assert.match(rebindAttemptClampMigration, /v_attempt_count := least/);
 assert.match(rebindAttemptClampMigration, /v_skipped/);
 
+const forceReleaseLeaseMigration = read(
+  "supabase/migrations/20260808173000_meta_organic_boost_force_release_lease.sql",
+);
+assert.match(
+  forceReleaseLeaseMigration,
+  /force_release_meta_account_operation_lease/,
+);
+assert.match(forceReleaseLeaseMigration, /lease_forced/);
+assert.match(
+  forceReleaseLeaseMigration,
+  /CLAIMED', 'EXECUTING', 'RECONCILING/,
+);
+assert.doesNotMatch(
+  forceReleaseLeaseMigration,
+  /claim_meta_account_operation\(\s*p_platform_account_id/,
+);
+assert.match(
+  read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
+  /Drain first/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-execute.ts"),
+  /lease_forced/,
+);
+
 console.log("test-meta-organic-boost: ok");

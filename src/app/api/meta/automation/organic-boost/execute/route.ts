@@ -18,29 +18,34 @@ export async function POST(request: NextRequest) {
     await readControlJson(request);
     const customer = await authenticateMetaCustomer();
 
+    // Drain first: diagnose used to claim a WRITE lease before drain and could
+    // leave lease_idle=false → claim_idle despite preflight_ok.
+    const drain = await drainOrganicBoostExecutionsForAccount({
+      userId: customer.userId,
+      platformAccountId: customer.platformAccountId,
+      maxRuns: 8,
+    });
+
     const admin = createAdminClient();
     let diagnose: unknown = null;
-    const { data: diagnoseData, error: diagnoseError } = await admin.rpc(
+    let diagnoseError: string | null = null;
+    const { data: diagnoseData, error: diagnoseRpcError } = await admin.rpc(
       "diagnose_meta_organic_boost_write_now",
       {
         p_user_id: customer.userId,
         p_platform_account_id: customer.platformAccountId,
       },
     );
-    if (!diagnoseError) {
+    if (diagnoseRpcError) {
+      diagnoseError = diagnoseRpcError.message;
+    } else {
       diagnose = diagnoseData;
     }
-
-    const drain = await drainOrganicBoostExecutionsForAccount({
-      userId: customer.userId,
-      platformAccountId: customer.platformAccountId,
-      maxRuns: 4,
-    });
 
     return controlJson({
       ok: true,
       diagnose,
-      diagnoseError: diagnoseError?.message ?? null,
+      diagnoseError,
       drain: {
         duePlans: drain.duePlans,
         runs: drain.runs,

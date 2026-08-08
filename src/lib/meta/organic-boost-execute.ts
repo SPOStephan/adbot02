@@ -80,10 +80,11 @@ async function prepareOrganicBoostWriteNow(input: {
     typeof record.rebind_detail === "string" && record.rebind_detail.trim()
       ? record.rebind_detail.trim()
       : null;
+  const leaseForced = record.lease_forced === true;
 
   return {
     duePlans: Number.isFinite(duePlans) ? duePlans : 0,
-    leaseHealed: leaseMatches && leaseIdle,
+    leaseHealed: (leaseMatches && leaseIdle) || leaseForced,
     preflightOkCount: Number.isFinite(preflightOkCount) ? preflightOkCount : null,
     killSwitchMode,
     detail: [
@@ -92,6 +93,7 @@ async function prepareOrganicBoostWriteNow(input: {
       `kill=${killSwitchMode ?? "?"}`,
       `lease_idle=${leaseIdle}`,
       `lease_match=${leaseMatches}`,
+      leaseForced ? "lease_forced=true" : null,
       Number.isFinite(reboundPlans) ? `rebound=${reboundPlans}` : null,
       preflightBlocker ? `blocker=${preflightBlocker}` : null,
       rebindDetail ? `rebind=${rebindDetail}` : null,
@@ -160,6 +162,13 @@ export async function drainOrganicBoostExecutionsForAccount(input: {
     !lastError
   ) {
     lastError = "preflight_zero_with_due_plans";
+  }
+  if (
+    prepared.detail?.includes("lease_idle=false") &&
+    prepared.duePlans > 0 &&
+    !lastError
+  ) {
+    lastError = "lease_busy_with_due_plans";
   }
 
   for (let index = 0; index < maxRuns; index += 1) {
