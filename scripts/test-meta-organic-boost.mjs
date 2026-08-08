@@ -36,6 +36,22 @@ assert.match(modeMigration, /Automatic boost mode requires a daily budget/);
 assert.match(materializerMigration, /materialize_meta_organic_boost_plan/);
 assert.match(materializerMigration, /object_story_id/);
 assert.match(materializerMigration, /run_meta_organic_boost_planner/);
+assert.match(
+  read("supabase/migrations/20260808160000_organic_boost_planner_never_throws.sql"),
+  /PLANNER_EXCEPTION/,
+);
+assert.match(
+  read("supabase/migrations/20260808160000_organic_boost_planner_never_throws.sql"),
+  /Policy was rotated/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-runner.ts"),
+  /error instanceof Error/,
+);
+assert.match(
+  read("src/lib/meta/planner.ts"),
+  /error\.message, error\.details, error\.hint/,
+);
 assert.match(materializerMigration, /approve_meta_organic_boost_canary_plan/);
 assert.match(materializerMigration, /unsupported_object_story_id/);
 assert.match(materializerMigration, /call_to_action_type/);
