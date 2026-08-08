@@ -997,8 +997,22 @@ assert.match(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /Kampagnen-Insights und Budgetrest|Ad- \+ Kampagnen-Insights/,
+  /Kampagnen-Insights und Budgetrest|Ad- \+ Kampagnen-Insights|geplantes Gesamtbudget/,
 );
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /deriveOrganicBoostRemainingMinor/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /durationDaysFromWindow/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /plannedEnvelopeMinor/,
+);
+// daily × days − spend (EUR major → minor): 5€/Tag × 7 Tage − 12,50€ = 22,50€
+assert.equal(Math.max(500 * 7 - Math.round(12.5 * 100), 0), 2250);
 
 const finalizeActiveMigration = read(
   "supabase/migrations/20260808175000_meta_organic_boost_finalize_active.sql",
