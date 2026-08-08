@@ -979,4 +979,25 @@ assert.match(
   /lease_forced/,
 );
 
+const spendByPlatformMigration = read(
+  "supabase/migrations/20260808174000_meta_organic_boost_spend_by_platform_id.sql",
+);
+assert.match(spendByPlatformMigration, /platform_campaign_id/);
+assert.match(
+  spendByPlatformMigration,
+  /c\.platform_campaign_id = bound\.platform_campaign_id/,
+);
+assert.match(
+  read("src/components/OrganicBoostPlanButton.tsx"),
+  /\/api\/connectors\/meta\/sync/,
+);
+assert.match(
+  read("src/components/OrganicBoostPlanButton.tsx"),
+  /Meta-Kennzahlen aktualisiert/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Ausgaben und Impressionen/,
+);
+
 console.log("test-meta-organic-boost: ok");
