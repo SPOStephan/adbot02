@@ -930,4 +930,16 @@ assert.match(
   /rebind_meta_organic_boost_plans_to_current_policy/,
 );
 
+const rebindHarderMigration = read(
+  "supabase/migrations/20260808171000_meta_organic_boost_rebind_harder.sql",
+);
+assert.match(rebindHarderMigration, /disable trigger guard_meta_mutation_plan_update/);
+assert.match(rebindHarderMigration, /rebind_detail/);
+assert.match(rebindHarderMigration, /rebind_exception:/);
+assert.match(rebindHarderMigration, /no_current_active_eur_policy/);
+assert.match(
+  read("src/lib/meta/organic-boost-execute.ts"),
+  /rebind_detail/,
+);
+
 console.log("test-meta-organic-boost: ok");
