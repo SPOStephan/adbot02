@@ -942,4 +942,16 @@ assert.match(
   /rebind_detail/,
 );
 
+const rebindAttemptClampMigration = read(
+  "supabase/migrations/20260808172000_meta_organic_boost_rebind_attempt_clamp.sql",
+);
+assert.match(
+  rebindAttemptClampMigration,
+  /mutation_plans_attempt_check/,
+);
+assert.match(rebindAttemptClampMigration, /max_attempts between 1 and 50/);
+assert.match(rebindAttemptClampMigration, /v_max_attempts := least/);
+assert.match(rebindAttemptClampMigration, /v_attempt_count := least/);
+assert.match(rebindAttemptClampMigration, /v_skipped/);
+
 console.log("test-meta-organic-boost: ok");
