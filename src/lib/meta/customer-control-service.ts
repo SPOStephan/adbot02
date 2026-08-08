@@ -117,12 +117,40 @@ export async function authenticateMetaCustomer(): Promise<MetaCustomer> {
   };
 }
 
-function rpcFailure(operation: string): never {
+function rpcFailure(operation: string, detail?: string | null): never {
+  const trimmed = detail?.trim();
   serviceError(
     "control_command_failed",
     500,
-    `${operation} konnte nicht sicher gespeichert werden. Es wurden keine unsicheren Änderungen ausgeführt.`,
+    trimmed
+      ? `${operation} konnte nicht sicher gespeichert werden. Es wurden keine unsicheren Änderungen ausgeführt. Details: ${trimmed}`
+      : `${operation} konnte nicht sicher gespeichert werden. Es wurden keine unsicheren Änderungen ausgeführt.`,
   );
+}
+
+function firstRpcRow(data: unknown): Record<string, unknown> | null {
+  if (Array.isArray(data)) {
+    const row = data[0];
+    return row && typeof row === "object" && !Array.isArray(row)
+      ? (row as Record<string, unknown>)
+      : null;
+  }
+
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    return data as Record<string, unknown>;
+  }
+
+  return null;
+}
+
+function rpcNonNegativeInt(
+  value: unknown,
+): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
 }
 
 async function tryRunOrganicBoostPlanner(input: {
@@ -279,14 +307,23 @@ export async function saveCustomerPolicy(
     p_enable_automation: command.enableAutomation,
   });
 
-  const result = Array.isArray(data) ? data[0] : null;
+  const result = firstRpcRow(data);
+  const managedBudgetOwnerCount = rpcNonNegativeInt(
+    result?.managed_budget_owner_count,
+  );
   if (
     error ||
     !result ||
     typeof result.policy_id !== "string" ||
-    typeof result.managed_budget_owner_count !== "number"
+    managedBudgetOwnerCount === null
   ) {
-    rpcFailure("Die Autonomie-Policy");
+    rpcFailure(
+      "Die Autonomie-Policy",
+      error?.message ??
+        (result
+          ? "Unerwartete Antwort vom Policy-RPC."
+          : "Leere Antwort vom Policy-RPC."),
+    );
   }
 
   // Autonomie + Launches = Writes freigeben + Beitrag-Push anstoßen.
@@ -308,8 +345,8 @@ export async function saveCustomerPolicy(
   }
 
   return {
-    policyId: result.policy_id,
-    managedBudgetOwnerCount: result.managed_budget_owner_count,
+    policyId: result.policy_id as string,
+    managedBudgetOwnerCount,
     organicBoost,
   };
 }

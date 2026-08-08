@@ -959,6 +959,15 @@ assert.match(serviceSource, /customer-launch-prepare:/);
 assert.match(serviceSource, /approve_meta_launch_canary_plan/);
 assert.match(serviceSource, /p_expected_payload_hash: command\.payloadHash/);
 assert.match(serviceSource, /put_meta_customer_budget_autonomy_policy/);
+assert.match(serviceSource, /function firstRpcRow/);
+assert.match(serviceSource, /Details:/);
+assert.match(
+  await readFile(
+    path.join(root, "supabase/migrations/20260808150000_policy_save_revive_nonfatal.sql"),
+    "utf8",
+  ),
+  /Soft-fail: hard-cap \/ policy changes must still persist/,
+);
 assert.match(serviceSource, /\.from\("meta_assets"\)/);
 assert.match(serviceSource, /set_meta_customer_automation_scope/);
 assert.match(serviceSource, /command\.status === "MANAGED"/);
