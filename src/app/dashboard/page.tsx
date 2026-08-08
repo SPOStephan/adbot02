@@ -1024,6 +1024,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {
         planId,
         planStatus,
+        campaignId: row.campaign_id ? String(row.campaign_id) : null,
         campaignName: String(row.campaign_name ?? "Beitrag-Push"),
         status,
         effectiveStatus,
@@ -1050,7 +1051,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           row.currency ?? metaAccount?.marketing_currency ?? "EUR",
         ),
         createdAt: String(row.created_at ?? new Date().toISOString()),
-      },
+      } satisfies OrganicBoostCampaignView,
     ];
   });
   const organicBoostPlanRows = [
@@ -1116,6 +1117,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {
         planId: String(plan.id),
         planStatus,
+        campaignId: null,
         campaignName,
         status: null,
         effectiveStatus: null,
@@ -1142,10 +1144,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         createdAt: String(
           link.created_at ?? plan.created_at ?? new Date().toISOString(),
         ),
-      },
+      } satisfies OrganicBoostCampaignView,
     ];
   });
-  const organicBoostCampaignViews =
+  const organicBoostCampaignViews: OrganicBoostCampaignView[] =
     organicBoostCampaignViewsFromRpc.length > 0
       ? organicBoostCampaignViewsFromRpc
       : organicBoostCampaignViewsFallback;
@@ -1474,6 +1476,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       return {
         planId: String(campaign.id),
         planStatus: "SYNCED",
+        campaignId: String(campaign.id),
         campaignName: String(campaign.name),
         status: campaign.status ? String(campaign.status) : null,
         effectiveStatus: campaign.effectiveStatus
@@ -1496,10 +1499,37 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         createdAt: new Date().toISOString(),
       } satisfies OrganicBoostCampaignView;
     });
-  const organicBoostCampaignViewsResolved =
+  const organicBoostCampaignViewsResolved: OrganicBoostCampaignView[] = (
     organicBoostCampaignViews.length > 0
       ? organicBoostCampaignViews
-      : organicBoostCampaignViewsFromLive;
+      : organicBoostCampaignViewsFromLive
+  ).map((campaign) => {
+    // Prefer Ampel RPC metrics; if still empty, fill from the same Abruf
+    // rollup used by the campaign table / dashboard totals.
+    if (
+      (campaign.spend != null && campaign.spend > 0) ||
+      (campaign.impressions != null && campaign.impressions > 0)
+    ) {
+      return campaign;
+    }
+
+    const live =
+      (campaign.campaignId
+        ? campaignRows.find((row) => row.id === campaign.campaignId)
+        : undefined) ??
+      campaignRows.find((row) => row.name === campaign.campaignName);
+
+    if (!live) {
+      return campaign;
+    }
+
+    return {
+      ...campaign,
+      spend: live.spend ?? campaign.spend,
+      impressions: live.impressions ?? campaign.impressions,
+      currency: live.currency || campaign.currency,
+    };
+  });
   const budgetOwnersByCampaign = new Map<
     string,
     AutomationScopeCampaignView["budgetOwners"]

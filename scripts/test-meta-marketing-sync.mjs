@@ -375,6 +375,9 @@ export function createAdminClient() {
   assert.equal(result.adsCount, 2);
   assert.equal(result.creativesCount, 2);
   assert.equal(result.insightsCount, 3);
+  assert.equal(result.insightsUntil, "2026-07-29");
+  assert.equal(result.insightsSince, "2026-06-23");
+  assert.ok(result.spendTotal > 0);
   assert.deepEqual(result.campaignBudgetSharingSnapshot, [
     {
       platform_campaign_id: "campaign-1",
@@ -406,6 +409,8 @@ export function createAdminClient() {
   assert.equal(call.args.p_ads.length, 2);
   assert.equal(call.args.p_creatives.length, 2);
   assert.equal(call.args.p_insights.length, 3);
+  assert.equal(call.args.p_insights_until, "2026-07-29");
+  assert.equal(call.args.p_insights_since, "2026-06-23");
   assert.equal(call.args.p_ads[1].platform_ad_id, "historical-ad");
   assert.equal(
     call.args.p_ads[1].platform_ad_set_id,

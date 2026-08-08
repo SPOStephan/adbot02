@@ -78,6 +78,8 @@ export function OrganicBoostPlanButton({
           blockedReason?: string | null;
           insightsCount?: number;
           campaignsCount?: number;
+          spendTotal?: number;
+          insightsUntil?: string | null;
           retryAt?: string | null;
         } | null;
         marketingSyncError?: string | null;
@@ -121,7 +123,24 @@ export function OrganicBoostPlanButton({
 
       let syncNotice: string | null = null;
       if (syncOk) {
-        syncNotice = `Meta-Kennzahlen aktualisiert (Abruf: ${sync?.insightsCount ?? 0} Insights, ${sync?.campaignsCount ?? 0} Kampagnen).`;
+        const spend = Number(sync?.spendTotal);
+        const spendLabel = Number.isFinite(spend)
+          ? new Intl.NumberFormat("de-DE", {
+              style: "currency",
+              currency: "EUR",
+              maximumFractionDigits: 2,
+            }).format(spend)
+          : "—";
+        const untilLabel = sync?.insightsUntil
+          ? new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" }).format(
+              new Date(`${sync.insightsUntil}T12:00:00Z`),
+            )
+          : null;
+        syncNotice = `Meta-Kennzahlen aktualisiert (Abruf: ${sync?.insightsCount ?? 0} Insights, Summe ${spendLabel}${untilLabel ? `, Fenster bis ${untilLabel}` : ""}).`;
+        if (Number.isFinite(spend) && spend <= 0) {
+          syncNotice +=
+            " Meta liefert für frische Kampagnen oft erst nach erster Auslieferung Kennzahlen — in Ads Manager prüfen und ggf. später erneut abrufen.";
+        }
       } else if (sync?.blockedReason === "manual_cooldown" || sync?.retryAt) {
         syncNotice =
           "Kampagnen laufen — Abruf kurz im Cooldown. Bitte in ca. 1 Min. erneut oder Abruf-Button.";

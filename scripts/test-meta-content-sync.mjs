@@ -544,6 +544,7 @@ export function createAdminClient() {
         adsCount: 4,
         creativesCount: 4,
         insightsCount: 37,
+        spendTotal: 125.5,
         recommendationsCount: 1,
         insightsSince: "2026-06-20",
         insightsUntil: "2026-07-26",

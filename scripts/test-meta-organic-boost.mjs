@@ -1045,5 +1045,18 @@ assert.match(
   read("src/components/OrganicBoostPlanButton.tsx"),
   /Meta-Kennzahlen aktualisiert/,
 );
+assert.match(
+  read("src/components/OrganicBoostPlanButton.tsx"),
+  /spendTotal/,
+);
+assert.match(
+  read("src/lib/meta/marketing-sync.ts"),
+  /Include account-local "today"/,
+);
+assert.match(read("src/lib/meta/marketing-sync.ts"), /sumInsightSpend/);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /campaignRows\.find\(\(row\) => row\.id === campaign\.campaignId\)/,
+);
 
 console.log("test-meta-organic-boost: ok");

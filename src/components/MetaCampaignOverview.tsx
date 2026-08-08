@@ -44,6 +44,8 @@ type CampaignRecommendation = {
 export type OrganicBoostCampaignView = {
   planId: string;
   planStatus: string;
+  /** Local campaigns.id when binding resolved; used to merge Abruf spend */
+  campaignId?: string | null;
   campaignName: string;
   status: string | null;
   effectiveStatus: string | null;
@@ -741,8 +743,10 @@ export function MetaCampaignOverview({
               <OrganicBoostLiveRefresh active={awaitingOrganicBoostProgress} />
               <p className="mt-3 text-xs font-medium leading-5 text-slate-500">
                 Status „Boost aktiv“ kommt vom Versand. Ausgaben und Impressionen
-                kommen vom Meta-Abruf — bei leeren/0-Werten Abruf oder „Manuell
-                erneut prüfen“ nutzen.
+                kommen vom Meta-Abruf (inkl. heutiger Tag in der Kontozone). Bei
+                €0 trotz aktiver Auslieferung: in Meta Ads Manager prüfen — oft
+                verzögert Meta die erste Insight-Zeile um Minuten bis Stunden —
+                dann Abruf oder „Manuell erneut prüfen“.
               </p>
               {organicBoostConfigured ? (
                 <OrganicBoostPlanButton label="Manuell erneut prüfen" />
