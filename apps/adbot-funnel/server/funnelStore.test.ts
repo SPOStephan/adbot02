@@ -44,7 +44,7 @@ describe("Mehr-Funnel-Speicher", () => {
       consent: true,
       sourceUrl: "https://example.org/f/test-speicher",
       utm: { utm_source: "test" },
-      resume: { key: "applications/test/cv.pdf", url: "/manus-storage/applications/test/cv.pdf", fileName: "cv.pdf", mimeType: "application/pdf", size: 1200 },
+      resume: { key: "applications/test/cv.pdf", url: "/api/storage/applications/test/cv.pdf", fileName: "cv.pdf", mimeType: "application/pdf", size: 1200 },
     });
 
     expect(created.status).toBe("new");

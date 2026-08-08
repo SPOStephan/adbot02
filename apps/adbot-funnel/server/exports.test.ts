@@ -18,7 +18,7 @@ const application: ApplicationRecord = {
   answers: { [technicalQuestionKey]: ["Vertrieb", "Office"], Erfahrung: ["3+ Jahre"] },
   contact: { name: "Muster; Erika", company: "Beispiel \"GmbH\"", email: "erika@example.org", phone: "+49 123", message: "Guten Tag" },
   consentAt: "2026-07-27T08:00:00.000Z",
-  resume: { key: "applications/test.pdf", url: "/manus-storage/applications/test.pdf", fileName: "CV Erika.pdf", mimeType: "application/pdf", size: 1024 },
+  resume: { key: "applications/test.pdf", url: "/api/storage/applications/test.pdf", fileName: "CV Erika.pdf", mimeType: "application/pdf", size: 1024 },
   sourceUrl: "https://example.org/f/karriere?utm_source=linkedin",
   utm: { utm_source: "linkedin" },
   createdAt: "2026-07-27T08:00:00.000Z",

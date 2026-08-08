@@ -1,6 +1,6 @@
 # Social Recruiting Funnel
 
-Der **Social Recruiting Funnel** ist eine eigenständige, mobile Bewerbungsanwendung mit öffentlichem Kandidaten-Funnel, geschütztem Admin-Bereich, visuellem Seiteneditor, Bewerbungsverwaltung sowie CSV- und PDF-Export. Die produktive Konfiguration und alle Bewerbungsdaten liegen in Supabase; Benachrichtigungen werden über Resend versendet.
+Der **Adbot Funnel** ist eine eigenständige, mobile Bewerbungs-/Lead-Anwendung mit öffentlichem Kandidaten-Funnel, geschütztem Admin-Bereich, visuellem Seiteneditor, Bewerbungsverwaltung sowie CSV- und PDF-Export. Die produktive Konfiguration und alle Bewerbungsdaten liegen in Supabase; Benachrichtigungen werden über Resend versendet.
 
 ## Funktionsumfang
 
@@ -32,7 +32,7 @@ React 19 + tRPC + Express
   ├─ Supabase PostgreSQL: Konfiguration und Bewerbungen
   ├─ Resend: Bewerbungsbenachrichtigungen
   ├─ Meta Pixel / Conversions API: pro Funnel aktivierbare automatische Conversion-Messung
-  └─ Privater S3-Speicher der aktuellen Hosting-Umgebung: Lebensläufe
+  └─ Supabase Storage: Lebensläufe und Branding-Dateien
 ```
 
 Der Browser besitzt keinen Supabase-Service-Schlüssel und greift nicht direkt auf die Bewerbungstabellen zu. Beide Tabellen haben aktivierte Row-Level Security; `anon` und `authenticated` besitzen keine Tabellenrechte. Ausschließlich der Server verwendet `service_role`. Weitere Details stehen in [`docs/infrastructure.md`](docs/infrastructure.md).
@@ -65,9 +65,9 @@ Die Anwendung benötigt folgende serverseitige Konfigurationsgruppen. Geheimwert
 | Gruppe | Variablen | Zweck |
 |---|---|---|
 | Supabase | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Funnel- und Bewerbungsdaten |
+| Storage | `STORAGE_BUCKET` (Default `application-resumes`) | Private Lebensläufe/Favicons in Supabase Storage |
 | Resend | `RESEND_API_KEY`, `MAIL_FROM` | Gebündelte Benachrichtigung |
-| Admin-Authentifizierung | `JWT_SECRET`, `OAUTH_SERVER_URL`, `VITE_APP_ID`, `VITE_OAUTH_PORTAL_URL`, `DATABASE_URL` | Geschützte Admin-Sitzung und Nutzerprofil |
-| Lebenslauf-Speicher | `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY` | Private Uploads und zeitlich begrenzte Downloads |
+| Admin-Authentifizierung | `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Geschützte Admin-Sitzung ohne Manus |
 
 Die produktive SQL-Migration liegt unter [`supabase/migrations/202607270001_initial_recruiting_schema.sql`](supabase/migrations/202607270001_initial_recruiting_schema.sql). Sie ist idempotent und enthält Tabellen, Indizes, Trigger, RLS-Aktivierung sowie explizite Rollenrechte.
 
@@ -89,7 +89,7 @@ node scripts/multifunnel-browser-smoke.mjs https://ihre-vorschau.example
 
 ## Veröffentlichung und Portabilität
 
-Für den schnellen Start wird die bereits eingerichtete Hosting-Umgebung verwendet. Supabase, Resend und GitHub sind davon unabhängig; Admin-Login und Lebenslauf-Speicher bleiben zunächst an die aktuelle Laufzeit gebunden. Die genaue Abgrenzung und der spätere Vercel-Pfad stehen in [`docs/hosting-strategy.md`](docs/hosting-strategy.md).
+Für den schnellen Start wird die bereits eingerichtete Hosting-Umgebung verwendet. Supabase, Resend und GitHub sind davon unabhängig; Admin-Login läuft über E-Mail/Passwort (JWT); Dateien liegen in Supabase Storage. Die genaue Abgrenzung und der spätere Vercel-Pfad stehen in [`docs/hosting-strategy.md`](docs/hosting-strategy.md).
 
 Der Admin-Bereich verwaltet nun mehrere Funnel über stabile UUIDs. Öffentliche URLs bleiben slug-basiert; der bestehende Produktionsfunnel behält deshalb unverändert `/f/karriere`. Neue Funnel beginnen als Entwurf, Kopien übernehmen Konfiguration und Branding, jedoch niemals Bewerbungen oder Lebenslaufdateien. Das verbindliche Modell steht in [`docs/multi-funnel-architecture.md`](docs/multi-funnel-architecture.md); der geprüfte Ausbau ist in [`docs/multi-funnel-smoke-test.md`](docs/multi-funnel-smoke-test.md) dokumentiert.
 

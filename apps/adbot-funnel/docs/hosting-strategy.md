@@ -1,7 +1,6 @@
 # Hosting-Strategie und späterer Vercel-Pfad
 
-**Autor:** Manus AI  
-**Stand:** 27. Juli 2026
+**Stand:** 8. August 2026 (Manus entfernt)
 
 ## Bestätigte Startentscheidung
 
@@ -13,8 +12,8 @@ Für einen schnellen Produktivstart wird die bereits vollständig funktionsfähi
 | Funnel-Konfiguration und Bewerbungen | Eigenes Supabase-Projekt | Vollständig portabel |
 | E-Mail-Versand | Eigenes Resend-Konto und verifizierte Domain `boncred.info` | Vollständig portabel |
 | Öffentlicher Webserver und Admin-Oberfläche | Aktuelle Hosting-Umgebung | Später migrierbar |
-| Admin-Authentifizierung | Aktuelle OAuth-Laufzeit | Vor Vercel-Umzug zu ersetzen |
-| Lebenslauf-Dateien | Privater S3-Speicher der aktuellen Laufzeit | Vor oder während eines Umzugs zu übertragen |
+| Admin-Authentifizierung | JWT + Admin-E-Mail/Passwort | Erledigt |
+| Lebenslauf-Dateien | Supabase Storage (`application-resumes`) | Erledigt |
 
 Für Kandidaten und Redakteure entsteht durch diese Startentscheidung kein Funktionsverlust. Der konkrete Nachteil ist die verbleibende technische Bindung von **Admin-Login, Lebenslauf-Dateispeicher und Webserverbetrieb**. Die geschäftskritischen strukturierten Daten liegen dagegen bereits in Supabase, der Versand in Resend und der Quellcode in GitHub.
 

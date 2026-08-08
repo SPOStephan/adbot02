@@ -23,7 +23,7 @@ const adminContext: TrpcContext = {
     openId: "multi-funnel-admin",
     email: "admin@example.org",
     name: "Admin",
-    loginMethod: "manus",
+    loginMethod: "password",
     role: "admin",
     createdAt: new Date("2026-07-27T10:00:00.000Z"),
     updatedAt: new Date("2026-07-27T10:00:00.000Z"),
