@@ -896,4 +896,38 @@ assert.match(
   /v_attempt := greatest/,
 );
 
+const rebindMigration = read(
+  "supabase/migrations/20260808170000_meta_organic_boost_rebind_current_policy.sql",
+);
+assert.match(
+  rebindMigration,
+  /rebind_meta_organic_boost_plans_to_current_policy/,
+);
+assert.match(
+  rebindMigration,
+  /diagnose_meta_organic_boost_plan_preflight/,
+);
+assert.match(rebindMigration, /app\.meta_organic_rebind/);
+assert.match(rebindMigration, /policy_inactive/);
+assert.match(
+  rebindMigration,
+  /drop function if exists public\.prepare_meta_organic_boost_write_now/,
+);
+assert.match(
+  rebindMigration,
+  /drop function if exists public\.diagnose_meta_organic_boost_write_now/,
+);
+assert.match(
+  rebindMigration,
+  /preflight_blocker/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-execute.ts"),
+  /preflight_blocker|blocker=/,
+);
+assert.match(
+  read("src/lib/meta/customer-control-service.ts"),
+  /rebind_meta_organic_boost_plans_to_current_policy/,
+);
+
 console.log("test-meta-organic-boost: ok");

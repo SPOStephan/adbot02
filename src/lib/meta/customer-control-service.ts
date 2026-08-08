@@ -205,6 +205,15 @@ async function reviveAndDrainOrganicBoost(input: {
 }): Promise<MetaOrganicBoostPlannerResult | null> {
   const admin = createAdminClient();
   try {
+    await admin.rpc("rebind_meta_organic_boost_plans_to_current_policy", {
+      p_user_id: input.customer.userId,
+      p_platform_account_id: input.customer.platformAccountId,
+    });
+  } catch {
+    // Function may be absent before migration; prepare/drain still helps.
+  }
+
+  try {
     await admin.rpc("revive_meta_organic_boost_superseded_plans", {
       p_user_id: input.customer.userId,
       p_platform_account_id: input.customer.platformAccountId,

@@ -67,10 +67,15 @@ async function prepareOrganicBoostWriteNow(input: {
   const record = row as Record<string, unknown>;
   const duePlans = Number(record.due_plans ?? 0);
   const preflightOkCount = Number(record.preflight_ok_count ?? 0);
+  const reboundPlans = Number(record.rebound_plans ?? 0);
   const killSwitchMode =
     typeof record.kill_switch_mode === "string" ? record.kill_switch_mode : null;
   const leaseMatches = record.lease_user_matches === true;
   const leaseIdle = record.lease_idle === true;
+  const preflightBlocker =
+    typeof record.preflight_blocker === "string" && record.preflight_blocker.trim()
+      ? record.preflight_blocker.trim()
+      : null;
 
   return {
     duePlans: Number.isFinite(duePlans) ? duePlans : 0,
@@ -83,7 +88,11 @@ async function prepareOrganicBoostWriteNow(input: {
       `kill=${killSwitchMode ?? "?"}`,
       `lease_idle=${leaseIdle}`,
       `lease_match=${leaseMatches}`,
-    ].join(" "),
+      Number.isFinite(reboundPlans) ? `rebound=${reboundPlans}` : null,
+      preflightBlocker ? `blocker=${preflightBlocker}` : null,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(" "),
     error: null,
   };
 }
