@@ -166,6 +166,73 @@ export function formatOrganicBoostFailureDetail(input: {
 /**
  * Ampel labels must be wire-verified. PENDING alone never means Meta was contacted.
  */
+/** Calendar days between start/end; used when plan duration_days is missing. */
+export function durationDaysFromWindow(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined,
+): number | null {
+  if (!startTime || !endTime) {
+    return null;
+  }
+
+  const start = Date.parse(startTime);
+  const end = Date.parse(endTime);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return null;
+  }
+
+  return Math.max(1, Math.round((end - start) / 86_400_000));
+}
+
+/**
+ * Restbudget for Beitrag-Push: planned envelope minus spend so far.
+ * Meta budget_remaining is only a last resort — for daily AD_SET budgets it
+ * means "left of today's cap", not remaining lifetime of the boost.
+ */
+export function deriveOrganicBoostRemainingMinor(input: {
+  budgetMode: "DAILY" | "LIFETIME";
+  dailyBudgetMinor: number | null | undefined;
+  lifetimeBudgetMinor: number | null | undefined;
+  durationDays: number | null | undefined;
+  startTime: string | null | undefined;
+  endTime: string | null | undefined;
+  /** Spend in major currency units (EUR), as from insights */
+  spend: number | null | undefined;
+  /** Meta budget_remaining in minor units — last resort only */
+  metaBudgetRemainingMinor?: number | null | undefined;
+}): number | null {
+  const durationDays =
+    input.durationDays != null &&
+    Number.isFinite(input.durationDays) &&
+    input.durationDays > 0
+      ? input.durationDays
+      : durationDaysFromWindow(input.startTime, input.endTime);
+
+  const plannedEnvelopeMinor =
+    input.budgetMode === "LIFETIME"
+      ? input.lifetimeBudgetMinor != null &&
+        Number.isFinite(input.lifetimeBudgetMinor)
+        ? input.lifetimeBudgetMinor
+        : null
+      : input.dailyBudgetMinor != null &&
+          Number.isFinite(input.dailyBudgetMinor) &&
+          durationDays != null
+        ? input.dailyBudgetMinor * durationDays
+        : null;
+
+  if (plannedEnvelopeMinor != null) {
+    const spendMinor =
+      input.spend != null && Number.isFinite(input.spend)
+        ? Math.round(input.spend * 100)
+        : 0;
+    return Math.max(plannedEnvelopeMinor - spendMinor, 0);
+  }
+
+  const meta = input.metaBudgetRemainingMinor;
+  return meta != null && Number.isFinite(meta) ? Math.max(meta, 0) : null;
+}
+
 export function deriveOrganicBoostDelivery(input: {
   planStatus: string | null | undefined;
   status: string | null | undefined;
@@ -615,8 +682,8 @@ export function MetaCampaignOverview({
                 Von Adbot gestartete Push-Kampagnen
               </h3>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                Ausgaben, Restbudget und Laufzeit aus Plan und Meta-Abruf. Interaktionen erscheinen,
-                sobald Meta sie in den Insights liefert.
+                Ausgaben aus dem Meta-Abruf; Restbudget als geplantes Gesamtbudget
+                minus bisherige Ausgaben. Interaktionen erscheinen, sobald Meta sie liefert.
               </p>
             </div>
           </div>
@@ -661,18 +728,16 @@ export function MetaCampaignOverview({
                           campaign.startTime,
                           campaign.endTime,
                         );
-                        const plannedLifetime =
-                          campaign.budgetMode === "LIFETIME"
-                            ? campaign.lifetimeBudgetMinor
-                            : campaign.dailyBudgetMinor != null &&
-                                campaign.durationDays != null
-                              ? campaign.dailyBudgetMinor * campaign.durationDays
-                              : null;
-                        const remaining =
-                          campaign.budgetRemainingMinor ??
-                          (plannedLifetime != null && campaign.spend != null
-                            ? Math.max(plannedLifetime - Math.round(campaign.spend * 100), 0)
-                            : null);
+                        const remaining = deriveOrganicBoostRemainingMinor({
+                          budgetMode: campaign.budgetMode,
+                          dailyBudgetMinor: campaign.dailyBudgetMinor,
+                          lifetimeBudgetMinor: campaign.lifetimeBudgetMinor,
+                          durationDays: campaign.durationDays,
+                          startTime: campaign.startTime,
+                          endTime: campaign.endTime,
+                          spend: campaign.spend,
+                          metaBudgetRemainingMinor: campaign.budgetRemainingMinor,
+                        });
 
                         return (
                           <tr key={campaign.planId}>
