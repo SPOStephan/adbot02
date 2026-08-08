@@ -171,7 +171,7 @@ export async function runOrganicBoostPlannerForAccount(input: {
       readLeaseToken: null,
       plannedAt: new Date().toISOString(),
     });
-  } catch {
+  } catch (error) {
     result = {
       status: "PLANNER_RPC_FAILED",
       plansCreated: 0,
@@ -179,7 +179,10 @@ export async function runOrganicBoostPlannerForAccount(input: {
       candidatesSkipped: 0,
       candidatesFailed: 0,
       candidatesConsidered: 0,
-      lastError: "run_meta_organic_boost_planner failed",
+      lastError:
+        error instanceof Error
+          ? error.message
+          : "run_meta_organic_boost_planner failed",
     };
   }
 

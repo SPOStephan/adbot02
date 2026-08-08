@@ -45,18 +45,32 @@ export class MetaBudgetPlannerError extends Error {
     | "planner_failed"
     | "planner_result_invalid"
     | "lease_release_failed";
+  readonly detail: string | null;
 
-  constructor(code: MetaBudgetPlannerError["code"]) {
-    super(`Meta budget planner failed: ${code}`);
+  constructor(code: MetaBudgetPlannerError["code"], detail?: string | null) {
+    const trimmed = detail?.trim();
+    super(
+      trimmed
+        ? `Meta budget planner failed: ${code} (${trimmed})`
+        : `Meta budget planner failed: ${code}`,
+    );
     this.name = "MetaBudgetPlannerError";
     this.code = code;
+    this.detail = trimmed ?? null;
   }
 }
 
 function integer(value: unknown): number | null {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
-    ? value
-    : null;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return null;
 }
 
 function nullableString(value: unknown): string | null | undefined {
@@ -244,12 +258,18 @@ export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
   });
 
   if (error) {
-    throw new MetaBudgetPlannerError("planner_failed");
+    throw new MetaBudgetPlannerError(
+      "planner_failed",
+      [error.message, error.details, error.hint].filter(Boolean).join(" | "),
+    );
   }
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row || typeof row !== "object") {
-    throw new MetaBudgetPlannerError("planner_result_invalid");
+    throw new MetaBudgetPlannerError(
+      "planner_result_invalid",
+      `Unerwartete Planner-Antwort: ${typeof data}`,
+    );
   }
 
   const record = row as Record<string, unknown>;
@@ -267,7 +287,10 @@ export async function runMetaOrganicBoostPlannerAfterSnapshot(input: {
         : String(rawLastError);
 
   if (typeof record.status !== "string") {
-    throw new MetaBudgetPlannerError("planner_result_invalid");
+    throw new MetaBudgetPlannerError(
+      "planner_result_invalid",
+      "Planner-Antwort ohne status.",
+    );
   }
 
   return {

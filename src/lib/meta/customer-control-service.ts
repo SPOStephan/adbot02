@@ -163,7 +163,7 @@ async function tryRunOrganicBoostPlanner(input: {
       userId: input.customer.userId,
       ownerPrefix: input.ownerPrefix,
     });
-  } catch {
+  } catch (error) {
     return {
       status: "PLANNER_RPC_FAILED",
       plansCreated: 0,
@@ -171,7 +171,10 @@ async function tryRunOrganicBoostPlanner(input: {
       candidatesSkipped: 0,
       candidatesFailed: 0,
       candidatesConsidered: 0,
-      lastError: "organic_boost_planner_exception",
+      lastError:
+        error instanceof Error
+          ? error.message
+          : "organic_boost_planner_exception",
     };
   }
 }

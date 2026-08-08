@@ -824,7 +824,7 @@ export async function syncMetaConnector(
               readLeaseToken,
               plannedAt: plannerAttemptedAt,
             });
-          } catch {
+          } catch (error) {
             organicBoostResult = {
               status: "PLANNER_RPC_FAILED",
               plansCreated: 0,
@@ -832,7 +832,10 @@ export async function syncMetaConnector(
               candidatesSkipped: 0,
               candidatesFailed: 0,
               candidatesConsidered: 0,
-              lastError: "run_meta_organic_boost_planner failed",
+              lastError:
+                error instanceof Error
+                  ? error.message
+                  : "run_meta_organic_boost_planner failed",
             };
           }
         } else {
@@ -891,7 +894,7 @@ export async function syncMetaConnector(
               readLeaseToken,
               plannedAt: plannerAttemptedAt,
             });
-          } catch {
+          } catch (error) {
             organicBoostResult = {
               status: "PLANNER_RPC_FAILED",
               plansCreated: 0,
@@ -899,7 +902,10 @@ export async function syncMetaConnector(
               candidatesSkipped: 0,
               candidatesFailed: 0,
               candidatesConsidered: 0,
-              lastError: "run_meta_organic_boost_planner failed",
+              lastError:
+                error instanceof Error
+                  ? error.message
+                  : "run_meta_organic_boost_planner failed",
             };
           }
         } catch (error) {
