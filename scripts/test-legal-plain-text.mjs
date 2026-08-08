@@ -10,10 +10,13 @@ function read(path) {
 
 const impressum = read("content/legal/impressum.md");
 const datenschutz = read("content/legal/datenschutz.md");
+const agb = read("content/legal/agb.md");
 assert.doesNotMatch(impressum, /^#/m);
 assert.doesNotMatch(datenschutz, /^#/m);
+assert.doesNotMatch(agb, /^#/m);
 assert.doesNotMatch(impressum, /^##/m);
 assert.doesNotMatch(datenschutz, /^##/m);
+assert.doesNotMatch(agb, /^##/m);
 
 const pagesTs = read("src/lib/legal/pages.ts");
 assert.match(pagesTs, /normalizeLegalPlainText/);

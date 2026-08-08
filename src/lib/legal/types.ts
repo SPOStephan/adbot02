@@ -1,4 +1,4 @@
-export const LEGAL_SLUGS = ["impressum", "datenschutz"] as const;
+export const LEGAL_SLUGS = ["impressum", "datenschutz", "agb"] as const;
 
 export type LegalSlug = (typeof LEGAL_SLUGS)[number];
 

@@ -7,8 +7,11 @@ function read(path) {
 
 assert.match(read("src/app/impressum/page.tsx"), /getLegalPage\("impressum"\)/);
 assert.match(read("src/app/datenschutz/page.tsx"), /getLegalPage\("datenschutz"\)/);
+assert.match(read("src/app/agb/page.tsx"), /getLegalPage\("agb"\)/);
 assert.match(read("src/components/SiteFooter.tsx"), /\/impressum/);
 assert.match(read("src/components/SiteFooter.tsx"), /\/datenschutz/);
+assert.match(read("src/components/SiteFooter.tsx"), /\/agb/);
+assert.match(read("src/lib/legal/types.ts"), /"agb"/);
 assert.match(read("src/app/dashboard/rechtliches/page.tsx"), /LegalPagesEditor/);
 assert.match(read("src/app/dashboard/rechtliches/page.tsx"), /isSiteAdmin/);
 assert.match(read("src/app/api/legal/pages/route.ts"), /saveLegalPage/);
@@ -18,6 +21,10 @@ assert.match(
   /site_legal_pages/,
 );
 assert.match(
+  read("supabase/migrations/20260808140000_site_legal_pages_agb.sql"),
+  /'agb'/,
+);
+assert.match(
   read("supabase/migrations/20260807130000_site_admins.sql"),
   /site_admins/,
 );
@@ -25,8 +32,14 @@ assert.match(read("src/app/dashboard/page.tsx"), /\/dashboard\/rechtliches/);
 assert.match(read("src/app/dashboard/page.tsx"), /userIsSiteAdmin/);
 assert.match(read("content/legal/impressum.md"), /Anbieter/);
 assert.match(read("content/legal/datenschutz.md"), /Verantwortlicher/);
+assert.match(read("content/legal/agb.md"), /Geschäftsbedingungen/);
 assert.doesNotMatch(read("content/legal/impressum.md"), /^#{1,6}\s/m);
 assert.doesNotMatch(read("content/legal/datenschutz.md"), /^#{1,6}\s/m);
+assert.doesNotMatch(read("content/legal/agb.md"), /^#{1,6}\s/m);
+assert.doesNotMatch(
+  read("src/components/LegalDocument.tsx"),
+  /Zuletzt aktualisiert/,
+);
 
 console.log("test-legal-pages: ok");
 

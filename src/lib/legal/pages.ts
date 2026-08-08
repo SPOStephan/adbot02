@@ -15,6 +15,7 @@ export { normalizeLegalPlainText } from "@/lib/legal/plain-text";
 const DEFAULT_TITLES: Record<LegalSlug, string> = {
   impressum: "Impressum",
   datenschutz: "Datenschutzerklärung",
+  agb: "Allgemeine Geschäftsbedingungen",
 };
 
 async function readFallbackFile(slug: LegalSlug): Promise<string> {

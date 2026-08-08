@@ -52,6 +52,16 @@ export function SiteFooter({ tone = "dark" }: Props) {
           >
             Datenschutzerklärung
           </Link>
+          <Link
+            className={
+              isDark
+                ? "text-slate-300 transition hover:text-white"
+                : "text-slate-700 transition hover:text-slate-950"
+            }
+            href={`${MARKETING_SITE_URL}/agb`}
+          >
+            AGB
+          </Link>
         </nav>
       </div>
     </footer>

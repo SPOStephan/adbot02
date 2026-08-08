@@ -35,6 +35,12 @@ export default function HomePage() {
           >
             Datenschutz
           </Link>
+          <Link
+            className="hidden px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white md:block"
+            href={`${MARKETING_SITE_URL}/agb`}
+          >
+            AGB
+          </Link>
           <Link className="hidden px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white sm:block" href={`${APP_SITE_URL}/login`}>
             Anmelden
           </Link>

@@ -81,8 +81,8 @@ export function LegalPagesEditor({ pages }: Props) {
               target="_blank"
             >
               /impressum
-            </a>{" "}
-            und{" "}
+            </a>
+            ,{" "}
             <a
               className="font-bold text-blue-700 underline underline-offset-2"
               href={`${MARKETING_SITE_URL}/datenschutz`}
@@ -90,6 +90,15 @@ export function LegalPagesEditor({ pages }: Props) {
               target="_blank"
             >
               /datenschutz
+            </a>{" "}
+            und{" "}
+            <a
+              className="font-bold text-blue-700 underline underline-offset-2"
+              href={`${MARKETING_SITE_URL}/agb`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              /agb
             </a>{" "}
             lesen denselben Text.
           </p>
