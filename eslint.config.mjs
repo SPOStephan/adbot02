@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Separate Vite/Express funnel app; not part of the Next.js build.
+    "apps/**",
   ]),
 ]);
 
