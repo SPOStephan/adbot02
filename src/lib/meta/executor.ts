@@ -515,7 +515,10 @@ async function dispatchRemoteMutation(input: {
 
   if (operation === "UPDATE_BUDGET") {
     const mode = parseMode(request.mode);
-    const objectId = requiredNumericId(request.object_id);
+    // Organic boost / launch steps bind object_id to the create-* step.
+    const objectId = requiredNumericId(
+      resolveBindingValue(request.object_id, bindings),
+    );
     const budgetType = parseBudgetType(request.budget_type);
     const amountMinor = requiredInteger(request.amount_minor, 1);
     if (step.objectType !== "CAMPAIGN" && step.objectType !== "AD_SET") {
@@ -542,7 +545,10 @@ async function dispatchRemoteMutation(input: {
 
   if (operation === "UPDATE_STATUS") {
     const mode = parseMode(request.mode);
-    const objectId = requiredNumericId(request.object_id);
+    // activate-ad-set / activate-campaign / activate-ad use $binding_step_id.
+    const objectId = requiredNumericId(
+      resolveBindingValue(request.object_id, bindings),
+    );
     const status = parseStatus(request.status);
     if (
       step.objectType !== "CAMPAIGN"
@@ -711,7 +717,10 @@ function classifyFailure(
   return {
     errorClass: "PREFLIGHT",
     errorCode: error instanceof TypeError ? "invalid_planned_request" : "executor_local_failure",
-    errorDetail: null,
+    errorDetail:
+      error instanceof Error
+        ? error.message.slice(0, 500)
+        : null,
     remoteOutcome: dispatchPersisted ? "PERMANENT" : "NOT_APPLIED",
     retryAfterSeconds: 120,
   };
