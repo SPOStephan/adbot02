@@ -972,7 +972,7 @@ assert.doesNotMatch(
 );
 assert.match(
   read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
-  /Drain first/,
+  /drainOrganicBoostExecutionsForAccount/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-execute.ts"),
@@ -998,6 +998,31 @@ assert.match(
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
   /Ausgaben und Impressionen/,
+);
+
+const finalizeActiveMigration = read(
+  "supabase/migrations/20260808175000_meta_organic_boost_finalize_active.sql",
+);
+assert.match(
+  finalizeActiveMigration,
+  /finalize_meta_organic_boost_already_active_plans/,
+);
+assert.match(finalizeActiveMigration, /finalized_active=/);
+assert.match(
+  read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
+  /syncMetaConnector/,
+);
+assert.match(
+  read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
+  /marketingSync/,
+);
+assert.match(
+  read("src/components/OrganicBoostPlanButton.tsx"),
+  /idleOnly/,
+);
+assert.match(
+  read("src/components/OrganicBoostPlanButton.tsx"),
+  /Meta-Kennzahlen aktualisiert/,
 );
 
 console.log("test-meta-organic-boost: ok");
