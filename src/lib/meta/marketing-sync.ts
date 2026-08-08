@@ -61,6 +61,8 @@ export type MetaMarketingSyncResult = {
   adsCount: number;
   creativesCount: number;
   insightsCount: number;
+  /** Sum of Meta insight spend rows written in this sync (account currency). */
+  spendTotal: number;
   recommendationsCount: number;
   insightsSince: string;
   insightsUntil: string;
@@ -100,13 +102,30 @@ export function completeInsightsDateRange(
   timeZone: string,
   now = new Date(),
 ): { since: string; until: string } {
-  const yesterday = new Date(now.getTime() - 86_400_000);
-  const until = dateInTimeZone(yesterday, timeZone);
+  // Include account-local "today": Beitrag-Push spend often starts the same day
+  // the campaign goes ACTIVE. Ending on yesterday left Ampel + dashboard at 0
+  // while Meta Ads Manager already showed delivery.
+  const until = dateInTimeZone(now, timeZone);
 
   return {
     since: addUtcDays(until, -(META_INSIGHTS_ROLLING_DAYS - 1)),
     until,
   };
+}
+
+export function sumInsightSpend(
+  insights: ReadonlyArray<Pick<MetaAdInsight, "spend">>,
+): number {
+  let total = 0;
+
+  for (const insight of insights) {
+    const value = Number(insight.spend);
+    if (Number.isFinite(value) && value > 0) {
+      total += value;
+    }
+  }
+
+  return total;
 }
 
 function assertUnique<T extends { id: string }>(items: T[]) {
@@ -584,6 +603,7 @@ export async function syncMetaMarketingSnapshot(input: {
   }
 
   const persisted = Array.isArray(data) ? data[0] : data;
+  const spendTotal = sumInsightSpend(insightsResult.items);
 
   return {
     syncId,
@@ -609,6 +629,7 @@ export async function syncMetaMarketingSnapshot(input: {
       "insights_count",
       insightsResult.items.length,
     ),
+    spendTotal,
     recommendationsCount: persistedCount(persisted, "recommendations_count", 0),
     insightsSince: dateRange.since,
     insightsUntil: dateRange.until,

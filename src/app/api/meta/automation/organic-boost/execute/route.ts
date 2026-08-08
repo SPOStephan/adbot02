@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
       blockedReason: string | null;
       insightsCount: number;
       campaignsCount: number;
+      spendTotal: number;
+      insightsUntil: string | null;
       retryAt: string | null;
     } | null = null;
     let marketingSyncError: string | null = null;
@@ -48,6 +50,8 @@ export async function POST(request: NextRequest) {
         blockedReason: syncResult.blockedReason,
         insightsCount: syncResult.insightsCount,
         campaignsCount: syncResult.campaignsCount,
+        spendTotal: syncResult.spendTotal,
+        insightsUntil: syncResult.insightsUntil,
         retryAt: syncResult.retryAt,
       };
     } catch (error) {

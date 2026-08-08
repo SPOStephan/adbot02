@@ -98,6 +98,7 @@ export type MetaSyncResult = {
   adsCount: number;
   creativesCount: number;
   insightsCount: number;
+  spendTotal: number;
   recommendationsCount: number;
   insightsSince: string | null;
   insightsUntil: string | null;
@@ -135,6 +136,7 @@ type MetaSyncMarketingFields = Pick<
   | "adsCount"
   | "creativesCount"
   | "insightsCount"
+  | "spendTotal"
   | "recommendationsCount"
   | "insightsSince"
   | "insightsUntil"
@@ -147,6 +149,7 @@ const EMPTY_MARKETING_RESULT: MetaSyncMarketingFields = {
   adsCount: 0,
   creativesCount: 0,
   insightsCount: 0,
+  spendTotal: 0,
   recommendationsCount: 0,
   insightsSince: null,
   insightsUntil: null,
@@ -226,6 +229,7 @@ function marketingFields(
         adsCount: result.adsCount,
         creativesCount: result.creativesCount,
         insightsCount: result.insightsCount,
+        spendTotal: result.spendTotal,
         recommendationsCount: result.recommendationsCount,
         insightsSince: result.insightsSince,
         insightsUntil: result.insightsUntil,
