@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   MetaCreativeImportError,
   importMetaCreativeImage,
@@ -15,6 +15,8 @@ import {
   type BudgetCanaryApprovalCommand,
   type BudgetCanaryMaterializationCommand,
   type BrandCommand,
+  type CampaignBriefArchiveCommand,
+  type CampaignBriefCommand,
   type DomainCommand,
   type KillSwitchCommand,
   type LaunchApprovalCommand,
@@ -1578,4 +1580,140 @@ export async function approveCustomerOrganicBoost(
     executableAt: row.executable_at,
     approvedAt: row.approved_at,
   };
+}
+
+
+function normalizeCampaignBriefNotes(notes: string): string | null {
+  const trimmed = notes.trim();
+  return trimmed ? trimmed : null;
+}
+
+function campaignBriefLandingHostname(landingUrl: string): string {
+  return new URL(landingUrl).hostname.toLowerCase();
+}
+
+function hashCampaignBriefContent(input: {
+  objective: string;
+  landingUrl: string;
+  notes: string | null;
+}): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        objective: input.objective,
+        landingUrl: input.landingUrl,
+        notes: input.notes,
+      }),
+    )
+    .digest("hex");
+}
+
+export type CampaignBriefStatus = "DRAFT" | "READY" | "CONSUMED" | "ARCHIVED";
+
+export type CampaignBriefRecord = {
+  briefId: string;
+  status: CampaignBriefStatus;
+  objective: string;
+  landingUrl: string;
+  landingHostname: string;
+  notes: string | null;
+  briefHash: string;
+  brandProfileId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  alreadyExisted?: boolean;
+};
+
+export async function saveCustomerCampaignBrief(
+  customer: MetaCustomer,
+  command: CampaignBriefCommand,
+): Promise<{
+  briefId: string;
+  status: CampaignBriefStatus;
+  alreadyExisted: boolean;
+}> {
+  const admin = createAdminClient();
+  const notes = normalizeCampaignBriefNotes(command.notes);
+  const landingHostname = campaignBriefLandingHostname(command.landingUrl);
+  const briefHash = hashCampaignBriefContent({
+    objective: command.objective,
+    landingUrl: command.landingUrl,
+    notes,
+  });
+
+  const { data: activeBrand, error: brandError } = await admin
+    .from("brand_profiles")
+    .select("id")
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("status", "ACTIVE")
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (brandError) {
+    serviceError(
+      "campaign_brief_brand_lookup_failed",
+      500,
+      "Das aktive Brand-Profil konnte für den Kampagnen-Brief nicht geprüft werden.",
+    );
+  }
+
+  const { data, error } = await admin.rpc("put_campaign_brief", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_objective: command.objective,
+    p_landing_url: command.landingUrl,
+    p_landing_hostname: landingHostname,
+    p_brief_hash: briefHash,
+    p_notes: notes,
+    p_brand_profile_id: activeBrand?.id ?? null,
+  });
+
+  const row = firstRpcRow(data);
+  if (error || !row || typeof row.brief_id !== "string") {
+    rpcFailure("Der Kampagnen-Brief", error?.message);
+  }
+
+  const status = String(row.status || "DRAFT");
+  if (
+    status !== "DRAFT" &&
+    status !== "READY" &&
+    status !== "CONSUMED" &&
+    status !== "ARCHIVED"
+  ) {
+    rpcFailure("Der Kampagnen-Brief", "unerwarteter Status");
+  }
+
+  return {
+    briefId: row.brief_id,
+    status,
+    alreadyExisted: Boolean(row.already_existed),
+  };
+}
+
+export async function archiveCustomerCampaignBrief(
+  customer: MetaCustomer,
+  command: CampaignBriefArchiveCommand,
+): Promise<{ briefId: string; archived: true }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("archive_campaign_brief", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_brief_id: command.briefId,
+  });
+
+  if (error) {
+    rpcFailure("Die Brief-Archivierung", error.message);
+  }
+
+  if (data !== true) {
+    serviceError(
+      "campaign_brief_not_found",
+      404,
+      "Der Kampagnen-Brief wurde nicht gefunden oder ist bereits archiviert.",
+    );
+  }
+
+  return { briefId: command.briefId, archived: true };
 }

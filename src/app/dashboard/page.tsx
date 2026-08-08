@@ -38,6 +38,10 @@ import {
   type BrandProfileView,
   type KillSwitchView,
 } from "@/components/AutomationControlCenter";
+import {
+  CampaignAssistantBrief,
+  type CampaignBriefView,
+} from "@/components/CampaignAssistantBrief";
 import type {
   AllowedDomainView,
   AutomationOnboardingData,
@@ -89,6 +93,12 @@ export const maxDuration = 300;
 const baseNavigation = [
   { label: "Übersicht", icon: LayoutDashboard, href: "/dashboard", active: true },
   { label: "Kampagnen", icon: Megaphone, href: "#kampagnen", active: false },
+  {
+    label: "Assistent",
+    icon: Sparkles,
+    href: "#kampagnen-assistent",
+    active: false,
+  },
   { label: "Creatives", icon: ImageIcon, href: null, active: false },
   { label: "Zielgruppen", icon: Target, href: null, active: false },
   { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center", active: false },
@@ -820,6 +830,44 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         { data: [] },
         { data: null },
       ];
+  const { data: campaignBriefRows } =
+    metaConnected && metaAccount
+      ? await supabase
+          .from("campaign_briefs")
+          .select(
+            "id,status,objective,landing_url,landing_hostname,notes,created_at,updated_at",
+          )
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .in("status", ["DRAFT", "READY"])
+          .order("updated_at", { ascending: false })
+          .limit(20)
+      : { data: [] };
+  const campaignBriefViews: CampaignBriefView[] = (
+    campaignBriefRows ?? []
+  ).flatMap((row) => {
+    const status = String(row.status ?? "");
+    if (
+      status !== "DRAFT" &&
+      status !== "READY" &&
+      status !== "CONSUMED" &&
+      status !== "ARCHIVED"
+    ) {
+      return [];
+    }
+    return [
+      {
+        id: String(row.id),
+        status,
+        objective: String(row.objective ?? ""),
+        landingUrl: String(row.landing_url ?? ""),
+        landingHostname: String(row.landing_hostname ?? ""),
+        notes: row.notes == null ? null : String(row.notes),
+        createdAt: String(row.created_at ?? ""),
+        updatedAt: String(row.updated_at ?? ""),
+      } satisfies CampaignBriefView,
+    ];
+  });
   const policyView: AutomationPolicyView | null = currentPolicy
     ? {
         id: String(currentPolicy.id),
@@ -1929,6 +1977,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             </article>
           </section>
+
+          {metaConnected && metaAccount ? (
+            <CampaignAssistantBrief briefs={campaignBriefViews} />
+          ) : null}
 
           {metaConnected && metaAccount ? (
             <AutomationControlCenter

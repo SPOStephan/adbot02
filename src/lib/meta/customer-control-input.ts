@@ -569,6 +569,53 @@ export const META_OBJECTIVES = [
 ] as const;
 export type MetaObjective = (typeof META_OBJECTIVES)[number];
 
+/** Customer-facing Kampagnen-Assistent objectives (Outcome-API subset). */
+export const CAMPAIGN_ASSISTANT_OBJECTIVES = [
+  "OUTCOME_TRAFFIC",
+  "OUTCOME_AWARENESS",
+  "OUTCOME_ENGAGEMENT",
+  "OUTCOME_LEADS",
+  "OUTCOME_SALES",
+  "OUTCOME_APP_PROMOTION",
+] as const;
+export type CampaignAssistantObjective =
+  (typeof CAMPAIGN_ASSISTANT_OBJECTIVES)[number];
+
+export type CampaignBriefCommand = {
+  objective: CampaignAssistantObjective;
+  landingUrl: string;
+  notes: string;
+};
+
+export function parseCampaignBriefCommand(value: unknown): CampaignBriefCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(body, ["objective", "landingUrl", "notes"], "Der Kampagnen-Brief");
+
+  return {
+    objective: requiredEnum(
+      body.objective,
+      "Das Werbeziel",
+      CAMPAIGN_ASSISTANT_OBJECTIVES,
+    ),
+    landingUrl: requiredHttpsUrl(body.landingUrl),
+    notes: optionalText(body.notes, "Die Notiz", 500),
+  };
+}
+
+export type CampaignBriefArchiveCommand = {
+  briefId: string;
+};
+
+export function parseCampaignBriefArchiveCommand(
+  value: unknown,
+): CampaignBriefArchiveCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(body, ["briefId"], "Die Brief-Archivierung");
+  return {
+    briefId: requiredUuid(body.briefId, "Die Brief-ID"),
+  };
+}
+
 const BLUEPRINT_ACTIONS = ["save", "activate"] as const;
 const BLUEPRINT_REQUIRED_INPUTS = [
   "destination_url",
