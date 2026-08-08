@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { BarChart3 } from "lucide-react";
 
+import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
 import type { LegalPage } from "@/lib/legal/types";
 import { MARKETING_SITE_URL } from "@/lib/site-urls";
@@ -9,20 +9,12 @@ type Props = {
   page: LegalPage;
 };
 
-export function LegalDocument({ page }: Props) {
+export async function LegalDocument({ page }: Props) {
   return (
     <main className="flex min-h-screen flex-col bg-slate-50 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-5">
-          <Link
-            className="flex items-center gap-3 text-sm font-extrabold"
-            href={MARKETING_SITE_URL}
-          >
-            <span className="grid size-9 place-items-center rounded-xl bg-blue-600 text-white">
-              <BarChart3 className="size-4" />
-            </span>
-            AdPilot
-          </Link>
+          <SiteBrandMark href={MARKETING_SITE_URL} size="sm" tone="light" />
           <nav className="flex items-center gap-4 text-xs font-bold text-slate-600">
             <Link className="hover:text-slate-950" href="/impressum">
               Impressum

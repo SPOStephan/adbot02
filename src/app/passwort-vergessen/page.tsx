@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { BarChart3, KeyRound } from "lucide-react";
+import { KeyRound } from "lucide-react";
 
 import { ForgotPasswordForm } from "@/components/ForgotPasswordForm";
+import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
 import { MARKETING_SITE_URL } from "@/lib/site-urls";
 
@@ -10,12 +11,7 @@ export default function ForgotPasswordPage() {
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto grid min-h-screen max-w-7xl lg:grid-cols-2">
         <section className="flex flex-col justify-between px-6 py-8 sm:px-10 lg:px-14 lg:py-12">
-          <Link className="flex items-center gap-3 font-bold" href={MARKETING_SITE_URL}>
-            <span className="grid size-10 place-items-center rounded-xl bg-blue-600 shadow-lg shadow-blue-600/30">
-              <BarChart3 className="size-5" />
-            </span>
-            <span>AdPilot</span>
-          </Link>
+          <SiteBrandMark href={MARKETING_SITE_URL} tone="dark" />
 
           <div className="my-16 max-w-xl lg:my-0">
             <p className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.2em] text-blue-400">

@@ -28,8 +28,10 @@ assert.match(editorPage, /redirect\("\/dashboard"\)/);
 
 const dashboard = read("src/app/dashboard/page.tsx");
 assert.match(dashboard, /isSiteAdmin/);
-assert.match(dashboard, /adminNavigationItem/);
+assert.match(dashboard, /adminNavigationItems/);
 assert.match(dashboard, /userIsSiteAdmin/);
+assert.match(dashboard, /\/dashboard\/logo/);
+assert.match(dashboard, /\/dashboard\/rechtliches/);
 
 // Public legal pages stay readable without admin.
 assert.match(read("src/app/impressum/page.tsx"), /getLegalPage\("impressum"\)/);

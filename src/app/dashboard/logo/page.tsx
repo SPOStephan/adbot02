@@ -1,35 +1,32 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Scale } from "lucide-react";
+import { ArrowLeft, Images } from "lucide-react";
 
-import { LegalPagesEditor } from "@/components/LegalPagesEditor";
 import { SignOutButton } from "@/components/SignOutButton";
 import { SiteFooter } from "@/components/SiteFooter";
+import { SiteLogoEditor } from "@/components/SiteLogoEditor";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
-import { getLegalPage } from "@/lib/legal/pages";
-import { LEGAL_SLUGS } from "@/lib/legal/types";
+import { getSiteBranding } from "@/lib/site-branding/branding";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export default async function DashboardLegalPage() {
+export default async function DashboardLogoPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/dashboard/rechtliches");
+    redirect("/login?next=/dashboard/logo");
   }
 
   if (!(await isSiteAdmin(user.id))) {
     redirect("/dashboard");
   }
 
-  const pages = await Promise.all(
-    LEGAL_SLUGS.map((slug) => getLegalPage(slug)),
-  );
+  const branding = await getSiteBranding();
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -37,21 +34,21 @@ export default async function DashboardLegalPage() {
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-xl bg-slate-900 text-white">
-              <Scale className="size-5" />
+              <Images className="size-5" />
             </span>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-                Dashboard
+                Dashboard · Admin
               </p>
-              <h1 className="text-lg font-extrabold">Rechtliches</h1>
+              <h1 className="text-lg font-extrabold">Logo</h1>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Link
               className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-950"
-              href="/dashboard/logo"
+              href="/dashboard/rechtliches"
             >
-              Logo
+              Rechtliches
             </Link>
             <Link
               className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-950"
@@ -66,7 +63,7 @@ export default async function DashboardLegalPage() {
       </div>
 
       <div className="mx-auto max-w-5xl px-6 py-8">
-        <LegalPagesEditor pages={pages} />
+        <SiteLogoEditor branding={branding} />
       </div>
 
       <SiteFooter tone="light" />
