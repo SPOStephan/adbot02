@@ -72,6 +72,15 @@ export function OrganicBoostPlanButton({
       const executeBody = (await executeResponse.json().catch(() => ({}))) as {
         ok?: boolean;
         message?: string;
+        marketingSync?: {
+          outcome?: string;
+          status?: string;
+          blockedReason?: string | null;
+          insightsCount?: number;
+          campaignsCount?: number;
+          retryAt?: string | null;
+        } | null;
+        marketingSyncError?: string | null;
         drain?: {
           duePlans?: number;
           runs?: number;
@@ -95,7 +104,6 @@ export function OrganicBoostPlanButton({
         executeBody.drain?.failed ??
         planBody.organicBoost?.executorFailed ??
         0;
-      const duePlans = executeBody.drain?.duePlans ?? 0;
       const drainError =
         executeBody.drain?.lastError?.trim() ||
         planBody.organicBoost?.executorLastError?.trim() ||
@@ -104,12 +112,25 @@ export function OrganicBoostPlanButton({
       const status = planBody.organicBoost?.status ?? "unbekannt";
       const error = planBody.organicBoost?.lastError?.trim();
 
-      // Kennzahlen (Spend/Imp.) kommen aus dem Marketing-Abruf, nicht aus dem
-      // Executor. Wenn nichts mehr zu schreiben ist: Abruf nachziehen.
+      const sync = executeBody.marketingSync;
+      const syncOk =
+        sync?.outcome === "completed" &&
+        (sync.status === "success" || sync.status === "partial");
+      const syncBlocked =
+        sync?.outcome === "blocked" || executeBody.marketingSyncError;
+
       let syncNotice: string | null = null;
-      const shouldRefreshMetrics =
-        written === 0 && execFailed === 0 && !drainError && duePlans < 1;
-      if (shouldRefreshMetrics) {
+      if (syncOk) {
+        syncNotice = `Meta-Kennzahlen aktualisiert (Abruf: ${sync?.insightsCount ?? 0} Insights, ${sync?.campaignsCount ?? 0} Kampagnen).`;
+      } else if (sync?.blockedReason === "manual_cooldown" || sync?.retryAt) {
+        syncNotice =
+          "Kampagnen laufen — Abruf kurz im Cooldown. Bitte in ca. 1 Min. erneut oder Abruf-Button.";
+      } else if (syncBlocked) {
+        syncNotice = `Kennzahlen-Abruf blockiert (${executeBody.marketingSyncError ?? sync?.blockedReason ?? sync?.status ?? "unbekannt"}). Bitte Abruf-Button prüfen.`;
+      }
+
+      // Abruf immer versuchen, falls Execute ihn nicht geschafft hat.
+      if (!syncOk && !sync?.retryAt) {
         const syncResponse = await fetch("/api/connectors/meta/sync", {
           method: "POST",
           credentials: "same-origin",
@@ -120,34 +141,39 @@ export function OrganicBoostPlanButton({
           error?: string;
           status?: string;
           retryAt?: string | null;
-          marketingInsightCount?: number;
         };
         if (syncResponse.ok && syncBody.ok === true) {
           syncNotice =
-            "Meta-Kennzahlen aktualisiert (Abruf). Ausgaben/Impressionen erscheinen in der Ampel.";
+            "Meta-Kennzahlen aktualisiert (Abruf). Ausgaben erscheinen in Ampel und Summe.";
         } else if (syncResponse.status === 429) {
           syncNotice =
-            "Kampagnen laufen — Abruf kurz im Cooldown. Gleich nochmal oder den Abruf-Button nutzen.";
-        } else {
+            "Kampagnen laufen — Abruf kurz im Cooldown. Gleich nochmal oder Abruf-Button.";
+        } else if (!syncNotice) {
           syncNotice =
-            "Kampagnen bereit — Kennzahlen-Abruf fehlgeschlagen. Bitte Abruf-Button nutzen.";
+            "Kennzahlen-Abruf fehlgeschlagen. Bitte Abruf-Button nutzen.";
         }
       }
 
+      const idleOnly =
+        drainError === "claim_idle_with_due_plans" ||
+        drainError === "lease_busy_with_due_plans";
+
       setNotice(
         written > 0
-          ? `Meta-Kontakt: ${written} Plan/Pläne gesendet.`
+          ? `Meta-Kontakt: ${written} Plan/Pläne gesendet.${syncNotice ? ` ${syncNotice}` : ""}`
           : execFailed > 0
             ? `Meta hat abgelehnt (${executeBody.drain?.lastOutcome ?? "failed"}${drainError ? `: ${drainError}` : ""}).`
-            : drainError
-              ? `Kein Meta-Kontakt (${drainError}${prepare ? ` · ${prepare}` : ""}).`
-              : syncNotice
-                ? syncNotice
-                : created > 0
-                  ? `Kampagnen bereit — kein neuer Versand nötig.${prepare ? ` (${prepare})` : ""}`
-                  : error
-                    ? `Kein Plan angelegt (${status}): ${error}`
-                    : `Kein Plan angelegt (Status ${status}).`,
+            : idleOnly && syncNotice
+              ? syncNotice
+              : drainError && !idleOnly
+                ? `Kein Meta-Kontakt (${drainError}${prepare ? ` · ${prepare}` : ""}).`
+                : syncNotice
+                  ? syncNotice
+                  : created > 0
+                    ? `Kampagnen bereit — kein neuer Versand nötig.${prepare ? ` (${prepare})` : ""}`
+                    : error
+                      ? `Kein Plan angelegt (${status}): ${error}`
+                      : `Kein Plan angelegt (Status ${status}).`,
       );
       router.refresh();
     } catch (error) {
