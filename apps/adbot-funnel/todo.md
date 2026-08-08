@@ -1,0 +1,167 @@
+# Project TODO
+
+- [x] Anforderungen aus der verbindlichen Funktionsliste und den visuellen Referenzen konsolidieren
+- [x] Neues Fullstack-Projekt mit React, TypeScript, Server und Datenbankgrundlage initialisieren
+- [x] Portables Domänenmodell für Funnels, Seiten, Optionen, Bewerbungen, Antworten, Uploads und Einstellungen definieren
+- [x] Beispieldaten für einen vollständigen Funnel mit allen vier festen Seitentypen anlegen
+- [x] Öffentliche Funnel-Route als eigenständige, direkt verlinkbare URL implementieren
+- [x] Mobile-First-Funnelrahmen mit Logo-Header, Fortschrittsbalken und Social-Proof-Footer implementieren
+- [x] Akzentfarbe #0165c3 verbindlich für Buttons, Fortschritt, Auswahlzustände und Highlights anwenden
+- [x] Wiederverwendbaren Seitentyp „Startseite / Informationsseite“ implementieren
+- [x] Wiederverwendbaren Seitentyp „2×2-Symbolkachel-Auswahl“ implementieren
+- [x] Wiederverwendbaren Seitentyp „kompakte Buttonlisten-Auswahl“ implementieren
+- [x] Wiederverwendbaren Seitentyp „Abschlussseite mit Kontaktformular“ implementieren
+- [x] Vorwärts-/Rückwärtsnavigation, Pflichtfeldprüfung und sichtbaren Fortschritt über alle Funnel-Schritte implementieren
+- [x] Konfigurierbare Kontaktfelder Name, Firma, E-Mail, Telefon und Freitext implementieren
+- [x] Pflichtfeld-Steuerung pro Kontaktfeld implementieren
+- [x] Verbindliche Datenschutz-Einwilligung mit editierbarem Text implementieren
+- [x] Optionalen Lebenslauf-Upload mit Dateityp- und Größenprüfung implementieren
+- [x] Geschützten Admin-Bereich mit klarer Navigation implementieren
+- [x] Bewerbungsübersicht mit Status, Datum, Kontaktdaten und Such-/Filterfunktion implementieren
+- [x] Detailansicht je Bewerbung mit allen Antworten und Upload-Metadaten implementieren
+- [x] Visuellen Seiteneditor mit direkter Vorschau implementieren
+- [x] Seiten im Editor umbenennen und Textinhalte direkt bearbeiten können
+- [x] Seiten im Editor duplizieren können
+- [x] Seiten im Editor nach oben und unten sortieren können
+- [x] Seiten im Editor löschen können, ohne den Funnel in einen ungültigen Zustand zu versetzen
+- [x] Antwortoptionen, Symbole und CTA-Beschriftungen pro Seite bearbeiten können
+- [x] Logo-URL, Farben und globale Social-Proof-Texte im Editor bearbeiten können
+- [x] Funnel-Konfiguration und Seitenänderungen persistent in der Datenbank speichern
+- [x] Neue Bewerbungen vollständig und atomar in der Datenbank speichern
+- [x] Konfigurierbare Empfänger-E-Mail im Admin-Bereich speichern
+- [x] Gebündelte E-Mail-Benachrichtigung je neuer vollständiger Bewerbung implementieren
+- [x] CSV-Export aller Bewerbungen aus dem Admin-Bereich implementieren
+- [x] PDF-Export aller Bewerbungen aus dem Admin-Bereich implementieren
+- [x] WordPress-iframe-Einbettung ohne abgeschnittene Inhalte und mit responsiver Höhe vorbereiten
+- [x] Sicherheitsheader und Einbettungsregeln für definierbare WordPress-Domains konfigurieren
+- [x] Leere, Lade-, Erfolgs- und Fehlerzustände für Funnel und Admin-Bereich implementieren
+- [x] Tastaturbedienung, Fokuszustände, Kontrast und semantische Formularbeschriftungen prüfen
+- [x] Unit- und Integrationstests für Validierung, Seitenduplikation, Sortierung, Speicherung und Exporte schreiben
+- [x] TypeScript-Prüfung, Testlauf und Produktions-Build erfolgreich ausführen
+- [x] Desktop- und Mobilansicht visuell prüfen und Layoutfehler beheben
+- [x] Privates GitHub-Repository für das eigenständige Projekt erstellen und Quellcode übertragen
+- [x] Neues Supabase-Projekt und portable SQL-Migrationen für Produktion vorbereiten
+- [x] Zurückgestellt: neues Vercel-Projekt vorbereiten; Nutzer priorisiert den schnellen Start über die bereits funktionsfähige Hosting-Umgebung
+- [x] WordPress-Einbettungsanleitung und Betriebsdokumentation verfassen
+- [x] Entfallen: separate Supabase-Organisation „Social Recruiting“ anlegen; Vorgabe wurde zugunsten der vorhandenen Organisation „Meer Erfolg GmbH“ geändert
+- [x] Entfallen: Projekt in der Organisation „Social Recruiting“ anlegen; Vorgabe wurde aktualisiert
+- [x] Neues Supabase-Projekt „social-recruiting-funnel“ ausschließlich in der Pro-Organisation „Meer Erfolg GmbH“ anlegen
+- [x] Sicherstellen, dass keine bestehenden Projekte, Daten oder Konfigurationen in „Meer Erfolg GmbH“ oder „Adbot“ verändert werden
+- [x] SQL-Migration anwenden und RLS-/Rollenmodell verifizieren; bewusst keine freigebenden Browser-Policies verwenden
+- [x] Supabase-Projektreferenz und betriebsbereiten Datenbankstatus ohne Zugangsdaten dokumentieren
+- [x] Admin-Editor nach der Implementierung per TypeScript-Prüfung und Dateiansicht verifizieren
+- [x] Vollständige Mobile-First-Styles für Funnelrahmen, Header, Fortschritt, Footer, 2×2-Kachelraster und kompakte Listenansicht ergänzen
+- [x] CSS-Variable --funnel-accent sichtbar für Buttons, Fortschrittsbalken, Auswahlzustände und Highlights verwenden
+- [x] Fortschrittsanzeige auf jedem Funnel-Schritt einschließlich Startseite sichtbar machen
+- [x] Clientseitige Dateitypprüfung und verständliche Fehlermeldungen für ungültige oder zu große Lebenslauf-Dateien ergänzen
+- [x] Separate Admin-Einstellungsseite für Empfänger-E-Mail, Funnel-Slug und Veröffentlichungsstatus erstellen
+- [x] Admin-Navigation und Routen für Bewerbungsübersicht, Detailansicht, Funnel-Editor und Einstellungen verifizieren
+- [x] Supabase-Sicherheitsentscheidung dokumentieren: ausschließlich serverseitige `service_role`, keine direkten Data-API-Policies für Browserrollen
+- [x] Produktive Funnel-Konfiguration auf Empfänger `job@boncred.info`, Datenschutz-URL `https://www.boncred.de/datenschutz/` und eigenständigen Betrieb ohne externe Einbettungs-Domains setzen
+- [x] WordPress-Einbettung in den Admin-Einstellungen unmissverständlich als optional kennzeichnen und die leere Domainliste erklären
+- [x] Öffentliche und geschützte Routen per Lazy Loading trennen und den Produktions-Bundle für Kandidaten reduzieren
+- [x] Eigenständige GitHub-README mit Architektur, lokaler Einrichtung, Secrets, Migration, Tests und Betriebswegen erstellen
+- [x] Schnelle Hosting-Variante mit konkreten Betriebsgrenzen und späterem Vercel-Migrationspfad dokumentieren
+- [x] Mehr-Funnel-Ausbau des vorhandenen Editors mit wiederverwendbaren und noch fehlenden Bausteinen dokumentieren
+- [x] Realen Ende-zu-Ende-Smoke-Test über alle vier Funnel-Schritte einschließlich PDF-Upload und Absenden ausführen
+- [x] Persistierten Testdatensatz in Supabase, Admin-Übersicht und Admin-Detailansicht einschließlich privatem Lebenslauf-Abruf verifizieren
+- [x] Annahme der Bewerbungsbenachrichtigung durch die Resend-Sende-API verifizieren und die Einschränkung des Send-only-Schlüssels dokumentieren
+- [x] Nutzerseitige Zustellung der Testbenachrichtigung im Postfach `job@boncred.info` bestätigen; Nachricht wurde im Spam-Ordner gefunden
+- [x] Eindeutig markierten Testdatensatz „TEST Bewerbung – bitte löschen“ nach fachlicher Sichtprüfung aus dem Produktivsystem entfernen
+- [x] Gemeldete Nichtzustellung der Testbenachrichtigung anhand Serverprotokollen, Resend-Antwort, Absender und Empfängerkonfiguration diagnostizieren
+- [x] Entfallen: kein Versandfehler im Code oder in Resend; SMTP-Annahme und spätere Auffindbarkeit im Spam-Ordner bestätigt
+- [x] Gezielten Zustellnachweis an `job@boncred.info` durch Resend-Ereignisse und nutzerseitige Postfachbestätigung abschließen
+- [x] Nach bestätigter Zustellung alle eindeutig markierten Testbewerbungen und zugehörigen Test-Lebenslaufverweise aus dem Produktivsystem entfernen
+- [x] Regressionstests, GitHub-Push und neuen Übergabe-Checkpoint nach der E-Mail-Korrektur abschließen
+- [x] Alle fest verdrahteten Ein-Funnel-Annahmen in Schema, Server, Admin-Routen, Editor, Einstellungen, Bewerbungen und öffentlichen Slug-Routen inventarisieren
+- [x] Mehr-Funnel-Domänenmodell für theoretisch unbegrenzt viele Funnel mit stabiler ID, eindeutigem Slug, Titel, Status, Sortierung und Zeitstempeln festlegen
+- [x] Bestehenden Produktionsfunnel verlustfrei in das neue Mehr-Funnel-Modell migrieren und seine öffentliche URL unverändert erhalten
+- [x] Datenbank- und Persistenzschicht für Auflisten, Erstellen, Umbenennen, Duplizieren, Archivieren, Wiederherstellen und Statuswechsel mehrerer Funnel erweitern
+- [x] Geschützte Mehr-Funnel-tRPC-Prozeduren mit Admin-Berechtigungen, Eingabevalidierung, Slug-Kollisionsschutz und atomarer Funnel-Erstellung implementieren
+- [x] Funnel-Bibliothek als Admin-Startseite mit Suchfunktion, Statusfiltern, Kennzahlen und klaren Aktionen pro Funnel bauen
+- [x] Erstellungsdialog mit „Neue Vorlage“ und „Bestehenden Funnel kopieren“ einschließlich editierbarem Titel und automatisch erzeugtem Slug umsetzen
+- [x] Duplizierung aller Funnel-Inhalte ohne Übernahme vorhandener Bewerbungen oder Lebenslaufdateien implementieren
+- [x] Funnel sicher veröffentlichen, pausieren, archivieren und wiederherstellen können; destruktive Löschung nicht als Standardaktion anbieten
+- [x] Editor und Funnel-Einstellungen über stabile Admin-Routen eindeutig auf den ausgewählten Funnel beziehen und klare Rückwege zur Funnel-Bibliothek anbieten
+- [x] Bewerbungsübersicht, Detailansicht, Kennzahlen und CSV-/PDF-Export funnelübergreifend sowie per Funnel filterbar machen
+- [x] Öffentliche Funnel-Auflösung weiterhin über eindeutige Slugs betreiben und pausierte beziehungsweise archivierte Funnel sicher sperren
+- [x] Optimistische UI-Aktualisierungen, Lade-, Leer-, Fehler- und Bestätigungszustände für alle Mehr-Funnel-Aktionen ergänzen
+- [x] Vitest-Abdeckung für Slug-Erzeugung, Kollisionsfälle, Vorlagenerstellung, Duplizierung, Statuswechsel, Berechtigungen und Bestandsmigration ergänzen
+- [x] Desktop- und Mobile-Oberflächen der Funnel-Bibliothek, Erstellungsabläufe, Editor-Routen und Bewerbungsfilter visuell sowie funktional prüfen
+- [x] Mehr-Funnel-Betrieb, URL-Konzept, Archivierungsregeln und Migrationsverhalten in README und Betriebsdokumentation festhalten
+- [x] Kennzahl „In Bearbeitung“ als echten kombinierten Bewerbungsfilter für `reviewing` und `contacted` statt als Toggle zwischen Einzelstatus implementieren und testen
+- [x] Entfallen: künstlicher Browserstatuswechsel am einzigen Produktivdatensatz; identische UI-Filterfunktion mit sichtbarer Oberfläche und deterministischem Vitest für `reviewing` sowie `contacted` nachgewiesen
+- [x] Erstellen, Kopieren, Editor-Speichern, Einstellungen-Speichern und Lebenszykluswechsel systematisch auf Lade-, Leer-, Fehler- und Bestätigungszustände prüfen und fehlende Zustände ergänzen
+- [x] Expliziten Vitest-Fall für die Bestandsnormalisierung ergänzen: UUID, Slug, Seiteninhalte und Bewerbungszuordnung bleiben bei fehlendem Status unverändert
+- [x] Browser-Smoke-Test für Neuerstellung aus Vorlage und Kopieren eines bestehenden Funnels erfolgreich durchführen und beide temporären Testfunnel anschließend archivieren
+- [x] Alle vom Mehr-Funnel-Browser-Smoke-Test erzeugten `E2E Mehr-Funnel`-Datensätze nach Prüfung auf fehlende Bewerbungen wieder aus der produktiven Funnel-Bibliothek entfernen
+- [x] `FunnelEditor.tsx` und `Settings.tsx` nach den letzten Patches erneut prüfen und konkrete Save-, Pending-, Error- und Ungespeichert-Zustände mit Codebelegen nachweisen
+- [x] Reproduzierbaren Browser-Smoke-Test für Editor-Speichern und Einstellungen-Speichern ausführen und erfolgreiche Zustandswechsel dokumentieren
+- [x] Mehr-Funnel-Änderungen committen und erfolgreich nach `github/main` pushen
+- [x] Finalen Übergabe-Checkpoint nach dem erfolgreichen Push speichern
+- [x] Bestehende Favicon-Konfiguration und ihre globale beziehungsweise funnelbezogene Gültigkeit prüfen und im Dashboard verständlich zugänglich machen
+- [x] Pro Funnel ein persistiertes Favicon mit sicherem Standardwert und dynamischer öffentlicher Ausgabe unterstützen
+- [x] Farben für normale und ausgewählte klickbare Antwortkästen pro Funnel konfigurierbar machen und in Editor-Vorschau sowie öffentlichem Funnel anwenden
+- [x] Den festen Eyebrow-Text „Kurze Frage“ pro Seite editierbar und durch ein leeres Feld vollständig ausblendbar machen
+- [x] Rückwärtskompatibilität bestehender Funnel-Konfigurationen durch Normalisierung und Schema-Tests absichern
+- [x] TypeScript-Prüfung, vollständige Vitest-Suite, Produktions-Build und responsive Sichtprüfung der neuen Branding-Funktionen erfolgreich abschließen
+- [x] Bedienwege für Favicon, Antwortfarben und Eyebrow dokumentieren, nach GitHub pushen und finalen Übergabe-Checkpoint speichern
+- [x] Erfolgsfall für Favicon-Upload, Konfigurationsspeicherung und öffentliche Rückgabe mit einem isolierten Speicher-Mock regressionssicher prüfen
+- [x] Setzen und Wiederherstellen des Browser-Favicons beim Laden und Verlassen eines öffentlichen Funnels mit einem gezielten DOM-Test absichern
+- [x] Alle Branding-Farbfelder um direkt editierbare und einfügbare Hexwerte mit synchronisiertem visuellen Farbwähler erweitern
+- [x] Hex-Eingaben tolerant während der Bearbeitung behandeln, aber nur normalisierte gültige `#RRGGBB`-Werte in die Funnel-Konfiguration übernehmen
+- [x] Den verfügbaren Icon-Katalog deutlich erweitern und zentral typisieren, damit Editor und öffentlicher Funnel dieselben Symbole verwenden
+- [x] Die textliche Icon-Auswahl durch eine tastaturbedienbare, visuelle Galerie mit Icon-Vorschau, Bezeichnung und Auswahlzustand ersetzen
+- [x] Bestehende gespeicherte Icon-Namen unverändert weiter rendern und unbekannte Legacy-Werte sicher abfangen
+- [x] Hex-Eingabe und Icon-Galerie mit Vitest, TypeScript, Produktions-Build sowie Desktop- und Mobilansicht prüfen
+- [x] Bedienung dokumentieren, Änderungen nach GitHub pushen und finalen Übergabe-Checkpoint speichern
+- [x] Tastaturbedienung der Icon-Galerie durch Fokusnavigation und Enter-Auswahl praktisch oder automatisiert nachweisen
+- [x] Vollständige Vitest-Suite und Produktions-Build des finalen Hex/Icon-Stands erneut erfolgreich ausführen und Ergebnis dokumentieren
+- [x] Bestehende Footer-, Datenschutz-, Absende-, Erfolgs- und Funnel-Einstellungsflüsse für Impressum, Weiterleitung und Tracking vollständig inventarisieren
+- [x] Pro Funnel einen validierten Impressumstitel und Impressumsinhalt persistent und rückwärtskompatibel speichern
+- [x] Auf jedem öffentlichen Funnel-Schritt neben „Datenschutz“ zwingend den Link „Impressum“ anzeigen und eine direkte, mobil zugängliche Impressumsansicht bereitstellen
+- [x] Bestehende Funnels mit einem sicheren Impressumsstandard normalisieren, ohne öffentliche Funnel-URLs oder Bewerbungsdaten zu verändern
+- [x] Pro Funnel zwischen bestehender Erfolgsnachricht und optionaler Weiterleitung nach erfolgreichem Absenden wählen können
+- [x] Weiterleitungs-URLs auf sichere absolute HTTPS-Adressen beschränken und erst nach bestätigter Bewerbungsspeicherung anwenden
+- [x] Meta-Pixel-ID, Aktivierungsstatus, Eventname, Test-Event-Code und serverseitiges Zugangstoken pro Funnel sicher administrierbar machen
+- [x] Meta-Zugangstoken verschlüsselt und ausschließlich serverseitig speichern, in öffentlichen Konfigurationen niemals ausliefern und im Admin-Bereich nur maskiert darstellen
+- [x] Separate optionale Tracking-Einwilligung für Meta integrieren und Browser-Pixel erst nach dieser Einwilligung laden
+- [x] Erfolgreiche Bewerbung als dedupliziertes Browser- und Conversions-API-Ereignis mit gemeinsamer Event-ID melden, ohne den Bewerbungserfolg von Meta abhängig zu machen
+- [x] Weiterleitung erst nach Browser-Conversion-Auslösung starten und bei deaktiviertem Tracking oder Meta-Fehlern weiterhin zuverlässig ausführen
+- [x] Admin-Bedienung für Impressum, Erfolgsverhalten und Meta-Tracking mit verständlichen Hinweisen, Lade-, Fehler- und Speicherzuständen ergänzen
+- [x] Schema-, Sicherheits-, Normalisierungs-, Weiterleitungs-, Consent-, Deduplizierungs- und Meta-Fehlerfälle mit Vitest absichern
+- [x] TypeScript-Prüfung, vollständige Testsuite, Produktions-Build sowie Desktop- und Mobilprüfung der neuen Flows erfolgreich abschließen
+- [x] Betriebs- und Datenschutzgrenzen dokumentieren, Änderungen nach GitHub pushen und finalen Übergabe-Checkpoint speichern
+- [x] Impressumsüberschrift und Impressumsinhalt serverseitig sowie in der Admin-UI als nicht-leere Pflichtangaben validieren und mit Vitest absichern
+- [x] Aktuelle Speicherung und Ausgabe von Antwort-Question-IDs, Seiten-IDs und internen Seitennamen in Dashboard, Detailansicht, Exporten und E-Mail-Benachrichtigungen inventarisieren
+- [x] Eine zentrale rückwärtskompatible Zuordnung von gespeicherten Antwort-IDs zu den nutzerdefinierten internen Seitennamen implementieren
+- [x] Bewerbungs-Dashboard und Bewerbungs-E-Mails ausschließlich mit internen Seitennamen statt technischer `question-*`-IDs ausgeben
+- [x] Fehlende oder veraltete Seitenreferenzen mit einem verständlichen Fallback behandeln, ohne technische IDs an Endnutzer auszugeben
+- [x] Vitest-Abdeckung für aktuelle und bestehende Bewerbungsdaten, E-Mail-Ausgabe sowie Dashboard-Aufbereitung ergänzen
+- [x] TypeScript-Prüfung, vollständige Testsuite, Produktionsbuild und visuelle Bewerbungsdetailprüfung erfolgreich abschließen
+- [x] Änderungen nach GitHub synchronisieren und finalen Übergabe-Checkpoint speichern
+- [x] Gespeicherte Meta-Konfiguration des betroffenen Funnels auf Aktivierung, Pixel-ID, Tokenstatus, Eventname und Test-Event-Code prüfen, ohne Geheimnisse auszulesen
+- [x] Browser- und Serverereignisfluss einschließlich Consent-Bedingung, gemeinsamer Event-ID und Meta-API-Payload mit der aktuellen Implementierung abgleichen
+- [x] Produktionsprotokolle auf unterdrückte Conversions-API-Fehler oder Meta-Antworten zum letzten Testversuch untersuchen
+- [x] Ursache zwischen fehlender Einwilligung, nicht ausgelöstem Bewerbungserfolg, falscher Datenquelle, Token-/Berechtigungsproblem oder Payload-Fehler eindeutig isolieren
+- [x] Erforderliche Konfigurations- oder Codekorrektur implementieren, ohne reale Bewerbungen oder Zugangsdaten offenzulegen
+- [x] Meta-Testereignisfluss mit automatisierten Tests und einem sicheren, nachvollziehbaren Prüfweg verifizieren
+- [x] Befund dokumentieren, Änderungen nach GitHub synchronisieren und finalen Übergabe-Checkpoint speichern
+- [x] Alle Abhängigkeiten von `metaConsent` in Kontaktformular, Submit-Payload, Browser-Pixel, Serverevent, Schemas und Tests vollständig inventarisieren
+- [x] Sichtbare Meta-Einwilligungscheckbox aus dem Bewerbungsformular entfernen und bestehende gespeicherte Funnel-Konfigurationen rückwärtskompatibel halten
+- [x] Browser-Pixel bei aktiviertem Meta-Tracking ohne separate Formularfreigabe laden und erfolgreiche Bewerbung automatisch mit gemeinsamer Event-ID melden
+- [x] Conversions API bei aktiviertem Meta-Tracking und vorhandenem Token nach erfolgreicher Bewerbung automatisch auslösen
+- [x] Nicht mehr verwendete Consent-Text-Eingabe und widersprüchliche Einwilligungshinweise aus der Admin-Oberfläche entfernen beziehungsweise eindeutig umformulieren
+- [x] Formular-, Pixel-, CAPI-, Schema- und Routertests an den automatischen Trackingfluss anpassen und negative Fälle bei deaktiviertem Tracking erhalten
+- [x] TypeScript-Prüfung, vollständige Testsuite, Produktionsbuild sowie Desktop- und Mobilprüfung ohne Meta-Checkbox erfolgreich abschließen
+- [x] Änderung dokumentieren, nach GitHub synchronisieren und finalen Übergabe-Checkpoint speichern
+- [x] Zeitstempel des letzten Bewerbungsversuchs mit produktiven Bewerbungs-, Server- und Meta-Protokollen korrelieren, ohne personenbezogene Inhalte offenzulegen
+- [x] Produktive Funnel-Konfiguration auf Tracking-Aktivierung, Pixel-ID, Tokenstatus, Eventname und verbleibenden Test-Event-Code prüfen
+- [x] Nachweisen, ob der letzte Submit ein Browser-Lead, einen CAPI-Versuch oder einen dokumentierten Skip-Grund erzeugt hat
+- [x] Meta-API-Antwort bei CAPI-Fehlern strukturiert und geheimnisfrei protokollieren, damit „Connection pending“ diagnostizierbar wird
+- [x] Ursache zwischen fehlendem Submit, deaktiviertem Tracking, Test-/Live-Ansicht, falscher Datenquelle, Tokenberechtigung und Payload-Validierung eindeutig isolieren
+- [x] Erforderliche CAPI-Code- oder Konfigurationskorrektur mit Vitest absichern
+- [x] Serverereignisfluss sicher verifizieren und Meta-Verbindungsstatus beziehungsweise verbleibende externe Verzögerung nachvollziehbar dokumentieren
+- [x] TypeScript, vollständige Testsuite und Produktionsbuild erfolgreich abschließen
+- [x] Änderungen nach GitHub synchronisieren und finalen Übergabe-Checkpoint speichern
+- [x] Temporären Meta-Testevent-Code nach erfolgreichem Servernachweis aus dem produktiven Funnel entfernen, ohne das CAPI-Token zu verändern
