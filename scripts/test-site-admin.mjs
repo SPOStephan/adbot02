@@ -36,7 +36,9 @@ assert.match(dashboard, /\/dashboard\/rechtliches/);
 // Public legal pages stay readable without admin.
 assert.match(read("src/app/impressum/page.tsx"), /getLegalPage\("impressum"\)/);
 assert.match(read("src/app/datenschutz/page.tsx"), /getLegalPage\("datenschutz"\)/);
+assert.match(read("src/app/agb/page.tsx"), /getLegalPage\("agb"\)/);
 assert.doesNotMatch(read("src/app/impressum/page.tsx"), /isSiteAdmin/);
 assert.doesNotMatch(read("src/app/datenschutz/page.tsx"), /isSiteAdmin/);
+assert.doesNotMatch(read("src/app/agb/page.tsx"), /isSiteAdmin/);
 
 console.log("test-site-admin: ok");
