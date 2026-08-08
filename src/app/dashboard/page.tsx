@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import {
   AlertCircle,
   ArrowUpRight,
-  BarChart3,
   Bell,
   CalendarClock,
   CalendarDays,
@@ -21,6 +20,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Images,
   Scale,
   Search,
   Settings,
@@ -73,6 +73,7 @@ import { OrganicBoostAutoPlanner } from "@/components/OrganicBoostAutoPlanner";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { SignOutButton } from "@/components/SignOutButton";
+import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
@@ -93,12 +94,20 @@ const baseNavigation = [
   { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center", active: false },
 ];
 
-const adminNavigationItem = {
-  label: "Rechtliches",
-  icon: Scale,
-  href: "/dashboard/rechtliches",
-  active: false,
-};
+const adminNavigationItems = [
+  {
+    label: "Logo",
+    icon: Images,
+    href: "/dashboard/logo",
+    active: false,
+  },
+  {
+    label: "Rechtliches",
+    icon: Scale,
+    href: "/dashboard/rechtliches",
+    active: false,
+  },
+];
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -370,7 +379,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const userIsSiteAdmin = await isSiteAdmin(user.id);
   const navigation = userIsSiteAdmin
-    ? [...baseNavigation, adminNavigationItem]
+    ? [...baseNavigation, ...adminNavigationItems]
     : [...baseNavigation];
 
   const { data: connectedAccounts, error: connectedAccountsError } = await supabase
@@ -1681,12 +1690,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-slate-200 bg-white px-4 py-6 lg:flex lg:flex-col">
-        <Link className="flex items-center gap-3 px-2 font-extrabold" href="/dashboard">
-          <span className="grid size-10 place-items-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
-            <BarChart3 className="size-5" />
-          </span>
-          <span>AdPilot</span>
-        </Link>
+        <div className="px-2">
+          <SiteBrandMark href="/dashboard" tone="light" />
+        </div>
 
         <nav className="mt-10 space-y-1">
           {navigation.map(({ label, icon: Icon, href, active }) =>
@@ -1731,10 +1737,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
           <div className="flex min-h-16 items-center justify-between gap-4 px-5 sm:px-8">
             <div className="flex items-center gap-3 lg:hidden">
-              <span className="grid size-9 place-items-center rounded-xl bg-blue-600 text-white">
-                <BarChart3 className="size-4" />
-              </span>
-              <span className="font-extrabold">AdPilot</span>
+              <SiteBrandMark href="/dashboard" size="sm" tone="light" />
             </div>
             <div className="ml-auto flex items-center gap-2 sm:gap-4">
               <span className="hidden max-w-56 truncate text-sm text-slate-500 sm:block">

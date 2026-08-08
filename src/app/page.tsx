@@ -1,13 +1,13 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  BarChart3,
   CheckCircle2,
   Layers3,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 
+import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
 import { APP_SITE_URL, MARKETING_SITE_URL } from "@/lib/site-urls";
 
@@ -21,12 +21,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen overflow-hidden bg-slate-950 text-white">
       <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-6 py-6 lg:px-8">
-        <Link className="flex items-center gap-3 font-extrabold" href="/">
-          <span className="grid size-10 place-items-center rounded-xl bg-blue-600 shadow-lg shadow-blue-600/30">
-            <BarChart3 className="size-5" />
-          </span>
-          <span>AdPilot</span>
-        </Link>
+        <SiteBrandMark href="/" tone="dark" />
         <div className="flex items-center gap-3">
           <Link
             className="hidden px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white md:block"
