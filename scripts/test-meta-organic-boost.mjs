@@ -1008,6 +1008,22 @@ assert.match(
   /finalize_meta_organic_boost_already_active_plans/,
 );
 assert.match(finalizeActiveMigration, /finalized_active=/);
+assert.doesNotMatch(
+  finalizeActiveMigration,
+  /update public\.mutation_plan_steps/,
+);
+
+const finalizeActiveNoStepMigration = read(
+  "supabase/migrations/20260808175100_meta_organic_boost_finalize_active_no_step_shape.sql",
+);
+assert.match(
+  finalizeActiveNoStepMigration,
+  /does not rewrite step dispatch shape/,
+);
+assert.doesNotMatch(
+  finalizeActiveNoStepMigration,
+  /update public\.mutation_plan_steps/,
+);
 assert.match(
   read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
   /syncMetaConnector/,

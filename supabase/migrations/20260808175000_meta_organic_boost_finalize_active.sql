@@ -65,30 +65,8 @@ begin
     );
 
   get diagnostics v_count = row_count;
-
-  -- Steps that are still open after Meta is already ACTIVE: close locally.
-  update public.mutation_plan_steps mps
-  set
-    status = case
-      when mps.status = 'SUCCEEDED' then mps.status
-      else 'SUCCEEDED'
-    end,
-    dispatch_state = case
-      when mps.dispatch_state = 'REMOTE_APPLIED' then mps.dispatch_state
-      else 'REMOTE_APPLIED'
-    end,
-    completed_at = coalesce(mps.completed_at, now()),
-    updated_at = now()
-  from public.mutation_plans mp
-  where mps.plan_id = mp.id
-    and mp.user_id = p_user_id
-    and mp.platform_account_id = p_platform_account_id
-    and mp.source_rule_key = 'organic-boost'
-    and mp.status = 'SUCCEEDED'
-    and mps.status in (
-      'PENDING', 'RETRYABLE', 'CLAIMED', 'RUNNING', 'FAILED', 'STALE'
-    );
-
+  -- Do not rewrite mutation_plan_steps: REMOTE_APPLIED requires
+  -- dispatch_started_at + remote_applied_at (dispatch_shape_check).
   return v_count;
 end;
 $$;
