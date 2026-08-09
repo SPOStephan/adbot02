@@ -4,7 +4,7 @@ import { funnelSecurityHeaders } from "../securityHeaders";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { registerStorageProxy } from "./storageProxy";
-import { attachSpaFallback } from "./vite";
+import { attachSpaFallback } from "./spaFallback";
 
 export type CreateAppOptions = {
   /** When false, skip static/SPA fallback (dev uses Vite middleware instead). */
