@@ -1038,6 +1038,22 @@ assert.doesNotMatch(
   finalizeActiveNoStepMigration,
   /update public\.mutation_plan_steps/,
 );
+
+const hardCapDayResumeMigration = read(
+  "supabase/migrations/20260809080000_meta_hard_cap_day_resume.sql",
+);
+assert.match(
+  hardCapDayResumeMigration,
+  /finalize_meta_organic_boost_already_active_plans/,
+);
+assert.match(
+  hardCapDayResumeMigration,
+  /boost:adset:%/,
+);
+assert.match(
+  hardCapDayResumeMigration,
+  /queue_meta_hard_cap_resume_internal/,
+);
 assert.match(
   finalizeActiveNoStepMigration,
   /prepare_meta_organic_boost_write_now/,
