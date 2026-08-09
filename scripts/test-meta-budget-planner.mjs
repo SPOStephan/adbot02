@@ -83,6 +83,38 @@ try {
     /run_meta_budget_planner/,
   );
 
+  const hardCapDayResumeMigration = await readFile(
+    join(
+      projectRoot,
+      "supabase/migrations/20260809080000_meta_hard_cap_day_resume.sql",
+    ),
+    "utf8",
+  );
+  assert.match(
+    hardCapDayResumeMigration,
+    /queue_meta_hard_cap_resume_internal/,
+  );
+  assert.match(
+    hardCapDayResumeMigration,
+    /hard_cap_day_resume/,
+  );
+  assert.match(
+    hardCapDayResumeMigration,
+    /'hard_cap_day_resume',\s*1,\s*'ACTIVATE'/,
+  );
+  assert.match(
+    hardCapDayResumeMigration,
+    /upper\(coalesce\(c\.effective_status, c\.status, ''''\)\) = ''ACTIVE''/,
+  );
+  assert.match(
+    hardCapDayResumeMigration,
+    /outcome'' in \(''CREATED'', ''QUEUED''\)/,
+  );
+  assert.match(
+    hardCapDayResumeMigration,
+    /boost:campaign:%/,
+  );
+
   const sourcePath = join(projectRoot, "src/lib/meta/planner.ts");
   const source = (await readFile(sourcePath, "utf8"))
     .replace('import "server-only";', "")
