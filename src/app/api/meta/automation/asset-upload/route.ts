@@ -50,6 +50,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const generateMetaCropsRaw = String(
+      form.get("generateMetaCrops") ?? "",
+    ).toLowerCase();
+    const generateMetaCrops =
+      generateMetaCropsRaw === "1" ||
+      generateMetaCropsRaw === "true" ||
+      generateMetaCropsRaw === "yes";
+
     const bytes = new Uint8Array(await file.arrayBuffer());
     const result = await uploadCustomerLibraryImage({
       userId: customer.userId,
@@ -58,6 +66,7 @@ export async function POST(request: NextRequest) {
       fileName: file.name || "upload.jpg",
       mimeType: file.type || null,
       bytes,
+      generateMetaCrops,
     });
 
     return NextResponse.json({ ok: true, ...result });
