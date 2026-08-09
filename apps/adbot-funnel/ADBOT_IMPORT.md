@@ -20,16 +20,15 @@ Arbeitskopie des Funnel-Builders im Adbot-Monorepo (`apps/adbot-funnel`).
 
 ## Vercel-Projekt (Deploy-Repo `adbot-funnel`)
 
-Konfiguration liegt in `vercel.json`:
-- Build: `pnpm run vercel-build` → `public/` (Vite) + gebündeltes `api/index.js` (esbuild, inkl. `@shared`-Aliases)
-- Rewrite: `/(.*) → /api`
-- Statische Dateien aus `public/` werden von Vercel vor dem Rewrite ausgeliefert
+Konfiguration:
+- **Sync-Workflow** baut `public/` + `api/index.js` und committed sie ins Deploy-Repo (Vercel hat den Build zuvor oft übersprungen → 3s Deploy ohne Function → 404)
+- `vercel.json`: Rewrite `/(.*) → /api`, Install/Build nur Platzhalter
+- Entry: `api/index.js` (CJS-Bundle)
 
 | Einstellung | Wert |
 |---|---|
 | Root Directory | `/` |
 | Output Directory | nicht auf `dist` setzen |
-| Entry | `api/index.js` (Build-Output aus `server/vercelHandler.ts`) |
 
 **URL:** Im Vercel-Projekt unter **Deployments → Visit** die Production-URL öffnen.  
 `https://adbot-funnel.vercel.app` ist oft nicht zugewiesen (404).  
