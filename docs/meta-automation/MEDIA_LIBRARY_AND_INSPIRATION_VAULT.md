@@ -17,7 +17,9 @@ Beide liegen in `public.brand_assets` (`library_scope`). Bytes im privaten Bucke
 4. Brand-Profil ist **kein** Upload-Gate. Ohne Profil wird das Asset unbound gespeichert und beim Active Launch über `bind_unbound_customer_brand_asset_for_launch` an das Launch-Profil gebunden.
 5. Danach im Automation Control Center als Brand-Asset wählbar
 
-SQL-Nachzug: `supabase/migrations/20260809193000_media_library_upload_without_brand_profile.sql`
+SQL-Nachzug:
+- `supabase/migrations/20260809193000_media_library_upload_without_brand_profile.sql`
+- `supabase/migrations/20260809194500_fix_library_scope_trigger_short_circuit.sql` (Pflicht: verhindert `record "new" has no field "library_scope"` beim Beitrag-Push)
 
 ## Inspiration Vault
 
