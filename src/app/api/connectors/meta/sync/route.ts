@@ -120,7 +120,9 @@ export async function POST() {
     created: number;
     existing: number;
     blocked: number;
+    revived: number;
     exposuresCleared: number;
+    scheduleEnded: number;
     error: string | null;
   } | null = null;
   let hardCapDrain: {
@@ -156,7 +158,9 @@ export async function POST() {
         created: forceResume.created,
         existing: forceResume.existing,
         blocked: forceResume.blocked,
+        revived: forceResume.revived,
         exposuresCleared: forceResume.exposuresCleared,
+        scheduleEnded: forceResume.scheduleEnded,
         error: forceResume.error,
       };
     }
@@ -166,7 +170,9 @@ export async function POST() {
       created: 0,
       existing: 0,
       blocked: 0,
+      revived: 0,
       exposuresCleared: 0,
+      scheduleEnded: 0,
       error: "force_resume_exception",
     };
   }
@@ -175,7 +181,7 @@ export async function POST() {
     const drain = await drainHardCapStatusExecutionsForAccount({
       platformAccountId: connector.id,
       userId: user.id,
-      maxRuns: 8,
+      maxRuns: 20,
     });
     hardCapDrain = {
       duePlans: drain.duePlans,

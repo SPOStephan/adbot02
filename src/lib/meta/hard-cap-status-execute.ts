@@ -21,7 +21,9 @@ export type OrganicBoostHardCapForceResumeResult = {
   created: number;
   existing: number;
   blocked: number;
+  revived: number;
   exposuresCleared: number;
+  scheduleEnded: number;
   error: string | null;
 };
 
@@ -53,7 +55,9 @@ export async function forceResumeOrganicBoostHardCapPauses(input: {
       created: 0,
       existing: 0,
       blocked: 0,
+      revived: 0,
       exposuresCleared: 0,
+      scheduleEnded: 0,
       error: error.message || "force_resume_rpc_failed",
     };
   }
@@ -72,7 +76,9 @@ export async function forceResumeOrganicBoostHardCapPauses(input: {
       created: 0,
       existing: 0,
       blocked: 0,
+      revived: 0,
       exposuresCleared: 0,
+      scheduleEnded: 0,
       error: "force_resume_result_empty",
     };
   }
@@ -83,7 +89,9 @@ export async function forceResumeOrganicBoostHardCapPauses(input: {
     created: Number(row.created ?? 0) || 0,
     existing: Number(row.existing ?? 0) || 0,
     blocked: Number(row.blocked ?? 0) || 0,
+    revived: Number(row.revived ?? 0) || 0,
     exposuresCleared: Number(row.exposures_cleared ?? 0) || 0,
+    scheduleEnded: Number(row.schedule_ended ?? 0) || 0,
     error: null,
   };
 }
@@ -131,7 +139,7 @@ export async function drainHardCapStatusExecutionsForAccount(input: {
   userId: string;
   maxRuns?: number;
 }): Promise<HardCapStatusDrainResult> {
-  const maxRuns = Math.max(1, Math.min(8, input.maxRuns ?? 4));
+  const maxRuns = Math.max(1, Math.min(20, input.maxRuns ?? 12));
   let runs = 0;
   let succeeded = 0;
   let failed = 0;

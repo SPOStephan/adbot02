@@ -171,6 +171,22 @@ try {
     /HARD_CAP_SAFETY/,
   );
 
+  const finishBoostHardCapResumeMigration = await readFile(
+    join(
+      projectRoot,
+      "supabase/migrations/20260809120000_meta_finish_organic_boost_hard_cap_resume.sql",
+    ),
+    "utf8",
+  );
+  assert.match(
+    finishBoostHardCapResumeMigration,
+    /resume_without_last_seen_sync/,
+  );
+  assert.match(
+    finishBoostHardCapResumeMigration,
+    /schedule_ended/,
+  );
+
   const sourcePath = join(projectRoot, "src/lib/meta/planner.ts");
   const source = (await readFile(sourcePath, "utf8"))
     .replace('import "server-only";', "")

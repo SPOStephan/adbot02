@@ -1099,6 +1099,21 @@ assert.match(
   forceResumeBoostHardCapMigration,
   /ORGANIC_BOOST_HARD_CAP_FORCE_RESUME/,
 );
+const finishBoostHardCapResumeMigration = read(
+  "supabase/migrations/20260809120000_meta_finish_organic_boost_hard_cap_resume.sql",
+);
+assert.match(
+  finishBoostHardCapResumeMigration,
+  /resume_without_last_seen_sync/,
+);
+assert.match(
+  finishBoostHardCapResumeMigration,
+  /v_revived/,
+);
+assert.match(
+  finishBoostHardCapResumeMigration,
+  /schedule_ended/,
+);
 assert.match(
   read("src/lib/meta/hard-cap-status-execute.ts"),
   /forceResumeOrganicBoostHardCapPauses/,

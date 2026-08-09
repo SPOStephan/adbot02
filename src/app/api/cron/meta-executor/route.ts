@@ -14,8 +14,8 @@ const NO_STORE_HEADERS = {
   "Cache-Control": "private, no-store, max-age=0",
 };
 
-/** Cap plans per cron tick so hard-cap ACTIVATE bursts drain within one minute. */
-const MAX_PLANS_PER_TICK = 8;
+/** Cap plans per cron tick so hard-cap ACTIVATE bursts drain quickly. */
+const MAX_PLANS_PER_TICK = 20;
 
 function authorized(request: Request, cronSecret: string): boolean {
   const supplied = request.headers.get("authorization") ?? "";
