@@ -302,22 +302,34 @@ grant execute on function public.prepare_meta_status_activate_write_now(uuid, uu
 comment on function public.prepare_meta_status_activate_write_now(uuid, uuid) is
   'Force-releases WRITE lease and revives organic_boost_reactivate / hard_cap_day_resume ACTIVATE plans for immediate claim.';
 
--- One-shot: revive any currently stuck ACTIVATE resume plans (all tenants).
+-- One-shot revive: materialize account ids first. A FOR-loop cursor on
+-- mutation_plans would block ALTER TABLE … ENABLE TRIGGER inside prepare
+-- (SQLSTATE 55006).
+create temporary table tmp_meta_status_activate_accounts (
+  user_id uuid not null,
+  platform_account_id uuid not null,
+  primary key (user_id, platform_account_id)
+) on commit drop;
+
+insert into tmp_meta_status_activate_accounts (user_id, platform_account_id)
+select distinct mp.user_id, mp.platform_account_id
+from public.mutation_plans mp
+where mp.action_type = 'ACTIVATE'
+  and mp.source_rule_key in (
+    'organic_boost_reactivate', 'hard_cap_day_resume'
+  )
+  and mp.status in (
+    'PENDING', 'RETRYABLE', 'STALE', 'BLOCKED', 'FAILED',
+    'PREFLIGHT_FAILED', 'CLAIMED', 'EXECUTING', 'RECONCILING'
+  );
+
 do $$
 declare
   v_account record;
 begin
   for v_account in
-    select distinct mp.user_id, mp.platform_account_id
-    from public.mutation_plans mp
-    where mp.action_type = 'ACTIVATE'
-      and mp.source_rule_key in (
-        'organic_boost_reactivate', 'hard_cap_day_resume'
-      )
-      and mp.status in (
-        'PENDING', 'RETRYABLE', 'STALE', 'BLOCKED', 'FAILED',
-        'PREFLIGHT_FAILED', 'CLAIMED', 'EXECUTING', 'RECONCILING'
-      )
+    select user_id, platform_account_id
+    from tmp_meta_status_activate_accounts
   loop
     perform public.prepare_meta_status_activate_write_now(
       v_account.user_id,
