@@ -18,8 +18,10 @@ export type HardCapForceResumeNoticeInput = {
   statusRefresh?: {
     requested?: number;
     refreshed?: number;
+    upserted?: number;
     paused?: number;
     active?: number;
+    targetsRepaired?: number;
     error?: string | null;
   } | null;
 };
@@ -66,9 +68,12 @@ export function formatHardCapResumeNotice(
 
   if (refresh && (refresh.requested ?? 0) > 0) {
     parts.push(
-      `Meta-Status nachgeladen: ${refresh.refreshed ?? 0}/${refresh.requested} Beitrag-Push` +
+      `Meta-Status nachgeladen: ${refresh.refreshed ?? 0}/${refresh.requested} lokal geschrieben` +
         (typeof refresh.paused === "number"
           ? ` (${refresh.paused} PAUSED bei Meta)`
+          : "") +
+        ((refresh.targetsRepaired ?? 0) > 0
+          ? `, ${refresh.targetsRepaired} Ziel(e) auf MANAGED`
           : ""),
     );
     if (refresh.error) {
@@ -85,6 +90,12 @@ export function formatHardCapResumeNotice(
         (revived > 0 ? `, ${revived} erneut versucht` : "") +
         (succeeded > 0 ? `, ${succeeded} an Meta geschrieben` : "") +
         (targetsRepaired > 0 ? `, ${targetsRepaired} Ziel(e) repariert` : ""),
+    );
+  } else if ((refresh?.paused ?? 0) > 0) {
+    parts.push(
+      `FEHLER: Meta meldet ${refresh?.paused} PAUSED Beitrag-Push, aber kein ACTIVATE-Plan wurde angelegt` +
+        (forceError ? ` (${forceError})` : "") +
+        " — SQL 20260809150000 prüfen",
     );
   } else if (linked > 0) {
     parts.push(
@@ -139,10 +150,17 @@ export function hardCapResumeNoticeKind(
   forceResume: HardCapForceResumeNoticeInput | null | undefined,
   drain: HardCapStatusDrainNoticeInput | null | undefined,
 ): HardCapResumeNoticeKind {
+  const refreshPaused = forceResume?.statusRefresh?.paused ?? 0;
+  const queued =
+    (forceResume?.created ?? 0) +
+    (forceResume?.existing ?? 0) +
+    (forceResume?.candidates ?? 0) +
+    (drain?.succeeded ?? 0);
   if (
     forceResume?.error ||
     (forceResume?.outcome ?? "").toUpperCase() === "BLOCKED" ||
-    (drain?.failed ?? 0) > 0
+    (drain?.failed ?? 0) > 0 ||
+    (refreshPaused > 0 && queued < 1)
   ) {
     return "error";
   }

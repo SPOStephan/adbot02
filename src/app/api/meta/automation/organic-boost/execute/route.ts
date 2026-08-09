@@ -85,8 +85,10 @@ export async function POST(request: NextRequest) {
       statusRefresh: {
         requested: number;
         refreshed: number;
+        upserted: number;
         paused: number;
         active: number;
+        targetsRepaired: number;
         error: string | null;
       };
     } | null = null;
@@ -102,8 +104,10 @@ export async function POST(request: NextRequest) {
     const statusRefreshPayload = {
       requested: statusRefresh.requested,
       refreshed: statusRefresh.refreshed,
+      upserted: statusRefresh.upserted,
       paused: statusRefresh.paused,
       active: statusRefresh.active,
+      targetsRepaired: statusRefresh.targetsRepaired,
       error: statusRefresh.error,
     };
 
@@ -124,6 +128,7 @@ export async function POST(request: NextRequest) {
           platformAccountId: customer.platformAccountId,
           userId: customer.userId,
           marketingSyncId,
+          pausedPlatformCampaignIds: statusRefresh.pausedPlatformIds,
         });
         hardCapForceResume = {
           outcome: forceResume.outcome,
