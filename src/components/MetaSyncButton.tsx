@@ -90,7 +90,7 @@ function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): str
   const error = boost.lastError?.trim();
 
   if (created + existing > 0) {
-    return `Beitrag-Push: ${created + existing} Bewerbung(en) angelegt — Meta-Versand folgt automatisch.`;
+    return `Beitrag-Push: ${created + existing} Bewerbung(en) angelegt — Meta-Kampagne wird jetzt geschrieben und erscheint in der Übersicht.`;
   }
 
   if (boost.status === "MATERIALIZE_FAILED" || failed > 0) {

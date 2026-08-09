@@ -26,6 +26,7 @@ import {
   type PolicyCommand,
 } from "@/lib/meta/customer-control-input";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
+import { planAndDrainOrganicBoostForAccount } from "@/lib/meta/organic-boost-ensure";
 import { runOrganicBoostPlannerForAccount } from "@/lib/meta/organic-boost-runner";
 import {
   claimMetaReadOperation,
@@ -1355,24 +1356,34 @@ export async function planCustomerOrganicBoost(
     platformAccountId: customer.platformAccountId,
   }).catch(() => undefined);
 
-  const planned = await runOrganicBoostPlannerForAccount({
+  const ensured = await planAndDrainOrganicBoostForAccount({
     platformAccountId: customer.platformAccountId,
     userId: customer.userId,
     ownerPrefix: "organic-boost-plan",
+    maxRuns: 8,
   });
 
-  const organicBoost = await reviveAndDrainOrganicBoost({
-    customer,
-    organicBoost: planned,
-  });
+  const planned = ensured.planner ?? {
+    status: "PLANNER_RPC_FAILED",
+    plansCreated: 0,
+    plansExisting: 0,
+    candidatesSkipped: 0,
+    candidatesFailed: 0,
+    candidatesConsidered: 0,
+    lastError: "organic_boost_ensure_empty",
+  };
+  const drain = ensured.drain;
 
   return {
-    ...(organicBoost ?? planned),
-    executorRuns: organicBoost?.executorRuns ?? 0,
-    executorSucceeded: organicBoost?.executorSucceeded ?? 0,
-    executorFailed: organicBoost?.executorFailed ?? 0,
-    executorLastOutcome: organicBoost?.executorLastOutcome ?? null,
-    executorLastError: organicBoost?.executorLastError ?? null,
+    ...planned,
+    pendingPlans: drain?.duePlans ?? 0,
+    executorRuns: drain?.runs ?? 0,
+    executorSucceeded: drain?.succeeded ?? 0,
+    executorFailed: drain?.failed ?? 0,
+    executorLastOutcome: drain?.lastOutcome ?? null,
+    executorLastError:
+      drain?.lastError ??
+      (drain?.prepareDetail ? `prepare: ${drain.prepareDetail}` : null),
   };
 }
 

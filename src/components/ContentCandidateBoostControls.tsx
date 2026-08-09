@@ -179,24 +179,26 @@ function statusCopy(input: {
     if (planner === "NOT_RUN") {
       return {
         tone: "amber" as const,
-        title: "Beitrag-Push startet automatisch",
+        title: "Kampagne wird angelegt",
         body: input.organicPlannerLastError
-          ? `Noch nicht gestartet: ${input.organicPlannerLastError}. Läuft unabhängig vom Beitrags-Abruf nach.`
-          : "Läuft unabhängig vom Beitrags-Abruf, sobald Lease und Marketing-Sync bereit sind.",
+          ? `Noch nicht gestartet: ${input.organicPlannerLastError}. Adbot holt Plan und Meta-Versand nach.`
+          : "Adbot legt den Beitrag-Push jetzt an (Plan + Meta-Kampagne), sobald Lease und Marketing-Stand bereit sind.",
       };
     }
     if (!planner) {
       return {
         tone: "amber" as const,
-        title: "Bewerbung startet automatisch",
-        body: "Beitrag ist erkannt. Beitrag-Push läuft unabhängig vom Abruf — kein erneuter Abruf nötig.",
+        title: "Kampagne wird angelegt",
+        body: "Beitrag ist erkannt. Adbot legt jetzt den Beitrag-Push-Plan an und schreibt die Meta-Kampagne. Erst danach erscheint der Beitrag in der Beitrag-Push-Übersicht — Meta-Freigabe folgt ggf. später.",
       };
     }
 
     return {
       tone: "amber" as const,
       title: "Bewerbung steht aus",
-      body: `Einstellungen sind bereit. Letzter Planner-Status: ${planner}. Läuft unabhängig vom Abruf.`,
+      body: input.organicPlannerLastError
+        ? `Noch keine Kampagne: ${input.organicPlannerLastError} (Status ${planner}).`
+        : `Einstellungen sind bereit. Letzter Planner-Status: ${planner}. Kampagne erscheint in der Übersicht, sobald der Plan steht.`,
     };
   }
 

@@ -825,8 +825,8 @@ export function MetaCampaignOverview({
                 <p className="mt-1 text-sm leading-6 text-slate-500">
                   {organicBoostConfigured
                     ? pendingBoostCandidateCount > 0
-                      ? `${pendingBoostCandidateCount} erkannte Beiträge werden automatisch beworben (Vollautomatik + Freigeben), unabhängig vom Abruf. Kein Extra-Klick nötig — sobald der Meta-Versand die Kampagnen geschrieben hat, erscheinen sie hier.`
-                      : "Automatischer Beitrag-Push ist eingeschaltet, aber aktuell liegt kein Boost-Plan vor. Sobald Pläne angelegt und per Meta-Versand geschrieben sind, erscheinen sie hier mit Ampel-Status."
+                      ? `${pendingBoostCandidateCount} erkannte Beiträge haben noch keinen Eintrag hier: Plan oder Meta-Versand steht aus. Adbot legt die Kampagne direkt nach dem Erkennen an — sobald der lokale Plan steht, erscheint die Zeile (auch vor Meta-Freigabe).`
+                      : "Automatischer Beitrag-Push ist eingeschaltet. Neue Kampagnen erscheinen hier, sobald Adbot den Plan angelegt hat — Meta-Freigabe kann danach noch ausstehen."
                     : "Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben, Restbudget und Laufzeit."}
                 </p>
                 {organicBoostConfigured &&

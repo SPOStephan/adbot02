@@ -15,6 +15,7 @@ import {
   syncMetaMarketingSnapshot,
   type MetaMarketingSyncResult,
 } from "./marketing-sync";
+import { planAndDrainOrganicBoostForAccount } from "./organic-boost-ensure";
 import { runOrganicBoostPlannerForAccount } from "./organic-boost-runner";
 import {
   claimMetaReadOperation,
@@ -960,8 +961,38 @@ export async function syncMetaConnector(
       }
     }
 
-    // Meta writes stay off the Abruf request path (timeout risk). Plans stay
-    // PENDING here; dashboard load + LiveRefresh + minutely cron drain them.
+    // After detect+plan: push Meta writes immediately for this account.
+    // Waiting only on dashboard/cron left Beitrag-Push stuck as "recognized"
+    // without appearing in the gepushte-Beiträge overview or Ads Manager.
+    if (!isHighUsage(usage)) {
+      const plannedCount =
+        (organicBoostResult?.plansCreated ?? 0) +
+        (organicBoostResult?.plansExisting ?? 0);
+      try {
+        if (plannedCount > 0) {
+          await planAndDrainOrganicBoostForAccount({
+            platformAccountId: connector.id,
+            userId: connector.user_id,
+            ownerPrefix: "organic-boost-drain-after-sync",
+            maxRuns: Math.min(8, Math.max(1, plannedCount)),
+            drainOnly: true,
+          });
+        } else if (newCount > 0) {
+          // Mid-sync planner may have skipped (lease/status). Retry + drain now.
+          const ensured = await planAndDrainOrganicBoostForAccount({
+            platformAccountId: connector.id,
+            userId: connector.user_id,
+            ownerPrefix: "organic-boost-after-sync",
+            maxRuns: 8,
+          });
+          if (ensured.planner) {
+            organicBoostResult = ensured.planner;
+          }
+        }
+      } catch {
+        // Planner/drain errors must not fail the content Abruf outcome.
+      }
+    }
 
     if (isHighUsage(usage)) {
       const rateLimitedResult = await markFailed({

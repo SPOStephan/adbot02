@@ -81,7 +81,7 @@ import {
   drainHardCapStatusExecutionsForAccount,
   forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
-import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
+import { planAndDrainOrganicBoostForAccount } from "@/lib/meta/organic-boost-ensure";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { createClient } from "@/lib/supabase/server";
 import { createFreebieSsoEntryPath, createFunnelSsoEntryPath } from "@/lib/site-urls";
@@ -453,32 +453,45 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const writeScopeGranted =
     Array.isArray(metaAccount?.meta_scopes) &&
     metaAccount.meta_scopes.includes("ads_management");
-  // Dashboard load drains due Beitrag-Push + hard-cap status plans so Meta
-  // writes do not depend solely on the minutely cron (which can go silent).
+  // Dashboard load: plan is_new Beitrag-Push candidates AND drain Meta writes
+  // immediately so recognized posts appear in the overview without waiting on
+  // the client AutoPlanner island or the minutely cron.
   if (metaConnected && metaAccount && writeScopeGranted) {
     try {
-      const drain = await drainOrganicBoostExecutionsForAccount({
+      const ensured = await planAndDrainOrganicBoostForAccount({
         userId: user.id,
         platformAccountId: metaAccount.id,
-        maxRuns: 4,
+        ownerPrefix: "organic-boost-dashboard",
+        maxRuns: 8,
       });
-      if (drain.lastError || drain.runs > 0 || (drain.duePlans ?? 0) > 0) {
-        console.error("organic_boost_dashboard_drain", {
+      const drain = ensured.drain;
+      if (
+        ensured.planner?.lastError ||
+        (ensured.planner?.plansCreated ?? 0) > 0 ||
+        drain?.lastError ||
+        (drain?.runs ?? 0) > 0 ||
+        (drain?.duePlans ?? 0) > 0
+      ) {
+        console.error("organic_boost_dashboard_ensure", {
           platformAccountId: metaAccount.id,
-          duePlans: drain.duePlans,
-          runs: drain.runs,
-          succeeded: drain.succeeded,
-          failed: drain.failed,
-          lastOutcome: drain.lastOutcome,
-          lastError: drain.lastError,
-          prepareDetail: drain.prepareDetail,
-          preflightOkCount: drain.preflightOkCount,
-          killSwitchMode: drain.killSwitchMode,
-          divertedToOtherAccount: drain.divertedToOtherAccount,
+          plannerStatus: ensured.planner?.status ?? null,
+          plansCreated: ensured.planner?.plansCreated ?? 0,
+          plansExisting: ensured.planner?.plansExisting ?? 0,
+          plannerError: ensured.planner?.lastError ?? null,
+          duePlans: drain?.duePlans ?? 0,
+          runs: drain?.runs ?? 0,
+          succeeded: drain?.succeeded ?? 0,
+          failed: drain?.failed ?? 0,
+          lastOutcome: drain?.lastOutcome ?? null,
+          lastError: drain?.lastError ?? null,
+          prepareDetail: drain?.prepareDetail ?? null,
+          preflightOkCount: drain?.preflightOkCount ?? null,
+          killSwitchMode: drain?.killSwitchMode ?? null,
+          divertedToOtherAccount: drain?.divertedToOtherAccount ?? false,
         });
       }
     } catch (error) {
-      console.error("organic_boost_dashboard_drain_exception", {
+      console.error("organic_boost_dashboard_ensure_exception", {
         platformAccountId: metaAccount.id,
         message: error instanceof Error ? error.message : "unknown",
       });
