@@ -1,7 +1,7 @@
 # Spiegelt apps/adbot-funnel nach SPOStephan/adbot-funnel (Vercel-Deploy-Repo).
 #
-# Baut Frontend + API-Bundle VOR dem Push, weil Vercel den vercel-build
-# hier nicht zuverlässig ausgeführt hat (3s-Deploys ohne api/index.js → 404).
+# Prebuild (pnpm vercel-build) + Force-Commit von public/ + api/ als Absicherung.
+# Vercel baut zusätzlich selbst (vercel.json install/build); Routing: API vs SPA.
 #
 # Secret in adbot02: ADBOT_FUNNEL_SYNC_TOKEN (PAT mit Schreibrecht auf adbot-funnel)
 
