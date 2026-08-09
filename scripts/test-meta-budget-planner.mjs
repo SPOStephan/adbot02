@@ -139,6 +139,22 @@ try {
     /queue_meta_hard_cap_resume_internal/,
   );
 
+  const organicBoostHardCapExemptMigration = await readFile(
+    join(
+      projectRoot,
+      "supabase/migrations/20260809100000_meta_organic_boost_hard_cap_pause_exempt.sql",
+    ),
+    "utf8",
+  );
+  assert.match(
+    organicBoostHardCapExemptMigration,
+    /organic_boost_hard_cap_exempt/,
+  );
+  assert.match(
+    organicBoostHardCapExemptMigration,
+    /Beitrag-Push/,
+  );
+
   const sourcePath = join(projectRoot, "src/lib/meta/planner.ts");
   const source = (await readFile(sourcePath, "utf8"))
     .replace('import "server-only";', "")

@@ -18,7 +18,7 @@ Marketing-Snapshot und Planner laufen unter derselben exklusiven Werbekonto-Leas
 
 ## Konservative Tagesexposure
 
-Für jeden aktuellen Budgetowner wird ein Tageswert in Minor Units berechnet. Bei bestätigtem, deaktiviertem Campaign-Budget-Sharing beträgt der Mindestfaktor `1,75`. Bei aktivem oder unbekanntem Sharing beträgt er mindestens `2,10`. Tageswerte dürfen innerhalb desselben Werbekonto-Tages nur steigen; ein später kleinerer Snapshot kann bereits reservierte Exposure nicht freigeben.
+Für jeden aktuellen Budgetowner wird ein Tageswert in Minor Units berechnet. Bei bestätigtem, deaktiviertem Campaign-Budget-Sharing beträgt der Mindestfaktor `1,75` (Metas dokumentiertes Tages-Overspend-Maximum von +75 %). Bei aktivem oder unbekanntem Sharing beträgt er mindestens `2,10`. Das ist **nicht** die autonome Budget-*Änderungs*-Grenze von 20 % / 24 h (`budget_change_limit_bps`). Tageswerte dürfen innerhalb desselben Werbekonto-Tages nur steigen; ein später kleinerer Snapshot kann bereits reservierte Exposure nicht freigeben.
 
 | Größe | Berechnung |
 |---|---|
@@ -39,7 +39,7 @@ Eine Budgetänderung verwendet immer das aktuell synchronisierte Budget als Ausg
 | `spend_without_results_7d` | Budget um 20 % senken | Aktuelle Empfehlung aus demselben Snapshot; Mindestdaten bereits durch die Recommendation Engine belegt. |
 | `cost_per_result_up_30pct` | Budget um 20 % senken | Aktuelle Empfehlung aus demselben Snapshot. |
 | `cost_per_result_down_15pct` | Budget um 10 % erhöhen | Je mindestens fünf Ergebnisse in beiden Siebentagesfenstern; Kosten je Ergebnis mindestens 15 % besser. |
-| Hard-Cap-Verletzung | Aktive Kampagnen pausieren | Sicherheitspfad über **Exposure** (`Tagesbudget × Flexfaktor`), nicht über beobachteten Spend. |
+| Hard-Cap-Verletzung | Aktive MANAGED-Kampagnen pausieren, **außer Beitrag-Push** (`organic-boost`) | Sicherheitspfad über **Exposure** (`Tagesbudget × Flexfaktor`), nicht über beobachteten Spend. Beitrag-Push bleibt mid-flight ACTIVE; neue Launches bleiben über Preflight am Hard-Cap geblockt. |
 | Neuer Werbekonto-Tag unter Cap | Zuvor per Hard-Cap `SAFETY_PAUSE`te MANAGED-Kampagnen wieder `ACTIVATE` (`safety_action`) | PAUSED Owner werden am neuen Tag nicht erneut in die SNAPSHOT-Exposure aufgenommen; Same-Day-Reserve bleibt erhalten. `mutation_plans_safety_type_check` erlaubt `safety_action` für `SAFETY_PAUSE` und `ACTIVATE`. |
 
 Jeder Budgetplan besitzt die vier ausführbaren Schritte `VALIDATE_REMOTE`, `UPDATE_BUDGET`, `READ_AFTER_WRITE` und `RECONCILE`. Ein Sicherheitspausenplan besitzt `VALIDATE_REMOTE`, `UPDATE_STATUS`, `READ_AFTER_WRITE` und `RECONCILE`. Planneroutput ist idempotent über Policy, Marketing-Snapshot, Target, Regel und Regelversion.

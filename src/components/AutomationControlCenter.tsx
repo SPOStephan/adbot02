@@ -661,7 +661,7 @@ export function AutomationControlCenter({
             <div className="mt-4 grid gap-3">
               <ToggleField
                 checked={allowBudgetChanges}
-                description="Erhöhen und senken bis höchstens 20 % innerhalb von 24 Stunden."
+                description="Adbot ändert Budgets autonom höchstens um 20 % innerhalb von 24 Stunden (getrennt von Metas Tages-Overspend bis +75 %)."
                 disabled={disabled}
                 label="Budgets ändern"
                 name="allowBudgetChanges"

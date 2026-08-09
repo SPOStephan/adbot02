@@ -1073,6 +1073,21 @@ assert.match(
   read("src/app/api/connectors/meta/sync/route.ts"),
   /drainHardCapStatusExecutionsForAccount/,
 );
+const organicBoostHardCapExemptMigration = read(
+  "supabase/migrations/20260809100000_meta_organic_boost_hard_cap_pause_exempt.sql",
+);
+assert.match(
+  organicBoostHardCapExemptMigration,
+  /organic_boost_hard_cap_exempt/,
+);
+assert.match(
+  organicBoostHardCapExemptMigration,
+  /queue_meta_hard_cap_pause_internal/,
+);
+assert.match(
+  organicBoostHardCapExemptMigration,
+  /source_rule_key = 'organic-boost'/,
+);
 assert.match(
   finalizeActiveNoStepMigration,
   /prepare_meta_organic_boost_write_now/,
