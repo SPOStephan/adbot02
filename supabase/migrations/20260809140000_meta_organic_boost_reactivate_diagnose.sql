@@ -693,6 +693,7 @@ begin
       link.created_at desc
   loop
     v_linked := v_linked + 1;
+    v_target_id := null;
 
     if v_candidate.platform_campaign_id is null
       or v_candidate.campaign_id is null then
