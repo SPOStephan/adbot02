@@ -4,6 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
+import {
+  formatHardCapResumeNotice,
+  type HardCapForceResumeNoticeInput,
+  type HardCapStatusDrainNoticeInput,
+} from "@/lib/meta/hard-cap-resume-notice";
+
 type Props = {
   label?: string;
 };
@@ -83,6 +89,8 @@ export function OrganicBoostPlanButton({
           retryAt?: string | null;
         } | null;
         marketingSyncError?: string | null;
+        hardCapForceResume?: HardCapForceResumeNoticeInput | null;
+        hardCapStatus?: HardCapStatusDrainNoticeInput | null;
         drain?: {
           duePlans?: number;
           runs?: number;
@@ -94,6 +102,12 @@ export function OrganicBoostPlanButton({
           preflightOkCount?: number | null;
         };
       };
+
+      if (!executeResponse.ok || executeBody.ok !== true) {
+        throw new Error(
+          executeBody.message ?? "Beitrag-Push-Execute fehlgeschlagen.",
+        );
+      }
 
       const created =
         (planBody.organicBoost?.plansCreated ?? 0) +
@@ -143,56 +157,43 @@ export function OrganicBoostPlanButton({
         }
       } else if (sync?.blockedReason === "manual_cooldown" || sync?.retryAt) {
         syncNotice =
-          "Kampagnen laufen — Abruf kurz im Cooldown. Bitte in ca. 1 Min. erneut oder Abruf-Button.";
+          "Kampagnenstand: Abruf kurz im Cooldown — Reaktivierung läuft trotzdem mit dem letzten Stand.";
       } else if (syncBlocked) {
-        syncNotice = `Kennzahlen-Abruf blockiert (${executeBody.marketingSyncError ?? sync?.blockedReason ?? sync?.status ?? "unbekannt"}). Bitte Abruf-Button prüfen.`;
+        syncNotice = `Kennzahlen-Abruf blockiert (${executeBody.marketingSyncError ?? sync?.blockedReason ?? sync?.status ?? "unbekannt"}).`;
       }
 
-      // Abruf immer versuchen, falls Execute ihn nicht geschafft hat.
-      if (!syncOk && !sync?.retryAt) {
-        const syncResponse = await fetch("/api/connectors/meta/sync", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { Accept: "application/json" },
-        });
-        const syncBody = (await syncResponse.json().catch(() => ({}))) as {
-          ok?: boolean;
-          error?: string;
-          status?: string;
-          retryAt?: string | null;
-        };
-        if (syncResponse.ok && syncBody.ok === true) {
-          syncNotice =
-            "Meta-Kennzahlen aktualisiert (Abruf). Ausgaben erscheinen in Ampel und Summe.";
-        } else if (syncResponse.status === 429) {
-          syncNotice =
-            "Kampagnen laufen — Abruf kurz im Cooldown. Gleich nochmal oder Abruf-Button.";
-        } else if (!syncNotice) {
-          syncNotice =
-            "Kennzahlen-Abruf fehlgeschlagen. Bitte Abruf-Button nutzen.";
-        }
-      }
+      const resumeNotice = formatHardCapResumeNotice(
+        executeBody.hardCapForceResume,
+        executeBody.hardCapStatus,
+      );
 
       const idleOnly =
         drainError === "claim_idle_with_due_plans" ||
         drainError === "lease_busy_with_due_plans";
 
-      setNotice(
+      const launchNotice =
         written > 0
-          ? `Meta-Kontakt: ${written} Plan/Pläne gesendet.${syncNotice ? ` ${syncNotice}` : ""}`
+          ? `Neue Bewerbung: ${written} Plan/Pläne an Meta gesendet.`
           : execFailed > 0
-            ? `Meta hat abgelehnt (${executeBody.drain?.lastOutcome ?? "failed"}${drainError ? `: ${drainError}` : ""}).`
-            : idleOnly && syncNotice
-              ? syncNotice
+            ? `Meta hat neue Bewerbung abgelehnt (${executeBody.drain?.lastOutcome ?? "failed"}${drainError ? `: ${drainError}` : ""}).`
+            : idleOnly
+              ? null
               : drainError && !idleOnly
-                ? `Kein Meta-Kontakt (${drainError}${prepare ? ` · ${prepare}` : ""}).`
-                : syncNotice
-                  ? syncNotice
-                  : created > 0
-                    ? `Kampagnen bereit — kein neuer Versand nötig.${prepare ? ` (${prepare})` : ""}`
-                    : error
-                      ? `Kein Plan angelegt (${status}): ${error}`
-                      : `Kein Plan angelegt (Status ${status}).`,
+                ? `Kein Meta-Kontakt für neue Bewerbung (${drainError}${prepare ? ` · ${prepare}` : ""}).`
+                : created > 0
+                  ? `Neue Bewerbung bereit — kein neuer Versand nötig.${prepare ? ` (${prepare})` : ""}`
+                  : error
+                    ? `Kein neuer Plan (${status}): ${error}`
+                    : null;
+
+      const parts = [resumeNotice, launchNotice, syncNotice].filter(
+        (part): part is string => Boolean(part),
+      );
+
+      setNotice(
+        parts.length > 0
+          ? parts.join(" ")
+          : `Geprüft (Status ${status}) — keine Aktion nötig.`,
       );
       router.refresh();
     } catch (error) {
