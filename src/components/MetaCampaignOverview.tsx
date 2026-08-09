@@ -831,21 +831,22 @@ export function MetaCampaignOverview({
                       : "Automatischer Beitrag-Push ist eingeschaltet. Neue Kampagnen erscheinen hier, sobald Adbot den Plan angelegt hat — Meta-Freigabe kann danach noch ausstehen."
                     : "Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben, Restbudget und Laufzeit."}
                 </p>
-                {organicBoostConfigured &&
-                (organicPlannerStatus || organicPlannerLastError) ? (
+                {organicBoostConfigured && pendingBoostCandidateCount > 0 ? (
                   <p
                     className={`mt-2 text-xs font-semibold leading-5 ${
                       organicPlannerLastError ||
                       organicPlannerStatus === "MATERIALIZE_FAILED" ||
-                      organicPlannerStatus === "NO_ELIGIBLE_CANDIDATES"
+                      organicPlannerStatus === "ACCOUNT_UNAVAILABLE" ||
+                      organicPlannerStatus === "STALE_OR_INVALID_SNAPSHOT" ||
+                      organicPlannerStatus === "NO_ACTIVE_POLICY"
                         ? "text-amber-800"
                         : "text-slate-600"
                     }`}
                   >
-                    Letzter Planner-Status: {organicPlannerStatus ?? "—"}
+                    Letzter Planner-Status: {organicPlannerStatus ?? "noch nicht gelaufen"}
                     {organicPlannerLastError
                       ? ` · ${organicPlannerLastError}`
-                      : ""}
+                      : " · Bitte „Manuell erneut prüfen“ — der genaue Blocker erscheint hier."}
                   </p>
                 ) : null}
                 <OrganicBoostLiveRefresh active={awaitingOrganicBoostProgress} />
