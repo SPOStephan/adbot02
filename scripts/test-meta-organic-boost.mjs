@@ -1088,6 +1088,25 @@ assert.match(
   organicBoostHardCapExemptMigration,
   /source_rule_key = 'organic-boost'/,
 );
+const forceResumeBoostHardCapMigration = read(
+  "supabase/migrations/20260809110000_meta_force_resume_organic_boost_hard_cap.sql",
+);
+assert.match(
+  forceResumeBoostHardCapMigration,
+  /force_resume_meta_organic_boost_hard_cap_pauses/,
+);
+assert.match(
+  forceResumeBoostHardCapMigration,
+  /ORGANIC_BOOST_HARD_CAP_FORCE_RESUME/,
+);
+assert.match(
+  read("src/lib/meta/hard-cap-status-execute.ts"),
+  /forceResumeOrganicBoostHardCapPauses/,
+);
+assert.match(
+  read("src/app/api/connectors/meta/sync/route.ts"),
+  /forceResumeOrganicBoostHardCapPauses/,
+);
 assert.match(
   finalizeActiveNoStepMigration,
   /prepare_meta_organic_boost_write_now/,

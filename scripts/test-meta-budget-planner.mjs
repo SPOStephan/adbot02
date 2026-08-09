@@ -155,6 +155,22 @@ try {
     /Beitrag-Push/,
   );
 
+  const forceResumeBoostHardCapMigration = await readFile(
+    join(
+      projectRoot,
+      "supabase/migrations/20260809110000_meta_force_resume_organic_boost_hard_cap.sql",
+    ),
+    "utf8",
+  );
+  assert.match(
+    forceResumeBoostHardCapMigration,
+    /force_resume_meta_organic_boost_hard_cap_pauses/,
+  );
+  assert.match(
+    forceResumeBoostHardCapMigration,
+    /HARD_CAP_SAFETY/,
+  );
+
   const sourcePath = join(projectRoot, "src/lib/meta/planner.ts");
   const source = (await readFile(sourcePath, "utf8"))
     .replace('import "server-only";', "")

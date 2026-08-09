@@ -15,6 +15,79 @@ export type HardCapStatusDrainResult = {
   lastError: string | null;
 };
 
+export type OrganicBoostHardCapForceResumeResult = {
+  outcome: string;
+  reason: string | null;
+  created: number;
+  existing: number;
+  blocked: number;
+  exposuresCleared: number;
+  error: string | null;
+};
+
+/**
+ * Queues ACTIVATE for Beitrag-Push campaigns wrongly SAFETY_PAUSEd by hard-cap,
+ * even when the account is still over the hard-cap (same-day reserve).
+ */
+export async function forceResumeOrganicBoostHardCapPauses(input: {
+  platformAccountId: string;
+  userId: string;
+  marketingSyncId: string;
+  plannedAt?: string;
+}): Promise<OrganicBoostHardCapForceResumeResult> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc(
+    "force_resume_meta_organic_boost_hard_cap_pauses",
+    {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+      p_source_marketing_sync_id: input.marketingSyncId,
+      p_planned_at: input.plannedAt ?? new Date().toISOString(),
+    },
+  );
+
+  if (error) {
+    return {
+      outcome: "ERROR",
+      reason: null,
+      created: 0,
+      existing: 0,
+      blocked: 0,
+      exposuresCleared: 0,
+      error: error.message || "force_resume_rpc_failed",
+    };
+  }
+
+  const row =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : Array.isArray(data) && data[0] && typeof data[0] === "object"
+        ? (data[0] as Record<string, unknown>)
+        : null;
+
+  if (!row) {
+    return {
+      outcome: "ERROR",
+      reason: "empty_result",
+      created: 0,
+      existing: 0,
+      blocked: 0,
+      exposuresCleared: 0,
+      error: "force_resume_result_empty",
+    };
+  }
+
+  return {
+    outcome: typeof row.outcome === "string" ? row.outcome : "OK",
+    reason: typeof row.reason === "string" ? row.reason : null,
+    created: Number(row.created ?? 0) || 0,
+    existing: Number(row.existing ?? 0) || 0,
+    blocked: Number(row.blocked ?? 0) || 0,
+    exposuresCleared: Number(row.exposures_cleared ?? 0) || 0,
+    error: null,
+  };
+}
+
 const HARD_CAP_RULE_KEYS = [
   "hard_cap_day_resume",
   "hard_cap_exposure_breach",

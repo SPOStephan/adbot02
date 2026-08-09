@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { drainHardCapStatusExecutionsForAccount } from "@/lib/meta/hard-cap-status-execute";
+import {
+  drainHardCapStatusExecutionsForAccount,
+  forceResumeOrganicBoostHardCapPauses,
+} from "@/lib/meta/hard-cap-status-execute";
 import { syncMetaConnector } from "@/lib/meta/sync";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -109,8 +113,16 @@ export async function POST() {
     );
   }
 
-  // After READ_SYNC lease release: push hard-cap ACTIVATE/SAFETY_PAUSE to Meta
-  // immediately so day-resume does not wait only on the minutely cron.
+  // After READ_SYNC lease release: force-queue ACTIVATE for wrongly paused
+  // Beitrag-Push campaigns (even over hard-cap), then drain to Meta.
+  let hardCapForceResume: {
+    outcome: string;
+    created: number;
+    existing: number;
+    blocked: number;
+    exposuresCleared: number;
+    error: string | null;
+  } | null = null;
   let hardCapDrain: {
     duePlans: number;
     runs: number;
@@ -119,6 +131,46 @@ export async function POST() {
     lastOutcome: string | null;
     lastError: string | null;
   } | null = null;
+
+  try {
+    const admin = createAdminClient();
+    const { data: accountRow } = await admin
+      .from("platform_accounts")
+      .select("marketing_sync_id")
+      .eq("id", connector.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const marketingSyncId =
+      typeof accountRow?.marketing_sync_id === "string"
+        ? accountRow.marketing_sync_id
+        : null;
+
+    if (marketingSyncId) {
+      const forceResume = await forceResumeOrganicBoostHardCapPauses({
+        platformAccountId: connector.id,
+        userId: user.id,
+        marketingSyncId,
+      });
+      hardCapForceResume = {
+        outcome: forceResume.outcome,
+        created: forceResume.created,
+        existing: forceResume.existing,
+        blocked: forceResume.blocked,
+        exposuresCleared: forceResume.exposuresCleared,
+        error: forceResume.error,
+      };
+    }
+  } catch {
+    hardCapForceResume = {
+      outcome: "ERROR",
+      created: 0,
+      existing: 0,
+      blocked: 0,
+      exposuresCleared: 0,
+      error: "force_resume_exception",
+    };
+  }
+
   try {
     const drain = await drainHardCapStatusExecutionsForAccount({
       platformAccountId: connector.id,
@@ -162,6 +214,7 @@ export async function POST() {
       candidatesConsidered: result.organicBoostCandidatesConsidered,
       lastError: result.organicBoostLastError,
     },
+    hardCapForceResume,
     hardCapStatus: hardCapDrain,
   });
 }
