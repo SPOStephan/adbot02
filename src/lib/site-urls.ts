@@ -1,6 +1,7 @@
 const DEFAULT_MARKETING_SITE_URL = "https://adbot.one";
 const DEFAULT_APP_SITE_URL = "https://app.adbot.one";
 const DEFAULT_FUNNEL_SITE_URL = "https://funnel.adbot.one";
+const DEFAULT_FREEBIE_SITE_URL = "https://freebie.adbot.one";
 
 function normalizeBaseUrl(value: string | undefined, fallback: string) {
   return (value?.trim() || fallback).replace(/\/+$/, "");
@@ -19,6 +20,11 @@ export const APP_SITE_URL = normalizeBaseUrl(
 export const FUNNEL_SITE_URL = normalizeBaseUrl(
   process.env.NEXT_PUBLIC_FUNNEL_URL,
   DEFAULT_FUNNEL_SITE_URL,
+);
+
+export const FREEBIE_SITE_URL = normalizeBaseUrl(
+  process.env.NEXT_PUBLIC_FREEBIE_URL,
+  DEFAULT_FREEBIE_SITE_URL,
 );
 
 const marketingHostname = new URL(MARKETING_SITE_URL).hostname.toLowerCase();
@@ -73,4 +79,18 @@ export function createFunnelAdminUrl() {
 /** Adbot-SSO-Einstieg (gleicher Origin wie das Portal). Leitet nach Funnel weiter. */
 export function createFunnelSsoEntryPath() {
   return "/api/funnel/sso";
+}
+
+export function createFreebieUrl(pathname = "/", search = "") {
+  const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return new URL(`${normalizedPath}${search}`, `${FREEBIE_SITE_URL}/`);
+}
+
+export function createFreebieAdminUrl() {
+  return createFreebieUrl("/admin");
+}
+
+/** Adbot-SSO-Einstieg (gleicher Origin wie das Portal). Leitet nach Freebie weiter. */
+export function createFreebieSsoEntryPath() {
+  return "/api/freebie/sso";
 }

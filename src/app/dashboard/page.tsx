@@ -12,6 +12,7 @@ import {
   Clock3,
   ExternalLink,
   Filter,
+  Gift,
   HelpCircle,
   ImageIcon,
   LayoutDashboard,
@@ -43,6 +44,7 @@ import {
   CampaignAssistantBrief,
   type CampaignBriefView,
 } from "@/components/CampaignAssistantBrief";
+import { FreebieWorkspaceCard } from "@/components/FreebieWorkspaceCard";
 import { FunnelWorkspaceCard } from "@/components/FunnelWorkspaceCard";
 import type {
   AllowedDomainView,
@@ -90,7 +92,7 @@ import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
-import { createFunnelSsoEntryPath } from "@/lib/site-urls";
+import { createFreebieSsoEntryPath, createFunnelSsoEntryPath } from "@/lib/site-urls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,6 +113,13 @@ const baseNavigation = [
     label: "Funnel",
     icon: Filter,
     href: createFunnelSsoEntryPath(),
+    active: false,
+    external: true,
+  },
+  {
+    label: "Freebie",
+    icon: Gift,
+    href: createFreebieSsoEntryPath(),
     active: false,
     external: true,
   },
@@ -2066,6 +2075,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </section>
 
           <FunnelWorkspaceCard userEmail={user.email} />
+
+          <FreebieWorkspaceCard userEmail={user.email} />
 
           {metaConnected && metaAccount ? (
             <CampaignAssistantBrief briefs={campaignBriefViews} />
