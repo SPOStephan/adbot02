@@ -45,6 +45,7 @@ export function MediaLibraryClient({
     try {
       const body = new FormData();
       body.set("file", file);
+      body.set("generateMetaCrops", "1");
       if (brandProfileId) {
         body.set("brandProfileId", brandProfileId);
       }
