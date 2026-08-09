@@ -27,6 +27,7 @@ type HardCapForceResumeResponse = {
   revived?: number;
   exposuresCleared?: number;
   scheduleEnded?: number;
+  candidates?: number;
   error?: string | null;
 };
 
@@ -186,14 +187,16 @@ function hardCapResumeNotice(
   const revived = forceResume?.revived ?? 0;
   const scheduleEnded = forceResume?.scheduleEnded ?? 0;
   const blocked = forceResume?.blocked ?? 0;
+  const candidates = forceResume?.candidates ?? 0;
   const succeeded = drain?.succeeded ?? 0;
   const failed = drain?.failed ?? 0;
   const forceError = forceResume?.error?.trim();
   const drainError = drain?.lastError?.trim();
 
-  if (created + existing + revived > 0 || succeeded > 0) {
+  if (candidates > 0 || created + existing + revived > 0 || succeeded > 0) {
     parts.push(
-      `Reaktivierung: ${created + existing} geplant` +
+      `Reaktivierung: ${candidates} pausierte Beitrag-Push-Kampagne(n)` +
+        (created + existing > 0 ? `, ${created + existing} geplant` : "") +
         (revived > 0 ? `, ${revived} erneut versucht` : "") +
         (succeeded > 0 ? `, ${succeeded} an Meta geschrieben` : ""),
     );
@@ -209,6 +212,10 @@ function hardCapResumeNotice(
     succeeded === 0
   ) {
     parts.push(`Reaktivierung: ${blocked} Kampagne(n) blockiert`);
+  } else if (candidates === 0 && !forceError) {
+    parts.push(
+      "Reaktivierung: lokal keine pausierten Beitrag-Push-Kampagnen gefunden",
+    );
   }
 
   if (failed > 0) {
