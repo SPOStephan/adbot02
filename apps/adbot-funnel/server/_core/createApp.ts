@@ -5,6 +5,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { registerStorageProxy } from "./storageProxy";
 import { attachSpaFallback } from "./spaFallback";
+import { registerAdbotSsoRoute } from "./adbotSsoRoute";
 
 export type CreateAppOptions = {
   /** When false, skip static/SPA fallback (dev uses Vite middleware instead). */
@@ -19,6 +20,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
     res.status(200).json({ ok: true, service: "adbot-funnel" });
   });
   app.use(funnelSecurityHeaders);
+  registerAdbotSsoRoute(app);
   registerStorageProxy(app);
   app.use(
     "/api/trpc",

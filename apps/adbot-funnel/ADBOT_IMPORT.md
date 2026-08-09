@@ -54,9 +54,17 @@ Siehe `.env.example`: `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SUPABASE_*
 - Admin-API: `funnel.setOwner`, optional Filter `funnels({ ownerUserId })`
 - Meta: `metaTracking.conversionTrigger` = `submit` | `doi` (Default `submit`; bei `doi` keine Conversion beim Absenden)
 
+## Adbot-SSO (Kunden-Login per Link)
+
+1. In **beiden** Vercel-Projekten (`adbot02` und `adbot-funnel`) denselben Wert setzen:
+   - `FUNNEL_SSO_SECRET` (≥32 Zeichen, z. B. `openssl rand -base64 48`)
+2. Redeploy beider Projekte
+3. Im Adbot-Dashboard: **Funnel öffnen** → `/api/funnel/sso` → Funnel setzt Session → `/admin`
+4. Kunde sieht/bearbeitet nur Funnel mit seiner `owner_user_id`
+5. Plattform-Admin weiterhin per `ADMIN_EMAIL`/`ADMIN_PASSWORD` (sieht alle Funnel)
+
 ## Nächste Schritte
 
-- Domain `funnel.adbot.one` (IONOS CNAME + Vercel Domains)
-- Adbot-SSO in den Funnel-Admin (Owner automatisch setzen)
 - DOI-Mailfluss + Conversion nach Bestätigung
+- Optional: Funnel im Dashboard per iframe statt neuer Tab
 - Freebie-Builder unter `freebie.adbot.one`

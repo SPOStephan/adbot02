@@ -47,11 +47,14 @@ describe("auth.login without Manus", () => {
     const claims = await verifySessionToken(cookies[0]?.value);
     expect(claims?.email).toBe("admin@example.com");
     expect(claims?.role).toBe("admin");
+    expect(claims?.authSource).toBe("password");
 
     const token = await createSessionToken(buildAdminUser());
     expect(await verifySessionToken(token)).toMatchObject({
       email: "admin@example.com",
       role: "admin",
+      authSource: "password",
     });
   });
 });
+

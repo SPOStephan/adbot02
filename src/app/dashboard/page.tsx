@@ -86,7 +86,7 @@ import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
-import { createFunnelAdminUrl } from "@/lib/site-urls";
+import { createFunnelSsoEntryPath } from "@/lib/site-urls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,7 +106,7 @@ const baseNavigation = [
   {
     label: "Funnel",
     icon: Filter,
-    href: createFunnelAdminUrl().toString(),
+    href: createFunnelSsoEntryPath(),
     active: false,
     external: true,
   },
