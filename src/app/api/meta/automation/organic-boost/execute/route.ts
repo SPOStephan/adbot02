@@ -11,6 +11,7 @@ import {
   forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
+import { refreshOrganicBoostCampaignStatusesFromMeta } from "@/lib/meta/organic-boost-status-refresh";
 import { syncMetaConnector } from "@/lib/meta/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -58,9 +59,15 @@ export async function POST(request: NextRequest) {
         error instanceof Error ? error.message : "marketing_sync_failed";
     }
 
-    // 2) Alle aktuellen PAUSED Beitrag-Push-Kampagnen mit Restlaufzeit reaktivieren.
+    // 2) Beitrag-Push-Status gezielt von Meta nachladen, dann Force-Reaktivierung.
+    const statusRefresh = await refreshOrganicBoostCampaignStatusesFromMeta({
+      platformAccountId: customer.platformAccountId,
+      userId: customer.userId,
+    });
+
     let hardCapForceResume: {
       outcome: string;
+      reason: string | null;
       created: number;
       existing: number;
       blocked: number;
@@ -68,7 +75,20 @@ export async function POST(request: NextRequest) {
       exposuresCleared: number;
       scheduleEnded: number;
       candidates: number;
+      linked: number;
+      activeLocal: number;
+      adsetPausedOnly: number;
+      targetsRepaired: number;
+      remainingUnder24h: number;
+      missingCurrent: number;
       error: string | null;
+      statusRefresh: {
+        requested: number;
+        refreshed: number;
+        paused: number;
+        active: number;
+        error: string | null;
+      };
     } | null = null;
     let hardCapStatus: {
       duePlans: number;
@@ -78,6 +98,14 @@ export async function POST(request: NextRequest) {
       lastOutcome: string | null;
       lastError: string | null;
     } | null = null;
+
+    const statusRefreshPayload = {
+      requested: statusRefresh.requested,
+      refreshed: statusRefresh.refreshed,
+      paused: statusRefresh.paused,
+      active: statusRefresh.active,
+      error: statusRefresh.error,
+    };
 
     try {
       const { data: accountRow } = await admin
@@ -99,6 +127,7 @@ export async function POST(request: NextRequest) {
         });
         hardCapForceResume = {
           outcome: forceResume.outcome,
+          reason: forceResume.reason,
           created: forceResume.created,
           existing: forceResume.existing,
           blocked: forceResume.blocked,
@@ -106,11 +135,19 @@ export async function POST(request: NextRequest) {
           exposuresCleared: forceResume.exposuresCleared,
           scheduleEnded: forceResume.scheduleEnded,
           candidates: forceResume.candidates,
+          linked: forceResume.linked,
+          activeLocal: forceResume.activeLocal,
+          adsetPausedOnly: forceResume.adsetPausedOnly,
+          targetsRepaired: forceResume.targetsRepaired,
+          remainingUnder24h: forceResume.remainingUnder24h,
+          missingCurrent: forceResume.missingCurrent,
           error: forceResume.error,
+          statusRefresh: statusRefreshPayload,
         };
       } else {
         hardCapForceResume = {
           outcome: "ERROR",
+          reason: "marketing_sync_required",
           created: 0,
           existing: 0,
           blocked: 0,
@@ -118,12 +155,20 @@ export async function POST(request: NextRequest) {
           exposuresCleared: 0,
           scheduleEnded: 0,
           candidates: 0,
+          linked: 0,
+          activeLocal: 0,
+          adsetPausedOnly: 0,
+          targetsRepaired: 0,
+          remainingUnder24h: 0,
+          missingCurrent: 0,
           error: "marketing_sync_required",
+          statusRefresh: statusRefreshPayload,
         };
       }
     } catch {
       hardCapForceResume = {
         outcome: "ERROR",
+        reason: "force_resume_exception",
         created: 0,
         existing: 0,
         blocked: 0,
@@ -131,7 +176,14 @@ export async function POST(request: NextRequest) {
         exposuresCleared: 0,
         scheduleEnded: 0,
         candidates: 0,
+        linked: 0,
+        activeLocal: 0,
+        adsetPausedOnly: 0,
+        targetsRepaired: 0,
+        remainingUnder24h: 0,
+        missingCurrent: 0,
         error: "force_resume_exception",
+        statusRefresh: statusRefreshPayload,
       };
     }
 

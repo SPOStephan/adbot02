@@ -1,5 +1,6 @@
 export type HardCapForceResumeNoticeInput = {
   outcome?: string;
+  reason?: string | null;
   created?: number;
   existing?: number;
   blocked?: number;
@@ -7,7 +8,20 @@ export type HardCapForceResumeNoticeInput = {
   exposuresCleared?: number;
   scheduleEnded?: number;
   candidates?: number;
+  linked?: number;
+  activeLocal?: number;
+  adsetPausedOnly?: number;
+  targetsRepaired?: number;
+  remainingUnder24h?: number;
+  missingCurrent?: number;
   error?: string | null;
+  statusRefresh?: {
+    requested?: number;
+    refreshed?: number;
+    paused?: number;
+    active?: number;
+    error?: string | null;
+  } | null;
 };
 
 export type HardCapStatusDrainNoticeInput = {
@@ -36,17 +50,56 @@ export function formatHardCapResumeNotice(
   const scheduleEnded = forceResume?.scheduleEnded ?? 0;
   const blocked = forceResume?.blocked ?? 0;
   const candidates = forceResume?.candidates ?? 0;
+  const linked = forceResume?.linked ?? 0;
+  const activeLocal = forceResume?.activeLocal ?? 0;
+  const adsetPausedOnly = forceResume?.adsetPausedOnly ?? 0;
+  const targetsRepaired = forceResume?.targetsRepaired ?? 0;
+  const remainingUnder24h = forceResume?.remainingUnder24h ?? 0;
+  const missingCurrent = forceResume?.missingCurrent ?? 0;
   const succeeded = drain?.succeeded ?? 0;
   const failed = drain?.failed ?? 0;
   const forceError = forceResume?.error?.trim();
   const drainError = drain?.lastError?.trim();
+  const outcome = (forceResume?.outcome ?? "").toUpperCase();
+  const reason = forceResume?.reason?.trim();
+  const refresh = forceResume?.statusRefresh;
 
-  if (candidates > 0 || created + existing + revived > 0 || succeeded > 0) {
+  if (refresh && (refresh.requested ?? 0) > 0) {
+    parts.push(
+      `Meta-Status nachgeladen: ${refresh.refreshed ?? 0}/${refresh.requested} Beitrag-Push` +
+        (typeof refresh.paused === "number"
+          ? ` (${refresh.paused} PAUSED bei Meta)`
+          : ""),
+    );
+    if (refresh.error) {
+      parts.push(`Status-Nachladen: ${refresh.error}`);
+    }
+  }
+
+  if (outcome === "BLOCKED" && reason) {
+    parts.push(`Reaktivierung blockiert (${reason})`);
+  } else if (candidates > 0 || created + existing + revived > 0 || succeeded > 0) {
     parts.push(
       `Reaktivierung: ${candidates} pausierte Beitrag-Push-Kampagne(n)` +
         (created + existing > 0 ? `, ${created + existing} geplant` : "") +
         (revived > 0 ? `, ${revived} erneut versucht` : "") +
-        (succeeded > 0 ? `, ${succeeded} an Meta geschrieben` : ""),
+        (succeeded > 0 ? `, ${succeeded} an Meta geschrieben` : "") +
+        (targetsRepaired > 0 ? `, ${targetsRepaired} Ziel(e) repariert` : ""),
+    );
+  } else if (linked > 0) {
+    parts.push(
+      `Reaktivierung: ${linked} Beitrag-Push gebunden, aber lokal keine PAUSED-Kampagne` +
+        (activeLocal > 0 ? ` (${activeLocal} lokal ACTIVE/nicht pausiert)` : "") +
+        (missingCurrent > 0
+          ? `, ${missingCurrent} ohne aktuellen Kampagnen-Stand`
+          : "") +
+        (adsetPausedOnly > 0
+          ? `, ${adsetPausedOnly} nur Ad-Set pausiert (Kampagne ACTIVE)`
+          : ""),
+    );
+  } else if (!forceError) {
+    parts.push(
+      "Reaktivierung: lokal keine pausierten Beitrag-Push-Kampagnen gefunden",
     );
   }
 
@@ -57,12 +110,15 @@ export function formatHardCapResumeNotice(
   } else if (
     blocked > 0 &&
     created + existing + revived === 0 &&
-    succeeded === 0
+    succeeded === 0 &&
+    candidates > 0
   ) {
     parts.push(`Reaktivierung: ${blocked} Kampagne(n) blockiert`);
-  } else if (candidates === 0 && !forceError) {
+  }
+
+  if (remainingUnder24h > 0) {
     parts.push(
-      "Reaktivierung: lokal keine pausierten Beitrag-Push-Kampagnen gefunden",
+      `${remainingUnder24h} mit Restlaufzeit unter 24h — Adbot sperrt das nicht, Reaktivierung wird trotzdem versucht`,
     );
   }
 
@@ -83,7 +139,11 @@ export function hardCapResumeNoticeKind(
   forceResume: HardCapForceResumeNoticeInput | null | undefined,
   drain: HardCapStatusDrainNoticeInput | null | undefined,
 ): HardCapResumeNoticeKind {
-  if (forceResume?.error || (drain?.failed ?? 0) > 0) {
+  if (
+    forceResume?.error ||
+    (forceResume?.outcome ?? "").toUpperCase() === "BLOCKED" ||
+    (drain?.failed ?? 0) > 0
+  ) {
     return "error";
   }
   if ((forceResume?.scheduleEnded ?? 0) > 0) {

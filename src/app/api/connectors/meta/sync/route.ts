@@ -117,6 +117,7 @@ export async function POST() {
   // Beitrag-Push campaigns (even over hard-cap), then drain to Meta.
   let hardCapForceResume: {
     outcome: string;
+    reason: string | null;
     created: number;
     existing: number;
     blocked: number;
@@ -124,6 +125,12 @@ export async function POST() {
     exposuresCleared: number;
     scheduleEnded: number;
     candidates: number;
+    linked: number;
+    activeLocal: number;
+    adsetPausedOnly: number;
+    targetsRepaired: number;
+    remainingUnder24h: number;
+    missingCurrent: number;
     error: string | null;
   } | null = null;
   let hardCapDrain: {
@@ -156,6 +163,7 @@ export async function POST() {
       });
       hardCapForceResume = {
         outcome: forceResume.outcome,
+        reason: forceResume.reason,
         created: forceResume.created,
         existing: forceResume.existing,
         blocked: forceResume.blocked,
@@ -163,12 +171,19 @@ export async function POST() {
         exposuresCleared: forceResume.exposuresCleared,
         scheduleEnded: forceResume.scheduleEnded,
         candidates: forceResume.candidates,
+        linked: forceResume.linked,
+        activeLocal: forceResume.activeLocal,
+        adsetPausedOnly: forceResume.adsetPausedOnly,
+        targetsRepaired: forceResume.targetsRepaired,
+        remainingUnder24h: forceResume.remainingUnder24h,
+        missingCurrent: forceResume.missingCurrent,
         error: forceResume.error,
       };
     }
   } catch {
     hardCapForceResume = {
       outcome: "ERROR",
+      reason: "force_resume_exception",
       created: 0,
       existing: 0,
       blocked: 0,
@@ -176,6 +191,12 @@ export async function POST() {
       exposuresCleared: 0,
       scheduleEnded: 0,
       candidates: 0,
+      linked: 0,
+      activeLocal: 0,
+      adsetPausedOnly: 0,
+      targetsRepaired: 0,
+      remainingUnder24h: 0,
+      missingCurrent: 0,
       error: "force_resume_exception",
     };
   }

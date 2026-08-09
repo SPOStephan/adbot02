@@ -25,26 +25,46 @@ export type OrganicBoostHardCapForceResumeResult = {
   exposuresCleared: number;
   scheduleEnded: number;
   candidates: number;
+  linked: number;
+  activeLocal: number;
+  adsetPausedOnly: number;
+  targetsRepaired: number;
+  remainingUnder24h: number;
+  missingCurrent: number;
   error: string | null;
 };
+
+function emptyForceResume(
+  outcome: string,
+  error: string | null,
+  reason: string | null = null,
+): OrganicBoostHardCapForceResumeResult {
+  return {
+    outcome,
+    reason,
+    created: 0,
+    existing: 0,
+    blocked: 0,
+    revived: 0,
+    exposuresCleared: 0,
+    scheduleEnded: 0,
+    candidates: 0,
+    linked: 0,
+    activeLocal: 0,
+    adsetPausedOnly: 0,
+    targetsRepaired: 0,
+    remainingUnder24h: 0,
+    missingCurrent: 0,
+    error,
+  };
+}
 
 function parseForceResumeRow(
   data: unknown,
   errorMessage: string | null,
 ): OrganicBoostHardCapForceResumeResult {
   if (errorMessage) {
-    return {
-      outcome: "ERROR",
-      reason: null,
-      created: 0,
-      existing: 0,
-      blocked: 0,
-      revived: 0,
-      exposuresCleared: 0,
-      scheduleEnded: 0,
-      candidates: 0,
-      error: errorMessage,
-    };
+    return emptyForceResume("ERROR", errorMessage);
   }
 
   const row =
@@ -55,23 +75,15 @@ function parseForceResumeRow(
         : null;
 
   if (!row) {
-    return {
-      outcome: "ERROR",
-      reason: "empty_result",
-      created: 0,
-      existing: 0,
-      blocked: 0,
-      revived: 0,
-      exposuresCleared: 0,
-      scheduleEnded: 0,
-      candidates: 0,
-      error: "force_resume_result_empty",
-    };
+    return emptyForceResume("ERROR", "force_resume_result_empty", "empty_result");
   }
 
+  const outcome = typeof row.outcome === "string" ? row.outcome : "OK";
+  const reason = typeof row.reason === "string" ? row.reason : null;
+
   return {
-    outcome: typeof row.outcome === "string" ? row.outcome : "OK",
-    reason: typeof row.reason === "string" ? row.reason : null,
+    outcome,
+    reason,
     created: Number(row.created ?? 0) || 0,
     existing: Number(row.existing ?? 0) || 0,
     blocked: Number(row.blocked ?? 0) || 0,
@@ -79,7 +91,16 @@ function parseForceResumeRow(
     exposuresCleared: Number(row.exposures_cleared ?? 0) || 0,
     scheduleEnded: Number(row.schedule_ended ?? 0) || 0,
     candidates: Number(row.candidates ?? 0) || 0,
-    error: null,
+    linked: Number(row.linked ?? 0) || 0,
+    activeLocal: Number(row.active_local ?? 0) || 0,
+    adsetPausedOnly: Number(row.adset_paused_only ?? 0) || 0,
+    targetsRepaired: Number(row.targets_repaired ?? 0) || 0,
+    remainingUnder24h: Number(row.remaining_under_24h ?? 0) || 0,
+    missingCurrent: Number(row.missing_current ?? 0) || 0,
+    error:
+      outcome.toUpperCase() === "BLOCKED" || outcome.toUpperCase() === "ERROR"
+        ? reason || "force_reactivate_blocked"
+        : null,
   };
 }
 
