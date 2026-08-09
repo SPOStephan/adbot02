@@ -19,6 +19,7 @@ import {
   Play,
   Plus,
   Images,
+  Rocket,
   Scale,
   Search,
   Settings,
@@ -125,6 +126,7 @@ const baseNavigation = [
   },
   { label: "Zielgruppen", icon: Target, href: null, active: false, external: false },
   { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center", active: false, external: false },
+  { label: "Traffic-Launch", icon: Rocket, href: "#traffic-launch", active: false, external: false },
 ];
 
 const adminNavigationItems = [
@@ -158,6 +160,7 @@ type DashboardPageProps = {
     meta_missing_scopes?: string | string[];
     meta_unexpected_scopes?: string | string[];
     meta_callback_stage?: string | string[];
+    assetId?: string | string[];
   }>;
 };
 
@@ -801,7 +804,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }),
         supabase
           .from("mutation_plans")
-          .select("id,status,created_at,payload_hash,planned_payload,source_rule_key")
+          .select(
+            "id,status,created_at,payload_hash,planned_payload,source_rule_key,not_before",
+          )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .eq("action_type", "LAUNCH_CHAIN")
@@ -1488,6 +1493,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       id: String(plan.id),
       status: String(plan.status),
       createdAt: String(plan.created_at),
+      notBefore:
+        typeof plan.not_before === "string" ? plan.not_before : null,
       payloadHash:
         typeof plan.payload_hash === "string" &&
         /^[0-9a-f]{64}$/.test(plan.payload_hash)
@@ -2095,6 +2102,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               currency={marketingCurrency}
               killSwitch={killSwitchView}
               onboarding={onboardingData}
+              initialTrafficAssetId={
+                typeof query.assetId === "string" &&
+                /^[0-9a-f-]{36}$/i.test(query.assetId)
+                  ? query.assetId
+                  : null
+              }
               policy={policyView}
               readiness={{
                 writeScopeGranted,
