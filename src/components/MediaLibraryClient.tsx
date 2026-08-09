@@ -30,7 +30,9 @@ export function MediaLibraryClient({
   metaConnected: boolean;
 }) {
   const router = useRouter();
-  const [brandProfileId, setBrandProfileId] = useState(brandProfiles[0]?.id ?? "");
+  const [brandProfileId, setBrandProfileId] = useState(
+    brandProfiles[0]?.id ?? "",
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -43,7 +45,9 @@ export function MediaLibraryClient({
     try {
       const body = new FormData();
       body.set("file", file);
-      body.set("brandProfileId", brandProfileId);
+      if (brandProfileId) {
+        body.set("brandProfileId", brandProfileId);
+      }
       const response = await fetch("/api/meta/automation/asset-upload", {
         method: "POST",
         body,
@@ -56,7 +60,9 @@ export function MediaLibraryClient({
       if (!response.ok || !json.ok) {
         throw new Error(json.error || "Upload fehlgeschlagen.");
       }
-      setMessage("Creative in die Media Library übernommen und für Meta-Launch bereit.");
+      setMessage(
+        "Creative in deine Media Library übernommen. Du kannst es später für Meta-Launches nutzen.",
+      );
       router.refresh();
     } catch (uploadError) {
       setError(
@@ -77,35 +83,38 @@ export function MediaLibraryClient({
             <Upload className="size-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-extrabold tracking-tight">Creative hochladen</h2>
+            <h2 className="text-lg font-extrabold tracking-tight">
+              Creative hochladen
+            </h2>
             <p className="mt-1 text-sm text-slate-600">
-              PNG/JPEG (256–4096px). Das Asset landet in deiner Media Library und kann über
-              Active Launch bei Meta verwendet werden.
+              PNG/JPEG (256–4096px). Einfach hochladen — ein Brand-Profil ist dafür
+              nicht nötig. Später kann Adbot aus deinen Creatives z.&nbsp;B.
+              Farbvorschläge ableiten; für Active Launch reicht die Zuordnung zum
+              Profil zum Launch-Zeitpunkt.
             </p>
             {!metaConnected ? (
               <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 Bitte zuerst ein Meta-Werbekonto verbinden.
               </p>
-            ) : !brandProfiles.length ? (
-              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                Aktives Brand-Profil erforderlich (Onboarding).
-              </p>
             ) : (
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-                <label className="grid flex-1 gap-1 text-sm font-medium">
-                  Brand-Profil
-                  <select
-                    className="h-10 rounded-lg border border-slate-200 px-3"
-                    onChange={event => setBrandProfileId(event.target.value)}
-                    value={brandProfileId}
-                  >
-                    {brandProfiles.map(profile => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.brandName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {brandProfiles.length ? (
+                  <label className="grid flex-1 gap-1 text-sm font-medium">
+                    Brand-Profil (optional)
+                    <select
+                      className="h-10 rounded-lg border border-slate-200 px-3"
+                      onChange={event => setBrandProfileId(event.target.value)}
+                      value={brandProfileId}
+                    >
+                      <option value="">Ohne Profil speichern</option>
+                      {brandProfiles.map(profile => (
+                        <option key={profile.id} value={profile.id}>
+                          {profile.brandName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">
                   {pending ? (
                     <Loader2 className="size-4 animate-spin" />
@@ -143,7 +152,8 @@ export function MediaLibraryClient({
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-extrabold tracking-tight">Deine Creatives</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Bereit für Meta-Launch im Automation Control Center.
+          In der Library gespeichert — bereit für Meta-Launch, sobald Autonomie und
+          Brand-Profil im Control Center stehen.
         </p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {assets.map(asset => (
