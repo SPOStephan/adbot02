@@ -518,7 +518,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       const hardCapDrain = await drainHardCapStatusExecutionsForAccount({
         userId: user.id,
         platformAccountId: metaAccount.id,
-        maxRuns: 8,
+        maxRuns: 20,
       });
       if (
         hardCapDrain.lastError ||
