@@ -31,6 +31,7 @@ async function upsertCampaignRow(input: {
   userId: string;
   platformAccountId: string;
   campaign: MetaCampaign;
+  marketingSyncId?: string | null;
 }): Promise<{ localId: string | null; wrote: boolean }> {
   const now = new Date().toISOString();
   const toMinor = (value: string | null): number | null => {
@@ -56,6 +57,9 @@ async function upsertCampaignRow(input: {
     stop_time: input.campaign.stopTime,
     is_current: true,
     updated_at: now,
+    ...(input.marketingSyncId
+      ? { last_seen_sync_id: input.marketingSyncId }
+      : {}),
   };
 
   const { data: updated, error: updateError } = await input.admin
@@ -72,6 +76,9 @@ async function upsertCampaignRow(input: {
       name: patch.name,
       is_current: true,
       updated_at: now,
+      ...(input.marketingSyncId
+        ? { last_seen_sync_id: input.marketingSyncId }
+        : {}),
     })
     .eq("user_id", input.userId)
     .eq("platform_account_id", input.platformAccountId)
@@ -226,7 +233,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
   const { data: account, error: accountError } = await admin
     .from("platform_accounts")
     .select(
-      "access_token_encrypted, token_iv, token_auth_tag, expires_at, data_access_expires_at",
+      "access_token_encrypted, token_iv, token_auth_tag, expires_at, data_access_expires_at, marketing_sync_id",
     )
     .eq("id", input.platformAccountId)
     .eq("user_id", input.userId)
@@ -293,6 +300,10 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
         userId: input.userId,
         platformAccountId: input.platformAccountId,
         campaign,
+        marketingSyncId:
+          typeof account.marketing_sync_id === "string"
+            ? account.marketing_sync_id
+            : null,
       });
 
       if (wrote.wrote) {
