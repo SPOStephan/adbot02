@@ -83,14 +83,20 @@ export function attachSpaFallback(app: Express) {
       next();
       return;
     }
-    if (!fs.existsSync(indexPath)) {
-      res
-        .status(500)
-        .type("text/plain")
-        .send("Frontend-Build fehlt (public/index.html). Bitte pnpm build ausführen.");
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
       return;
     }
-    res.sendFile(indexPath);
+    // On Vercel the CDN serves /index.html from public/; keep the SPA bootable
+    // even if the file is not inside the function bundle.
+    if (process.env.VERCEL) {
+      res.redirect(302, "/index.html");
+      return;
+    }
+    res
+      .status(500)
+      .type("text/plain")
+      .send("Frontend-Build fehlt (public/index.html). Bitte pnpm build ausführen.");
   });
 }
 
