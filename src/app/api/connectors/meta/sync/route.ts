@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { loadContentSyncSnapshot } from "@/lib/meta/content-sync-snapshot";
 import {
   drainHardCapStatusExecutionsForAccount,
   forceReactivatePausedOrganicBoostCampaigns,
@@ -58,7 +59,7 @@ async function authenticatedConnector() {
 }
 
 export async function GET() {
-  const { user, connector } = await authenticatedConnector();
+  const { supabase, user, connector } = await authenticatedConnector();
 
   if (!user) {
     return json({ ok: false, error: "unauthorized" }, 401);
@@ -68,18 +69,28 @@ export async function GET() {
     return json({ ok: true, connected: false });
   }
 
+  const snapshot = await loadContentSyncSnapshot({
+    supabase,
+    userId: user.id,
+    platformAccountId: connector.id,
+    connector,
+  });
+
   return json({
     ok: true,
     connected: true,
-    status: connector.sync_status,
-    errorCode: connector.sync_error_code,
-    lastSyncStartedAt: connector.last_sync_started_at,
-    lastSyncedAt: connector.last_synced_at,
-    nextSyncAt: connector.next_sync_at,
+    status: snapshot.status,
+    errorCode: snapshot.errorCode,
+    lastSyncStartedAt: snapshot.lastSyncStartedAt,
+    lastSyncedAt: snapshot.lastSyncedAt,
+    nextSyncAt: snapshot.nextSyncAt,
+    displayNextSyncAt: snapshot.displayNextSyncAt,
     dataAccessExpiresAt: connector.data_access_expires_at,
-    baselineCompleted: Boolean(connector.baseline_completed_at),
-    seenCount: connector.last_sync_seen_count ?? 0,
-    newCount: connector.last_sync_new_count ?? 0,
+    baselineCompleted: snapshot.baselineCompleted,
+    seenCount: snapshot.seenCount,
+    newCount: snapshot.newCount,
+    storedCandidateCount: snapshot.storedCandidateCount,
+    candidates: snapshot.candidates,
   });
 }
 
