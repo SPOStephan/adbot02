@@ -14,6 +14,84 @@ type Props = {
   label?: string;
 };
 
+type CandidateDiagnosis = {
+  isNewCount?: number;
+  alreadyLinkedCount?: number;
+  sourceFilteredOut?: number;
+  assetFilteredOut?: number;
+  skipOverrideCount?: number;
+  eligibleCount?: number;
+  sourceFilter?: string | null;
+  assetScope?: string | null;
+  boostEnabled?: boolean | null;
+  autoBoostNewCandidates?: boolean | null;
+  boostMode?: string | null;
+};
+
+function noPlanReason(input: {
+  status: string;
+  error: string | null;
+  considered: number;
+  failed: number;
+  skipped: number;
+  diagnosis: CandidateDiagnosis | null;
+}): string {
+  const d = input.diagnosis;
+  const bits: string[] = [];
+  if (d) {
+    bits.push(`is_new=${d.isNewCount ?? "?"}`);
+    bits.push(`bereits_verknüpft=${d.alreadyLinkedCount ?? "?"}`);
+    bits.push(`passend=${d.eligibleCount ?? "?"}`);
+    if ((d.sourceFilteredOut ?? 0) > 0) {
+      bits.push(`quellenfilter_raus=${d.sourceFilteredOut}`);
+    }
+    if ((d.assetFilteredOut ?? 0) > 0) {
+      bits.push(`asset_raus=${d.assetFilteredOut}`);
+    }
+    if ((d.skipOverrideCount ?? 0) > 0) {
+      bits.push(`skip=${d.skipOverrideCount}`);
+    }
+    if (d.sourceFilter) bits.push(`quellenfilter=${d.sourceFilter}`);
+    if (d.assetScope) bits.push(`assets=${d.assetScope}`);
+    if (d.boostMode) bits.push(`modus=${d.boostMode}`);
+    if (d.boostEnabled === false) bits.push("boost=aus");
+    if (d.autoBoostNewCandidates === false) bits.push("auto_boost=aus");
+  }
+  bits.push(`geprüft=${input.considered}`);
+  bits.push(`fehlgeschlagen=${input.failed}`);
+  bits.push(`übersprungen=${input.skipped}`);
+
+  const detail = bits.join(", ");
+  if (input.status === "DISABLED" || d?.boostEnabled === false) {
+    return `Kein Plan angelegt: Beitrag-Push nicht aktiv [${detail}]`;
+  }
+  if (d?.autoBoostNewCandidates === false) {
+    return `Kein Plan angelegt: Auto-Boost für neue Beiträge ist aus [${detail}]`;
+  }
+  if (input.error) {
+    return `Kein Plan angelegt (${input.status}): ${input.error} [${detail}]`;
+  }
+  if ((d?.eligibleCount ?? 0) === 0 || input.status === "NO_ELIGIBLE_CANDIDATES") {
+    if ((d?.sourceFilteredOut ?? 0) > 0) {
+      return `Kein Plan angelegt: Quellenfilter schließt die neuen Beiträge aus [${detail}]`;
+    }
+    if ((d?.assetFilteredOut ?? 0) > 0) {
+      return `Kein Plan angelegt: Asset-Auswahl schließt die neuen Beiträge aus [${detail}]`;
+    }
+    if ((d?.alreadyLinkedCount ?? 0) > 0 && (d?.isNewCount ?? 0) > 0) {
+      return `Kein Plan angelegt: neue Beiträge sind bereits mit einer Kampagne verknüpft [${detail}]`;
+    }
+    return `Kein Plan angelegt: keine passenden Beitragskandidaten für die aktuellen Filter/Einstellungen [${detail}]`;
+  }
+  if (input.status === "MATERIALIZE_FAILED" || input.failed > 0) {
+    return `Kein Plan angelegt: Materialize fehlgeschlagen (${input.status}) [${detail}]`;
+  }
+  if (input.considered === 0) {
+    return `Kein Plan angelegt: Planner hat keine Kandidaten geprüft (${input.status}) [${detail}]`;
+  }
+  return `Kein Plan angelegt (Status ${input.status}) [${detail}]`;
+}
+
 export function OrganicBoostPlanButton({
   label = "Manuell erneut prüfen",
 }: Props) {
@@ -27,6 +105,7 @@ export function OrganicBoostPlanButton({
     try {
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v1");
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v2");
+      window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v3");
       const planResponse = await fetch(
         "/api/meta/automation/organic-boost/plan",
         {
@@ -55,6 +134,9 @@ export function OrganicBoostPlanButton({
           executorFailed?: number;
           executorLastOutcome?: string | null;
           executorLastError?: string | null;
+          prepareDetail?: string | null;
+          duePlans?: number;
+          candidateDiagnosis?: CandidateDiagnosis | null;
         };
       };
       if (!planResponse.ok || planBody.ok !== true) {
@@ -120,13 +202,18 @@ export function OrganicBoostPlanButton({
         executeBody.drain?.failed ??
         planBody.organicBoost?.executorFailed ??
         0;
+      const duePlans =
+        executeBody.drain?.duePlans ?? planBody.organicBoost?.duePlans ?? 0;
       const drainError =
         executeBody.drain?.lastError?.trim() ||
         planBody.organicBoost?.executorLastError?.trim() ||
         null;
-      const prepare = executeBody.drain?.prepareDetail?.trim();
       const status = planBody.organicBoost?.status ?? "unbekannt";
-      const error = planBody.organicBoost?.lastError?.trim();
+      const error = planBody.organicBoost?.lastError?.trim() || null;
+      const considered = planBody.organicBoost?.candidatesConsidered ?? 0;
+      const failed = planBody.organicBoost?.candidatesFailed ?? 0;
+      const skipped = planBody.organicBoost?.candidatesSkipped ?? 0;
+      const diagnosis = planBody.organicBoost?.candidateDiagnosis ?? null;
 
       const sync = executeBody.marketingSync;
       const syncOk =
@@ -153,7 +240,7 @@ export function OrganicBoostPlanButton({
         syncNotice = `Meta-Kennzahlen aktualisiert (Abruf: ${sync?.insightsCount ?? 0} Insights, Summe ${spendLabel}${untilLabel ? `, Fenster bis ${untilLabel}` : ""}).`;
         if (Number.isFinite(spend) && spend <= 0) {
           syncNotice +=
-            " Noch keine positive Spend-Zeile von Meta — Ampel nutzt zusätzlich Kampagnen-Insights und Budgetrest. In 1–2 Min. erneut prüfen.";
+            " Noch keine positive Spend-Zeile von Meta — Ampel nutzt zusätzlich Kampagnen-Insights und Budgetrest.";
         }
       } else if (sync?.blockedReason === "manual_cooldown" || sync?.retryAt) {
         syncNotice =
@@ -171,20 +258,29 @@ export function OrganicBoostPlanButton({
         drainError === "claim_idle_with_due_plans" ||
         drainError === "lease_busy_with_due_plans";
 
-      const launchNotice =
-        written > 0
-          ? `Neue Bewerbung: ${written} Plan/Pläne an Meta gesendet.`
-          : execFailed > 0
-            ? `Meta hat neue Bewerbung abgelehnt (${executeBody.drain?.lastOutcome ?? "failed"}${drainError ? `: ${drainError}` : ""}).`
-            : idleOnly
-              ? null
-              : drainError && !idleOnly
-                ? `Kein Meta-Kontakt für neue Bewerbung (${drainError}${prepare ? ` · ${prepare}` : ""}).`
-                : created > 0
-                  ? `Neue Bewerbung bereit — kein neuer Versand nötig.${prepare ? ` (${prepare})` : ""}`
-                  : error
-                    ? `Kein neuer Plan (${status}): ${error}`
-                    : null;
+      let launchNotice: string | null = null;
+      if (written > 0) {
+        launchNotice = `Neue Bewerbung: ${written} Plan/Pläne an Meta gesendet.`;
+      } else if (execFailed > 0) {
+        launchNotice = `Meta hat neue Bewerbung abgelehnt (${executeBody.drain?.lastOutcome ?? "failed"}${drainError ? `: ${drainError}` : ""}).`;
+      } else if (created === 0 && duePlans === 0) {
+        // Autonomie/Lease OK but no plan exists — not a Meta contact failure.
+        launchNotice = noPlanReason({
+          status,
+          error,
+          considered,
+          failed,
+          skipped,
+          diagnosis,
+        });
+      } else if (drainError && !idleOnly && duePlans > 0) {
+        launchNotice = `Kein Meta-Kontakt trotz fälliger Pläne (${drainError}).`;
+      } else if (created > 0 && duePlans === 0) {
+        launchNotice =
+          "Plan vorhanden, aber nicht fällig/bereits verarbeitet — kein neuer Meta-Versand nötig.";
+      } else if (idleOnly) {
+        launchNotice = null;
+      }
 
       const parts = [resumeNotice, launchNotice, syncNotice].filter(
         (part): part is string => Boolean(part),

@@ -246,9 +246,8 @@ async function reviveAndDrainOrganicBoost(input: {
       executorSucceeded = drain.succeeded;
       executorFailed = drain.failed;
       executorLastOutcome = drain.lastOutcome;
-      executorLastError =
-        drain.lastError ??
-        (drain.prepareDetail ? `prepare: ${drain.prepareDetail}` : null);
+      // prepareDetail with due=0 is diagnostic, not a Meta write failure.
+      executorLastError = drain.lastError;
     } catch (error) {
       executorLastError =
         error instanceof Error
@@ -1287,13 +1286,197 @@ export async function saveCustomerBoostSettings(
   return { settingsId: data, organicBoost };
 }
 
+export type OrganicBoostCandidateDiagnosis = {
+  isNewCount: number;
+  /** is_new candidates that already have a boost link (not all-account links). */
+  alreadyLinkedCount: number;
+  sourceFilteredOut: number;
+  assetFilteredOut: number;
+  skipOverrideCount: number;
+  /** Matches planner eligibility before materialize (unlinked + filters). */
+  eligibleCount: number;
+  sourceFilter: string | null;
+  assetScope: string | null;
+  boostEnabled: boolean | null;
+  autoBoostNewCandidates: boolean | null;
+  boostMode: string | null;
+};
+
 export type PlanCustomerOrganicBoostResult = MetaOrganicBoostPlannerResult & {
   executorRuns: number;
   executorSucceeded: number;
   executorFailed: number;
   executorLastOutcome: string | null;
   executorLastError: string | null;
+  prepareDetail: string | null;
+  duePlans: number;
+  candidateDiagnosis: OrganicBoostCandidateDiagnosis | null;
 };
+
+async function diagnoseOrganicBoostCandidates(input: {
+  userId: string;
+  platformAccountId: string;
+}): Promise<OrganicBoostCandidateDiagnosis> {
+  const admin = createAdminClient();
+  const [{ data: settings }, { data: candidates }] = await Promise.all([
+    admin
+      .from("meta_boost_settings")
+      .select(
+        "enabled,auto_boost_new_candidates,boost_mode,require_manual_approval,source_filter,asset_scope",
+      )
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("is_current", true)
+      .maybeSingle(),
+    admin
+      .from("meta_content_candidates")
+      .select("id,source,meta_asset_id")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("is_new", true)
+      .limit(100),
+  ]);
+
+  const rows = Array.isArray(candidates) ? candidates : [];
+  const candidateIds = rows
+    .map((row) => (typeof row.id === "string" ? row.id : null))
+    .filter((id): id is string => Boolean(id));
+
+  const linkedIds = new Set<string>();
+  const skipOverrideIds = new Set<string>();
+  const includedAssetIds = new Set<string>();
+
+  if (candidateIds.length > 0) {
+    const [{ data: links }, { data: overrides }] = await Promise.all([
+      admin
+        .from("meta_organic_boost_links")
+        .select("content_candidate_id")
+        .eq("user_id", input.userId)
+        .eq("platform_account_id", input.platformAccountId)
+        .in("content_candidate_id", candidateIds),
+      admin
+        .from("meta_content_boost_overrides")
+        .select("content_candidate_id,mode")
+        .eq("platform_account_id", input.platformAccountId)
+        .in("content_candidate_id", candidateIds),
+    ]);
+
+    for (const link of links ?? []) {
+      if (typeof link.content_candidate_id === "string") {
+        linkedIds.add(link.content_candidate_id);
+      }
+    }
+    for (const override of overrides ?? []) {
+      if (
+        override.mode === "SKIP" &&
+        typeof override.content_candidate_id === "string"
+      ) {
+        skipOverrideIds.add(override.content_candidate_id);
+      }
+    }
+  }
+
+  const assetScope =
+    typeof settings?.asset_scope === "string" ? settings.asset_scope : null;
+  const sourceFilter =
+    typeof settings?.source_filter === "string"
+      ? settings.source_filter
+      : null;
+
+  if (assetScope === "SELECTED") {
+    const assetIds = [
+      ...new Set(
+        rows
+          .map((row) =>
+            typeof row.meta_asset_id === "string" ? row.meta_asset_id : null,
+          )
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (assetIds.length > 0) {
+      const { data: assetSettings } = await admin
+        .from("meta_boost_asset_settings")
+        .select("meta_asset_id,included")
+        .eq("user_id", input.userId)
+        .eq("platform_account_id", input.platformAccountId)
+        .in("meta_asset_id", assetIds);
+      for (const row of assetSettings ?? []) {
+        if (row.included === true && typeof row.meta_asset_id === "string") {
+          includedAssetIds.add(row.meta_asset_id);
+        }
+      }
+    }
+  }
+
+  let alreadyLinkedCount = 0;
+  let sourceFilteredOut = 0;
+  let assetFilteredOut = 0;
+  let skipOverrideCount = 0;
+  let eligibleCount = 0;
+
+  for (const row of rows) {
+    const id = typeof row.id === "string" ? row.id : null;
+    if (!id) continue;
+    if (linkedIds.has(id)) {
+      alreadyLinkedCount += 1;
+      continue;
+    }
+    if (skipOverrideIds.has(id)) {
+      skipOverrideCount += 1;
+      continue;
+    }
+    const source = typeof row.source === "string" ? row.source : null;
+    if (
+      sourceFilter &&
+      sourceFilter !== "both" &&
+      source &&
+      source !== sourceFilter
+    ) {
+      sourceFilteredOut += 1;
+      continue;
+    }
+    if (assetScope === "SELECTED") {
+      const assetId =
+        typeof row.meta_asset_id === "string" ? row.meta_asset_id : null;
+      if (!assetId || !includedAssetIds.has(assetId)) {
+        assetFilteredOut += 1;
+        continue;
+      }
+    }
+    eligibleCount += 1;
+  }
+
+  const boostMode =
+    settings?.boost_mode === "AUTO" ||
+    settings?.boost_mode === "REVIEW" ||
+    settings?.boost_mode === "OFF"
+      ? String(settings.boost_mode)
+      : settings
+        ? Boolean(settings.require_manual_approval)
+          ? "REVIEW"
+          : Boolean(settings.enabled)
+            ? "AUTO"
+            : "OFF"
+        : null;
+
+  return {
+    isNewCount: rows.length,
+    alreadyLinkedCount,
+    sourceFilteredOut,
+    assetFilteredOut,
+    skipOverrideCount,
+    eligibleCount,
+    sourceFilter,
+    assetScope,
+    boostEnabled:
+      typeof settings?.enabled === "boolean" ? settings.enabled : null,
+    autoBoostNewCandidates:
+      typeof settings?.auto_boost_new_candidates === "boolean"
+        ? settings.auto_boost_new_candidates
+        : null,
+    boostMode,
+  };
+}
 
 export async function planCustomerOrganicBoost(
   customer: MetaCustomer,
@@ -1305,6 +1488,11 @@ export async function planCustomerOrganicBoost(
     ownerPrefix: "organic-boost-plan",
     maxRuns: 8,
   });
+
+  const candidateDiagnosis = await diagnoseOrganicBoostCandidates({
+    userId: customer.userId,
+    platformAccountId: customer.platformAccountId,
+  }).catch(() => null);
 
   if (ensured.skippedRecent) {
     return {
@@ -1321,6 +1509,9 @@ export async function planCustomerOrganicBoost(
       executorFailed: 0,
       executorLastOutcome: null,
       executorLastError: null,
+      prepareDetail: null,
+      duePlans: 0,
+      candidateDiagnosis,
     };
   }
 
@@ -1342,9 +1533,10 @@ export async function planCustomerOrganicBoost(
     executorSucceeded: drain?.succeeded ?? 0,
     executorFailed: drain?.failed ?? 0,
     executorLastOutcome: drain?.lastOutcome ?? null,
-    executorLastError:
-      drain?.lastError ??
-      (drain?.prepareDetail ? `prepare: ${drain.prepareDetail}` : null),
+    executorLastError: drain?.lastError ?? null,
+    prepareDetail: drain?.prepareDetail ?? null,
+    duePlans: drain?.duePlans ?? 0,
+    candidateDiagnosis,
   };
 }
 
