@@ -3,8 +3,20 @@
 Arbeitskopie des Funnel-Builders im Adbot-Monorepo (`apps/adbot-funnel`).
 
 - Quelle ursprünglich: `SPOStephan/social-recruiting-funnel` @ `598f6e1`
-- Separates Deploy-Repo optional: `SPOStephan/adbot-funnel`
+- Separates Deploy-Repo (Vercel): `SPOStephan/adbot-funnel`
 - **Manus entfernt:** Admin-Login per E-Mail/Passwort (JWT), Storage über Supabase
+- Spiegelung: Workflow `.github/workflows/sync-adbot-funnel.yml` pusht `apps/adbot-funnel` → `adbot-funnel`
+
+## Spiegel-Repo einmalig freischalten
+
+1. GitHub → **Settings → Developer settings → Personal access tokens**
+   - Fine-grained: nur Repo `adbot-funnel`, Permission **Contents: Read and write**
+   - oder Classic: Scope **`repo`**
+2. In **`adbot02`** → Settings → Secrets and variables → Actions  
+   Secret-Name: **`ADBOT_FUNNEL_SYNC_TOKEN`** → Token einfügen
+3. Actions → **Sync adbot-funnel mirror** → **Run workflow** (erster Sync)
+4. Danach läuft der Sync automatisch bei Änderungen unter `apps/adbot-funnel/**` auf `main`
+5. Vercel (Projekt an `adbot-funnel`) redeployt nach dem Push
 
 ## Erforderliche Env
 
