@@ -1363,6 +1363,24 @@ export async function planCustomerOrganicBoost(
     maxRuns: 8,
   });
 
+  if (ensured.skippedRecent) {
+    return {
+      status: "PLANNED",
+      plansCreated: 0,
+      plansExisting: 0,
+      candidatesSkipped: 0,
+      candidatesFailed: 0,
+      candidatesConsidered: 0,
+      lastError: null,
+      pendingPlans: 0,
+      executorRuns: 0,
+      executorSucceeded: 0,
+      executorFailed: 0,
+      executorLastOutcome: null,
+      executorLastError: null,
+    };
+  }
+
   const planned = ensured.planner ?? {
     status: "PLANNER_RPC_FAILED",
     plansCreated: 0,

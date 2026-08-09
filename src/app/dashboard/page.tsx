@@ -83,6 +83,7 @@ import {
 } from "@/lib/meta/hard-cap-status-execute";
 import { planAndDrainOrganicBoostForAccount } from "@/lib/meta/organic-boost-ensure";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createFreebieSsoEntryPath, createFunnelSsoEntryPath } from "@/lib/site-urls";
 
@@ -453,24 +454,45 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const writeScopeGranted =
     Array.isArray(metaAccount?.meta_scopes) &&
     metaAccount.meta_scopes.includes("ads_management");
-  // Dashboard load: plan is_new Beitrag-Push candidates AND drain Meta writes
-  // immediately so recognized posts appear in the overview without waiting on
-  // the client AutoPlanner island or the minutely cron.
+  // Dashboard load: plan+drain once, then cooldown so LiveRefresh polls do not
+  // re-enter Meta WRITE every 15s (lease fights + endless "Aktualisiert…").
   if (metaConnected && metaAccount && writeScopeGranted) {
+    // Clear sticky lease banners from a prior parallel Abruf/Drain.
+    const stickyLease =
+      metaAccount.marketing_sync_error_code === "marketing_operation_locked" ||
+      metaAccount.marketing_sync_error_code === "marketing_operation_lease_failed";
+    if (stickyLease && metaAccount.marketing_sync_status === "success") {
+      try {
+        await createAdminClient()
+          .from("platform_accounts")
+          .update({
+            marketing_sync_error_code: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", metaAccount.id)
+          .eq("user_id", user.id);
+        metaAccount.marketing_sync_error_code = null;
+      } catch {
+        // Non-fatal display cleanup.
+      }
+    }
+
     try {
       const ensured = await planAndDrainOrganicBoostForAccount({
         userId: user.id,
         platformAccountId: metaAccount.id,
         ownerPrefix: "organic-boost-dashboard",
-        maxRuns: 8,
+        maxRuns: 4,
+        skipIfRecentMs: 60_000,
       });
       const drain = ensured.drain;
       if (
-        ensured.planner?.lastError ||
-        (ensured.planner?.plansCreated ?? 0) > 0 ||
-        drain?.lastError ||
-        (drain?.runs ?? 0) > 0 ||
-        (drain?.duePlans ?? 0) > 0
+        !ensured.skippedRecent &&
+        (ensured.planner?.lastError ||
+          (ensured.planner?.plansCreated ?? 0) > 0 ||
+          drain?.lastError ||
+          (drain?.runs ?? 0) > 0 ||
+          (drain?.duePlans ?? 0) > 0)
       ) {
         console.error("organic_boost_dashboard_ensure", {
           platformAccountId: metaAccount.id,
