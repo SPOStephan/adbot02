@@ -18,6 +18,19 @@ Arbeitskopie des Funnel-Builders im Adbot-Monorepo (`apps/adbot-funnel`).
 4. Danach läuft der Sync automatisch bei Änderungen unter `apps/adbot-funnel/**` auf `main`
 5. Vercel (Projekt an `adbot-funnel`) redeployt nach dem Push
 
+## Vercel-Projekt (Deploy-Repo `adbot-funnel`)
+
+| Einstellung | Wert |
+|---|---|
+| Framework | **Other** oder **Express** |
+| Root Directory | `/` (Repo-Wurzel) |
+| Install Command | `pnpm install` |
+| Build Command | `pnpm build` |
+| Output Directory | **leer** (nicht `dist`) |
+| Entry | `server.ts` (`export default app`) |
+
+Wenn die URL Roh-JavaScript zeigt: Output Directory leeren und Redeploy.
+
 ## Erforderliche Env
 
 Siehe `.env.example`: `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SUPABASE_*`, optional Resend.

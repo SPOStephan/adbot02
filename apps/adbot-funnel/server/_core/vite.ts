@@ -29,14 +29,13 @@ export async function setupVite(app: Express, server: Server) {
         import.meta.dirname,
         "../..",
         "client",
-        "index.html"
+        "index.html",
       );
 
-      // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`
+        `src="/src/main.tsx?v=${nanoid()}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
@@ -47,21 +46,55 @@ export async function setupVite(app: Express, server: Server) {
   });
 }
 
-export function serveStatic(app: Express) {
-  const distPath =
-    process.env.NODE_ENV === "development"
-      ? path.resolve(import.meta.dirname, "../..", "dist", "public")
-      : path.resolve(import.meta.dirname, "public");
-  if (!fs.existsSync(distPath)) {
+export function resolvePublicDir() {
+  const candidates = [
+    path.resolve(process.cwd(), "public"),
+    path.resolve(process.cwd(), "dist", "public"),
+    path.resolve(import.meta.dirname, "../..", "dist", "public"),
+    path.resolve(import.meta.dirname, "public"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, "index.html"))) {
+      return candidate;
+    }
+  }
+
+  return candidates[0];
+}
+
+/** SPA fallback + local static serving. On Vercel, CDN serves /public; express.static is ignored. */
+export function attachSpaFallback(app: Express) {
+  const publicDir = resolvePublicDir();
+  const indexPath = path.join(publicDir, "index.html");
+
+  if (!fs.existsSync(indexPath)) {
     console.error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`
+      `[Frontend] Build fehlt: ${indexPath}. Bitte "pnpm build" ausführen.`,
     );
   }
 
-  app.use(express.static(distPath));
+  if (!process.env.VERCEL) {
+    app.use(express.static(publicDir));
+  }
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) {
+      next();
+      return;
+    }
+    if (!fs.existsSync(indexPath)) {
+      res
+        .status(500)
+        .type("text/plain")
+        .send("Frontend-Build fehlt (public/index.html). Bitte pnpm build ausführen.");
+      return;
+    }
+    res.sendFile(indexPath);
   });
+}
+
+/** @deprecated use attachSpaFallback */
+export function serveStatic(app: Express) {
+  attachSpaFallback(app);
 }
