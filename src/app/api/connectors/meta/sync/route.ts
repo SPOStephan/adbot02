@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { drainHardCapStatusExecutionsForAccount } from "@/lib/meta/hard-cap-status-execute";
 import { syncMetaConnector } from "@/lib/meta/sync";
 import { createClient } from "@/lib/supabase/server";
 
@@ -108,6 +109,41 @@ export async function POST() {
     );
   }
 
+  // After READ_SYNC lease release: push hard-cap ACTIVATE/SAFETY_PAUSE to Meta
+  // immediately so day-resume does not wait only on the minutely cron.
+  let hardCapDrain: {
+    duePlans: number;
+    runs: number;
+    succeeded: number;
+    failed: number;
+    lastOutcome: string | null;
+    lastError: string | null;
+  } | null = null;
+  try {
+    const drain = await drainHardCapStatusExecutionsForAccount({
+      platformAccountId: connector.id,
+      userId: user.id,
+      maxRuns: 8,
+    });
+    hardCapDrain = {
+      duePlans: drain.duePlans,
+      runs: drain.runs,
+      succeeded: drain.succeeded,
+      failed: drain.failed,
+      lastOutcome: drain.lastOutcome,
+      lastError: drain.lastError,
+    };
+  } catch {
+    hardCapDrain = {
+      duePlans: 0,
+      runs: 0,
+      succeeded: 0,
+      failed: 0,
+      lastOutcome: null,
+      lastError: "hard_cap_status_drain_exception",
+    };
+  }
+
   return json({
     ok: result.status === "success" || result.status === "partial",
     status: result.status,
@@ -126,5 +162,6 @@ export async function POST() {
       candidatesConsidered: result.organicBoostCandidatesConsidered,
       lastError: result.organicBoostLastError,
     },
+    hardCapStatus: hardCapDrain,
   });
 }

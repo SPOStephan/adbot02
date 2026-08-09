@@ -40,7 +40,7 @@ Eine Budgetänderung verwendet immer das aktuell synchronisierte Budget als Ausg
 | `cost_per_result_up_30pct` | Budget um 20 % senken | Aktuelle Empfehlung aus demselben Snapshot. |
 | `cost_per_result_down_15pct` | Budget um 10 % erhöhen | Je mindestens fünf Ergebnisse in beiden Siebentagesfenstern; Kosten je Ergebnis mindestens 15 % besser. |
 | Hard-Cap-Verletzung | Aktive Kampagnen pausieren | Sicherheitspfad über **Exposure** (`Tagesbudget × Flexfaktor`), nicht über beobachteten Spend. |
-| Neuer Werbekonto-Tag unter Cap | Zuvor per Hard-Cap `SAFETY_PAUSE`te MANAGED-Kampagnen wieder `ACTIVATE` | PAUSED Owner werden am neuen Tag nicht erneut in die SNAPSHOT-Exposure aufgenommen; Same-Day-Reserve bleibt erhalten. |
+| Neuer Werbekonto-Tag unter Cap | Zuvor per Hard-Cap `SAFETY_PAUSE`te MANAGED-Kampagnen wieder `ACTIVATE` (`safety_action`) | PAUSED Owner werden am neuen Tag nicht erneut in die SNAPSHOT-Exposure aufgenommen; Same-Day-Reserve bleibt erhalten. `mutation_plans_safety_type_check` erlaubt `safety_action` für `SAFETY_PAUSE` und `ACTIVATE`. |
 
 Jeder Budgetplan besitzt die vier ausführbaren Schritte `VALIDATE_REMOTE`, `UPDATE_BUDGET`, `READ_AFTER_WRITE` und `RECONCILE`. Ein Sicherheitspausenplan besitzt `VALIDATE_REMOTE`, `UPDATE_STATUS`, `READ_AFTER_WRITE` und `RECONCILE`. Planneroutput ist idempotent über Policy, Marketing-Snapshot, Target, Regel und Regelversion.
 

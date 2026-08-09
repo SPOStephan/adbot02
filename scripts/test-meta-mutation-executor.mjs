@@ -205,7 +205,8 @@ try {
   assert.match(executorRouteSource, /constantTimeEqual\(supplied, `Bearer \$\{cronSecret\}`\)/);
   assert.match(executorRouteSource, /export const maxDuration = 300/);
   assert.match(executorRouteSource, /processNextMetaMutation/);
-  assert.match(executorRouteSource, /processed: result\.processed \? 1 : 0/);
+  assert.match(executorRouteSource, /MAX_PLANS_PER_TICK = 8/);
+  assert.match(executorRouteSource, /processed \+= 1/);
   assert.doesNotMatch(executorRouteSource, /planId|executionId|platformAccountId|leaseToken/);
   assert.deepEqual(
     vercelConfig.crons.find((item) => item.path === "/api/cron/meta-executor"),

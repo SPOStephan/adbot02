@@ -119,6 +119,26 @@ try {
     /boost:campaign:%/,
   );
 
+  const hardCapActivateConstraintMigration = await readFile(
+    join(
+      projectRoot,
+      "supabase/migrations/20260809090000_meta_hard_cap_activate_safety_constraint.sql",
+    ),
+    "utf8",
+  );
+  assert.match(
+    hardCapActivateConstraintMigration,
+    /mutation_plans_safety_type_check/,
+  );
+  assert.match(
+    hardCapActivateConstraintMigration,
+    /action_type in \('SAFETY_PAUSE', 'ACTIVATE'\)/,
+  );
+  assert.match(
+    hardCapActivateConstraintMigration,
+    /queue_meta_hard_cap_resume_internal/,
+  );
+
   const sourcePath = join(projectRoot, "src/lib/meta/planner.ts");
   const source = (await readFile(sourcePath, "utf8"))
     .replace('import "server-only";', "")

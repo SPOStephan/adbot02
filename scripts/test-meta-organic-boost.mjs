@@ -1054,6 +1054,25 @@ assert.match(
   hardCapDayResumeMigration,
   /queue_meta_hard_cap_resume_internal/,
 );
+const hardCapActivateConstraintMigration = read(
+  "supabase/migrations/20260809090000_meta_hard_cap_activate_safety_constraint.sql",
+);
+assert.match(
+  hardCapActivateConstraintMigration,
+  /action_type in \('SAFETY_PAUSE', 'ACTIVATE'\)/,
+);
+assert.match(
+  read("src/lib/meta/hard-cap-status-execute.ts"),
+  /drainHardCapStatusExecutionsForAccount/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /drainHardCapStatusExecutionsForAccount/,
+);
+assert.match(
+  read("src/app/api/connectors/meta/sync/route.ts"),
+  /drainHardCapStatusExecutionsForAccount/,
+);
 assert.match(
   finalizeActiveNoStepMigration,
   /prepare_meta_organic_boost_write_now/,

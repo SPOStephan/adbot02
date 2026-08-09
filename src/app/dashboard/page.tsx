@@ -82,6 +82,7 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
+import { drainHardCapStatusExecutionsForAccount } from "@/lib/meta/hard-cap-status-execute";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
@@ -482,8 +483,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const writeScopeGranted =
     Array.isArray(metaAccount?.meta_scopes) &&
     metaAccount.meta_scopes.includes("ads_management");
-  // Dashboard load drains due Beitrag-Push plans so Ampel progress does not
-  // depend solely on the minutely cron (which can go silent).
+  // Dashboard load drains due Beitrag-Push + hard-cap status plans so Meta
+  // writes do not depend solely on the minutely cron (which can go silent).
   if (metaConnected && metaAccount && writeScopeGranted) {
     try {
       const drain = await drainOrganicBoostExecutionsForAccount({
@@ -508,6 +509,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       }
     } catch (error) {
       console.error("organic_boost_dashboard_drain_exception", {
+        platformAccountId: metaAccount.id,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+
+    try {
+      const hardCapDrain = await drainHardCapStatusExecutionsForAccount({
+        userId: user.id,
+        platformAccountId: metaAccount.id,
+        maxRuns: 8,
+      });
+      if (
+        hardCapDrain.lastError ||
+        hardCapDrain.runs > 0 ||
+        hardCapDrain.duePlans > 0
+      ) {
+        console.error("hard_cap_status_dashboard_drain", {
+          platformAccountId: metaAccount.id,
+          duePlans: hardCapDrain.duePlans,
+          runs: hardCapDrain.runs,
+          succeeded: hardCapDrain.succeeded,
+          failed: hardCapDrain.failed,
+          lastOutcome: hardCapDrain.lastOutcome,
+          lastError: hardCapDrain.lastError,
+          divertedToOtherAccount: hardCapDrain.divertedToOtherAccount,
+        });
+      }
+    } catch (error) {
+      console.error("hard_cap_status_dashboard_drain_exception", {
         platformAccountId: metaAccount.id,
         message: error instanceof Error ? error.message : "unknown",
       });
