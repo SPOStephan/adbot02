@@ -3,12 +3,10 @@ import fs from "fs";
 import path from "path";
 
 export function resolvePublicDir() {
+  // Use process.cwd() only — import.meta.dirname is empty in the CJS Vercel bundle.
   const candidates = [
     path.resolve(process.cwd(), "public"),
     path.resolve(process.cwd(), "dist", "public"),
-    path.resolve(import.meta.dirname, "../..", "dist", "public"),
-    path.resolve(import.meta.dirname, "../..", "public"),
-    path.resolve(import.meta.dirname, "public"),
   ];
 
   for (const candidate of candidates) {
