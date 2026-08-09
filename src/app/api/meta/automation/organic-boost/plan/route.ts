@@ -36,6 +36,9 @@ export async function POST(request: NextRequest) {
         executorFailed: organicBoost.executorFailed,
         executorLastOutcome: organicBoost.executorLastOutcome,
         executorLastError: organicBoost.executorLastError,
+        prepareDetail: organicBoost.prepareDetail,
+        duePlans: organicBoost.duePlans,
+        candidateDiagnosis: organicBoost.candidateDiagnosis,
       },
     });
   } catch (error) {
