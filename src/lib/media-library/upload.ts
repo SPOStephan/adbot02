@@ -4,10 +4,6 @@ import { getCreativeAssetStorageBucket } from "@/lib/creative-assets/env";
 import { inspectCreativeImage } from "@/lib/creative-assets/image";
 import { CreativeAssetProviderError } from "@/lib/creative-assets/types";
 import {
-  generateMetaCropsFromOriginal,
-  type MetaCropPresetKey,
-} from "@/lib/media-library/meta-crops";
-import {
   storeCustomerLibraryAsset,
   storeInspirationVaultAsset,
 } from "@/lib/media-library/storage";
@@ -18,7 +14,7 @@ export type UploadedLibraryAsset = {
   originalFilename: string;
   width: number;
   height: number;
-  role: "original" | MetaCropPresetKey;
+  role: string;
   label: string;
 };
 
@@ -147,68 +143,77 @@ export async function uploadCustomerLibraryImage(input: {
   ];
   let preferredLaunchAssetId = originalId;
 
+  // Crops are best-effort and dynamically loaded so a sharp/runtime failure
+  // never blocks the original full-size library upload.
   if (input.generateMetaCrops) {
-    const crops = await generateMetaCropsFromOriginal({
-      bytes: inspected.bytes,
-      mimeType: inspected.mimeType,
-    });
+    try {
+      const { generateMetaCropsFromOriginal } = await import(
+        "@/lib/media-library/meta-crops"
+      );
+      const crops = await generateMetaCropsFromOriginal({
+        bytes: inspected.bytes,
+        mimeType: inspected.mimeType,
+      });
 
-    for (const crop of crops) {
-      try {
-        const cropStored = await storeCustomerLibraryAsset({
-          userId: input.userId,
-          platformAccountId: input.platformAccountId,
-          bytes: crop.bytes,
-          sha256: crop.sha256,
-          mimeType: crop.mimeType,
-          bucket,
-        });
-        const base =
-          originalFilename.replace(/\.[^.]+$/, "").slice(0, 180) || "creative";
-        const cropName = `${base}__${crop.width}x${crop.height}.${
-          crop.mimeType === "image/png" ? "png" : "jpg"
-        }`;
-        const { data: cropId, error: cropError } = await admin.rpc(
-          "register_uploaded_brand_asset",
-          {
-            p_user_id: input.userId,
-            p_platform_account_id: input.platformAccountId,
-            p_brand_profile_id: brandProfileId,
-            p_storage_bucket: cropStored.bucket,
-            p_storage_path: cropStored.path,
-            p_original_filename: cropName,
-            p_sha256: crop.sha256,
-            p_mime_type: crop.mimeType,
-            p_byte_size: crop.byteSize,
-            p_width: crop.width,
-            p_height: crop.height,
-            p_metadata: {
-              contract_version: 1,
-              library: "customer",
-              source_kind: "meta_crop",
-              role: crop.key,
-              parent_asset_id: originalId,
-              brand_profile_optional: true,
+      for (const crop of crops) {
+        try {
+          const cropStored = await storeCustomerLibraryAsset({
+            userId: input.userId,
+            platformAccountId: input.platformAccountId,
+            bytes: crop.bytes,
+            sha256: crop.sha256,
+            mimeType: crop.mimeType,
+            bucket,
+          });
+          const base =
+            originalFilename.replace(/\.[^.]+$/, "").slice(0, 180) || "creative";
+          const cropName = `${base}__${crop.width}x${crop.height}.${
+            crop.mimeType === "image/png" ? "png" : "jpg"
+          }`;
+          const { data: cropId, error: cropError } = await admin.rpc(
+            "register_uploaded_brand_asset",
+            {
+              p_user_id: input.userId,
+              p_platform_account_id: input.platformAccountId,
+              p_brand_profile_id: brandProfileId,
+              p_storage_bucket: cropStored.bucket,
+              p_storage_path: cropStored.path,
+              p_original_filename: cropName,
+              p_sha256: crop.sha256,
+              p_mime_type: crop.mimeType,
+              p_byte_size: crop.byteSize,
+              p_width: crop.width,
+              p_height: crop.height,
+              p_metadata: {
+                contract_version: 1,
+                library: "customer",
+                source_kind: "meta_crop",
+                role: crop.key,
+                parent_asset_id: originalId,
+                brand_profile_optional: true,
+              },
             },
-          },
-        );
-        if (cropError || typeof cropId !== "string") {
-          continue;
+          );
+          if (cropError || typeof cropId !== "string") {
+            continue;
+          }
+          assets.push({
+            brandAssetId: cropId,
+            originalFilename: cropName,
+            width: crop.width,
+            height: crop.height,
+            role: crop.key,
+            label: crop.label,
+          });
+          if (crop.preferredForLaunch) {
+            preferredLaunchAssetId = cropId;
+          }
+        } catch {
+          // Individual crop registration is best-effort.
         }
-        assets.push({
-          brandAssetId: cropId,
-          originalFilename: cropName,
-          width: crop.width,
-          height: crop.height,
-          role: crop.key,
-          label: crop.label,
-        });
-        if (crop.preferredForLaunch) {
-          preferredLaunchAssetId = cropId;
-        }
-      } catch {
-        // Crop registration is best-effort; original remains.
       }
+    } catch (cropError) {
+      console.error("[media-library] meta crop generation skipped", cropError);
     }
   }
 

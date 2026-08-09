@@ -9,6 +9,8 @@ import {
   X,
 } from "lucide-react";
 
+import { parseAssetUploadResponse } from "@/lib/media-library/parse-upload-response";
+
 export type PickerAsset = {
   id: string;
   originalFilename: string;
@@ -98,21 +100,10 @@ export function CreativePickerModal({
       }
       const response = await fetch("/api/meta/automation/asset-upload", {
         method: "POST",
+        credentials: "same-origin",
         body,
       });
-      const json = (await response.json()) as {
-        ok?: boolean;
-        error?: string;
-        brandAssetId?: string;
-        preferredLaunchAssetId?: string;
-        assets?: Array<{
-          brandAssetId?: string;
-          originalFilename?: string;
-          width?: number;
-          height?: number;
-          label?: string;
-        }>;
-      };
+      const json = await parseAssetUploadResponse(response);
       if (!response.ok || !json.ok) {
         throw new Error(json.error || "Upload fehlgeschlagen.");
       }
