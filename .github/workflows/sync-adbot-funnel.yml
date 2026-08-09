@@ -40,10 +40,12 @@ jobs:
             exit 1
           fi
 
+      # Muss zu packageManager in apps/adbot-funnel/package.json passen (pnpm@10.4.1).
+      # pnpm 9 → ERR_PNPM_LOCKFILE_CONFIG_MISMATCH bei patchedDependencies.
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.4.1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -68,6 +70,7 @@ jobs:
 
           BRANCH="$(git -C "${WORK}" branch --show-current)"
           echo "Zielbranch: ${BRANCH}"
+          pnpm --version
 
           rsync -a --delete \
             --exclude '.git' \
@@ -94,6 +97,7 @@ jobs:
           test -f api/index.js
           test -f api/index.bundle.cjs
           test -f public/index.html
+          ls -la api/ public/ | head -40
 
           # Deploy-Artefakte sind in .gitignore — fürs Deploy-Repo trotzdem committen.
           git add -A
