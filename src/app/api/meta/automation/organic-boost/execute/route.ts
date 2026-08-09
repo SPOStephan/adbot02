@@ -90,6 +90,8 @@ export async function POST(request: NextRequest) {
         upserted: number;
         paused: number;
         active: number;
+        completed: number;
+        missingAtMeta: number;
         targetsRepaired: number;
         error: string | null;
       };
@@ -109,6 +111,8 @@ export async function POST(request: NextRequest) {
       upserted: statusRefresh.upserted,
       paused: statusRefresh.paused,
       active: statusRefresh.active,
+      completed: statusRefresh.completed,
+      missingAtMeta: statusRefresh.missingAtMeta,
       targetsRepaired: statusRefresh.targetsRepaired,
       error: statusRefresh.error,
     };

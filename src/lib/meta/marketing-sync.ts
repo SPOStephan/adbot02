@@ -530,6 +530,57 @@ export async function syncMetaMarketingSnapshot(input: {
   usage = mergeMetaUsage(usage, historicalCampaignsResult.usage);
   campaigns = mergeUniqueById(campaigns, historicalCampaignsResult.items);
 
+  // Beitrag-Push campaigns must stay in the snapshot even when Meta's account
+  // edge omits completed/archived objects — otherwise is_current flips false.
+  const adminForBoost = createAdminClient();
+  const { data: boostLinkRows } = await adminForBoost
+    .from("meta_organic_boost_links")
+    .select("plan_id")
+    .eq("user_id", input.userId)
+    .eq("platform_account_id", input.platformAccountId)
+    .limit(100);
+  const boostPlanIds = [
+    ...new Set(
+      (boostLinkRows ?? [])
+        .map((row) => (typeof row.plan_id === "string" ? row.plan_id : null))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  let boostCampaignIds: string[] = [];
+  if (boostPlanIds.length > 0) {
+    const { data: boostBindings } = await adminForBoost
+      .from("remote_object_bindings")
+      .select("remote_object_id")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("object_type", "CAMPAIGN")
+      .in("plan_id", boostPlanIds);
+    boostCampaignIds = [
+      ...new Set(
+        (boostBindings ?? [])
+          .map((row) =>
+            typeof row.remote_object_id === "string"
+              ? row.remote_object_id
+              : null,
+          )
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+  }
+  const knownCampaignIds = new Set(campaigns.map((campaign) => campaign.id));
+  const missingBoostCampaignIds = boostCampaignIds.filter(
+    (id) => !knownCampaignIds.has(id),
+  );
+  if (missingBoostCampaignIds.length > 0) {
+    const boostHistorical = await getMetaCampaignsByIds({
+      campaignIds: missingBoostCampaignIds,
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+    });
+    usage = mergeMetaUsage(usage, boostHistorical.usage);
+    campaigns = mergeUniqueById(campaigns, boostHistorical.items);
+  }
+
   const unresolvedHierarchy = {
     ads: missingReferencedIds(
       ads.map((ad) => ad.id),
@@ -612,7 +663,7 @@ export async function syncMetaMarketingSnapshot(input: {
     is_adset_budget_sharing_enabled:
       campaign.is_adset_budget_sharing_enabled,
   }));
-  const admin = createAdminClient();
+  const admin = adminForBoost;
   const { data, error } = await admin.rpc("replace_meta_marketing_snapshot", {
     p_platform_account_id: input.platformAccountId,
     p_user_id: input.userId,
@@ -641,6 +692,18 @@ export async function syncMetaMarketingSnapshot(input: {
       persistenceDiagnostic(error),
     );
     throw new MetaMarketingDataError("persistence_failed");
+  }
+
+  // Soft-expire from replace_meta_marketing_snapshot must not hide Beitrag-Push.
+  const { error: retainError } = await admin.rpc(
+    "retain_meta_organic_boost_campaigns",
+    {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+    },
+  );
+  if (retainError) {
+    // RPC absent until migration applied; snapshot still usable.
   }
 
   const persisted = Array.isArray(data) ? data[0] : data;
