@@ -2,14 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   AlertCircle,
-  ArrowUpRight,
   Bell,
-  CalendarClock,
   CalendarDays,
-  Camera,
   CheckCircle2,
   CircleDollarSign,
-  Clock3,
   ExternalLink,
   EyeOff,
   Filter,
@@ -22,7 +18,6 @@ import {
   Pin,
   Play,
   Plus,
-  RefreshCw,
   Images,
   Scale,
   Search,
@@ -62,11 +57,9 @@ import type {
   BoostSettingsView,
 } from "@/components/AutomationBoostSettings";
 import {
-  ContentCandidateBoostControls,
   type ContentBoostOverrideView,
   type HeldOrganicBoostPlanView,
 } from "@/components/ContentCandidateBoostControls";
-import { ContentCandidatePreview } from "@/components/ContentCandidatePreview";
 import {
   MetaCampaignOverview,
   deriveOrganicBoostDelivery,
@@ -74,24 +67,22 @@ import {
   type OrganicBoostCampaignView,
 } from "@/components/MetaCampaignOverview";
 import {
-  MetaConnectedAssets,
   type MetaConnectedAssetView,
 } from "@/components/MetaConnectedAssets";
-import { MetaSyncButton } from "@/components/MetaSyncButton";
-import { OrganicBoostAutoPlanner } from "@/components/OrganicBoostAutoPlanner";
+import { MetaContentSyncPanel } from "@/components/MetaContentSyncPanel";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { SignOutButton } from "@/components/SignOutButton";
 import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
+import { loadContentSyncSnapshot } from "@/lib/meta/content-sync-snapshot";
 import {
   drainHardCapStatusExecutionsForAccount,
   forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
-import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import { createClient } from "@/lib/supabase/server";
 import { createFreebieSsoEntryPath, createFunnelSsoEntryPath } from "@/lib/site-urls";
 
@@ -264,49 +255,6 @@ function getMetaNotice(
 
   return null;
 }
-
-const SYNC_STATUS = {
-  idle: {
-    label: "Bereit für den ersten Abruf",
-    className: "bg-blue-50 text-blue-700 ring-blue-200",
-    description: "Die Verbindung steht. Der sichere Ausgangsbestand kann jetzt eingelesen werden.",
-  },
-  reconnected: {
-    label: "Wieder verbunden",
-    className: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    description: "Die Verbindung wurde erneuert. Der gespeicherte Ausgangsbestand bleibt erhalten.",
-  },
-  syncing: {
-    label: "Abruf läuft",
-    className: "bg-blue-50 text-blue-700 ring-blue-200",
-    description: "Facebook- und Instagram-Beiträge werden gerade abgeglichen.",
-  },
-  success: {
-    label: "Aktuell",
-    className: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    description: "Der letzte Abruf wurde vollständig abgeschlossen.",
-  },
-  partial: {
-    label: "Teilweise aktualisiert",
-    className: "bg-amber-50 text-amber-800 ring-amber-200",
-    description: "Mindestens eine Quelle war kurzzeitig nicht erreichbar.",
-  },
-  error: {
-    label: "Abruf wird wiederholt",
-    className: "bg-red-50 text-red-700 ring-red-200",
-    description: "Der automatische Abruf versucht es nach einer sicheren Pause erneut.",
-  },
-  rate_limited: {
-    label: "Meta-Pause aktiv",
-    className: "bg-amber-50 text-amber-800 ring-amber-200",
-    description: "Der Abruf pausiert automatisch, um Meta-Nutzungslimits einzuhalten.",
-  },
-  reconnect_required: {
-    label: "Verbindung erneuern",
-    className: "bg-red-50 text-red-700 ring-red-200",
-    description: "Der Lesezugriff ist abgelaufen oder wurde von Meta widerrufen.",
-  },
-} as const;
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
@@ -502,10 +450,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     (account) => account.platform === "meta" && !account.revoked_at,
   );
   const metaConnected = Boolean(metaAccount?.connected_at);
-  const customerNextSyncAt = resolveCustomerNextSyncAt(
-    metaAccount?.next_sync_at,
-    renderedAt,
-  );
   const writeScopeGranted =
     Array.isArray(metaAccount?.meta_scopes) &&
     metaAccount.meta_scopes.includes("ads_management");
@@ -592,40 +536,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       });
     }
   }
-  const [
-    { data: metaAssets },
-    { data: contentCandidates },
-    { count: storedCandidateCount },
-  ] = metaConnected && metaAccount
-    ? await Promise.all([
+  const [{ data: metaAssets }, contentSyncSnapshot] =
+    metaConnected && metaAccount
+      ? await Promise.all([
           supabase
             .from("meta_assets")
             .select("id, asset_type, meta_asset_id, name, username, last_synced_at")
             .eq("platform_account_id", metaAccount.id)
             .eq("user_id", user.id)
             .order("asset_type", { ascending: true }),
-          supabase
-            .from("meta_content_candidates")
-            .select(
-              "id, source, meta_asset_id, content_type, caption_excerpt, permalink_url, preview_url, published_at, first_seen_at",
-            )
-            .eq("platform_account_id", metaAccount.id)
-            .eq("user_id", user.id)
-            .eq("is_new", true)
-            .order("published_at", { ascending: false, nullsFirst: false })
-            .limit(8),
-          supabase
-            .from("meta_content_candidates")
-            .select("id", { count: "exact", head: true })
-            .eq("platform_account_id", metaAccount.id)
-            .eq("user_id", user.id),
+          loadContentSyncSnapshot({
+            supabase,
+            userId: user.id,
+            platformAccountId: metaAccount.id,
+            connector: {
+              sync_status: metaAccount.sync_status,
+              sync_error_code: metaAccount.sync_error_code,
+              last_sync_started_at: metaAccount.last_sync_started_at,
+              last_synced_at: metaAccount.last_synced_at,
+              next_sync_at: metaAccount.next_sync_at,
+              last_sync_seen_count: metaAccount.last_sync_seen_count,
+              last_sync_new_count: metaAccount.last_sync_new_count,
+              baseline_completed_at: metaAccount.baseline_completed_at,
+            },
+            now: renderedAt,
+          }),
         ])
-      : [{ data: [] }, { data: [] }, { count: 0 }];
+      : [
+          { data: [] as never[] },
+          null,
+        ];
+  const contentCandidates = contentSyncSnapshot?.candidates ?? [];
   const syncStatus = metaAccount?.sync_status ?? "idle";
-  const syncInfo =
-    syncStatus === "idle" && metaAccount?.baseline_completed_at
-      ? SYNC_STATUS.reconnected
-      : (SYNC_STATUS[syncStatus as keyof typeof SYNC_STATUS] ?? SYNC_STATUS.idle);
   const reconnectRequired =
     syncStatus === "reconnect_required" || !writeScopeGranted;
   const pageAssets = (metaAssets ?? []).filter(
@@ -1347,19 +1289,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       status: String(plan.status ?? "PENDING"),
     });
   }
-  const eligiblePendingBoostCandidates = (contentCandidates ?? []).filter(
+  const eligiblePendingBoostCandidates = contentCandidates.filter(
     (candidate) => {
-      if (organicBoostPlanByCandidate.has(String(candidate.id))) {
+      if (organicBoostPlanByCandidate.has(candidate.id)) {
         return false;
       }
-      const override = boostOverrideByCandidate.get(String(candidate.id));
+      const override = boostOverrideByCandidate.get(candidate.id);
       if (override?.mode === "SKIP") {
         return false;
       }
       if (!boostSettingsView) {
         return true;
       }
-      const source = String(candidate.source ?? "");
+      const source = candidate.source;
       if (
         boostSettingsView.sourceFilter !== "both" &&
         source !== boostSettingsView.sourceFilter
@@ -1367,7 +1309,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         return false;
       }
       if (boostSettingsView.assetScope === "SELECTED") {
-        const assetId = String(candidate.meta_asset_id ?? "");
+        const assetId = candidate.metaAssetId ?? "";
         const included = boostSettingsView.assetSettings.some(
           (asset) => asset.metaAssetId === assetId && asset.included,
         );
@@ -2173,245 +2115,59 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </section>
 
-          {metaConnected && metaAccount ? (
-            <section className="mt-10 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-5 py-5 sm:px-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
-                      Meta Content Sync
-                    </p>
-                    <h2 className="mt-2 text-xl font-extrabold tracking-tight">
-                      Beiträge sicher abrufen
-                    </h2>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-                      Adbot liest veröffentlichte Beiträge deiner in Meta ausgewählten Facebook-Seiten und Instagram-Konten. Dieser Sync-Pfad führt keine Mutation aus; Meta-Änderungen laufen ausschließlich über die getrennte, policy-gedeckte Control Plane.
-                    </p>
-                  </div>
-                  <span
-                    className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset ${syncInfo.className}`}
-                  >
-                    {syncInfo.label}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid gap-6 px-5 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                <div>
-                  <p className="text-sm font-bold text-slate-900">
-                    {syncInfo.description}
-                  </p>
-                  <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <dt className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-                        <Clock3 className="size-4" />
-                        Letzter Abruf
-                      </dt>
-                      <dd className="mt-2 text-sm font-bold text-slate-900">
-                        {formatDateTime(metaAccount.last_synced_at)}
-                      </dd>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <dt className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-                        <CalendarClock className="size-4" />
-                        Nächster Abruf
-                      </dt>
-                      <dd className="mt-2 text-sm font-bold text-slate-900">
-                        {formatDateTime(customerNextSyncAt)}
-                      </dd>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-                        Gesehen
-                      </dt>
-                      <dd className="mt-2 text-2xl font-extrabold text-slate-900">
-                        {metaAccount.last_sync_seen_count ?? 0}
-                      </dd>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-                        Neu erkannt
-                      </dt>
-                      <dd className="mt-2 text-2xl font-extrabold text-blue-700">
-                        {metaAccount.last_sync_new_count ?? 0}
-                      </dd>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-                        Gespeichert
-                      </dt>
-                      <dd className="mt-2 text-2xl font-extrabold text-slate-900">
-                        {storedCandidateCount ?? 0}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <MetaConnectedAssets
-                    assets={connectedAssetViews}
-                    extendHref="/api/connectors/meta/start"
-                    showExtraHint={showExtraAssetHint}
-                  />
-                </div>
-
-                <div className="lg:min-w-60">
-                  {reconnectRequired ? (
-                    <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                      <p className="text-sm font-bold text-red-950">
-                        {writeScopeGranted
-                          ? "Die Meta-Verbindung muss erneuert werden."
-                          : "Der minimale Schreibscope muss bestätigt werden."}
-                      </p>
-                      <form action="/api/connectors/meta/start" method="post">
-                        <button
-                          className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
-                          type="submit"
-                        >
-                          Meta neu verbinden
-                          <ArrowUpRight className="size-4" />
-                        </button>
-                      </form>
-                    </div>
-                  ) : (
-                    <MetaSyncButton
-                      lastSyncStartedAt={metaAccount.last_sync_started_at ?? null}
-                    />
-                  )}
-                  <p className="mt-3 text-xs leading-5 text-slate-500">
-                    Automatisch einmal pro Stunde. Der manuelle Abruf ist nach 60 Sekunden erneut verfügbar.
-                  </p>
-                </div>
-              </div>
-
-              {!metaAccount.baseline_completed_at ? (
-                <div className="mx-5 mb-6 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-950 sm:mx-6">
-                  <span className="font-bold">Sicherer Ausgangsbestand:</span>{" "}
-                  Beim ersten Abruf werden vorhandene Beiträge eingelesen, aber nicht als neu markiert. Erst später veröffentlichte Inhalte erscheinen als neue Kandidaten.
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {metaConnected ? (
-            <section className="mt-10 scroll-mt-24" id="beitragskandidaten">
-              <OrganicBoostAutoPlanner
-                enabled={shouldAutoPlanOrganicBoost}
-                pendingCandidateCount={pendingBoostCandidateCount}
-              />
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
-                    Beitragskandidaten
-                  </p>
-                  <h2 className="mt-2 text-xl font-extrabold tracking-tight">
-                    Neu seit dem Ausgangsbestand
-                  </h2>
-                </div>
-                <p className="max-w-xl text-sm leading-6 text-slate-500">
-                  Neue Beiträge werden erkannt und — bei aktivem automatischem Beitrag-Push —
-                  sofort mit den Konto-Standards beworben. Anpassungen je Beitrag sind optional.
-                </p>
-              </div>
-
-              {contentCandidates?.length ? (
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  {contentCandidates.map((candidate) => (
-                    <article
-                      className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-                      key={candidate.id}
-                    >
-                      <ContentCandidatePreview
-                        contentType={candidate.content_type}
-                        previewUrl={candidate.preview_url}
-                        source={candidate.source}
-                      />
-                      <div className="flex min-h-52 flex-col p-5">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                            {candidate.source === "instagram" ? (
-                              <Camera className="size-3.5" />
-                            ) : (
-                              <Megaphone className="size-3.5" />
-                            )}
-                            {candidate.source === "instagram"
-                              ? "Instagram"
-                              : "Facebook"}
-                          </span>
-                          <span className="text-xs font-semibold text-slate-500">
-                            {formatDateTime(
-                              candidate.published_at ?? candidate.first_seen_at,
-                            )}
-                          </span>
-                        </div>
-                        <p className="mt-5 line-clamp-4 text-sm leading-6 text-slate-700">
-                          {candidate.caption_excerpt ??
-                            "Beitrag ohne verfügbaren Text"}
-                        </p>
-                        <div className="mt-auto pt-5">
-                          {candidate.permalink_url ? (
-                            <a
-                              className="inline-flex items-center gap-2 text-sm font-bold text-blue-700 transition hover:text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                              href={candidate.permalink_url}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              Originalbeitrag ansehen
-                              <ExternalLink className="size-4" />
-                            </a>
-                          ) : (
-                            <span className="text-sm font-semibold text-slate-400">
-                              Kein öffentlicher Link verfügbar
-                            </span>
-                          )}
-                          <ContentCandidateBoostControls
-                            boostMode={boostSettingsView?.boostMode ?? "OFF"}
-                            canApprove={Boolean(
-                              writeScopeGranted &&
-                                killSwitchView?.mode === "FREEZE_WRITES" &&
-                                boostSettingsView?.enabled,
-                            )}
-                            canPrepare={Boolean(
-                              writeScopeGranted &&
-                                killSwitchView?.mode === "FREEZE_WRITES" &&
-                                boostSettingsView?.enabled &&
-                                policyView?.status === "ACTIVE" &&
-                                policyView.allowNewLaunches,
-                            )}
-                            candidateId={String(candidate.id)}
-                            heldPlan={
-                              organicBoostPlanByCandidate.get(String(candidate.id)) ?? null
-                            }
-                            killSwitchMode={killSwitchView?.mode ?? null}
-                            organicPlannerLastError={organicPlannerLastError}
-                            organicPlannerStatus={organicPlannerStatus}
-                            override={
-                              boostOverrideByCandidate.get(String(candidate.id)) ?? null
-                            }
-                            policyActive={Boolean(
-                              policyView?.status === "ACTIVE" &&
-                                policyView.allowNewLaunches &&
-                                policyView.allowStatusChanges,
-                            )}
-                            source={
-                              candidate.source === "instagram" ? "instagram" : "facebook"
-                            }
-                          />
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
-                  <RefreshCw className="mx-auto size-6 text-slate-400" />
-                  <p className="mt-3 font-bold text-slate-900">
-                    Noch keine neuen Beitragskandidaten
-                  </p>
-                  <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
-                    Nach dem ersten Ausgangsbestand erscheinen hier Beiträge, die bei einem späteren manuellen oder stündlichen Abruf neu erkannt werden.
-                  </p>
-                </div>
-              )}
-            </section>
+          {metaConnected && metaAccount && contentSyncSnapshot ? (
+            <MetaContentSyncPanel
+              boost={{
+                autoPlanEnabled: shouldAutoPlanOrganicBoost,
+                boostEnabled: Boolean(boostSettingsView?.enabled),
+                boostMode: boostSettingsView?.boostMode ?? "OFF",
+                canApprove: Boolean(
+                  writeScopeGranted &&
+                    killSwitchView?.mode === "FREEZE_WRITES" &&
+                    boostSettingsView?.enabled,
+                ),
+                canPrepare: Boolean(
+                  writeScopeGranted &&
+                    killSwitchView?.mode === "FREEZE_WRITES" &&
+                    boostSettingsView?.enabled &&
+                    policyView?.status === "ACTIVE" &&
+                    policyView.allowNewLaunches,
+                ),
+                heldPlanByCandidate: Object.fromEntries(
+                  organicBoostPlanByCandidate.entries(),
+                ),
+                killSwitchMode: killSwitchView?.mode ?? null,
+                organicPlannerLastError: organicPlannerLastError,
+                organicPlannerStatus: organicPlannerStatus,
+                overrideByCandidate: Object.fromEntries(
+                  boostOverrideByCandidate.entries(),
+                ),
+                pendingBoostCandidateIds: eligiblePendingBoostCandidates.map(
+                  (candidate) => candidate.id,
+                ),
+                policyActive: Boolean(
+                  policyView?.status === "ACTIVE" &&
+                    policyView.allowNewLaunches &&
+                    policyView.allowStatusChanges,
+                ),
+              }}
+              connectedAssets={connectedAssetViews}
+              initial={{
+                status: contentSyncSnapshot.status,
+                lastSyncStartedAt: contentSyncSnapshot.lastSyncStartedAt,
+                lastSyncedAt: contentSyncSnapshot.lastSyncedAt,
+                nextSyncAt: contentSyncSnapshot.nextSyncAt,
+                displayNextSyncAt: contentSyncSnapshot.displayNextSyncAt,
+                baselineCompleted: contentSyncSnapshot.baselineCompleted,
+                seenCount: contentSyncSnapshot.seenCount,
+                newCount: contentSyncSnapshot.newCount,
+                storedCandidateCount: contentSyncSnapshot.storedCandidateCount,
+                candidates: contentSyncSnapshot.candidates,
+              }}
+              reconnectRequired={reconnectRequired}
+              showExtraAssetHint={showExtraAssetHint}
+              writeScopeGranted={writeScopeGranted}
+            />
           ) : null}
         </div>
         <SiteFooter tone="light" />

@@ -14,6 +14,10 @@ import {
 type MetaSyncButtonProps = {
   lastSyncStartedAt: string | null;
   reconnectRequired?: boolean;
+  /** Called after a sync attempt settles (success or handled API error). */
+  onSyncSettled?: () => void;
+  /** When false, skips full-page router.refresh() (default true). */
+  refreshOnComplete?: boolean;
 };
 
 type OrganicBoostResponse = {
@@ -177,6 +181,8 @@ function combineNoticeKind(
 export function MetaSyncButton({
   lastSyncStartedAt,
   reconnectRequired = false,
+  onSyncSettled,
+  refreshOnComplete = true,
 }: MetaSyncButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -198,6 +204,17 @@ export function MetaSyncButton({
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    setRetryAt(initialRetryAt(lastSyncStartedAt));
+  }, [lastSyncStartedAt]);
+
+  function completeRefresh() {
+    onSyncSettled?.();
+    if (refreshOnComplete) {
+      router.refresh();
+    }
+  }
 
   const retryTimestamp = retryAt ? new Date(retryAt).getTime() : 0;
   const remainingSeconds =
@@ -248,7 +265,7 @@ export function MetaSyncButton({
                       ? `Abruf-Serverfehler (${response.status}). Bitte kurz warten und erneut versuchen.`
                       : "Neue Beiträge konnten gerade nicht abgerufen werden.";
         setNotice({ kind: "error", text: message });
-        router.refresh();
+        completeRefresh();
         return;
       }
 
@@ -279,7 +296,7 @@ export function MetaSyncButton({
         kind: combineNoticeKind(true, boostKind, hardCapKind),
         text,
       });
-      router.refresh();
+      completeRefresh();
     } catch (error) {
       const aborted =
         (error instanceof DOMException && error.name === "AbortError") ||
