@@ -127,6 +127,11 @@ type SyncInput = {
   platformAccountId: string;
   userId?: string;
   mode: "manual" | "cron";
+  /**
+   * When false, skip post-Abruf plan+drain (caller already drains, e.g. execute
+   * route). Default true so detect→Meta write stays on the Abruf path.
+   */
+  ensureOrganicBoost?: boolean;
 };
 
 type MetaSyncMarketingFields = Pick<
@@ -962,9 +967,9 @@ export async function syncMetaConnector(
     }
 
     // After detect+plan: push Meta writes immediately for this account.
-    // Waiting only on dashboard/cron left Beitrag-Push stuck as "recognized"
-    // without appearing in the gepushte-Beiträge overview or Ads Manager.
-    if (!isHighUsage(usage)) {
+    // Callers that already drain (execute route) set ensureOrganicBoost=false
+    // to avoid a second WRITE lease contention / long request.
+    if (input.ensureOrganicBoost !== false && !isHighUsage(usage)) {
       const plannedCount =
         (organicBoostResult?.plansCreated ?? 0) +
         (organicBoostResult?.plansExisting ?? 0);
@@ -1077,9 +1082,12 @@ export async function syncMetaConnector(
           : marketingLeaseBlocked
             ? (connector.marketing_sync_status ?? "error")
             : "error",
+      // Lease contention is transient — do not sticky-banner the dashboard.
       marketing_sync_error_code: marketingResult
         ? null
-        : marketingErrorCode,
+        : marketingLeaseBlocked
+          ? null
+          : marketingErrorCode,
       marketing_last_sync_started_at: marketingStartedAt,
       marketing_next_sync_at: nextSyncAt,
       automation_planner_status: plannerErrorCode

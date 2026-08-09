@@ -618,14 +618,16 @@ export function MetaCampaignOverview({
   recommendations,
   status,
 }: MetaCampaignOverviewProps) {
+  // Spin only while Meta write is actually in flight. Pending candidates alone
+  // must not keep LiveRefresh refreshing the whole dashboard for minutes
+  // (that re-triggered plan+drain and fought the account lease).
   const awaitingOrganicBoostProgress =
     organicBoostConfigured &&
-    (pendingBoostCandidateCount > 0 ||
-      organicBoostCampaigns.some(
-        (campaign) =>
-          campaign.deliveryState === "starting" ||
-          campaign.deliveryState === "queued",
-      ));
+    organicBoostCampaigns.some(
+      (campaign) =>
+        campaign.deliveryState === "starting" ||
+        campaign.deliveryState === "queued",
+    );
   // Sticky plan blocked_reason must not contradict Autonomie when already ALLOW.
   const organicBoostKillSwitchBlocked =
     killSwitchMode !== "ALLOW" &&
@@ -825,7 +827,7 @@ export function MetaCampaignOverview({
                 <p className="mt-1 text-sm leading-6 text-slate-500">
                   {organicBoostConfigured
                     ? pendingBoostCandidateCount > 0
-                      ? `${pendingBoostCandidateCount} erkannte Beiträge haben noch keinen Eintrag hier: Plan oder Meta-Versand steht aus. Adbot legt die Kampagne direkt nach dem Erkennen an — sobald der lokale Plan steht, erscheint die Zeile (auch vor Meta-Freigabe).`
+                      ? `${pendingBoostCandidateCount} erkannte Beiträge warten noch auf Plan/Meta-Versand. Adbot holt das serverseitig nach — ohne Dauer-Aktualisierung der ganzen Seite.`
                       : "Automatischer Beitrag-Push ist eingeschaltet. Neue Kampagnen erscheinen hier, sobald Adbot den Plan angelegt hat — Meta-Freigabe kann danach noch ausstehen."
                     : "Sobald Adbot organische Beiträge bewirbt, erscheinen sie hier mit Ausgaben, Restbudget und Laufzeit."}
                 </p>

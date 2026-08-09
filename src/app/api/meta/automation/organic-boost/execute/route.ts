@@ -43,6 +43,8 @@ export async function POST(request: NextRequest) {
         platformAccountId: customer.platformAccountId,
         userId: customer.userId,
         mode: "manual",
+        // This route drains Beitrag-Push below — avoid nested plan+drain.
+        ensureOrganicBoost: false,
       });
       marketingSync = {
         outcome: syncResult.outcome,

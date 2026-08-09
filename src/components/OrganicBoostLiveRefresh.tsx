@@ -5,17 +5,16 @@ import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
 type Props = {
-  /** True while plans are still being created or written to Meta. */
+  /** True while plans are still being written to Meta. */
   active: boolean;
 };
 
-const INTERVAL_MS = 15_000;
-const MAX_DURATION_MS = 15 * 60_000;
+const INTERVAL_MS = 20_000;
+const MAX_DURATION_MS = 3 * 60_000;
 
 /**
- * Soft-polls the dashboard while Beitrag-Push is in flight so the Ampel
- * appears without manual browser refresh. Stops once inactive or after
- * a safety timeout.
+ * Soft-polls the dashboard while Beitrag-Push Meta writes are in flight.
+ * Keep short: each refresh is heavy; endless spinning fought the account lease.
  */
 export function OrganicBoostLiveRefresh({ active }: Props) {
   const router = useRouter();

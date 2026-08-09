@@ -19,9 +19,9 @@ type Props = {
 };
 
 const SESSION_KEY = "adbot.organicBoostAutoPlan.v3";
-const START_DELAY_MS = 1_000;
-const RETRY_DELAY_MS = 8_000;
-const MAX_RETRY_DELAY_MS = 45_000;
+const START_DELAY_MS = 2_000;
+const RETRY_DELAY_MS = 30_000;
+const MAX_RETRY_DELAY_MS = 90_000;
 
 /**
  * Backup path: starts Beitrag-Push for already-recognized posts while the
