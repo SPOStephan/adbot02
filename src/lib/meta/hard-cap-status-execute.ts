@@ -113,9 +113,45 @@ export async function forceReactivatePausedOrganicBoostCampaigns(input: {
   userId: string;
   marketingSyncId: string;
   plannedAt?: string;
+  /** When Meta already reported these as PAUSED, reactivate by id (hard path). */
+  pausedPlatformCampaignIds?: string[];
 }): Promise<OrganicBoostHardCapForceResumeResult> {
   const admin = createAdminClient();
   const plannedAt = input.plannedAt ?? new Date().toISOString();
+  const pausedIds = [
+    ...new Set(
+      (input.pausedPlatformCampaignIds ?? []).filter(
+        (id): id is string => typeof id === "string" && id.length > 0,
+      ),
+    ),
+  ];
+
+  // Prefer explicit Meta-PAUSED ids — this is the path that must work when the
+  // scan RPC still reports candidates=0 despite status refresh finding PAUSED.
+  let byIdsResult: OrganicBoostHardCapForceResumeResult | null = null;
+  let byIdsError: string | null = null;
+
+  if (pausedIds.length > 0) {
+    const byIds = await admin.rpc("force_reactivate_meta_organic_boost_by_ids", {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+      p_source_marketing_sync_id: input.marketingSyncId,
+      p_platform_campaign_ids: pausedIds,
+      p_planned_at: plannedAt,
+    });
+
+    if (byIds.error) {
+      byIdsError = byIds.error.message || "by_ids_rpc_failed";
+    } else {
+      byIdsResult = parseForceResumeRow(byIds.data, null);
+      if (byIdsResult.created + byIdsResult.existing > 0) {
+        return byIdsResult;
+      }
+      if (byIdsResult.candidates > 0) {
+        return byIdsResult;
+      }
+    }
+  }
 
   const primary = await admin.rpc(
     "force_reactivate_paused_meta_organic_boost_campaigns",
@@ -128,10 +164,24 @@ export async function forceReactivatePausedOrganicBoostCampaigns(input: {
   );
 
   if (!primary.error) {
-    return parseForceResumeRow(primary.data, null);
+    const scanned = parseForceResumeRow(primary.data, null);
+    if (scanned.created + scanned.existing + scanned.candidates > 0) {
+      return scanned;
+    }
+    if (byIdsResult) {
+      return {
+        ...byIdsResult,
+        error:
+          byIdsResult.error ||
+          (pausedIds.length > 0
+            ? "meta_paused_but_no_activate_queued"
+            : null),
+      };
+    }
+    return scanned;
   }
 
-  // Fallback while 20260809130000 is not applied yet.
+  // Fallback while newer migrations are not applied yet.
   const fallback = await admin.rpc(
     "force_resume_meta_organic_boost_hard_cap_pauses",
     {
@@ -145,13 +195,30 @@ export async function forceReactivatePausedOrganicBoostCampaigns(input: {
   if (fallback.error) {
     return parseForceResumeRow(
       null,
-      primary.error.message ||
-        fallback.error.message ||
-        "force_reactivate_rpc_failed",
+      [
+        byIdsError ? `by_ids: ${byIdsError}` : null,
+        primary.error.message,
+        fallback.error.message,
+      ]
+        .filter(Boolean)
+        .join("; ") || "force_reactivate_rpc_failed",
     );
   }
 
-  return parseForceResumeRow(fallback.data, null);
+  const fallbackParsed = parseForceResumeRow(fallback.data, null);
+  if (
+    fallbackParsed.created + fallbackParsed.existing < 1 &&
+    pausedIds.length > 0
+  ) {
+    return {
+      ...fallbackParsed,
+      error:
+        byIdsError ||
+        "meta_paused_but_sql_20260809150000_required",
+    };
+  }
+
+  return fallbackParsed;
 }
 
 /** @deprecated Prefer forceReactivatePausedOrganicBoostCampaigns */
