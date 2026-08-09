@@ -11,6 +11,8 @@ export type OrganicBoostStatusRefreshResult = {
   upserted: number;
   paused: number;
   active: number;
+  completed: number;
+  missingAtMeta: number;
   targetsRepaired: number;
   pausedPlatformIds: string[];
   error: string | null;
@@ -24,6 +26,87 @@ function isPausedCampaign(campaign: MetaCampaign): boolean {
     effective === "PAUSED" ||
     effective === "CAMPAIGN_PAUSED"
   );
+}
+
+function isCompletedCampaign(campaign: MetaCampaign): boolean {
+  const status = (campaign.status ?? "").toUpperCase();
+  const effective = (campaign.effectiveStatus ?? "").toUpperCase();
+  if (
+    status === "COMPLETED" ||
+    effective === "COMPLETED" ||
+    effective === "CAMPAIGN_COMPLETED" ||
+    status === "ARCHIVED" ||
+    effective === "ARCHIVED" ||
+    status === "DELETED" ||
+    effective === "DELETED"
+  ) {
+    return true;
+  }
+  if (!campaign.stopTime) {
+    return false;
+  }
+  const stopMs = Date.parse(campaign.stopTime);
+  return Number.isFinite(stopMs) && stopMs <= Date.now();
+}
+
+/** Meta often keeps configured status ACTIVE after stop_time; normalize locally. */
+function normalizeCampaignForLocal(campaign: MetaCampaign): MetaCampaign {
+  if (!isCompletedCampaign(campaign)) {
+    return campaign;
+  }
+  const effective = (campaign.effectiveStatus ?? "").toUpperCase();
+  if (
+    effective === "COMPLETED" ||
+    effective === "CAMPAIGN_COMPLETED" ||
+    effective === "ARCHIVED" ||
+    effective === "DELETED"
+  ) {
+    return campaign;
+  }
+  return {
+    ...campaign,
+    effectiveStatus: "COMPLETED",
+  };
+}
+
+async function markMissingBoostCampaign(input: {
+  admin: ReturnType<typeof createAdminClient>;
+  userId: string;
+  platformAccountId: string;
+  platformCampaignId: string;
+  marketingSyncId?: string | null;
+}): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { data: existing } = await input.admin
+    .from("campaigns")
+    .select("id,stop_time,effective_status,status")
+    .eq("user_id", input.userId)
+    .eq("platform_account_id", input.platformAccountId)
+    .eq("platform_campaign_id", input.platformCampaignId)
+    .maybeSingle();
+
+  if (!existing?.id) {
+    return false;
+  }
+
+  const stopMs = existing.stop_time ? Date.parse(String(existing.stop_time)) : Number.NaN;
+  const scheduleEnded = Number.isFinite(stopMs) && stopMs <= Date.now();
+  const nextEffective = scheduleEnded ? "COMPLETED" : "DELETED";
+
+  const { error } = await input.admin
+    .from("campaigns")
+    .update({
+      is_current: true,
+      effective_status: nextEffective,
+      updated_at: now,
+      ...(input.marketingSyncId
+        ? { last_seen_sync_id: input.marketingSyncId }
+        : {}),
+    })
+    .eq("id", existing.id)
+    .eq("user_id", input.userId);
+
+  return !error;
 }
 
 async function upsertCampaignRow(input: {
@@ -173,6 +256,8 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
     upserted: 0,
     paused: 0,
     active: 0,
+    completed: 0,
+    missingAtMeta: 0,
     targetsRepaired: 0,
     pausedPlatformIds: [] as string[],
     error: null as string | null,
@@ -280,12 +365,24 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
     let upserted = 0;
     let paused = 0;
     let active = 0;
+    let completed = 0;
+    let missingAtMeta = 0;
     let targetsRepaired = 0;
     const pausedPlatformIds: string[] = [];
+    const seen = new Set<string>();
+    const marketingSyncId =
+      typeof account.marketing_sync_id === "string"
+        ? account.marketing_sync_id
+        : null;
 
-    for (const campaign of meta.items) {
+    for (const raw of meta.items) {
+      const campaign = normalizeCampaignForLocal(raw);
+      seen.add(campaign.id);
       const pausedAtMeta = isPausedCampaign(campaign);
-      if (pausedAtMeta) {
+      const completedAtMeta = isCompletedCampaign(campaign);
+      if (completedAtMeta) {
+        completed += 1;
+      } else if (pausedAtMeta) {
         paused += 1;
         pausedPlatformIds.push(campaign.id);
       } else if (
@@ -300,10 +397,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
         userId: input.userId,
         platformAccountId: input.platformAccountId,
         campaign,
-        marketingSyncId:
-          typeof account.marketing_sync_id === "string"
-            ? account.marketing_sync_id
-            : null,
+        marketingSyncId,
       });
 
       if (wrote.wrote) {
@@ -311,7 +405,8 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
         upserted += 1;
       }
 
-      if (pausedAtMeta && wrote.localId) {
+      // Never auto-reactivate schedule-ended campaigns.
+      if (pausedAtMeta && !completedAtMeta && wrote.localId) {
         const repaired = await repairManagedTarget({
           admin,
           userId: input.userId,
@@ -325,12 +420,37 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
       }
     }
 
+    for (const platformCampaignId of campaignIds) {
+      if (seen.has(platformCampaignId)) {
+        continue;
+      }
+      const marked = await markMissingBoostCampaign({
+        admin,
+        userId: input.userId,
+        platformAccountId: input.platformAccountId,
+        platformCampaignId,
+        marketingSyncId,
+      });
+      if (marked) {
+        missingAtMeta += 1;
+        completed += 1;
+        refreshed += 1;
+      }
+    }
+
+    await admin.rpc("retain_meta_organic_boost_campaigns", {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+    });
+
     return {
       requested: campaignIds.length,
       refreshed,
       upserted,
       paused,
       active,
+      completed,
+      missingAtMeta,
       targetsRepaired,
       pausedPlatformIds,
       error: null,

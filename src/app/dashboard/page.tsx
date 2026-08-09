@@ -1112,10 +1112,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const hasRemoteCampaignBinding = row.has_remote_campaign_binding === true;
     const anyStepRemoteApplied = row.any_step_remote_applied === true;
     const anyStepDispatchStarted = row.any_step_dispatch_started === true;
+    const startTime = row.start_time ? String(row.start_time) : null;
+    const endTime = row.end_time ? String(row.end_time) : null;
     const delivery = deriveOrganicBoostDelivery({
       planStatus,
       status,
       effectiveStatus,
+      endTime,
       hasRemoteCampaignBinding,
       anyStepRemoteApplied,
       anyStepDispatchStarted,
@@ -1160,8 +1163,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         lifetimeBudgetMinor: toFiniteNumber(row.lifetime_budget_minor),
         budgetRemainingMinor: toFiniteNumber(row.budget_remaining_minor),
         durationDays: toFiniteNumber(row.duration_days),
-        startTime: row.start_time ? String(row.start_time) : null,
-        endTime: row.end_time ? String(row.end_time) : null,
+        startTime,
+        endTime,
         spend: toFiniteNumber(row.spend),
         impressions: toFiniteNumber(row.impressions),
         postEngagements: toFiniteNumber(row.post_engagements),
@@ -1210,10 +1213,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       return [];
     }
     const planStatus = String(plan.status ?? "UNKNOWN");
+    const endTime =
+      typeof payload.end_time === "string" ? payload.end_time : null;
     const delivery = deriveOrganicBoostDelivery({
       planStatus,
       status: null,
       effectiveStatus: null,
+      endTime,
       hasRemoteCampaignBinding: false,
       anyStepRemoteApplied: false,
       anyStepDispatchStarted: false,
@@ -1587,6 +1593,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         effectiveStatus: campaign.effectiveStatus
           ? String(campaign.effectiveStatus)
           : null,
+        endTime: campaign.stopTime,
         hasRemoteCampaignBinding: true,
         anyStepRemoteApplied: true,
         anyStepDispatchStarted: true,

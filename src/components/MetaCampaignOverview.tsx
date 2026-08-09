@@ -56,6 +56,7 @@ export type OrganicBoostCampaignView = {
     | "starting"
     | "queued"
     | "paused"
+    | "completed"
     | "failed"
     | "unknown";
   deliveryLabel: string;
@@ -237,6 +238,8 @@ export function deriveOrganicBoostDelivery(input: {
   planStatus: string | null | undefined;
   status: string | null | undefined;
   effectiveStatus: string | null | undefined;
+  /** Schedule end (plan end_time or campaign stop_time) */
+  endTime?: string | null;
   /** True only when remote_object_bindings has a CAMPAIGN row for this plan */
   hasRemoteCampaignBinding?: boolean | null;
   /** True when any step reached REMOTE_APPLIED */
@@ -249,9 +252,30 @@ export function deriveOrganicBoostDelivery(input: {
   const hasBinding = input.hasRemoteCampaignBinding === true;
   const wireStarted =
     input.anyStepDispatchStarted === true || input.anyStepRemoteApplied === true;
+  const endMs = input.endTime ? Date.parse(input.endTime) : Number.NaN;
+  const scheduleEnded =
+    Number.isFinite(endMs) && endMs <= Date.now();
 
   // Meta-facing campaign states require a verified remote campaign binding.
   if (hasBinding) {
+    if (
+      effective === "COMPLETED" ||
+      effective === "CAMPAIGN_COMPLETED" ||
+      effective === "ARCHIVED"
+    ) {
+      return {
+        deliveryState: "completed",
+        deliveryLabel: "Laufzeit beendet",
+      };
+    }
+
+    if (effective === "DELETED") {
+      return {
+        deliveryState: "completed",
+        deliveryLabel: "Bei Meta nicht mehr verfügbar — lokal behalten",
+      };
+    }
+
     if (
       effective === "PENDING_REVIEW" ||
       effective === "IN_PROCESS" ||
@@ -264,13 +288,6 @@ export function deriveOrganicBoostDelivery(input: {
       };
     }
 
-    if (effective === "ACTIVE") {
-      return {
-        deliveryState: "active",
-        deliveryLabel: "Boost aktiv",
-      };
-    }
-
     if (
       effective === "PAUSED" ||
       effective === "CAMPAIGN_PAUSED" ||
@@ -279,6 +296,21 @@ export function deriveOrganicBoostDelivery(input: {
       return {
         deliveryState: "paused",
         deliveryLabel: "Pausiert",
+      };
+    }
+
+    // Meta can still report configured status ACTIVE after stop_time.
+    if (scheduleEnded && (effective === "ACTIVE" || !effective)) {
+      return {
+        deliveryState: "completed",
+        deliveryLabel: "Laufzeit beendet",
+      };
+    }
+
+    if (effective === "ACTIVE") {
+      return {
+        deliveryState: "active",
+        deliveryLabel: "Boost aktiv",
       };
     }
   }
@@ -537,6 +569,15 @@ function statusStyle(status: string | null) {
     return "bg-amber-50 text-amber-800 ring-amber-200";
   }
 
+  if (
+    status === "COMPLETED" ||
+    status === "CAMPAIGN_COMPLETED" ||
+    status === "ARCHIVED" ||
+    status === "DELETED"
+  ) {
+    return "bg-slate-100 text-slate-700 ring-slate-300";
+  }
+
   return "bg-slate-100 text-slate-600 ring-slate-200";
 }
 
@@ -569,6 +610,12 @@ function boostDeliveryStyle(state: OrganicBoostCampaignView["deliveryState"]) {
     return {
       badge: "bg-slate-100 text-slate-700 ring-slate-200",
       dot: "bg-slate-400",
+    };
+  }
+  if (state === "completed") {
+    return {
+      badge: "bg-slate-100 text-slate-700 ring-slate-300",
+      dot: "bg-slate-500",
     };
   }
   return {

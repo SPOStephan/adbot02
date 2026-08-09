@@ -21,6 +21,8 @@ export type HardCapForceResumeNoticeInput = {
     upserted?: number;
     paused?: number;
     active?: number;
+    completed?: number;
+    missingAtMeta?: number;
     targetsRepaired?: number;
     error?: string | null;
   } | null;
@@ -67,11 +69,19 @@ export function formatHardCapResumeNotice(
   const refresh = forceResume?.statusRefresh;
 
   if (refresh && (refresh.requested ?? 0) > 0) {
+    const statusBits: string[] = [];
+    if (typeof refresh.paused === "number") {
+      statusBits.push(`${refresh.paused} PAUSED`);
+    }
+    if ((refresh.completed ?? 0) > 0) {
+      statusBits.push(`${refresh.completed} beendet`);
+    }
+    if ((refresh.missingAtMeta ?? 0) > 0) {
+      statusBits.push(`${refresh.missingAtMeta} bei Meta nicht mehr lesbar`);
+    }
     parts.push(
       `Meta-Status nachgeladen: ${refresh.refreshed ?? 0}/${refresh.requested} lokal geschrieben` +
-        (typeof refresh.paused === "number"
-          ? ` (${refresh.paused} PAUSED bei Meta)`
-          : "") +
+        (statusBits.length > 0 ? ` (${statusBits.join(", ")})` : "") +
         ((refresh.targetsRepaired ?? 0) > 0
           ? `, ${refresh.targetsRepaired} Ziel(e) auf MANAGED`
           : ""),
