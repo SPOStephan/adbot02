@@ -19,6 +19,26 @@ type OrganicBoostResponse = {
   lastError?: string | null;
 };
 
+type HardCapForceResumeResponse = {
+  outcome?: string;
+  created?: number;
+  existing?: number;
+  blocked?: number;
+  revived?: number;
+  exposuresCleared?: number;
+  scheduleEnded?: number;
+  error?: string | null;
+};
+
+type HardCapStatusDrainResponse = {
+  duePlans?: number;
+  runs?: number;
+  succeeded?: number;
+  failed?: number;
+  lastOutcome?: string | null;
+  lastError?: string | null;
+};
+
 type SyncResponse = {
   ok?: boolean;
   error?: string;
@@ -26,6 +46,8 @@ type SyncResponse = {
   newCount?: number;
   retryAt?: string | null;
   organicBoost?: OrganicBoostResponse | null;
+  hardCapForceResume?: HardCapForceResumeResponse | null;
+  hardCapStatus?: HardCapStatusDrainResponse | null;
 };
 
 type NoticeKind = "success" | "info" | "error";
@@ -150,12 +172,89 @@ function organicBoostNoticeKind(boost: OrganicBoostResponse | null | undefined):
   return "info";
 }
 
-function combineNoticeKind(contentOk: boolean, boostKind: NoticeKind): NoticeKind {
-  if (!contentOk) {
+function hardCapResumeNotice(
+  forceResume: HardCapForceResumeResponse | null | undefined,
+  drain: HardCapStatusDrainResponse | null | undefined,
+): string | null {
+  if (!forceResume && !drain) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  const created = forceResume?.created ?? 0;
+  const existing = forceResume?.existing ?? 0;
+  const revived = forceResume?.revived ?? 0;
+  const scheduleEnded = forceResume?.scheduleEnded ?? 0;
+  const blocked = forceResume?.blocked ?? 0;
+  const succeeded = drain?.succeeded ?? 0;
+  const failed = drain?.failed ?? 0;
+  const forceError = forceResume?.error?.trim();
+  const drainError = drain?.lastError?.trim();
+
+  if (created + existing + revived > 0 || succeeded > 0) {
+    parts.push(
+      `Reaktivierung: ${created + existing} geplant` +
+        (revived > 0 ? `, ${revived} erneut versucht` : "") +
+        (succeeded > 0 ? `, ${succeeded} an Meta geschrieben` : ""),
+    );
+  }
+
+  if (scheduleEnded > 0) {
+    parts.push(
+      `${scheduleEnded} nicht reaktiviert (Laufzeit bereits beendet)`,
+    );
+  } else if (
+    blocked > 0 &&
+    created + existing + revived === 0 &&
+    succeeded === 0
+  ) {
+    parts.push(`Reaktivierung: ${blocked} Kampagne(n) blockiert`);
+  }
+
+  if (failed > 0) {
+    parts.push(`${failed} Meta-Schreibfehler`);
+  }
+
+  if (forceError) {
+    parts.push(`Reaktivierung-Fehler: ${forceError}`);
+  } else if (drainError && succeeded === 0 && created + existing + revived > 0) {
+    parts.push(`Executor: ${drainError}`);
+  }
+
+  return parts.length > 0 ? parts.join(". ") + "." : null;
+}
+
+function hardCapResumeNoticeKind(
+  forceResume: HardCapForceResumeResponse | null | undefined,
+  drain: HardCapStatusDrainResponse | null | undefined,
+): NoticeKind {
+  if (forceResume?.error || (drain?.failed ?? 0) > 0) {
     return "error";
   }
-  if (boostKind === "error") {
+  if ((forceResume?.scheduleEnded ?? 0) > 0) {
+    return "info";
+  }
+  if (
+    (forceResume?.created ?? 0) +
+      (forceResume?.existing ?? 0) +
+      (forceResume?.revived ?? 0) +
+      (drain?.succeeded ?? 0) >
+    0
+  ) {
+    return "success";
+  }
+  return "info";
+}
+
+function combineNoticeKind(
+  contentOk: boolean,
+  ...kinds: NoticeKind[]
+): NoticeKind {
+  if (!contentOk || kinds.includes("error")) {
     return "error";
+  }
+  if (kinds.includes("success")) {
+    return "success";
   }
   // Abruf ohne neue Beiträge ist Erfolg — auch wenn Boost nur informiert
   // (keine Treffer / noch nicht aktiv), nicht rot.
@@ -252,9 +351,20 @@ export function MetaSyncButton({
             : "Abruf abgeschlossen. Es gibt aktuell keine neuen Beiträge.";
       const boostText = organicBoostNotice(body.organicBoost);
       const boostKind = organicBoostNoticeKind(body.organicBoost);
+      const hardCapText = hardCapResumeNotice(
+        body.hardCapForceResume,
+        body.hardCapStatus,
+      );
+      const hardCapKind = hardCapResumeNoticeKind(
+        body.hardCapForceResume,
+        body.hardCapStatus,
+      );
+      const text = [contentText, boostText, hardCapText]
+        .filter((part): part is string => Boolean(part))
+        .join(" ");
       setNotice({
-        kind: combineNoticeKind(true, boostKind),
-        text: boostText ? `${contentText} ${boostText}` : contentText,
+        kind: combineNoticeKind(true, boostKind, hardCapKind),
+        text,
       });
       router.refresh();
     } catch (error) {
