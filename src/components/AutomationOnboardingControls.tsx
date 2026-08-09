@@ -50,6 +50,8 @@ export type RecentLaunchPlanView = {
   id: string;
   status: string;
   createdAt: string;
+  /** Held canaries use far-future / infinity not_before while status stays PENDING. */
+  notBefore: string | null;
   payloadHash: string | null;
   objective: string | null;
   destinationUrl: string | null;
@@ -99,9 +101,17 @@ type HeldLaunchPlan = HeldLaunchPlanCommon &
       }
   );
 
+function planLooksHeld(plan: RecentLaunchPlanView): boolean {
+  if (plan.status === "HELD") return true;
+  if (plan.status !== "PENDING" || !plan.notBefore) return false;
+  if (plan.notBefore.toLowerCase() === "infinity") return true;
+  const ms = Date.parse(plan.notBefore);
+  return Number.isFinite(ms) && ms > Date.now() + 30 * 24 * 60 * 60 * 1000;
+}
+
 function toHeldLaunchPlan(plan: RecentLaunchPlanView): HeldLaunchPlan | null {
   if (
-    plan.status !== "HELD" ||
+    !planLooksHeld(plan) ||
     !plan.payloadHash ||
     !plan.objective ||
     !plan.destinationUrl ||

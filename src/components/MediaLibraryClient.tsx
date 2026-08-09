@@ -174,15 +174,25 @@ export function MediaLibraryClient({
               <p className="mt-1 text-xs text-slate-400">
                 {new Date(asset.createdAt).toLocaleString("de-DE")}
               </p>
-              <a
-                className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
-                href={`/api/media-library/preview?assetId=${asset.id}`}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                Vorschau-URL
-                <ExternalLink className="size-3" />
-              </a>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <a
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                  href={`/api/media-library/preview?assetId=${asset.id}`}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  Vorschau
+                  <ExternalLink className="size-3" />
+                </a>
+                {asset.status === "READY" ? (
+                  <a
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
+                    href={`/dashboard?assetId=${asset.id}#traffic-launch`}
+                  >
+                    Für Traffic-Kampagne nutzen
+                  </a>
+                ) : null}
+              </div>
             </article>
           ))}
           {!assets.length ? (

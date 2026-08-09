@@ -27,6 +27,7 @@ import {
   AutomationOnboardingControls,
   type AutomationOnboardingData,
 } from "@/components/AutomationOnboardingControls";
+import { TrafficLaunchCanary } from "@/components/TrafficLaunchCanary";
 import {
   AutomationScopeManager,
   type AutomationScopeCampaignView,
@@ -92,6 +93,7 @@ type AutomationControlCenterProps = {
   boostSettings: BoostSettingsView | null;
   boostEligibleAssets: BoostEligibleAssetView[];
   onboarding: AutomationOnboardingData;
+  initialTrafficAssetId?: string | null;
   readiness: {
     writeScopeGranted: boolean;
     verifiedDomains: number;
@@ -312,6 +314,7 @@ export function AutomationControlCenter({
   currency,
   killSwitch,
   onboarding,
+  initialTrafficAssetId = null,
   policy,
   readiness,
 }: AutomationControlCenterProps) {
@@ -913,6 +916,20 @@ export function AutomationControlCenter({
           canConfirm={canConfirmBudgetCanary}
           currency={currency}
           plans={budgetCanaries}
+        />
+
+        <TrafficLaunchCanary
+          brandProfileId={brandProfile?.id ?? null}
+          currency={currency}
+          data={onboarding}
+          initialAssetId={initialTrafficAssetId}
+          killSwitchMode={killSwitch?.mode ?? "FREEZE_WRITES"}
+          policyLaunchReady={Boolean(
+            policy?.status === "ACTIVE" &&
+              policy.allowNewLaunches &&
+              policy.allowStatusChanges,
+          )}
+          writeScopeGranted={readiness.writeScopeGranted}
         />
 
         <AutomationOnboardingControls
