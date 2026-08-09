@@ -24,31 +24,15 @@ export type OrganicBoostHardCapForceResumeResult = {
   revived: number;
   exposuresCleared: number;
   scheduleEnded: number;
+  candidates: number;
   error: string | null;
 };
 
-/**
- * Queues ACTIVATE for Beitrag-Push campaigns wrongly SAFETY_PAUSEd by hard-cap,
- * even when the account is still over the hard-cap (same-day reserve).
- */
-export async function forceResumeOrganicBoostHardCapPauses(input: {
-  platformAccountId: string;
-  userId: string;
-  marketingSyncId: string;
-  plannedAt?: string;
-}): Promise<OrganicBoostHardCapForceResumeResult> {
-  const admin = createAdminClient();
-  const { data, error } = await admin.rpc(
-    "force_resume_meta_organic_boost_hard_cap_pauses",
-    {
-      p_platform_account_id: input.platformAccountId,
-      p_user_id: input.userId,
-      p_source_marketing_sync_id: input.marketingSyncId,
-      p_planned_at: input.plannedAt ?? new Date().toISOString(),
-    },
-  );
-
-  if (error) {
+function parseForceResumeRow(
+  data: unknown,
+  errorMessage: string | null,
+): OrganicBoostHardCapForceResumeResult {
+  if (errorMessage) {
     return {
       outcome: "ERROR",
       reason: null,
@@ -58,7 +42,8 @@ export async function forceResumeOrganicBoostHardCapPauses(input: {
       revived: 0,
       exposuresCleared: 0,
       scheduleEnded: 0,
-      error: error.message || "force_resume_rpc_failed",
+      candidates: 0,
+      error: errorMessage,
     };
   }
 
@@ -79,6 +64,7 @@ export async function forceResumeOrganicBoostHardCapPauses(input: {
       revived: 0,
       exposuresCleared: 0,
       scheduleEnded: 0,
+      candidates: 0,
       error: "force_resume_result_empty",
     };
   }
@@ -92,13 +78,75 @@ export async function forceResumeOrganicBoostHardCapPauses(input: {
     revived: Number(row.revived ?? 0) || 0,
     exposuresCleared: Number(row.exposures_cleared ?? 0) || 0,
     scheduleEnded: Number(row.schedule_ended ?? 0) || 0,
+    candidates: Number(row.candidates ?? 0) || 0,
     error: null,
   };
 }
 
-const HARD_CAP_RULE_KEYS = [
+/**
+ * Aggressive recovery: ACTIVATE every current PAUSED Beitrag-Push campaign
+ * with remaining schedule — no prior SAFETY_PAUSE required.
+ */
+export async function forceReactivatePausedOrganicBoostCampaigns(input: {
+  platformAccountId: string;
+  userId: string;
+  marketingSyncId: string;
+  plannedAt?: string;
+}): Promise<OrganicBoostHardCapForceResumeResult> {
+  const admin = createAdminClient();
+  const plannedAt = input.plannedAt ?? new Date().toISOString();
+
+  const primary = await admin.rpc(
+    "force_reactivate_paused_meta_organic_boost_campaigns",
+    {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+      p_source_marketing_sync_id: input.marketingSyncId,
+      p_planned_at: plannedAt,
+    },
+  );
+
+  if (!primary.error) {
+    return parseForceResumeRow(primary.data, null);
+  }
+
+  // Fallback while 20260809130000 is not applied yet.
+  const fallback = await admin.rpc(
+    "force_resume_meta_organic_boost_hard_cap_pauses",
+    {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+      p_source_marketing_sync_id: input.marketingSyncId,
+      p_planned_at: plannedAt,
+    },
+  );
+
+  if (fallback.error) {
+    return parseForceResumeRow(
+      null,
+      primary.error.message ||
+        fallback.error.message ||
+        "force_reactivate_rpc_failed",
+    );
+  }
+
+  return parseForceResumeRow(fallback.data, null);
+}
+
+/** @deprecated Prefer forceReactivatePausedOrganicBoostCampaigns */
+export async function forceResumeOrganicBoostHardCapPauses(input: {
+  platformAccountId: string;
+  userId: string;
+  marketingSyncId: string;
+  plannedAt?: string;
+}): Promise<OrganicBoostHardCapForceResumeResult> {
+  return forceReactivatePausedOrganicBoostCampaigns(input);
+}
+
+const STATUS_REACTIVATE_RULE_KEYS = [
   "hard_cap_day_resume",
   "hard_cap_exposure_breach",
+  "organic_boost_reactivate",
 ] as const;
 
 async function countDueHardCapStatusPlans(input: {
@@ -111,7 +159,7 @@ async function countDueHardCapStatusPlans(input: {
     .select("id")
     .eq("user_id", input.userId)
     .eq("platform_account_id", input.platformAccountId)
-    .in("source_rule_key", [...HARD_CAP_RULE_KEYS])
+    .in("source_rule_key", [...STATUS_REACTIVATE_RULE_KEYS])
     .in("action_type", ["ACTIVATE", "SAFETY_PAUSE"])
     .in("status", [
       "PENDING",
@@ -121,7 +169,7 @@ async function countDueHardCapStatusPlans(input: {
       "RECONCILING",
     ])
     .lte("not_before", new Date().toISOString())
-    .limit(20);
+    .limit(40);
 
   if (error) {
     return { count: 0, error: error.message || "due_plan_count_failed" };
@@ -130,9 +178,8 @@ async function countDueHardCapStatusPlans(input: {
 }
 
 /**
- * Drains hard-cap SAFETY_PAUSE / day-resume ACTIVATE plans for one account.
- * Dashboard + cron use this so Meta status writes do not depend solely on a
- * single plan per minute when Beitrag-Push drain is idle.
+ * Drains hard-cap / organic-boost ACTIVATE plans for one account.
+ * Forces the account WRITE lease idle via prepare_write_now when available.
  */
 export async function drainHardCapStatusExecutionsForAccount(input: {
   platformAccountId: string;
@@ -150,12 +197,19 @@ export async function drainHardCapStatusExecutionsForAccount(input: {
 
   const admin = createAdminClient();
   try {
-    await admin.rpc("heal_meta_account_operation_lease", {
+    await admin.rpc("prepare_meta_organic_boost_write_now", {
       p_platform_account_id: input.platformAccountId,
       p_user_id: input.userId,
     });
   } catch {
-    // Heal is best-effort; claim may still succeed if the lease is already idle.
+    try {
+      await admin.rpc("heal_meta_account_operation_lease", {
+        p_platform_account_id: input.platformAccountId,
+        p_user_id: input.userId,
+      });
+    } catch {
+      // Lease heal is best-effort.
+    }
   }
 
   for (let index = 0; index < maxRuns; index += 1) {

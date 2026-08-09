@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   drainHardCapStatusExecutionsForAccount,
-  forceResumeOrganicBoostHardCapPauses,
+  forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
 import { syncMetaConnector } from "@/lib/meta/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -123,6 +123,7 @@ export async function POST() {
     revived: number;
     exposuresCleared: number;
     scheduleEnded: number;
+    candidates: number;
     error: string | null;
   } | null = null;
   let hardCapDrain: {
@@ -148,7 +149,7 @@ export async function POST() {
         : null;
 
     if (marketingSyncId) {
-      const forceResume = await forceResumeOrganicBoostHardCapPauses({
+      const forceResume = await forceReactivatePausedOrganicBoostCampaigns({
         platformAccountId: connector.id,
         userId: user.id,
         marketingSyncId,
@@ -161,6 +162,7 @@ export async function POST() {
         revived: forceResume.revived,
         exposuresCleared: forceResume.exposuresCleared,
         scheduleEnded: forceResume.scheduleEnded,
+        candidates: forceResume.candidates,
         error: forceResume.error,
       };
     }
@@ -173,6 +175,7 @@ export async function POST() {
       revived: 0,
       exposuresCleared: 0,
       scheduleEnded: 0,
+      candidates: 0,
       error: "force_resume_exception",
     };
   }

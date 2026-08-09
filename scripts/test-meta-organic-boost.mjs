@@ -187,6 +187,25 @@ assert.match(
   read("src/components/MetaSyncButton.tsx"),
   /Laufzeit bereits beendet/,
 );
+const reactivateAllPausedBoostsMigration = read(
+  "supabase/migrations/20260809130000_meta_reactivate_all_paused_organic_boost.sql",
+);
+assert.match(
+  reactivateAllPausedBoostsMigration,
+  /force_reactivate_paused_meta_organic_boost_campaigns/,
+);
+assert.match(
+  reactivateAllPausedBoostsMigration,
+  /organic_boost_reactivate/,
+);
+assert.match(
+  read("src/lib/meta/hard-cap-status-execute.ts"),
+  /forceReactivatePausedOrganicBoostCampaigns/,
+);
+assert.match(
+  read("src/app/api/connectors/meta/sync/route.ts"),
+  /forceReactivatePausedOrganicBoostCampaigns/,
+);
 assert.match(
   read("src/app/api/connectors/meta/sync/route.ts"),
   /organicBoost/,
@@ -1128,11 +1147,15 @@ assert.match(
 );
 assert.match(
   read("src/lib/meta/hard-cap-status-execute.ts"),
-  /forceResumeOrganicBoostHardCapPauses/,
+  /forceReactivatePausedOrganicBoostCampaigns/,
 );
 assert.match(
   read("src/app/api/connectors/meta/sync/route.ts"),
-  /forceResumeOrganicBoostHardCapPauses/,
+  /forceReactivatePausedOrganicBoostCampaigns/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /forceReactivatePausedOrganicBoostCampaigns/,
 );
 assert.match(
   finalizeActiveNoStepMigration,

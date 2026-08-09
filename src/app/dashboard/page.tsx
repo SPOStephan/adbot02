@@ -82,7 +82,10 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
-import { drainHardCapStatusExecutionsForAccount } from "@/lib/meta/hard-cap-status-execute";
+import {
+  drainHardCapStatusExecutionsForAccount,
+  forceReactivatePausedOrganicBoostCampaigns,
+} from "@/lib/meta/hard-cap-status-execute";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
@@ -515,6 +518,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
 
     try {
+      const marketingSyncId =
+        typeof metaAccount.marketing_sync_id === "string"
+          ? metaAccount.marketing_sync_id
+          : null;
+      if (marketingSyncId) {
+        const forceResume = await forceReactivatePausedOrganicBoostCampaigns({
+          userId: user.id,
+          platformAccountId: metaAccount.id,
+          marketingSyncId,
+        });
+        if (
+          forceResume.error ||
+          forceResume.created > 0 ||
+          forceResume.existing > 0 ||
+          forceResume.candidates > 0
+        ) {
+          console.error("organic_boost_dashboard_force_reactivate", {
+            platformAccountId: metaAccount.id,
+            ...forceResume,
+          });
+        }
+      }
+
       const hardCapDrain = await drainHardCapStatusExecutionsForAccount({
         userId: user.id,
         platformAccountId: metaAccount.id,
