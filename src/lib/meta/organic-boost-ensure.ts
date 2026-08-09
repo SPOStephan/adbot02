@@ -37,37 +37,79 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-async function lastEnsureAtMs(input: {
+async function lastSuccessfulEnsureAtMs(input: {
   userId: string;
   platformAccountId: string;
 }): Promise<number | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("platform_accounts")
-    .select("sync_usage,organic_boost_planner_last_run_at")
+    .select("sync_usage")
     .eq("id", input.platformAccountId)
     .eq("user_id", input.userId)
     .maybeSingle();
 
-  const candidates: number[] = [];
-  const plannerAt = data?.organic_boost_planner_last_run_at;
-  if (typeof plannerAt === "string") {
-    const ms = new Date(plannerAt).getTime();
-    if (Number.isFinite(ms)) candidates.push(ms);
-  }
-
+  // Only the success marker — planner_last_run_at also updates on MATERIALIZE_FAILED
+  // and must not suppress retries.
   const usage = asRecord(data?.sync_usage);
   const boost = asRecord(usage.organic_boost);
-  for (const key of ["ensured_at", "observed_at"] as const) {
-    const raw = boost[key];
-    if (typeof raw === "string") {
-      const ms = new Date(raw).getTime();
-      if (Number.isFinite(ms)) candidates.push(ms);
-    }
+  const raw = boost.ensured_at;
+  if (typeof raw !== "string") return null;
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+async function repairOrphanInstagramPageLinks(input: {
+  userId: string;
+  platformAccountId: string;
+}): Promise<void> {
+  const admin = createAdminClient();
+  const [{ data: pages }, { data: orphans }] = await Promise.all([
+    admin
+      .from("meta_assets")
+      .select("meta_asset_id")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("asset_type", "facebook_page")
+      .limit(5),
+    admin
+      .from("meta_assets")
+      .select("id,parent_meta_asset_id")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("asset_type", "instagram_account")
+      .limit(20),
+  ]);
+
+  if (!pages || pages.length !== 1 || !orphans?.length) {
+    return;
   }
 
-  if (!candidates.length) return null;
-  return Math.max(...candidates);
+  const pageId = String(pages[0]?.meta_asset_id ?? "");
+  if (!pageId || pageId.length < 5) {
+    return;
+  }
+
+  const orphanIds = orphans
+    .filter((row) => {
+      const parent = row.parent_meta_asset_id;
+      return parent == null || String(parent).length < 5;
+    })
+    .map((row) => String(row.id));
+
+  if (!orphanIds.length) {
+    return;
+  }
+
+  await admin
+    .from("meta_assets")
+    .update({
+      parent_meta_asset_id: pageId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", input.userId)
+    .eq("platform_account_id", input.platformAccountId)
+    .in("id", orphanIds);
 }
 
 async function markEnsureTimestamp(input: {
@@ -124,7 +166,7 @@ export async function planAndDrainOrganicBoostForAccount(input: {
   skippedRecent: boolean;
 }> {
   if (input.skipIfRecentMs && input.skipIfRecentMs > 0) {
-    const lastAt = await lastEnsureAtMs({
+    const lastAt = await lastSuccessfulEnsureAtMs({
       userId: input.userId,
       platformAccountId: input.platformAccountId,
     });
@@ -132,6 +174,11 @@ export async function planAndDrainOrganicBoostForAccount(input: {
       return { planner: null, drain: null, skippedRecent: true };
     }
   }
+
+  await repairOrphanInstagramPageLinks({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+  }).catch(() => undefined);
 
   let planner: MetaOrganicBoostPlannerResult | null = null;
 
@@ -196,10 +243,14 @@ export async function planAndDrainOrganicBoostForAccount(input: {
     };
   }
 
-  await markEnsureTimestamp({
-    userId: input.userId,
-    platformAccountId: input.platformAccountId,
-  }).catch(() => undefined);
+  const ensureSucceeded =
+    planned > 0 || (drain?.succeeded ?? 0) > 0 || (drain?.runs ?? 0) > 0;
+  if (ensureSucceeded) {
+    await markEnsureTimestamp({
+      userId: input.userId,
+      platformAccountId: input.platformAccountId,
+    }).catch(() => undefined);
+  }
 
   return { planner, drain, skippedRecent: false };
 }

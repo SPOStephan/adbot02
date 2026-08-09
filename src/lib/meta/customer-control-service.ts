@@ -1295,67 +1295,10 @@ export type PlanCustomerOrganicBoostResult = MetaOrganicBoostPlannerResult & {
   executorLastError: string | null;
 };
 
-async function repairOrphanInstagramPageLinks(input: {
-  userId: string;
-  platformAccountId: string;
-}): Promise<void> {
-  const admin = createAdminClient();
-  const [{ data: pages }, { data: orphans }] = await Promise.all([
-    admin
-      .from("meta_assets")
-      .select("meta_asset_id")
-      .eq("user_id", input.userId)
-      .eq("platform_account_id", input.platformAccountId)
-      .eq("asset_type", "facebook_page")
-      .limit(5),
-    admin
-      .from("meta_assets")
-      .select("id,parent_meta_asset_id")
-      .eq("user_id", input.userId)
-      .eq("platform_account_id", input.platformAccountId)
-      .eq("asset_type", "instagram_account")
-      .limit(20),
-  ]);
-
-  if (!pages || pages.length !== 1 || !orphans?.length) {
-    return;
-  }
-
-  const pageId = String(pages[0]?.meta_asset_id ?? "");
-  if (!pageId || pageId.length < 5) {
-    return;
-  }
-
-  const orphanIds = orphans
-    .filter((row) => {
-      const parent = row.parent_meta_asset_id;
-      return parent == null || String(parent).length < 5;
-    })
-    .map((row) => String(row.id));
-
-  if (!orphanIds.length) {
-    return;
-  }
-
-  await admin
-    .from("meta_assets")
-    .update({
-      parent_meta_asset_id: pageId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", input.userId)
-    .eq("platform_account_id", input.platformAccountId)
-    .in("id", orphanIds);
-}
-
 export async function planCustomerOrganicBoost(
   customer: MetaCustomer,
 ): Promise<PlanCustomerOrganicBoostResult> {
-  await repairOrphanInstagramPageLinks({
-    userId: customer.userId,
-    platformAccountId: customer.platformAccountId,
-  }).catch(() => undefined);
-
+  // Instagram orphan repair runs inside planAndDrainOrganicBoostForAccount.
   const ensured = await planAndDrainOrganicBoostForAccount({
     platformAccountId: customer.platformAccountId,
     userId: customer.userId,
