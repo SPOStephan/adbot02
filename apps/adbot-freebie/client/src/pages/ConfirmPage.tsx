@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 function readToken() {
   if (typeof window === "undefined") return "";
@@ -18,41 +18,54 @@ export function ConfirmPage() {
   }, [token, confirmMutation]);
 
   if (!token) {
-    return <Shell>Bestätigungslink unvollständig.</Shell>;
+    return <PublicShell>Bestätigungslink unvollständig.</PublicShell>;
   }
 
-  if (confirmMutation.isPending) {
-    return <Shell>Bestätige E-Mail…</Shell>;
+  if (confirmMutation.isPending || (!confirmMutation.data && !confirmMutation.error)) {
+    return <PublicShell>Bestätige E-Mail…</PublicShell>;
   }
 
   if (confirmMutation.error) {
-    return <Shell>{confirmMutation.error.message}</Shell>;
+    return <PublicShell>{confirmMutation.error.message}</PublicShell>;
   }
 
-  const data = confirmMutation.data;
-  if (!data) return <Shell>Bestätige E-Mail…</Shell>;
+  const data = confirmMutation.data!;
 
   return (
-    <Shell>
-      <p className="brand text-4xl">Adbot Freebie</p>
-      <h1 className="mt-4 text-2xl font-semibold">{data.title}</h1>
-      <p className="mt-3 text-[var(--muted)]">E-Mail bestätigt — dein Freebie ist bereit.</p>
-      <a
-        className="mt-8 inline-flex rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white"
-        href={data.downloadUrl}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        Freebie herunterladen
-      </a>
-    </Shell>
+    <PublicShell>
+      <p className="funnel-eyebrow">Adbot Freebie</p>
+      <h1>{data.title}</h1>
+      <p className="funnel-description">E-Mail bestätigt — dein Freebie ist bereit.</p>
+      <div className="mt-8">
+        <a
+          className="funnel-primary-button"
+          href={data.downloadUrl}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          Freebie herunterladen
+        </a>
+      </div>
+    </PublicShell>
   );
 }
 
-function Shell({ children }: { children: import("react").ReactNode }) {
+function PublicShell({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-16">
-      {children}
-    </main>
+    <div className="funnel-canvas">
+      <header className="funnel-header">
+        <div className="funnel-wordmark">
+          <span className="funnel-wordmark-mark" aria-hidden="true">
+            AF
+          </span>
+          Adbot Freebie
+        </div>
+      </header>
+      <main className="funnel-main">
+        <section className="funnel-step">
+          <div className="funnel-copy">{children}</div>
+        </section>
+      </main>
+    </div>
   );
 }

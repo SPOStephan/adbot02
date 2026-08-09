@@ -12,12 +12,14 @@ export default function App() {
       <Route path="/o/:slug" component={OfferPage} />
       <Route path="/confirm" component={ConfirmPage} />
       <Route>
-        <main className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-16">
-          <div>
-            <p className="brand text-4xl">Adbot Freebie</p>
-            <p className="mt-3 text-[var(--muted)]">Seite nicht gefunden.</p>
-          </div>
-        </main>
+        <div className="funnel-canvas">
+          <main className="funnel-main">
+            <section className="funnel-step">
+              <p className="funnel-eyebrow">Adbot Freebie</p>
+              <h1>Seite nicht gefunden.</h1>
+            </section>
+          </main>
+        </div>
       </Route>
     </Switch>
   );
