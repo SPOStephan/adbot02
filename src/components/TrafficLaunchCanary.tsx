@@ -4,17 +4,21 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
+  ImagePlus,
   LoaderCircle,
   PlayCircle,
   Rocket,
   ShieldCheck,
-  Upload,
 } from "lucide-react";
 
 import type {
   AutomationOnboardingData,
   RecentLaunchPlanView,
 } from "@/components/AutomationOnboardingControls";
+import {
+  CreativePickerModal,
+  type PickerAsset,
+} from "@/components/CreativePickerModal";
 
 type Notice = { tone: "success" | "error"; message: string } | null;
 
@@ -180,15 +184,28 @@ export function TrafficLaunchCanary({
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [destinationUrl, setDestinationUrl] = useState("");
   const [dailyBudget, setDailyBudget] = useState("20.00");
   const [primaryText, setPrimaryText] = useState("Mehr erfahren.");
+  const [pickerAssets, setPickerAssets] = useState<PickerAsset[]>(() =>
+    data.brandAssets.map((asset) => ({
+      id: asset.id,
+      originalFilename: asset.originalFilename,
+      width: asset.width,
+      height: asset.height,
+      label: null,
+    })),
+  );
   const [assetId, setAssetId] = useState(
-    initialAssetId && data.brandAssets.some((asset) => asset.id === initialAssetId)
+    initialAssetId &&
+      data.brandAssets.some((asset) => asset.id === initialAssetId)
       ? initialAssetId
       : (data.brandAssets[0]?.id ?? ""),
   );
+  const selectedAsset =
+    pickerAssets.find((asset) => asset.id === assetId) ?? null;
   const [heldPlan, setHeldPlan] = useState<HeldPlan | null>(() => {
     for (const plan of data.recentLaunchPlans) {
       const held = toHeldFromRecent(plan);
@@ -207,13 +224,17 @@ export function TrafficLaunchCanary({
       { label: "Launch-Policy aktiv", ready: policyLaunchReady },
       { label: "Exposure-Snapshot", ready: data.snapshotReady },
       { label: "Brand-Profil", ready: Boolean(brandProfileId) },
-      { label: "Creative bereit", ready: data.brandAssets.length > 0 },
+      {
+        label: "Creative bereit",
+        ready: pickerAssets.length > 0 || Boolean(assetId),
+      },
     ],
     [
+      assetId,
       brandProfileId,
       currency,
-      data.brandAssets.length,
       data.snapshotReady,
+      pickerAssets.length,
       policyLaunchReady,
       writeScopeGranted,
     ],
@@ -537,39 +558,44 @@ export function TrafficLaunchCanary({
         </li>
       </ul>
 
-      {!data.brandAssets.length ? (
-        <p className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          Noch kein freigegebenes Creative.{" "}
-          <a
-            className="font-bold text-blue-700 hover:underline"
-            href="/dashboard/creatives"
-          >
-            Zur Media Library hochladen
-          </a>
-          .
-        </p>
-      ) : null}
-
       <form className="mt-6 grid gap-4 lg:grid-cols-2" onSubmit={prepare}>
-        <label className="text-sm font-bold text-slate-800">
+        <div className="text-sm font-bold text-slate-800">
           Creative
-          <select
-            className={inputClass}
-            disabled={pending || !data.brandAssets.length}
-            onChange={(event) => setAssetId(event.target.value)}
-            required
-            value={assetId}
+          <button
+            className="mt-2 flex w-full items-center gap-3 rounded-xl border border-slate-300 bg-white p-3 text-left transition hover:border-blue-400 hover:bg-slate-50 disabled:opacity-50"
+            disabled={pending}
+            onClick={() => setPickerOpen(true)}
+            type="button"
           >
-            {data.brandAssets.map((asset) => (
-              <option key={asset.id} value={asset.id}>
-                {asset.originalFilename}
-                {asset.width && asset.height
-                  ? ` (${asset.width}×${asset.height})`
+            <span className="relative size-14 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+              {selectedAsset ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt=""
+                  className="size-full object-cover"
+                  src={`/api/media-library/preview?assetId=${selectedAsset.id}`}
+                />
+              ) : (
+                <span className="grid size-full place-items-center text-slate-400">
+                  <ImagePlus className="size-5" />
+                </span>
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-extrabold text-slate-950">
+                {selectedAsset
+                  ? selectedAsset.originalFilename
+                  : "Creative wählen oder hochladen"}
+              </span>
+              <span className="mt-1 block text-xs font-medium text-slate-500">
+                {selectedAsset?.width && selectedAsset?.height
+                  ? `${selectedAsset.width}×${selectedAsset.height} · `
                   : ""}
-              </option>
-            ))}
-          </select>
-        </label>
+                Öffnet Auswahl-Layer — ohne Seitenwechsel
+              </span>
+            </span>
+          </button>
+        </div>
         <label className="text-sm font-bold text-slate-800">
           Tagesbudget (EUR)
           <input
@@ -610,7 +636,7 @@ export function TrafficLaunchCanary({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:col-span-2">
           <button
             className={buttonClass}
-            disabled={pending || !gatesReady || Boolean(heldPlan)}
+            disabled={pending || !gatesReady || !assetId || Boolean(heldPlan)}
             type="submit"
           >
             {pending && !heldPlan ? (
@@ -620,15 +646,38 @@ export function TrafficLaunchCanary({
             )}
             Traffic vorbereiten
           </button>
-          <a
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50"
-            href="/dashboard/creatives"
+          <button
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            disabled={pending}
+            onClick={() => setPickerOpen(true)}
+            type="button"
           >
-            <Upload className="size-4" />
-            Creative hochladen
-          </a>
+            <ImagePlus className="size-4" />
+            Creative wechseln
+          </button>
         </div>
       </form>
+
+      <CreativePickerModal
+        assets={pickerAssets}
+        brandProfileId={brandProfileId}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(id) => setAssetId(id)}
+        onUploaded={({ preferredLaunchAssetId, assets }) => {
+          setPickerAssets((previous) => {
+            const map = new Map(previous.map((asset) => [asset.id, asset]));
+            for (const asset of assets) {
+              map.set(asset.id, asset);
+            }
+            return [...map.values()];
+          });
+          setAssetId(preferredLaunchAssetId);
+          // Soft refresh so Control Center / Media Library stay in sync.
+          refresh();
+        }}
+        open={pickerOpen}
+        selectedAssetId={assetId || null}
+      />
 
       {heldPlan ? (
         <form
