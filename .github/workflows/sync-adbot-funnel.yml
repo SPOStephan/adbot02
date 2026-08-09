@@ -1,13 +1,9 @@
 # Spiegelt apps/adbot-funnel nach SPOStephan/adbot-funnel (Vercel-Deploy-Repo).
 #
-# Einmalig nötig in adbot02 → Settings → Secrets and variables → Actions:
-#   Name:  ADBOT_FUNNEL_SYNC_TOKEN
-#   Wert:  GitHub PAT mit Schreibrecht auf SPOStephan/adbot-funnel
-#          (Fine-grained: Contents Read/Write auf adbot-funnel
-#           oder Classic: Scope "repo")
+# Baut Frontend + API-Bundle VOR dem Push, weil Vercel den vercel-build
+# hier nicht zuverlässig ausgeführt hat (3s-Deploys ohne api/index.js → 404).
 #
-# Danach: Actions → "Sync adbot-funnel mirror" → Run workflow
-# oder automatisch bei Push auf main unter apps/adbot-funnel/**
+# Secret in adbot02: ADBOT_FUNNEL_SYNC_TOKEN (PAT mit Schreibrecht auf adbot-funnel)
 
 name: Sync adbot-funnel mirror
 
@@ -40,12 +36,23 @@ jobs:
           TOKEN: ${{ secrets.ADBOT_FUNNEL_SYNC_TOKEN }}
         run: |
           if [ -z "${TOKEN}" ]; then
-            echo "::error::Secret ADBOT_FUNNEL_SYNC_TOKEN fehlt in adbot02 (Settings → Secrets and variables → Actions)."
-            echo "::error::Lege ein PAT mit Schreibrecht auf SPOStephan/adbot-funnel an und speichere es unter diesem Namen."
+            echo "::error::Secret ADBOT_FUNNEL_SYNC_TOKEN fehlt in adbot02."
             exit 1
           fi
 
-      - name: Mirror apps/adbot-funnel → SPOStephan/adbot-funnel
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/adbot-funnel/pnpm-lock.yaml
+
+      - name: Mirror, build, and push to SPOStephan/adbot-funnel
         env:
           TOKEN: ${{ secrets.ADBOT_FUNNEL_SYNC_TOKEN }}
         run: |
@@ -67,6 +74,10 @@ jobs:
             --exclude 'node_modules' \
             --exclude 'dist' \
             --exclude 'build' \
+            --exclude 'public' \
+            --exclude 'api/index.js' \
+            --exclude 'api/index.bundle.cjs' \
+            --exclude 'api/.bundle-stamp' \
             --exclude '.env' \
             --exclude '.env.*' \
             --exclude '.vercel' \
@@ -75,13 +86,24 @@ jobs:
             "${WORK}/"
 
           cd "${WORK}"
+
+          echo "Installiere Abhängigkeiten und baue Vercel-Artefakte…"
+          pnpm install --frozen-lockfile
+          pnpm run vercel-build
+
+          test -f api/index.js
+          test -f api/index.bundle.cjs
+          test -f public/index.html
+
+          # Deploy-Artefakte sind in .gitignore — fürs Deploy-Repo trotzdem committen.
           git add -A
+          git add -f public api/index.js api/index.bundle.cjs api/.bundle-stamp
 
           if git diff --cached --quiet; then
             echo "Keine Änderungen gegenüber dem Spiegel-Repo."
             exit 0
           fi
 
-          git commit -m "sync: from adbot02/apps/adbot-funnel@${GITHUB_SHA}"
+          git commit -m "sync: from adbot02/apps/adbot-funnel@${GITHUB_SHA} (prebuilt)"
           git push origin "HEAD:${BRANCH}"
-          echo "Spiegel aktualisiert: SPOStephan/adbot-funnel@${BRANCH}"
+          echo "Spiegel aktualisiert mit Prebuild: SPOStephan/adbot-funnel@${BRANCH}"

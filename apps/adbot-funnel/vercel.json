@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm install",
-  "buildCommand": "pnpm run vercel-build",
+  "installCommand": "echo 'prebuilt by sync workflow'",
+  "buildCommand": "echo 'prebuilt by sync workflow'",
   "rewrites": [
     {
       "source": "/(.*)",
