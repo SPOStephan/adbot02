@@ -20,16 +20,16 @@ Arbeitskopie des Funnel-Builders im Adbot-Monorepo (`apps/adbot-funnel`).
 
 ## Vercel-Projekt (Deploy-Repo `adbot-funnel`)
 
+Konfiguration liegt in `vercel.json` (Framework Express, Build `pnpm run vercel-build`).
+
 | Einstellung | Wert |
 |---|---|
-| Framework | **Other** oder **Express** |
-| Root Directory | `/` (Repo-Wurzel) |
-| Install Command | `pnpm install` |
-| Build Command | `pnpm build` |
-| Output Directory | **leer** (nicht `dist`) |
-| Entry | `server.ts` (`export default app`) |
+| Framework | **Express** (oder via `vercel.json`) |
+| Root Directory | `/` |
+| Output Directory | nicht überschreiben (kein `dist`) |
+| Entry | `server.ts` mit direktem `import express` |
 
-Wenn die URL Roh-JavaScript zeigt: Output Directory leeren und Redeploy.
+Nach Sync: Redeploy. Save ausgegraut in der UI ist ok, wenn nichts geändert wurde.
 
 ## Erforderliche Env
 
