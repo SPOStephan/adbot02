@@ -1026,11 +1026,12 @@ async function loadVerifiedBrandAsset(input: {
   const { data, error } = await admin
     .from("brand_assets")
     .select(
-      "id,sha256,mime_type,byte_size,width,height,storage_bucket,storage_path,original_filename,status,moderation_status,meta_image_hash",
+      "id,sha256,mime_type,byte_size,width,height,storage_bucket,storage_path,original_filename,status,moderation_status,meta_image_hash,library_scope",
     )
     .eq("id", input.assetId)
     .eq("user_id", input.userId)
     .eq("platform_account_id", input.platformAccountId)
+    .eq("library_scope", "CUSTOMER")
     .eq("status", "READY")
     .eq("moderation_status", "APPROVED")
     .maybeSingle();

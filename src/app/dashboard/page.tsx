@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   Clock3,
   ExternalLink,
+  EyeOff,
   Filter,
   Gift,
   HelpCircle,
@@ -123,7 +124,13 @@ const baseNavigation = [
     active: false,
     external: true,
   },
-  { label: "Creatives", icon: ImageIcon, href: null, active: false, external: false },
+  {
+    label: "Creatives",
+    icon: ImageIcon,
+    href: "/dashboard/creatives",
+    active: false,
+    external: false,
+  },
   { label: "Zielgruppen", icon: Target, href: null, active: false, external: false },
   { label: "Autonomie", icon: ShieldCheck, href: "#automation-control-center", active: false, external: false },
 ];
@@ -140,6 +147,13 @@ const adminNavigationItems = [
     label: "Rechtliches",
     icon: Scale,
     href: "/dashboard/rechtliches",
+    active: false,
+    external: false,
+  },
+  {
+    label: "Inspiration",
+    icon: EyeOff,
+    href: "/dashboard/inspiration",
     active: false,
     external: false,
   },
@@ -800,6 +814,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
+          .eq("library_scope", "CUSTOMER")
           .eq("status", "READY")
           .eq("moderation_status", "APPROVED")
           .order("created_at", { ascending: false })

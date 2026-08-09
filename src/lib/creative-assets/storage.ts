@@ -15,7 +15,7 @@ const PRIVATE_BUCKET_OPTIONS = {
   allowedMimeTypes: ["image/png", "image/jpeg"],
 };
 
-async function ensurePrivateBucket(bucket: string): Promise<void> {
+export async function ensurePrivateCreativeAssetBucket(bucket: string): Promise<void> {
   const admin = createAdminClient();
   const { data, error } = await admin.storage.getBucket(bucket);
   if (error && !/not found|404/i.test(error.message)) {
@@ -65,7 +65,7 @@ export async function storeCreativeAssetInSupabase(input: {
     throw new Error("Creative asset storage input is invalid");
   }
 
-  await ensurePrivateBucket(input.bucket);
+  await ensurePrivateCreativeAssetBucket(input.bucket);
   const extension = input.mimeType === "image/png" ? "png" : "jpg";
   const path = [
     input.userId,

@@ -238,6 +238,7 @@ export async function listReadyBrandAssets(input: {
     ].join(","))
     .eq("user_id", input.userId)
     .eq("platform_account_id", input.platformAccountId)
+    .eq("library_scope", "CUSTOMER")
     .eq("status", "READY")
     .eq("moderation_status", "APPROVED")
     .order("updated_at", { ascending: false })
