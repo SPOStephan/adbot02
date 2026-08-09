@@ -265,6 +265,53 @@ async function countDueHardCapStatusPlans(input: {
   return { count: data?.length ?? 0, error: null };
 }
 
+async function prepareStatusActivateWriteNow(input: {
+  platformAccountId: string;
+  userId: string;
+}): Promise<{ duePlans: number | null; detail: string | null }> {
+  const admin = createAdminClient();
+
+  const primary = await admin.rpc("prepare_meta_status_activate_write_now", {
+    p_user_id: input.userId,
+    p_platform_account_id: input.platformAccountId,
+  });
+
+  if (!primary.error) {
+    const row =
+      primary.data && typeof primary.data === "object" && !Array.isArray(primary.data)
+        ? (primary.data as Record<string, unknown>)
+        : null;
+    return {
+      duePlans: Number(row?.due_plans ?? 0) || 0,
+      detail: row
+        ? `activate_prep due=${row.due_plans ?? 0} revived=${row.revived ?? 0} lease_forced=${row.lease_forced === true}`
+        : null,
+    };
+  }
+
+  // Fallbacks while 20260809170000 is not applied.
+  try {
+    await admin.rpc("prepare_meta_organic_boost_write_now", {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+    });
+  } catch {
+    try {
+      await admin.rpc("heal_meta_account_operation_lease", {
+        p_platform_account_id: input.platformAccountId,
+        p_user_id: input.userId,
+      });
+    } catch {
+      // best-effort
+    }
+  }
+
+  return {
+    duePlans: null,
+    detail: `activate_prep_fallback:${primary.error.message || "rpc_missing"}`,
+  };
+}
+
 /**
  * Drains hard-cap / organic-boost ACTIVATE plans for one account.
  * Forces the account WRITE lease idle via prepare_write_now when available.
@@ -282,22 +329,11 @@ export async function drainHardCapStatusExecutionsForAccount(input: {
   let divertedToOtherAccount = false;
   let lastError: string | null = null;
   let duePlans = 0;
+  let idleRetries = 0;
 
-  const admin = createAdminClient();
-  try {
-    await admin.rpc("prepare_meta_organic_boost_write_now", {
-      p_platform_account_id: input.platformAccountId,
-      p_user_id: input.userId,
-    });
-  } catch {
-    try {
-      await admin.rpc("heal_meta_account_operation_lease", {
-        p_platform_account_id: input.platformAccountId,
-        p_user_id: input.userId,
-      });
-    } catch {
-      // Lease heal is best-effort.
-    }
+  const prepared = await prepareStatusActivateWriteNow(input);
+  if (prepared.duePlans != null) {
+    duePlans = prepared.duePlans;
   }
 
   for (let index = 0; index < maxRuns; index += 1) {
@@ -319,8 +355,15 @@ export async function drainHardCapStatusExecutionsForAccount(input: {
       lastOutcome = result.outcome;
 
       if (!result.processed || result.outcome === "idle") {
+        if (result.outcome === "idle" && idleRetries < 1) {
+          idleRetries += 1;
+          await prepareStatusActivateWriteNow(input);
+          continue;
+        }
         if (result.outcome === "idle") {
-          lastError = "claim_idle_with_due_plans";
+          lastError = prepared.detail
+            ? `claim_idle_with_due_plans (${prepared.detail})`
+            : "claim_idle_with_due_plans";
         }
         break;
       }
