@@ -176,6 +176,18 @@ assert.match(
   /NoticeKind/,
 );
 assert.match(
+  read("src/components/MetaSyncButton.tsx"),
+  /hardCapResumeNotice/,
+);
+assert.match(
+  read("src/components/MetaSyncButton.tsx"),
+  /scheduleEnded/,
+);
+assert.match(
+  read("src/components/MetaSyncButton.tsx"),
+  /Laufzeit bereits beendet/,
+);
+assert.match(
   read("src/app/api/connectors/meta/sync/route.ts"),
   /organicBoost/,
 );
