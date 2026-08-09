@@ -1064,6 +1064,24 @@ export async function materializeCustomerLaunch(
   let result: CustomerLaunchResult | null = null;
   try {
     const admin = createAdminClient();
+    // Library uploads may arrive before onboarding creates a brand profile.
+    // Bind unbound CUSTOMER assets to the launch profile at prepare-time.
+    const { error: bindError } = await admin.rpc(
+      "bind_unbound_customer_brand_asset_for_launch",
+      {
+        p_user_id: customer.userId,
+        p_platform_account_id: customer.platformAccountId,
+        p_brand_profile_id: command.brandProfileId,
+        p_brand_asset_id: command.brandAssetId,
+      },
+    );
+    if (bindError) {
+      serviceError(
+        "launch_preparation_not_ready",
+        409,
+        "Der Aktiv-Launch wurde nicht vorbereitet: FREEZE_WRITES, aktueller EUR-Snapshot, Launch-Policy, Budgetgrenzen, Domain, Brand und Creative müssen vollständig erfüllt sein.",
+      );
+    }
     const commonRpcArguments = {
       p_user_id: customer.userId,
       p_platform_account_id: customer.platformAccountId,

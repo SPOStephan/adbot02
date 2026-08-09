@@ -18,7 +18,10 @@ export async function POST(request: NextRequest) {
     const customer = await authenticateMetaCustomer();
     const form = await request.formData();
     const file = form.get("file");
-    const brandProfileId = String(form.get("brandProfileId") ?? "").trim();
+    const brandProfileRaw = String(form.get("brandProfileId") ?? "").trim();
+    const brandProfileId = /^[0-9a-f-]{36}$/i.test(brandProfileRaw)
+      ? brandProfileRaw
+      : null;
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -26,27 +29,25 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (!/^[0-9a-f-]{36}$/i.test(brandProfileId)) {
-      return NextResponse.json(
-        { ok: false, error: "Aktives Brand-Profil ist erforderlich." },
-        { status: 400 },
-      );
-    }
 
-    const admin = createAdminClient();
-    const { data: profile } = await admin
-      .from("brand_profiles")
-      .select("id")
-      .eq("id", brandProfileId)
-      .eq("user_id", customer.userId)
-      .eq("platform_account_id", customer.platformAccountId)
-      .eq("status", "ACTIVE")
-      .maybeSingle();
-    if (!profile) {
-      return NextResponse.json(
-        { ok: false, error: "Aktives Brand-Profil nicht gefunden." },
-        { status: 404 },
-      );
+    // Brand profile is optional for Media Library storage. If the customer
+    // picks one, verify it belongs to this Meta account; otherwise store unbound.
+    if (brandProfileId) {
+      const admin = createAdminClient();
+      const { data: profile } = await admin
+        .from("brand_profiles")
+        .select("id")
+        .eq("id", brandProfileId)
+        .eq("user_id", customer.userId)
+        .eq("platform_account_id", customer.platformAccountId)
+        .eq("status", "ACTIVE")
+        .maybeSingle();
+      if (!profile) {
+        return NextResponse.json(
+          { ok: false, error: "Gewähltes Brand-Profil nicht gefunden." },
+          { status: 404 },
+        );
+      }
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());

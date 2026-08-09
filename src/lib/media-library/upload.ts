@@ -32,7 +32,7 @@ function asImageMime(
 export async function uploadCustomerLibraryImage(input: {
   userId: string;
   platformAccountId: string;
-  brandProfileId: string;
+  brandProfileId?: string | null;
   fileName: string;
   mimeType: string | null;
   bytes: Uint8Array;
@@ -73,11 +73,17 @@ export async function uploadCustomerLibraryImage(input: {
     bucket,
   });
 
+  const brandProfileId =
+    typeof input.brandProfileId === "string" &&
+    /^[0-9a-f-]{36}$/i.test(input.brandProfileId.trim())
+      ? input.brandProfileId.trim()
+      : null;
+
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("register_uploaded_brand_asset", {
     p_user_id: input.userId,
     p_platform_account_id: input.platformAccountId,
-    p_brand_profile_id: input.brandProfileId,
+    p_brand_profile_id: brandProfileId,
     p_storage_bucket: stored.bucket,
     p_storage_path: stored.path,
     p_original_filename: input.fileName.slice(0, 255) || "upload.jpg",
@@ -90,6 +96,7 @@ export async function uploadCustomerLibraryImage(input: {
       contract_version: 1,
       library: "customer",
       source_kind: "customer_upload",
+      brand_profile_optional: true,
     },
   });
 
