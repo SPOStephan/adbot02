@@ -231,9 +231,9 @@ export async function forceResumeOrganicBoostHardCapPauses(input: {
   return forceReactivatePausedOrganicBoostCampaigns(input);
 }
 
+/** Resume drain must never execute SAFETY_PAUSE / hard_cap_exposure_breach. */
 const STATUS_REACTIVATE_RULE_KEYS = [
   "hard_cap_day_resume",
-  "hard_cap_exposure_breach",
   "organic_boost_reactivate",
 ] as const;
 
@@ -248,7 +248,7 @@ async function countDueHardCapStatusPlans(input: {
     .eq("user_id", input.userId)
     .eq("platform_account_id", input.platformAccountId)
     .in("source_rule_key", [...STATUS_REACTIVATE_RULE_KEYS])
-    .in("action_type", ["ACTIVATE", "SAFETY_PAUSE"])
+    .eq("action_type", "ACTIVATE")
     .in("status", [
       "PENDING",
       "RETRYABLE",
