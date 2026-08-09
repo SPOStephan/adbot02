@@ -1,0 +1,107 @@
+# Spiegelt apps/adbot-freebie nach SPOStephan/adbot-freebie (Vercel-Deploy-Repo).
+#
+# Secret in adbot02: ADBOT_FREEBIE_SYNC_TOKEN (PAT mit Schreibrecht auf adbot-freebie)
+
+name: Sync adbot-freebie mirror
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/adbot-freebie/**"
+      - ".github/workflows/sync-adbot-freebie.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-adbot-freebie-mirror
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout adbot02
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Require ADBOT_FREEBIE_SYNC_TOKEN
+        env:
+          TOKEN: ${{ secrets.ADBOT_FREEBIE_SYNC_TOKEN }}
+        run: |
+          if [ -z "${TOKEN}" ]; then
+            echo "::error::Secret ADBOT_FREEBIE_SYNC_TOKEN fehlt in adbot02."
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/adbot-freebie/pnpm-lock.yaml
+
+      - name: Mirror, build, and push to SPOStephan/adbot-freebie
+        env:
+          TOKEN: ${{ secrets.ADBOT_FREEBIE_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git config --global user.name "adbot-freebie-sync"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          WORK="$(mktemp -d)/adbot-freebie"
+          git clone --depth 1 \
+            "https://x-access-token:${TOKEN}@github.com/SPOStephan/adbot-freebie.git" \
+            "${WORK}"
+
+          BRANCH="$(git -C "${WORK}" branch --show-current)"
+          echo "Zielbranch: ${BRANCH}"
+          pnpm --version
+
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude 'build' \
+            --exclude 'public' \
+            --exclude 'api/index.js' \
+            --exclude 'api/index.bundle.cjs' \
+            --exclude 'api/.bundle-stamp' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude '.vercel' \
+            --exclude '.turbo' \
+            apps/adbot-freebie/ \
+            "${WORK}/"
+
+          cd "${WORK}"
+
+          echo "Installiere Abhängigkeiten und baue Vercel-Artefakte…"
+          pnpm install --frozen-lockfile
+          pnpm run vercel-build
+
+          test -f api/index.js
+          test -f api/index.bundle.cjs
+          test -f public/index.html
+          ls -la api/ public/ | head -40
+
+          git add -A
+          git add -f public api/index.js api/index.bundle.cjs api/.bundle-stamp
+
+          if git diff --cached --quiet; then
+            echo "Keine Änderungen gegenüber dem Spiegel-Repo."
+            exit 0
+          fi
+
+          git commit -m "sync: from adbot02/apps/adbot-freebie@${GITHUB_SHA} (prebuilt)"
+          git push origin "HEAD:${BRANCH}"
+          echo "Spiegel aktualisiert mit Prebuild: SPOStephan/adbot-freebie@${BRANCH}"
