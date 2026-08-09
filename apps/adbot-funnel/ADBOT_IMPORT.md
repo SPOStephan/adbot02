@@ -20,16 +20,20 @@ Arbeitskopie des Funnel-Builders im Adbot-Monorepo (`apps/adbot-funnel`).
 
 ## Vercel-Projekt (Deploy-Repo `adbot-funnel`)
 
-Konfiguration liegt in `vercel.json` (Framework Express, Build `pnpm run vercel-build`).
+Konfiguration liegt in `vercel.json`:
+- Build: `pnpm run vercel-build` (Vite → `public/`)
+- Rewrite: `/(.*) → /api` (Express in `api/index.ts`)
+- Statische Dateien aus `public/` werden von Vercel vor dem Rewrite ausgeliefert
 
 | Einstellung | Wert |
 |---|---|
-| Framework | **Express** (oder via `vercel.json`) |
 | Root Directory | `/` |
-| Output Directory | nicht überschreiben (kein `dist`) |
-| Entry | `server.ts` mit direktem `import express` |
+| Output Directory | nicht auf `dist` setzen |
+| Entry | `api/index.ts` |
 
-Nach Sync: Redeploy. Save ausgegraut in der UI ist ok, wenn nichts geändert wurde.
+**URL:** Im Vercel-Projekt unter **Deployments → Visit** die Production-URL öffnen.  
+`https://adbot-funnel.vercel.app` ist oft nicht zugewiesen (404).  
+Wenn **Deployment Protection** aktiv ist, brauchst du Vercel-Login oder Protection temporär aus.
 
 ## Erforderliche Env
 
