@@ -26,14 +26,18 @@ const metaConversions = readFileSync(
 assert.match(siteUrls, /DEFAULT_FUNNEL_SITE_URL = "https:\/\/funnel\.adbot\.one"/);
 assert.match(siteUrls, /export const FUNNEL_SITE_URL/);
 assert.match(siteUrls, /export function createFunnelAdminUrl/);
+assert.match(siteUrls, /export function createFunnelSsoEntryPath/);
+assert.match(siteUrls, /return "\/api\/funnel\/sso"/);
 assert.match(envExample, /NEXT_PUBLIC_FUNNEL_URL=https:\/\/funnel\.adbot\.one/);
+assert.match(envExample, /FUNNEL_SSO_SECRET=/);
 
 assert.match(dashboard, /FunnelWorkspaceCard/);
 assert.match(dashboard, /label: "Funnel"/);
-assert.match(dashboard, /createFunnelAdminUrl/);
+assert.match(dashboard, /createFunnelSsoEntryPath/);
 assert.match(dashboard, /external: true/);
 assert.match(card, /id="funnel"/);
 assert.match(card, /FUNNEL_SITE_URL/);
+assert.match(card, /createFunnelSsoEntryPath/);
 
 assert.match(migration, /owner_user_id uuid/);
 assert.match(migration, /owner_email text/);

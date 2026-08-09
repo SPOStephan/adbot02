@@ -12,8 +12,10 @@ import {
   setFunnelOwnerSchema,
 } from "@shared/funnelSchemas";
 import type { ApplicationSubmission, FunnelConfig, ResumeMetadata } from "@shared/funnel";
+import type { User } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 import { adminProcedure, publicProcedure, router } from "../_core/trpc";
+import { getTenantOwnerUserId, isPlatformAdmin } from "../_core/session";
 import {
   createApplication,
   createFunnel,
@@ -68,6 +70,17 @@ async function requireFunnel(id: string) {
   return config;
 }
 
+async function requireOwnedFunnel(id: string, user: User) {
+  const config = await requireFunnel(id);
+  if (isPlatformAdmin(user)) return config;
+
+  const owner = await getFunnelOwner(id);
+  if (!owner?.userId || owner.userId !== user.openId) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
+  }
+  return config;
+}
+
 async function assertSlugAvailable(slug: string, currentId?: string) {
   const existing = await getFunnel(slug);
   if (existing && existing.id !== currentId) {
@@ -75,8 +88,19 @@ async function assertSlugAvailable(slug: string, currentId?: string) {
   }
 }
 
-async function applicationsWithConfigs(funnelId?: string) {
-  const applications = await listApplications(funnelId);
+async function applicationsWithConfigs(funnelId: string | undefined, user: User) {
+  let applications;
+  if (funnelId) {
+    await requireOwnedFunnel(funnelId, user);
+    applications = await listApplications(funnelId);
+  } else if (isPlatformAdmin(user)) {
+    applications = await listApplications();
+  } else {
+    const owned = await listFunnels({ ownerUserId: user.openId });
+    const batches = await Promise.all(owned.map(item => listApplications(item.id)));
+    applications = batches.flat();
+  }
+
   const funnelIds = Array.from(new Set(applications.map(application => application.funnelId)));
   const configs = (await Promise.all(funnelIds.map(id => getFunnelById(id))))
     .filter((config): config is FunnelConfig => Boolean(config));
@@ -105,6 +129,13 @@ function hasValidFaviconSignature(buffer: Buffer, mimeType: z.infer<typeof favic
     return buffer.length >= signature.length && signature.every((value, index) => buffer[index] === value);
   }
   return buffer.length >= 4 && buffer[0] === 0 && buffer[1] === 0 && buffer[2] === 1 && buffer[3] === 0;
+}
+
+function ownerFromUser(user: User) {
+  return {
+    userId: user.openId,
+    email: user.email ?? null,
+  };
 }
 
 export const funnelRouter = router({
@@ -149,14 +180,22 @@ export const funnelRouter = router({
     return { id: application.id, notificationSent, metaConversion: metaConversion.status };
   }),
 
-  funnels: adminProcedure
-    .input(z.object({ ownerUserId: z.string().uuid().optional() }).optional())
-    .query(({ input }) => listFunnels(input?.ownerUserId ? { ownerUserId: input.ownerUserId } : undefined)),
+  funnels: adminProcedure.query(({ ctx }) => {
+    const ownerUserId = getTenantOwnerUserId(ctx.user);
+    return listFunnels(ownerUserId ? { ownerUserId } : undefined);
+  }),
 
   adminConfig: adminProcedure
     .input(z.object({ id: funnelIdSchema }).optional())
-    .query(async ({ input }) => {
-      const config = input?.id ? await requireFunnel(input.id) : await getOrCreateDefaultFunnel();
+    .query(async ({ input, ctx }) => {
+      let config: FunnelConfig;
+      if (input?.id) {
+        config = await requireOwnedFunnel(input.id, ctx.user);
+      } else if (isPlatformAdmin(ctx.user)) {
+        config = await getOrCreateDefaultFunnel();
+      } else {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Funnel-ID ist erforderlich." });
+      }
       return {
         config,
         metaServerSettings: await getMetaServerSettingsSummary(config.id),
@@ -165,27 +204,36 @@ export const funnelRouter = router({
       };
     }),
 
-  create: adminProcedure.input(createFunnelSchema).mutation(async ({ input }) => {
+  create: adminProcedure.input(createFunnelSchema).mutation(async ({ input, ctx }) => {
     const slug = await getUniqueFunnelSlug(input.slug || input.title);
     const config = createFunnelFromTemplate(defaultFunnel, input.title, slug);
-    return createFunnel(config, {
-      userId: input.ownerUserId ?? null,
-      email: input.ownerEmail ?? null,
-    });
+    const owner = isPlatformAdmin(ctx.user)
+      ? {
+          userId: input.ownerUserId ?? null,
+          email: input.ownerEmail ?? null,
+        }
+      : ownerFromUser(ctx.user);
+    return createFunnel(config, owner);
   }),
 
-  duplicate: adminProcedure.input(duplicateFunnelSchema).mutation(async ({ input }) => {
-    const source = await requireFunnel(input.sourceId);
+  duplicate: adminProcedure.input(duplicateFunnelSchema).mutation(async ({ input, ctx }) => {
+    const source = await requireOwnedFunnel(input.sourceId, ctx.user);
     const slug = await getUniqueFunnelSlug(input.slug || input.title);
     const copy = createFunnelFromTemplate(source, input.title, slug);
     const sourceOwner = await getFunnelOwner(source.id);
-    return createFunnel(copy, {
-      userId: input.ownerUserId ?? sourceOwner?.userId ?? null,
-      email: input.ownerEmail ?? sourceOwner?.email ?? null,
-    });
+    const owner = isPlatformAdmin(ctx.user)
+      ? {
+          userId: input.ownerUserId ?? sourceOwner?.userId ?? null,
+          email: input.ownerEmail ?? sourceOwner?.email ?? null,
+        }
+      : ownerFromUser(ctx.user);
+    return createFunnel(copy, owner);
   }),
 
-  setOwner: adminProcedure.input(setFunnelOwnerSchema).mutation(async ({ input }) => {
+  setOwner: adminProcedure.input(setFunnelOwnerSchema).mutation(async ({ input, ctx }) => {
+    if (!isPlatformAdmin(ctx.user)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Nur Plattform-Admins dürfen den Owner ändern." });
+    }
     await requireFunnel(input.funnelId);
     const summary = await setFunnelOwner(input.funnelId, {
       userId: input.ownerUserId,
@@ -195,8 +243,8 @@ export const funnelRouter = router({
     return summary;
   }),
 
-  uploadFavicon: adminProcedure.input(faviconUploadSchema).mutation(async ({ input }) => {
-    await requireFunnel(input.funnelId);
+  uploadFavicon: adminProcedure.input(faviconUploadSchema).mutation(async ({ input, ctx }) => {
+    await requireOwnedFunnel(input.funnelId, ctx.user);
     const buffer = Buffer.from(input.dataBase64, "base64");
     if (buffer.byteLength !== input.size || !hasValidFaviconSignature(buffer, input.mimeType)) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Die Favicon-Datei ist beschädigt oder hat ein nicht unterstütztes Format." });
@@ -206,44 +254,57 @@ export const funnelRouter = router({
     return storagePut(`funnels/${input.funnelId}/branding/favicon-${crypto.randomUUID()}.${extension}`, buffer, contentType);
   }),
 
-  saveConfig: adminProcedure.input(funnelConfigSchema).mutation(async ({ input }) => {
-    await requireFunnel(input.id);
+  saveConfig: adminProcedure.input(funnelConfigSchema).mutation(async ({ input, ctx }) => {
+    await requireOwnedFunnel(input.id, ctx.user);
     const slug = slugifyFunnel(input.slug);
     await assertSlugAvailable(slug, input.id);
     return saveFunnel({ ...input, slug, isPublished: input.status === "published" });
   }),
 
-  saveMetaServerSettings: adminProcedure.input(metaServerSettingsSchema).mutation(async ({ input }) => {
-    await requireFunnel(input.funnelId);
+  saveMetaServerSettings: adminProcedure.input(metaServerSettingsSchema).mutation(async ({ input, ctx }) => {
+    await requireOwnedFunnel(input.funnelId, ctx.user);
     return saveMetaServerSettings(input.funnelId, input);
   }),
 
   setFunnelStatus: adminProcedure
     .input(z.object({ id: funnelIdSchema, status: funnelStatusSchema }))
-    .mutation(async ({ input }) => {
-      const config = await requireFunnel(input.id);
+    .mutation(async ({ input, ctx }) => {
+      const config = await requireOwnedFunnel(input.id, ctx.user);
       return saveFunnel({ ...config, status: input.status, isPublished: input.status === "published" });
     }),
 
-  applications: adminProcedure.input(optionalFunnelFilter).query(({ input }) => listApplications(input?.funnelId)),
+  applications: adminProcedure.input(optionalFunnelFilter).query(async ({ input, ctx }) => {
+    if (input?.funnelId) {
+      await requireOwnedFunnel(input.funnelId, ctx.user);
+      return listApplications(input.funnelId);
+    }
+    if (isPlatformAdmin(ctx.user)) return listApplications();
+    const owned = await listFunnels({ ownerUserId: ctx.user.openId });
+    const batches = await Promise.all(owned.map(item => listApplications(item.id)));
+    return batches.flat();
+  }),
 
-  application: adminProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ input }) => {
+  application: adminProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ input, ctx }) => {
     const application = await getApplication(input.id);
     if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+    await requireOwnedFunnel(application.funnelId, ctx.user);
     const config = await getFunnelById(application.funnelId) ?? await getFunnel(application.funnelSlug) ?? undefined;
     return { ...application, displayAnswers: resolveApplicationAnswers(config, application.answers) };
   }),
 
   updateStatus: adminProcedure
     .input(z.object({ id: z.string().uuid(), status: applicationStatusSchema }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const existing = await getApplication(input.id);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      await requireOwnedFunnel(existing.funnelId, ctx.user);
       const application = await updateApplicationStatus(input.id, input.status);
       if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
       return application;
     }),
 
-  exportCsv: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input }) => {
-    const { applications, configs } = await applicationsWithConfigs(input?.funnelId);
+  exportCsv: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input, ctx }) => {
+    const { applications, configs } = await applicationsWithConfigs(input?.funnelId, ctx.user);
     return {
       fileName: `bewerbungen-${new Date().toISOString().slice(0, 10)}.csv`,
       mimeType: "text/csv;charset=utf-8",
@@ -251,8 +312,8 @@ export const funnelRouter = router({
     };
   }),
 
-  exportPdf: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input }) => {
-    const { applications, configs } = await applicationsWithConfigs(input?.funnelId);
+  exportPdf: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input, ctx }) => {
+    const { applications, configs } = await applicationsWithConfigs(input?.funnelId, ctx.user);
     return {
       fileName: `bewerbungen-${new Date().toISOString().slice(0, 10)}.pdf`,
       mimeType: "application/pdf",

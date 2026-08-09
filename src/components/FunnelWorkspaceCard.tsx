@@ -1,13 +1,13 @@
 import { ExternalLink, Filter } from "lucide-react";
 
-import { FUNNEL_SITE_URL, createFunnelAdminUrl } from "@/lib/site-urls";
+import { FUNNEL_SITE_URL, createFunnelSsoEntryPath } from "@/lib/site-urls";
 
 type FunnelWorkspaceCardProps = {
   userEmail?: string | null;
 };
 
 export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
-  const adminUrl = createFunnelAdminUrl().toString();
+  const ssoUrl = createFunnelSsoEntryPath();
 
   return (
     <section
@@ -34,19 +34,19 @@ export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Der Funnel-Builder läuft unter{" "}
             <span className="font-semibold text-slate-800">{FUNNEL_SITE_URL.replace(/^https?:\/\//, "")}</span>
-            . Mandantenbindung an deinen Adbot-Account wird vorbereitet
+            . Du wirst automatisch mit deinem Adbot-Konto angemeldet und siehst nur deine eigenen Funnel
             {userEmail ? (
               <>
                 {" "}
                 (<span className="font-medium text-slate-800">{userEmail}</span>)
               </>
             ) : null}
-            ; die Meta-Conversion kann später wahlweise beim Absenden oder nach DOI gemeldet werden.
+            .
           </p>
         </div>
         <a
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-          href={adminUrl}
+          href={ssoUrl}
           rel="noopener noreferrer"
           target="_blank"
         >

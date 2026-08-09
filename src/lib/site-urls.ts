@@ -69,3 +69,8 @@ export function createFunnelUrl(pathname = "/", search = "") {
 export function createFunnelAdminUrl() {
   return createFunnelUrl("/admin");
 }
+
+/** Adbot-SSO-Einstieg (gleicher Origin wie das Portal). Leitet nach Funnel weiter. */
+export function createFunnelSsoEntryPath() {
+  return "/api/funnel/sso";
+}
