@@ -104,11 +104,15 @@ try {
   );
   assert.match(
     hardCapDayResumeMigration,
-    /upper\(coalesce\(c\.effective_status, c\.status, ''''\)\) = ''ACTIVE''/,
+    /Could not normalize planner outcome checks to CREATED\/QUEUED/,
   );
   assert.match(
     hardCapDayResumeMigration,
-    /outcome'' in \(''CREATED'', ''QUEUED''\)/,
+    /Hard-cap day-resume patch did not apply to budget planner/,
+  );
+  assert.match(
+    hardCapDayResumeMigration,
+    /regexp_replace/,
   );
   assert.match(
     hardCapDayResumeMigration,

@@ -316,35 +316,58 @@ declare
   v_function regprocedure :=
     'public.refresh_meta_budget_planner_snapshot_internal(uuid,uuid,uuid,uuid,timestamptz)'::regprocedure;
   v_definition text;
-  v_campaign_old constant text :=
-    E'and c.is_current\n    and coalesce(c.daily_budget_minor, 0) > 0\n  on conflict on constraint daily_budget_exposures_account_day_owner_key';
-  v_campaign_new constant text :=
-    E'and c.is_current\n    and coalesce(c.daily_budget_minor, 0) > 0\n    and upper(coalesce(c.effective_status, c.status, '''')) = ''ACTIVE''\n  on conflict on constraint daily_budget_exposures_account_day_owner_key';
-  v_adset_old constant text :=
-    E'and c.is_current\n    and coalesce(c.daily_budget_minor, 0) = 0\n    and coalesce(ag.daily_budget_minor, 0) > 0\n  on conflict on constraint daily_budget_exposures_account_day_owner_key';
-  v_adset_new constant text :=
-    E'and c.is_current\n    and coalesce(c.daily_budget_minor, 0) = 0\n    and coalesce(ag.daily_budget_minor, 0) > 0\n    and upper(coalesce(c.effective_status, c.status, '''')) = ''ACTIVE''\n    and upper(coalesce(ag.effective_status, ag.status, '''')) = ''ACTIVE''\n  on conflict on constraint daily_budget_exposures_account_day_owner_key';
+  v_updated text;
 begin
   select pg_get_functiondef(v_function) into v_definition;
 
-  if position(v_campaign_old in v_definition) = 0 then
-    raise exception 'Campaign ACTIVE exposure patch target not found';
-  end if;
-  if position(v_adset_old in v_definition) = 0 then
-    raise exception 'Ad-set ACTIVE exposure patch target not found';
+  if v_definition is null then
+    raise exception 'refresh_meta_budget_planner_snapshot_internal not found';
   end if;
 
-  v_definition := replace(v_definition, v_campaign_old, v_campaign_new);
-  v_definition := replace(v_definition, v_adset_old, v_adset_new);
+  -- Idempotent: already patched.
+  if position(
+    'effective_status, c.status'
+    in v_definition
+  ) > 0
+    and position(
+      E'= ''ACTIVE'''
+      in v_definition
+    ) > 0 then
+    return;
+  end if;
+
+  -- Campaign daily-budget owners: only ACTIVE.
+  v_updated := regexp_replace(
+    v_definition,
+    E'and c\\.is_current\\s+and coalesce\\(c\\.daily_budget_minor, 0\\) > 0\\s+on conflict on constraint daily_budget_exposures_account_day_owner_key',
+    $repl$and c.is_current
+    and coalesce(c.daily_budget_minor, 0) > 0
+    and upper(coalesce(c.effective_status, c.status, '')) = 'ACTIVE'
+  on conflict on constraint daily_budget_exposures_account_day_owner_key$repl$,
+    1
+  );
+
+  -- Ad-set daily-budget owners: campaign + ad set ACTIVE.
+  v_updated := regexp_replace(
+    v_updated,
+    E'and c\\.is_current\\s+and coalesce\\(c\\.daily_budget_minor, 0\\) = 0\\s+and coalesce\\(ag\\.daily_budget_minor, 0\\) > 0\\s+on conflict on constraint daily_budget_exposures_account_day_owner_key',
+    $repl$and c.is_current
+    and coalesce(c.daily_budget_minor, 0) = 0
+    and coalesce(ag.daily_budget_minor, 0) > 0
+    and upper(coalesce(c.effective_status, c.status, '')) = 'ACTIVE'
+    and upper(coalesce(ag.effective_status, ag.status, '')) = 'ACTIVE'
+  on conflict on constraint daily_budget_exposures_account_day_owner_key$repl$,
+    1
+  );
 
   if position(
     E'upper(coalesce(c.effective_status, c.status, '''')) = ''ACTIVE'''
-    in v_definition
+    in v_updated
   ) = 0 then
-    raise exception 'ACTIVE exposure patch did not apply';
+    raise exception 'ACTIVE exposure patch did not apply to refresh snapshot';
   end if;
 
-  execute v_definition;
+  execute v_updated;
 end;
 $patch_refresh$;
 
@@ -354,128 +377,142 @@ comment on function public.refresh_meta_budget_planner_snapshot_internal(
   'Refreshes daily exposure from ACTIVE budget owners only; same-day PAUSED rows written earlier keep the pause reserve until the next account day.';
 
 -- ---------------------------------------------------------------------------
--- 3) Planner: count CREATED, queue day-resume when under hard cap
+-- 3) Planner: accept CREATED/QUEUED, queue day-resume when under hard cap
 -- ---------------------------------------------------------------------------
 do $patch_planner$
 declare
   v_function regprocedure :=
     'public.run_meta_budget_planner(uuid,uuid,uuid,uuid,timestamptz)'::regprocedure;
   v_definition text;
-  v_queued_old constant text :=
-    E'if v_result->>''outcome'' = ''QUEUED'' then';
-  v_queued_new constant text :=
-    E'if v_result->>''outcome'' in (''CREATED'', ''QUEUED'') then';
-  v_resume_anchor constant text :=
-    E'if coalesce(v_kill_mode, ''ALLOW'') <> ''ALLOW'' then\n'
-    || E'    return query select\n'
-    || E'      ''KILL_SWITCH_BLOCKED''::text,\n'
-    || E'      v_refresh.snapshot_id,\n'
-    || E'      v_refresh.account_day,\n'
-    || E'      v_refresh.observed_budget_owner_count,\n'
-    || E'      v_refresh.reserved_exposure_minor,\n'
-    || E'      0,\n'
-    || E'      0,\n'
-    || E'      0,\n'
-    || E'      false;\n'
-    || E'    return;\n'
-    || E'  end if;\n'
-    || E'\n'
-    || E'  -- Negative campaign-level recommendations';
-  v_resume_insert constant text :=
-    E'if coalesce(v_kill_mode, ''ALLOW'') <> ''ALLOW'' then\n'
-    || E'    return query select\n'
-    || E'      ''KILL_SWITCH_BLOCKED''::text,\n'
-    || E'      v_refresh.snapshot_id,\n'
-    || E'      v_refresh.account_day,\n'
-    || E'      v_refresh.observed_budget_owner_count,\n'
-    || E'      v_refresh.reserved_exposure_minor,\n'
-    || E'      0,\n'
-    || E'      0,\n'
-    || E'      0,\n'
-    || E'      false;\n'
-    || E'    return;\n'
-    || E'  end if;\n'
-    || E'\n'
-    || E'  -- Under hard cap: reactivate MANAGED campaigns we safety-paused earlier.\n'
-    || E'  for v_candidate in\n'
-    || E'    select target.id as automation_target_id,\n'
-    || E'      target.campaign_scope_key\n'
-    || E'    from public.campaigns c\n'
-    || E'    join public.automation_targets target\n'
-    || E'      on target.platform_account_id = c.platform_account_id\n'
-    || E'     and target.target_type = ''CAMPAIGN''\n'
-    || E'     and target.platform_object_id = c.platform_campaign_id\n'
-    || E'     and target.status = ''MANAGED''\n'
-    || E'    where c.user_id = p_user_id\n'
-    || E'      and c.platform_account_id = p_platform_account_id\n'
-    || E'      and c.is_current\n'
-    || E'      and c.last_seen_sync_id = p_source_marketing_sync_id\n'
-    || E'      and upper(coalesce(c.effective_status, c.status, '''')) = ''PAUSED''\n'
-    || E'      and (c.stop_time is null or c.stop_time > p_planned_at)\n'
-    || E'      and exists (\n'
-    || E'        select 1\n'
-    || E'        from public.mutation_plans prior\n'
-    || E'        where prior.user_id = p_user_id\n'
-    || E'          and prior.platform_account_id = p_platform_account_id\n'
-    || E'          and prior.target_type = ''CAMPAIGN''\n'
-    || E'          and prior.target_key = target.target_key\n'
-    || E'          and prior.action_type = ''SAFETY_PAUSE''\n'
-    || E'          and prior.safety_action\n'
-    || E'          and prior.status = ''SUCCEEDED''\n'
-    || E'          and prior.source_rule_key = ''hard_cap_exposure_breach''\n'
-    || E'      )\n'
-    || E'    order by target.campaign_scope_key\n'
-    || E'  loop\n'
-    || E'    v_result := public.queue_meta_hard_cap_resume_internal(\n'
-    || E'      p_user_id,\n'
-    || E'      p_platform_account_id,\n'
-    || E'      v_policy.id,\n'
-    || E'      v_refresh.snapshot_id,\n'
-    || E'      p_source_marketing_sync_id,\n'
-    || E'      v_candidate.automation_target_id,\n'
-    || E'      v_refresh.account_day,\n'
-    || E'      jsonb_build_object(\n'
-    || E'        ''account_day'', v_refresh.account_day,\n'
-    || E'        ''account_reserved_exposure_minor'', v_refresh.reserved_exposure_minor,\n'
-    || E'        ''account_hard_cap_minor'', v_policy.account_daily_hard_cap_minor,\n'
-    || E'        ''campaign_scope_key'', v_candidate.campaign_scope_key,\n'
-    || E'        ''resume_reason'', ''hard_cap_day_resume''\n'
-    || E'      ),\n'
-    || E'      p_planned_at\n'
-    || E'    );\n'
-    || E'\n'
-    || E'    if v_result->>''outcome'' in (''CREATED'', ''QUEUED'') then\n'
-    || E'      v_created := v_created + 1;\n'
-    || E'    elsif v_result->>''outcome'' = ''EXISTING'' then\n'
-    || E'      v_existing := v_existing + 1;\n'
-    || E'    else\n'
-    || E'      v_blocked := v_blocked + 1;\n'
-    || E'    end if;\n'
-    || E'  end loop;\n'
-    || E'\n'
-    || E'  -- Negative campaign-level recommendations';
-  v_queued_count integer;
+  v_updated text;
 begin
   select pg_get_functiondef(v_function) into v_definition;
 
-  v_queued_count :=
-    (char_length(v_definition)
-      - char_length(replace(v_definition, v_queued_old, '')))
-    / char_length(v_queued_old);
-  if v_queued_count < 1 then
-    raise exception 'Expected QUEUED outcome checks in budget planner, found none';
+  if v_definition is null then
+    raise exception 'run_meta_budget_planner not found';
   end if;
-  v_definition := replace(v_definition, v_queued_old, v_queued_new);
 
-  if position(v_resume_anchor in v_definition) = 0 then
-    raise exception 'Hard-cap day-resume patch anchor not found';
-  end if;
+  -- Idempotent: resume already patched.
   if position('queue_meta_hard_cap_resume_internal' in v_definition) > 0 then
-    raise exception 'Hard-cap day-resume patch already present';
+    return;
   end if;
 
-  v_definition := replace(v_definition, v_resume_anchor, v_resume_insert);
-  execute v_definition;
+  -- Normalize outcome checks: production may already use CREATED (not QUEUED).
+  v_updated := replace(
+    v_definition,
+    E'if v_result->>''outcome'' = ''QUEUED'' then',
+    E'if v_result->>''outcome'' in (''CREATED'', ''QUEUED'') then'
+  );
+  v_updated := replace(
+    v_updated,
+    E'if v_result->>''outcome'' = ''CREATED'' then',
+    E'if v_result->>''outcome'' in (''CREATED'', ''QUEUED'') then'
+  );
+
+  if position(
+    E'in (''CREATED'', ''QUEUED'')'
+    in v_updated
+  ) = 0 then
+    raise exception
+      'Could not normalize planner outcome checks to CREATED/QUEUED';
+  end if;
+
+  -- Insert day-resume loop after kill-switch gate, before budget recommendations.
+  -- Whitespace-tolerant: pg_get_functiondef formatting can differ from source.
+  v_updated := regexp_replace(
+    v_updated,
+    E'if coalesce\\(v_kill_mode, ''ALLOW''\\) <> ''ALLOW'' then\\s+'
+    || E'return query select\\s+'
+    || E'''KILL_SWITCH_BLOCKED''::text,\\s+'
+    || E'v_refresh\\.snapshot_id,\\s+'
+    || E'v_refresh\\.account_day,\\s+'
+    || E'v_refresh\\.observed_budget_owner_count,\\s+'
+    || E'v_refresh\\.reserved_exposure_minor,\\s+'
+    || E'0,\\s+0,\\s+0,\\s+false;\\s+'
+    || E'return;\\s+'
+    || E'end if;\\s+'
+    || E'-- Negative campaign-level recommendations[^\n]*\n',
+    $repl$if coalesce(v_kill_mode, 'ALLOW') <> 'ALLOW' then
+    return query select
+      'KILL_SWITCH_BLOCKED'::text,
+      v_refresh.snapshot_id,
+      v_refresh.account_day,
+      v_refresh.observed_budget_owner_count,
+      v_refresh.reserved_exposure_minor,
+      0,
+      0,
+      0,
+      false;
+    return;
+  end if;
+
+  -- Under hard cap: reactivate MANAGED campaigns we safety-paused earlier.
+  for v_candidate in
+    select target.id as automation_target_id,
+      target.campaign_scope_key
+    from public.campaigns c
+    join public.automation_targets target
+      on target.platform_account_id = c.platform_account_id
+     and target.target_type = 'CAMPAIGN'
+     and target.platform_object_id = c.platform_campaign_id
+     and target.status = 'MANAGED'
+    where c.user_id = p_user_id
+      and c.platform_account_id = p_platform_account_id
+      and c.is_current
+      and c.last_seen_sync_id = p_source_marketing_sync_id
+      and upper(coalesce(c.effective_status, c.status, '')) = 'PAUSED'
+      and (c.stop_time is null or c.stop_time > p_planned_at)
+      and exists (
+        select 1
+        from public.mutation_plans prior
+        where prior.user_id = p_user_id
+          and prior.platform_account_id = p_platform_account_id
+          and prior.target_type = 'CAMPAIGN'
+          and prior.target_key = target.target_key
+          and prior.action_type = 'SAFETY_PAUSE'
+          and prior.safety_action
+          and prior.status = 'SUCCEEDED'
+          and prior.source_rule_key = 'hard_cap_exposure_breach'
+      )
+    order by target.campaign_scope_key
+  loop
+    v_result := public.queue_meta_hard_cap_resume_internal(
+      p_user_id,
+      p_platform_account_id,
+      v_policy.id,
+      v_refresh.snapshot_id,
+      p_source_marketing_sync_id,
+      v_candidate.automation_target_id,
+      v_refresh.account_day,
+      jsonb_build_object(
+        'account_day', v_refresh.account_day,
+        'account_reserved_exposure_minor', v_refresh.reserved_exposure_minor,
+        'account_hard_cap_minor', v_policy.account_daily_hard_cap_minor,
+        'campaign_scope_key', v_candidate.campaign_scope_key,
+        'resume_reason', 'hard_cap_day_resume'
+      ),
+      p_planned_at
+    );
+
+    if v_result->>'outcome' in ('CREATED', 'QUEUED') then
+      v_created := v_created + 1;
+    elsif v_result->>'outcome' = 'EXISTING' then
+      v_existing := v_existing + 1;
+    else
+      v_blocked := v_blocked + 1;
+    end if;
+  end loop;
+
+  -- Negative campaign-level recommendations
+$repl$,
+    1
+  );
+
+  if position('queue_meta_hard_cap_resume_internal' in v_updated) = 0 then
+    raise exception 'Hard-cap day-resume patch did not apply to budget planner';
+  end if;
+
+  execute v_updated;
 end;
 $patch_planner$;
 
