@@ -1,0 +1,87 @@
+# Spiegelt apps/adbot-funnel nach SPOStephan/adbot-funnel (Vercel-Deploy-Repo).
+#
+# Einmalig nötig in adbot02 → Settings → Secrets and variables → Actions:
+#   Name:  ADBOT_FUNNEL_SYNC_TOKEN
+#   Wert:  GitHub PAT mit Schreibrecht auf SPOStephan/adbot-funnel
+#          (Fine-grained: Contents Read/Write auf adbot-funnel
+#           oder Classic: Scope "repo")
+#
+# Danach: Actions → "Sync adbot-funnel mirror" → Run workflow
+# oder automatisch bei Push auf main unter apps/adbot-funnel/**
+
+name: Sync adbot-funnel mirror
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/adbot-funnel/**"
+      - ".github/workflows/sync-adbot-funnel.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-adbot-funnel-mirror
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout adbot02
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Require ADBOT_FUNNEL_SYNC_TOKEN
+        env:
+          TOKEN: ${{ secrets.ADBOT_FUNNEL_SYNC_TOKEN }}
+        run: |
+          if [ -z "${TOKEN}" ]; then
+            echo "::error::Secret ADBOT_FUNNEL_SYNC_TOKEN fehlt in adbot02 (Settings → Secrets and variables → Actions)."
+            echo "::error::Lege ein PAT mit Schreibrecht auf SPOStephan/adbot-funnel an und speichere es unter diesem Namen."
+            exit 1
+          fi
+
+      - name: Mirror apps/adbot-funnel → SPOStephan/adbot-funnel
+        env:
+          TOKEN: ${{ secrets.ADBOT_FUNNEL_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git config --global user.name "adbot-funnel-sync"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          WORK="$(mktemp -d)/adbot-funnel"
+          git clone --depth 1 \
+            "https://x-access-token:${TOKEN}@github.com/SPOStephan/adbot-funnel.git" \
+            "${WORK}"
+
+          BRANCH="$(git -C "${WORK}" branch --show-current)"
+          echo "Zielbranch: ${BRANCH}"
+
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude 'build' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude '.vercel' \
+            --exclude '.turbo' \
+            apps/adbot-funnel/ \
+            "${WORK}/"
+
+          cd "${WORK}"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Keine Änderungen gegenüber dem Spiegel-Repo."
+            exit 0
+          fi
+
+          git commit -m "sync: from adbot02/apps/adbot-funnel@${GITHUB_SHA}"
+          git push origin "HEAD:${BRANCH}"
+          echo "Spiegel aktualisiert: SPOStephan/adbot-funnel@${BRANCH}"
