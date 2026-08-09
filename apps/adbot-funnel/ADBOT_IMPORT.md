@@ -20,19 +20,28 @@ Arbeitskopie des Funnel-Builders im Adbot-Monorepo (`apps/adbot-funnel`).
 
 ## Vercel-Projekt (Deploy-Repo `adbot-funnel`)
 
-Konfiguration:
-- **Sync-Workflow** baut `public/` + `api/index.js` und committed sie ins Deploy-Repo (Vercel hat den Build zuvor oft übersprungen → 3s Deploy ohne Function → 404)
-- `vercel.json`: Rewrite `/(.*) → /api`, Install/Build nur Platzhalter
-- Entry: `api/index.js` (CJS-Bundle)
+Architektur (eine klare Trennung):
+
+| Schicht | Zuständig |
+|---|---|
+| `public/` (Vite-Build) | CDN: HTML/JS/CSS |
+| `api/index.js` (Express-Bundle) | Nur `/api/*` (+ Legacy `/manus-storage/*`) |
+| `vercel.json` rewrites | `/api/*` → Function; alles andere → `/index.html` (Rewrite, **kein** Redirect) |
+
+Build:
+- Vercel führt `pnpm install` + `pnpm run vercel-build` aus
+- Sync-Workflow baut zusätzlich vor und committed Artefakte (Absicherung)
 
 | Einstellung | Wert |
 |---|---|
 | Root Directory | `/` |
-| Output Directory | nicht auf `dist` setzen |
+| Framework Preset | Other / leer (nicht Vite mit Output `dist`) |
+| Output Directory | `public` (steht in `vercel.json`) |
+| Deployment Protection | **für Production aus** — sonst SSO-Redirect-Loops auf `*.vercel.app` |
 
 **URL:** Im Vercel-Projekt unter **Deployments → Visit** die Production-URL öffnen.  
-`https://adbot-funnel.vercel.app` ist oft nicht zugewiesen (404).  
-Wenn **Deployment Protection** aktiv ist, brauchst du Vercel-Login oder Protection temporär aus.
+Alte Deployment-URLs (`*-xxxx-fportal.vercel.app`) veralten.  
+Smoke: `/api/health` → `{"ok":true,"service":"adbot-funnel"}`.
 
 ## Erforderliche Env
 
@@ -47,6 +56,7 @@ Siehe `.env.example`: `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SUPABASE_*
 
 ## Nächste Schritte
 
+- Domain `funnel.adbot.one` (IONOS CNAME + Vercel Domains)
 - Adbot-SSO in den Funnel-Admin (Owner automatisch setzen)
 - DOI-Mailfluss + Conversion nach Bestätigung
 - Freebie-Builder unter `freebie.adbot.one`

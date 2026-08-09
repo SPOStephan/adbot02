@@ -18,7 +18,11 @@ export function resolvePublicDir() {
   return candidates[0];
 }
 
-/** SPA fallback + local static serving. No Vite imports (safe for Vercel functions). */
+function isApiPath(pathname: string) {
+  return pathname === "/api" || pathname.startsWith("/api/");
+}
+
+/** SPA fallback + local static serving. Never HTTP-redirects (that loops under Vercel rewrites). */
 export function attachSpaFallback(app: Express) {
   const publicDir = resolvePublicDir();
   const indexPath = path.join(publicDir, "index.html");
@@ -29,21 +33,20 @@ export function attachSpaFallback(app: Express) {
     );
   }
 
-  if (!process.env.VERCEL) {
-    app.use(express.static(publicDir));
+  // On Vercel, static files come from outputDirectory + SPA rewrite — not Express.
+  if (process.env.VERCEL) {
+    return;
   }
 
+  app.use(express.static(publicDir));
+
   app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api/")) {
+    if (isApiPath(req.path) || req.path.startsWith("/manus-storage/")) {
       next();
       return;
     }
     if (fs.existsSync(indexPath)) {
       res.sendFile(indexPath);
-      return;
-    }
-    if (process.env.VERCEL) {
-      res.redirect(302, "/index.html");
       return;
     }
     res
