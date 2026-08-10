@@ -1182,6 +1182,27 @@ function launchPreparationFailureMessage(error: unknown): string {
   return "Die Kampagne konnte nicht vorbereitet werden. Bitte erneut versuchen.";
 }
 
+/** Keep a short SQL/detail suffix so opaque gates stop hiding the real failure. */
+function withLaunchFailureDetail(message: string, error: unknown): string {
+  const record =
+    error && typeof error === "object"
+      ? (error as { message?: unknown; details?: unknown; hint?: unknown })
+      : null;
+  const raw = [record?.message, record?.details, record?.hint]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join(" | ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+  if (!raw) {
+    return message;
+  }
+  if (message.includes(raw) || message.includes(raw.slice(0, 40))) {
+    return message;
+  }
+  return `${message} (Technik: ${raw})`;
+}
+
 async function ensureFreezeWritesForLaunch(customer: MetaCustomer): Promise<void> {
   await setCustomerKillSwitch(customer, {
     mode: "FREEZE_WRITES",
@@ -1439,10 +1460,11 @@ async function ensureLaunchExposureSnapshot(
     },
   );
   if (fallback.error || !fallback.data) {
+    const cause = error ?? fallback.error;
     serviceError(
       "launch_exposure_snapshot_required",
       409,
-      launchPreparationFailureMessage(error ?? fallback.error),
+      withLaunchFailureDetail(launchPreparationFailureMessage(cause), cause),
     );
   }
 }
@@ -1503,7 +1525,10 @@ export async function materializeCustomerLaunch(
       serviceError(
         "launch_preparation_not_ready",
         409,
-        launchPreparationFailureMessage(bindError),
+        withLaunchFailureDetail(
+          launchPreparationFailureMessage(bindError),
+          bindError,
+        ),
       );
     }
     // Omit p_planned_at so Postgres uses now() — Vercel clock skew against
@@ -1539,11 +1564,12 @@ export async function materializeCustomerLaunch(
         message: error.message,
         details: error.details,
         hint: error.hint,
+        code: (error as { code?: string }).code,
       });
       serviceError(
         "launch_preparation_not_ready",
         409,
-        launchPreparationFailureMessage(error),
+        withLaunchFailureDetail(launchPreparationFailureMessage(error), error),
       );
     }
     result = parseCustomerLaunchResult(data);
