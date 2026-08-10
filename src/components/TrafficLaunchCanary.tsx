@@ -695,7 +695,7 @@ export function TrafficLaunchCanary({
             value={destinationUrl}
           />
         </label>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:col-span-2">
+        <div className="lg:col-span-2">
           <button
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={
@@ -714,12 +714,6 @@ export function TrafficLaunchCanary({
             )}
             Textvorschlag aus URL
           </button>
-          <p className="text-xs font-medium leading-5 text-slate-500">
-            Kein Zwischenspeichern nötig. Vorschlag landet direkt in den
-            Textfeldern darunter — Credits werden abgezogen (
-            Aktion creative.generate_copy_set, mind. Katalogpreis, sonst
-            Providerkosten × 1,5).
-          </p>
         </div>
         {notice ? (
           <p
