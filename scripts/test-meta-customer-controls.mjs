@@ -30,6 +30,7 @@ const {
   parseKillSwitchCommand,
   parseLaunchApprovalCommand,
   parseLaunchCommand,
+  parsePixelCommand,
   parsePolicyCommand,
 } = await import(inputModuleUrl);
 
@@ -433,6 +434,59 @@ assert.deepEqual(
     brandProfileId: "33333333-3333-4333-8333-333333333333",
     brandAssetId: "44444444-4444-4444-8444-444444444444",
     allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    budgetOwnerType: "AD_SET",
+    dailyBudget: "20,00",
+    destinationUrl: "https://funnel.adbot.one/f/karriere",
+    campaignName: "Lead Sommer",
+    pixelId: "123456789012345",
+    customEventType: "Lead",
+    reason: "Kontrollierter Staging-Lead-Launch.",
+    confirmation: "AKTIV-LAUNCH VORBEREITEN",
+  }).launchInputs,
+  {
+    destination_url: "https://funnel.adbot.one/f/karriere",
+    campaign_name: "Lead Sommer",
+    ad_set_name: undefined,
+    creative_name: undefined,
+    ad_name: undefined,
+    promoted_object: {
+      pixel_id: "123456789012345",
+      custom_event_type: "LEAD",
+    },
+  },
+);
+
+assert.deepEqual(
+  parsePixelCommand({
+    action: "confirm",
+    pixelId: "123456789012345",
+    label: "Haupt",
+    customEventType: "LEAD",
+  }),
+  {
+    action: "confirm",
+    pixelId: "123456789012345",
+    label: "Haupt",
+    customEventType: "LEAD",
+  },
+);
+expectInputError(
+  () =>
+    parsePixelCommand({
+      action: "confirm",
+      pixelId: "12abc",
+      label: "",
+      customEventType: "LEAD",
+    }),
+  "invalid_pixel_id",
+);
+
+assert.deepEqual(
+  parseLaunchCommand({
+    blueprintId: "22222222-2222-4222-8222-222222222222",
+    brandProfileId: "33333333-3333-4333-8333-333333333333",
+    brandAssetId: "44444444-4444-4444-8444-444444444444",
+    allowedDomainId: "11111111-1111-4111-8111-111111111111",
     budgetType: "LIFETIME",
     budgetOwnerType: "CAMPAIGN",
     lifetimeBudget: "15,00",
@@ -713,6 +767,7 @@ const [
   canaryRouteSource,
   canaryPrepareRouteSource,
   domainRouteSource,
+  pixelRouteSource,
   blueprintRouteSource,
   assetImportRouteSource,
   launchRouteSource,
@@ -756,6 +811,7 @@ const [
     "utf8",
   ),
   readFile(path.join(root, "src/app/api/meta/automation/domain/route.ts"), "utf8"),
+  readFile(path.join(root, "src/app/api/meta/automation/pixel/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/blueprint/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/asset-import/route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/launch/route.ts"), "utf8"),
@@ -842,6 +898,13 @@ assert.match(canaryPrepareRouteSource, /materializeCustomerBudgetCanary/);
 assert.match(canaryPrepareRouteSource, /readControlJson/);
 assert.match(domainRouteSource, /parseDomainCommand/);
 assert.match(domainRouteSource, /applyCustomerDomainCommand/);
+assert.match(pixelRouteSource, /parsePixelCommand/);
+assert.match(pixelRouteSource, /applyCustomerPixelCommand/);
+assert.match(serviceSource, /applyCustomerPixelCommand/);
+assert.match(componentSource, /MetaPixelBinding/);
+assert.match(componentSource, /LeadLaunchCanary/);
+assert.match(componentSource, /TrafficLaunchCanary/);
+assert.match(pageSource, /meta_confirmed_pixels/);
 assert.match(blueprintRouteSource, /parseBlueprintCommand/);
 assert.match(blueprintRouteSource, /applyCustomerBlueprintCommand/);
 assert.match(assetImportRouteSource, /parseAssetImportCommand/);
@@ -932,7 +995,9 @@ assert.match(onboardingSource, /Unveränderlicher Aktiv-Launch · HELD/);
 assert.match(onboardingSource, /Noch 0 Meta-Writes/);
 assert.match(onboardingSource, /SHA-256-Fingerprint/);
 assert.match(onboardingSource, /Exakt diesen Aktiv-Launch freigeben/);
-assert.doesNotMatch(onboardingSource, /\/api\/cron\/meta-executor|Date\.now/);
+// Held-plan detection may use Date.now(); clients must still never poke the executor cron.
+assert.doesNotMatch(onboardingSource, /\/api\/cron\/meta-executor/);
+assert.match(onboardingSource, /pixels:/);
 assert.doesNotMatch(
   componentSource,
   /SUPABASE_SERVICE_ROLE_KEY|createAdminClient|platformAccountId|access_token/i,

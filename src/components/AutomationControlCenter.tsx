@@ -27,6 +27,8 @@ import {
   AutomationOnboardingControls,
   type AutomationOnboardingData,
 } from "@/components/AutomationOnboardingControls";
+import { LeadLaunchCanary } from "@/components/LeadLaunchCanary";
+import { MetaPixelBinding } from "@/components/MetaPixelBinding";
 import { TrafficLaunchCanary } from "@/components/TrafficLaunchCanary";
 import {
   AutomationScopeManager,
@@ -923,6 +925,21 @@ export function AutomationControlCenter({
           currency={currency}
           data={onboarding}
           initialAssetId={initialTrafficAssetId}
+          killSwitchMode={killSwitch?.mode ?? "FREEZE_WRITES"}
+          policyLaunchReady={Boolean(
+            policy?.status === "ACTIVE" &&
+              policy.allowNewLaunches &&
+              policy.allowStatusChanges,
+          )}
+          writeScopeGranted={readiness.writeScopeGranted}
+        />
+
+        <MetaPixelBinding pixels={onboarding.pixels} />
+
+        <LeadLaunchCanary
+          brandProfileId={brandProfile?.id ?? null}
+          currency={currency}
+          data={onboarding}
           killSwitchMode={killSwitch?.mode ?? "FREEZE_WRITES"}
           policyLaunchReady={Boolean(
             policy?.status === "ACTIVE" &&

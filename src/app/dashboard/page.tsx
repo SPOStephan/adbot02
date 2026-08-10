@@ -46,6 +46,7 @@ import { FunnelWorkspaceCard } from "@/components/FunnelWorkspaceCard";
 import type {
   AllowedDomainView,
   AutomationOnboardingData,
+  ConfirmedPixelView,
   ObjectiveBlueprintView,
   ReadyBrandAssetView,
   RecentLaunchPlanView,
@@ -918,6 +919,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .order("updated_at", { ascending: false })
           .limit(20)
       : { data: [] };
+  // Additive Lead prerequisite — independent of Traffic onboarding queries.
+  const { data: confirmedPixelRows } =
+    metaConnected && metaAccount
+      ? await supabase
+          .from("meta_confirmed_pixels")
+          .select(
+            "id,pixel_id,label,custom_event_type,status,customer_confirmed_at",
+          )
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("status", "CONFIRMED")
+          .is("revoked_at", null)
+          .order("created_at", { ascending: false })
+          .limit(20)
+      : { data: [] };
   const campaignBriefViews: CampaignBriefView[] = (
     campaignBriefRows ?? []
   ).flatMap((row) => {
@@ -1403,6 +1419,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       ];
     },
   );
+  const pixelViews: ConfirmedPixelView[] = (confirmedPixelRows ?? []).flatMap(
+    (pixel) => {
+      if (String(pixel.status) !== "CONFIRMED") return [];
+      const pixelId = String(pixel.pixel_id ?? "");
+      if (!/^\d{5,25}$/.test(pixelId)) return [];
+      return [
+        {
+          id: String(pixel.id),
+          pixelId,
+          label: String(pixel.label ?? ""),
+          customEventType: String(pixel.custom_event_type ?? "LEAD"),
+          status: "CONFIRMED" as const,
+          customerConfirmedAt: pixel.customer_confirmed_at
+            ? String(pixel.customer_confirmed_at)
+            : null,
+        },
+      ];
+    },
+  );
   const blueprintViews: ObjectiveBlueprintView[] = (
     customerBlueprints ?? []
   ).flatMap((blueprint) => {
@@ -1548,6 +1583,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   });
   const onboardingData: AutomationOnboardingData = {
     domains: domainViews,
+    pixels: pixelViews,
     blueprints: blueprintViews,
     brandAssets: brandAssetViews,
     syncedCreatives: syncedCreativeViews,
