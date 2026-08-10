@@ -254,8 +254,6 @@ export function LeadLaunchCanary({
       { label: "ads_management", ready: writeScopeGranted },
       { label: "EUR", ready: currency === "EUR" },
       { label: "Launch-Policy aktiv", ready: policyLaunchReady },
-      { label: "Exposure-Snapshot", ready: data.snapshotReady },
-      { label: "Brand-Profil", ready: Boolean(brandProfileId) },
       { label: "Pixel bestätigt", ready: Boolean(selectedPixel) },
       {
         label: "Creative bereit",
@@ -264,9 +262,7 @@ export function LeadLaunchCanary({
     ],
     [
       assetId,
-      brandProfileId,
       currency,
-      data.snapshotReady,
       pickerAssets.length,
       policyLaunchReady,
       selectedPixel,
@@ -427,9 +423,9 @@ export function LeadLaunchCanary({
     setPending(true);
     setNotice(null);
     try {
-      if (!gatesReady || !brandProfileId || !selectedPixel) {
+      if (!gatesReady || !selectedPixel) {
         throw new Error(
-          "Voraussetzungen fehlen (Scope, EUR, Policy, Snapshot, Brand, Pixel, Creative).",
+          "Voraussetzungen fehlen (Scope, EUR, Launch-Policy, Pixel, Creative).",
         );
       }
       if (!assetId) {
@@ -462,7 +458,7 @@ export function LeadLaunchCanary({
         brandAssetIds?: string[];
       }>("POST", "/api/meta/automation/launch", {
         blueprintId,
-        brandProfileId,
+        ...(brandProfileId ? { brandProfileId } : {}),
         brandAssetId: assetId,
         allowedDomainId,
         budgetType: "DAILY",
@@ -823,7 +819,7 @@ export function LeadLaunchCanary({
             ) : (
               <PlayCircle className="size-4" />
             )}
-            Lead vorbereiten
+            Kampagne vorbereiten
           </button>
           <button
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
@@ -905,7 +901,7 @@ export function LeadLaunchCanary({
             ) : (
               <Check className="size-4" />
             )}
-            Lead-Launch freigeben
+            Kampagne starten
           </button>
         </form>
       ) : null}

@@ -428,6 +428,20 @@ assert.deepEqual(
   },
 );
 
+assert.equal(
+  parseLaunchCommand({
+    blueprintId: "22222222-2222-4222-8222-222222222222",
+    brandAssetId: "44444444-4444-4444-8444-444444444444",
+    allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    budgetOwnerType: "AD_SET",
+    dailyBudget: "20,00",
+    destinationUrl: "https://www.example.de/angebot",
+    reason: "Kontrollierter Staging-Aktiv-Launch.",
+    confirmation: "AKTIV-LAUNCH VORBEREITEN",
+  }).brandProfileId,
+  null,
+);
+
 assert.deepEqual(
   parseLaunchCommand({
     blueprintId: "22222222-2222-4222-8222-222222222222",
@@ -912,9 +926,24 @@ assert.match(assetImportRouteSource, /importCustomerBrandAsset/);
 assert.match(launchRouteSource, /export async function POST/);
 assert.match(launchRouteSource, /parseLaunchCommand/);
 assert.match(launchRouteSource, /materializeCustomerLaunch/);
+assert.match(launchRouteSource, /maxDuration = 120/);
 assert.match(launchRouteSource, /export async function PUT/);
 assert.match(launchRouteSource, /parseLaunchApprovalCommand/);
 assert.match(launchRouteSource, /approveCustomerLaunch/);
+assert.match(serviceSource, /ensureActiveBrandProfileForLaunch/);
+assert.match(serviceSource, /ensureLaunchExposureSnapshot/);
+assert.match(serviceSource, /refreshCustomerMarketingIfNeeded/);
+assert.match(serviceSource, /ensure_meta_organic_boost_exposure_snapshot/);
+assert.match(serviceSource, /syncMetaConnector/);
+
+const trafficCanarySource = await readFile(
+  path.join(root, "src/components/TrafficLaunchCanary.tsx"),
+  "utf8",
+);
+assert.match(trafficCanarySource, /Kampagne vorbereiten/);
+assert.match(trafficCanarySource, /Kampagne starten/);
+assert.doesNotMatch(trafficCanarySource, /Exposure-Snapshot/);
+assert.doesNotMatch(trafficCanarySource, /Brand-Profil/);
 assert.match(pageSource, /AutomationControlCenter/);
 assert.match(pageSource, /instagram_account_ids/);
 assert.match(pageSource, /meta_asset_id/);

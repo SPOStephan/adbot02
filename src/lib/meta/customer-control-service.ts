@@ -34,6 +34,7 @@ import {
   releaseMetaAccountOperation,
   type MetaOrganicBoostPlannerResult,
 } from "@/lib/meta/planner";
+import { syncMetaConnector } from "@/lib/meta/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -1076,22 +1077,258 @@ function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
   };
 }
 
+/**
+ * Stale/missing marketing sync is handled inside prepare — customers must not
+ * run a separate Abruf chore just to launch an uploaded Traffic creative.
+ */
+async function refreshCustomerMarketingIfNeeded(
+  customer: MetaCustomer,
+): Promise<MetaCustomer> {
+  if (customer.marketingSyncId) {
+    return customer;
+  }
+
+  const syncResult = await syncMetaConnector({
+    platformAccountId: customer.platformAccountId,
+    userId: customer.userId,
+    mode: "manual",
+    ensureOrganicBoost: false,
+  });
+
+  if (syncResult.outcome === "blocked") {
+    const reason = syncResult.blockedReason;
+    serviceError(
+      "fresh_sync_required",
+      409,
+      reason === "cooldown"
+        ? "Meta-Kontodaten werden gerade aktualisiert. Bitte in einer Minute erneut „Kampagne vorbereiten“ tippen."
+        : reason === "locked"
+          ? "Ein Meta-Abruf läuft bereits. Bitte kurz warten und erneut versuchen."
+          : "Für den Kampagnenstart braucht Adbot aktuelle Meta-Kontodaten. Bitte Meta verbinden oder später erneut versuchen.",
+    );
+  }
+
+  const refreshed = await authenticateMetaCustomer();
+  if (!refreshed.marketingSyncId) {
+    serviceError(
+      "fresh_sync_required",
+      409,
+      "Der Meta-Abruf konnte die Kontodaten nicht vollständig aktualisieren. Bitte später erneut versuchen.",
+    );
+  }
+  return refreshed;
+}
+
+/**
+ * ACTIVE brand profile is required by Meta creative page_id wiring — but the
+ * customer should not fill a brand form for a simple Traffic launch. Auto-create
+ * from the connected Facebook Page (+ optional Instagram actor).
+ */
+async function ensureActiveBrandProfileForLaunch(
+  customer: MetaCustomer,
+  preferredId: string | null,
+): Promise<string> {
+  const admin = createAdminClient();
+
+  if (preferredId) {
+    const { data: preferred, error: preferredError } = await admin
+      .from("brand_profiles")
+      .select("id,facebook_page_id")
+      .eq("id", preferredId)
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("status", "ACTIVE")
+      .maybeSingle();
+    if (preferredError) {
+      serviceError(
+        "brand_profile_lookup_failed",
+        500,
+        "Das Brand-Profil konnte nicht sicher geprüft werden.",
+      );
+    }
+    if (preferred?.id && preferred.facebook_page_id) {
+      return preferred.id;
+    }
+  }
+
+  const { data: active, error: activeError } = await admin
+    .from("brand_profiles")
+    .select("id,facebook_page_id")
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("status", "ACTIVE")
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (activeError) {
+    serviceError(
+      "brand_profile_lookup_failed",
+      500,
+      "Das Brand-Profil konnte nicht sicher geprüft werden.",
+    );
+  }
+  if (active?.id && active.facebook_page_id) {
+    return active.id;
+  }
+
+  const [
+    { data: assets, error: assetError },
+    { data: account, error: accountError },
+  ] = await Promise.all([
+    admin
+      .from("meta_assets")
+      .select("asset_type,meta_asset_id")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .in("asset_type", ["facebook_page", "instagram_account"])
+      .order("created_at", { ascending: false }),
+    admin
+      .from("platform_accounts")
+      .select("account_name,instagram_account_ids")
+      .eq("id", customer.platformAccountId)
+      .eq("user_id", customer.userId)
+      .eq("platform", "meta")
+      .is("revoked_at", null)
+      .maybeSingle(),
+  ]);
+
+  if (assetError || accountError || !account) {
+    serviceError(
+      "brand_actor_lookup_failed",
+      500,
+      "Die verbundenen Meta-Seiten konnten nicht sicher geprüft werden.",
+    );
+  }
+
+  const facebookPageId = assets?.find(
+    (asset) => asset.asset_type === "facebook_page",
+  )?.meta_asset_id;
+  if (!facebookPageId || !/^\d{1,64}$/.test(facebookPageId)) {
+    serviceError(
+      "facebook_page_required",
+      409,
+      "Für Anzeigen muss eine Facebook-Seite mit dem Meta-Konto verbunden sein. Bitte Meta erneut verbinden.",
+    );
+  }
+
+  const selectedInstagramIds = new Set(
+    Array.isArray(account.instagram_account_ids)
+      ? account.instagram_account_ids.filter(
+          (id): id is string =>
+            typeof id === "string" && /^[0-9]{1,64}$/.test(id),
+        )
+      : [],
+  );
+  const selectedIg = assets?.find(
+    (asset) =>
+      asset.asset_type === "instagram_account" &&
+      selectedInstagramIds.has(asset.meta_asset_id),
+  )?.meta_asset_id;
+  const anyIg = assets?.find(
+    (asset) => asset.asset_type === "instagram_account",
+  )?.meta_asset_id;
+  const instagramActorId =
+    selectedIg && /^\d{1,64}$/.test(selectedIg)
+      ? selectedIg
+      : anyIg && /^\d{1,64}$/.test(anyIg)
+        ? anyIg
+        : null;
+
+  const brandName = (
+    customer.accountName ||
+    account.account_name ||
+    "Mein Unternehmen"
+  )
+    .toString()
+    .trim()
+    .slice(0, 120) || "Mein Unternehmen";
+
+  const { data, error } = await admin.rpc("put_brand_profile_version", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_display_name: brandName,
+    p_brand_name: brandName,
+    p_facebook_page_id: facebookPageId,
+    p_instagram_actor_id: instagramActorId,
+    p_guidelines: {},
+    p_forbidden_content: [],
+    p_generation_defaults: {},
+    p_activate: true,
+    p_generated_asset_approval_mode: "AUTONOMOUS_POLICY",
+  });
+
+  if (error || typeof data !== "string") {
+    rpcFailure("Das Brand-Profil");
+  }
+  return data;
+}
+
+/**
+ * Hard-cap reservation needs a COMPLETE exposure snapshot for today's sync.
+ * Bootstrap via the same ensure used by Beitrag-Push — no separate customer chore.
+ */
+async function ensureLaunchExposureSnapshot(
+  customer: MetaCustomer,
+  leaseToken: string,
+): Promise<void> {
+  if (!customer.marketingSyncId) {
+    serviceError(
+      "fresh_sync_required",
+      409,
+      "Für den Kampagnenstart fehlen aktuelle Meta-Kontodaten.",
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data: policy, error: policyError } = await admin
+    .from("automation_policies")
+    .select("id")
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("is_current", true)
+    .eq("status", "ACTIVE")
+    .eq("currency", "EUR")
+    .maybeSingle();
+
+  if (policyError || !policy?.id) {
+    serviceError(
+      "launch_policy_required",
+      409,
+      "Eine aktive Launch-Policy ist erforderlich, bevor die Kampagne vorbereitet werden kann.",
+    );
+  }
+
+  const { data, error } = await admin.rpc(
+    "ensure_meta_organic_boost_exposure_snapshot",
+    {
+      p_platform_account_id: customer.platformAccountId,
+      p_user_id: customer.userId,
+      p_policy_id: policy.id,
+      p_source_marketing_sync_id: customer.marketingSyncId,
+      p_read_lease_token: leaseToken,
+      p_planned_at: new Date().toISOString(),
+    },
+  );
+
+  if (error || !data) {
+    serviceError(
+      "launch_exposure_snapshot_required",
+      409,
+      "Der Budget-Snapshot für den Kampagnenstart konnte nicht automatisch erzeugt werden. Bitte erneut versuchen.",
+    );
+  }
+}
+
 export async function materializeCustomerLaunch(
   customer: MetaCustomer,
   command: LaunchCommand,
 ): Promise<CustomerLaunchResult> {
   requireWriteReadyCustomer(customer, "einen Aktiv-Launch vorbereitest");
-  if (!customer.marketingSyncId) {
-    serviceError(
-      "fresh_sync_required",
-      409,
-      "Vor der Aktiv-Launch-Vorbereitung ist ein aktueller erfolgreicher Meta-Abruf erforderlich.",
-    );
-  }
+  const readyCustomer = await refreshCustomerMarketingIfNeeded(customer);
 
   const leaseToken = await claimMetaReadOperation({
-    platformAccountId: customer.platformAccountId,
-    userId: customer.userId,
+    platformAccountId: readyCustomer.platformAccountId,
+    userId: readyCustomer.userId,
     ownerId: `customer-launch-prepare:${randomUUID()}`,
   });
   if (!leaseToken) {
@@ -1105,14 +1342,20 @@ export async function materializeCustomerLaunch(
   let result: CustomerLaunchResult | null = null;
   try {
     const admin = createAdminClient();
+    const brandProfileId = await ensureActiveBrandProfileForLaunch(
+      readyCustomer,
+      command.brandProfileId,
+    );
+    await ensureLaunchExposureSnapshot(readyCustomer, leaseToken);
+
     // Library uploads may arrive before onboarding creates a brand profile.
     // Bind unbound CUSTOMER assets to the launch profile at prepare-time.
     const { error: bindError } = await admin.rpc(
       "bind_unbound_customer_brand_asset_for_launch",
       {
-        p_user_id: customer.userId,
-        p_platform_account_id: customer.platformAccountId,
-        p_brand_profile_id: command.brandProfileId,
+        p_user_id: readyCustomer.userId,
+        p_platform_account_id: readyCustomer.platformAccountId,
+        p_brand_profile_id: brandProfileId,
         p_brand_asset_id: command.brandAssetId,
       },
     );
@@ -1120,15 +1363,15 @@ export async function materializeCustomerLaunch(
       serviceError(
         "launch_preparation_not_ready",
         409,
-        "Der Aktiv-Launch wurde nicht vorbereitet: FREEZE_WRITES, aktueller EUR-Snapshot, Launch-Policy, Budgetgrenzen, Domain, Brand und Creative müssen vollständig erfüllt sein.",
+        "Der Aktiv-Launch wurde nicht vorbereitet: FREEZE_WRITES, Launch-Policy, Budgetgrenzen, Domain und Creative müssen vollständig erfüllt sein.",
       );
     }
     const commonRpcArguments = {
-      p_user_id: customer.userId,
-      p_platform_account_id: customer.platformAccountId,
+      p_user_id: readyCustomer.userId,
+      p_platform_account_id: readyCustomer.platformAccountId,
       p_read_lease_token: leaseToken,
       p_blueprint_id: command.blueprintId,
-      p_brand_profile_id: command.brandProfileId,
+      p_brand_profile_id: brandProfileId,
       p_brand_asset_id: command.brandAssetId,
       p_allowed_domain_id: command.allowedDomainId,
       p_budget_owner_type: command.budgetOwnerType,
@@ -1154,15 +1397,15 @@ export async function materializeCustomerLaunch(
       serviceError(
         "launch_preparation_not_ready",
         409,
-        "Der Aktiv-Launch wurde nicht vorbereitet: FREEZE_WRITES, aktueller EUR-Snapshot, Launch-Policy, Budgetgrenzen, Domain, Brand und Creative müssen vollständig erfüllt sein.",
+        "Der Aktiv-Launch wurde nicht vorbereitet: FREEZE_WRITES, Launch-Policy, Budgetgrenzen, Domain und Creative müssen vollständig erfüllt sein.",
       );
     }
     result = parseCustomerLaunchResult(data);
   } finally {
     try {
       await releaseMetaAccountOperation({
-        platformAccountId: customer.platformAccountId,
-        userId: customer.userId,
+        platformAccountId: readyCustomer.platformAccountId,
+        userId: readyCustomer.userId,
         leaseToken,
       });
     } catch {
