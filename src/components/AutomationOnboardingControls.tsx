@@ -22,6 +22,15 @@ export type AllowedDomainView = {
   customerConfirmedAt: string | null;
 };
 
+export type ConfirmedPixelView = {
+  id: string;
+  pixelId: string;
+  label: string;
+  customEventType: string;
+  status: "CONFIRMED";
+  customerConfirmedAt: string | null;
+};
+
 export type ObjectiveBlueprintView = {
   id: string;
   objective: string;
@@ -176,6 +185,8 @@ function toHeldLaunchPlan(plan: RecentLaunchPlanView): HeldLaunchPlan | null {
 
 export type AutomationOnboardingData = {
   domains: AllowedDomainView[];
+  /** Confirmed Meta Pixels for Lead/offsite launches; unused by Traffic. */
+  pixels: ConfirmedPixelView[];
   blueprints: ObjectiveBlueprintView[];
   brandAssets: ReadyBrandAssetView[];
   syncedCreatives: SyncedCreativeView[];

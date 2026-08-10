@@ -485,6 +485,8 @@ function normalizedHostname(value: unknown, field: string): string {
 
 const DOMAIN_ACTIONS = ["register", "confirm"] as const;
 const DOMAIN_VERIFICATION_METHODS = ["CUSTOMER_CONFIRMATION"] as const;
+const PIXEL_ACTIONS = ["confirm", "revoke"] as const;
+const DEFAULT_LEAD_CUSTOM_EVENT = "LEAD";
 
 export type DomainCommand =
   | {
@@ -495,6 +497,62 @@ export type DomainCommand =
       verificationEvidence: Record<string, unknown>;
     }
   | { action: "confirm"; domainId: string };
+
+export type PixelCommand =
+  | {
+      action: "confirm";
+      pixelId: string;
+      label: string;
+      customEventType: string;
+    }
+  | { action: "revoke"; pixelRowId: string };
+
+function requiredPixelId(value: unknown, field: string): string {
+  const text = requiredText(value, field, 5, 25);
+  if (!/^\d{5,25}$/.test(text)) {
+    inputError("invalid_pixel_id", `${field} muss aus 5–25 Ziffern bestehen.`);
+  }
+  return text;
+}
+
+function requiredCustomEventType(value: unknown): string {
+  if (value === undefined || value === null || value === "") {
+    return DEFAULT_LEAD_CUSTOM_EVENT;
+  }
+  const text = requiredText(value, "Das Conversion-Event", 1, 64).toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(text)) {
+    inputError(
+      "invalid_custom_event_type",
+      "Das Conversion-Event muss mit einem Buchstaben beginnen und nur A–Z, Ziffern oder _ enthalten.",
+    );
+  }
+  return text;
+}
+
+export function parsePixelCommand(value: unknown): PixelCommand {
+  const body = asJsonObject(value);
+  const action = requiredEnum(body.action, "Die Pixel-Aktion", PIXEL_ACTIONS);
+
+  if (action === "revoke") {
+    assertExactKeys(body, ["action", "pixelRowId"], "Der Pixel-Befehl");
+    return {
+      action,
+      pixelRowId: requiredUuid(body.pixelRowId, "Die Pixel-Zeilen-ID"),
+    };
+  }
+
+  assertExactKeys(
+    body,
+    ["action", "pixelId", "label", "customEventType"],
+    "Der Pixel-Befehl",
+  );
+  return {
+    action,
+    pixelId: requiredPixelId(body.pixelId, "Die Pixel-ID"),
+    label: optionalText(body.label, "Die Pixel-Bezeichnung", 120),
+    customEventType: requiredCustomEventType(body.customEventType),
+  };
+}
 
 export function parseDomainCommand(value: unknown): DomainCommand {
   const body = asJsonObject(value);
@@ -872,6 +930,11 @@ type LaunchCommon = {
     ad_set_name?: string;
     creative_name?: string;
     ad_name?: string;
+    /** Optional Lead/offsite override — omitted for Traffic launches. */
+    promoted_object?: {
+      pixel_id: string;
+      custom_event_type: string;
+    };
   };
 };
 
@@ -933,6 +996,9 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     "adName",
     "reason",
     "confirmation",
+    // Optional Lead fields — Traffic Canary simply omits them.
+    "pixelId",
+    "customEventType",
   ];
   assertExactKeys(
     body,
@@ -949,6 +1015,27 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     );
   }
 
+  const pixelIdRaw = body.pixelId;
+  const hasPixel =
+    pixelIdRaw !== undefined && pixelIdRaw !== null && pixelIdRaw !== "";
+  const promotedObject = hasPixel
+    ? {
+        pixel_id: requiredPixelId(pixelIdRaw, "Die Pixel-ID"),
+        custom_event_type: requiredCustomEventType(body.customEventType),
+      }
+    : undefined;
+  if (
+    !hasPixel &&
+    body.customEventType !== undefined &&
+    body.customEventType !== null &&
+    body.customEventType !== ""
+  ) {
+    inputError(
+      "pixel_required_for_event",
+      "Ein Conversion-Event ohne bestätigte Pixel-ID ist nicht erlaubt.",
+    );
+  }
+
   const common: LaunchCommon = {
     blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
     brandProfileId: requiredUuid(body.brandProfileId, "Die Brand-Profil-ID"),
@@ -961,6 +1048,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       ad_set_name: optionalLaunchName(body.adSetName, "Der Ad-Set-Name"),
       creative_name: optionalLaunchName(body.creativeName, "Der Creative-Name"),
       ad_name: optionalLaunchName(body.adName, "Der Anzeigenname"),
+      ...(promotedObject ? { promoted_object: promotedObject } : {}),
     },
   };
   const budgetOwnerType = requiredEnum(

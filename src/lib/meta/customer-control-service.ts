@@ -21,6 +21,7 @@ import {
   type KillSwitchCommand,
   type LaunchApprovalCommand,
   type LaunchCommand,
+  type PixelCommand,
   type OrganicBoostApprovalCommand,
   type OrganicBoostPrepareCommand,
   type PolicyCommand,
@@ -743,6 +744,46 @@ export async function applyCustomerDomainCommand(
     rpcFailure("Die Domain-Bestätigung");
   }
   return { domainId: data, status: "VERIFIED" };
+}
+
+export async function applyCustomerPixelCommand(
+  customer: MetaCustomer,
+  command: PixelCommand,
+): Promise<{
+  pixelRowId: string;
+  status: "CONFIRMED" | "REVOKED";
+  pixelId?: string;
+  customEventType?: string;
+}> {
+  const admin = createAdminClient();
+  if (command.action === "confirm") {
+    const { data, error } = await admin.rpc("confirm_meta_pixel", {
+      p_user_id: customer.userId,
+      p_platform_account_id: customer.platformAccountId,
+      p_pixel_id: command.pixelId,
+      p_label: command.label,
+      p_custom_event_type: command.customEventType,
+    });
+    if (error || typeof data !== "string") {
+      rpcFailure("Die Pixel-Bestätigung");
+    }
+    return {
+      pixelRowId: data,
+      status: "CONFIRMED",
+      pixelId: command.pixelId,
+      customEventType: command.customEventType,
+    };
+  }
+
+  const { data, error } = await admin.rpc("revoke_meta_confirmed_pixel", {
+    p_user_id: customer.userId,
+    p_platform_account_id: customer.platformAccountId,
+    p_pixel_row_id: command.pixelRowId,
+  });
+  if (error || typeof data !== "string") {
+    rpcFailure("Das Zurückziehen der Pixel-Bindung");
+  }
+  return { pixelRowId: data, status: "REVOKED" };
 }
 
 export async function applyCustomerBlueprintCommand(

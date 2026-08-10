@@ -111,7 +111,7 @@ describe("Meta Conversions API", () => {
           {},
           fetchMock
         )
-      ).resolves.toEqual({ status: "sent", eventsReceived: 1 });
+      ).resolves.toEqual({ status: "sent", eventsReceived: 1, attempts: 1 });
       expect(fetchMock).toHaveBeenCalledOnce();
       const [url, request] = fetchMock.mock.calls[0]!;
       expect(url).toBe(
@@ -129,6 +129,7 @@ describe("Meta Conversions API", () => {
           httpStatus: 200,
           eventsReceived: 1,
           traceId: "trace-success",
+          attempt: 1,
         }
       );
     } finally {
@@ -188,13 +189,16 @@ describe("Meta Conversions API", () => {
       ).resolves.toEqual({
         status: "failed",
         reason: "Meta CAPI konnte technisch nicht erreicht werden",
+        attempts: 3,
       });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(consoleError).toHaveBeenCalledWith(
         "[Meta CAPI] Übertragung technisch fehlgeschlagen",
         {
           eventId: submission.metaEventId,
           pixelId: config.metaTracking.pixelId,
           errorType: "Error",
+          attempt: 3,
         }
       );
     } finally {
@@ -236,7 +240,9 @@ describe("Meta Conversions API", () => {
         status: "failed",
         reason: "Meta CAPI hat kein empfangenes Ereignis bestätigt",
         eventsReceived: 0,
+        attempts: 1,
       });
+      expect(fetchMock).toHaveBeenCalledOnce();
       expect(consoleError).toHaveBeenCalledWith(
         "[Meta CAPI] Ereignis nicht bestätigt",
         {
@@ -245,6 +251,7 @@ describe("Meta Conversions API", () => {
           httpStatus: 200,
           eventsReceived: 0,
           traceId: "trace-zero",
+          attempt: 1,
         }
       );
     } finally {
@@ -288,7 +295,9 @@ describe("Meta Conversions API", () => {
         status: "failed",
         reason: "Meta CAPI hat das Ereignis abgelehnt",
         eventsReceived: undefined,
+        attempts: 1,
       });
+      expect(fetchMock).toHaveBeenCalledOnce();
       expect(consoleError).toHaveBeenCalledWith(
         "[Meta CAPI] Ereignis abgelehnt",
         {
@@ -297,6 +306,7 @@ describe("Meta Conversions API", () => {
           httpStatus: 400,
           eventsReceived: undefined,
           traceId: "trace-error",
+          attempt: 1,
           errorType: "OAuthException",
           errorCode: 190,
           errorSubcode: 463,

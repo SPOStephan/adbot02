@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, CheckCircle2, CircleAlert, Clipboard, ExternalLink, KeyRound, Loader2, Save, Settings2, Signpost, Target } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, CircleAlert, Clipboard, ExternalLink, Globe, KeyRound, Loader2, Save, Settings2, Signpost, Target } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import type { FunnelConfig, FunnelStatus } from "@shared/funnel";
@@ -24,6 +24,7 @@ export default function Settings() {
   const [metaTestEventCode, setMetaTestEventCode] = useState("");
   const [savedMetaTestEventCode, setSavedMetaTestEventCode] = useState("");
   const [clearMetaAccessToken, setClearMetaAccessToken] = useState(false);
+  const [customHostname, setCustomHostname] = useState("");
 
   useEffect(() => { if (query.data?.config) { setDraft(query.data.config); setSavedConfig(query.data.config); } }, [query.data?.config]);
   useEffect(() => {
@@ -50,6 +51,32 @@ export default function Settings() {
       setMetaTestEventCode(saved.testEventCode);
       setSavedMetaTestEventCode(saved.testEventCode);
       await utils.funnel.adminConfig.invalidate({ id: funnelId });
+    },
+    onError: error => toast.error(error.message),
+  });
+  const customDomainsQuery = trpc.funnel.customDomains.useQuery(
+    { funnelId: funnelId! },
+    { enabled: Boolean(funnelId) }
+  );
+  const registerCustomDomain = trpc.funnel.registerCustomDomain.useMutation({
+    onSuccess: async () => {
+      setCustomHostname("");
+      await customDomainsQuery.refetch();
+      toast.success("Custom Domain registriert — DNS-Eintrag setzen");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const markCustomDomainReady = trpc.funnel.markCustomDomainReady.useMutation({
+    onSuccess: async () => {
+      await customDomainsQuery.refetch();
+      toast.success("Domain als bereit markiert");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const revokeCustomDomain = trpc.funnel.revokeCustomDomain.useMutation({
+    onSuccess: async () => {
+      await customDomainsQuery.refetch();
+      toast.success("Custom Domain zurückgezogen");
     },
     onError: error => toast.error(error.message),
   });
@@ -165,7 +192,7 @@ export default function Settings() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-start gap-3"><KeyRound className="mt-0.5 size-5 shrink-0 text-[#0165c3]" aria-hidden="true" /><div><h3 className="text-sm font-bold">Conversions API – serverseitig, optional</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Ohne Token arbeitet der Funnel im Browser-only-Modus. Mit Token wird dieselbe Conversion zusätzlich serverseitig mit gemeinsamer Event-ID gemeldet und von Meta dedupliziert.</p></div></div>
+            <div className="flex items-start gap-3"><KeyRound className="mt-0.5 size-5 shrink-0 text-[#0165c3]" aria-hidden="true" /><div><h3 className="text-sm font-bold">Conversions API – serverseitig</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Für Lead-Kampagnen mit Meta-Optimierung empfohlen. Ohne Token arbeitet der Funnel im Browser-only-Modus (Adblocker können Events schlucken). Mit Token wird dieselbe Conversion zusätzlich serverseitig mit gemeinsamer Event-ID gemeldet; kurze Netzfehler werden begrenzt wiederholt. DOI-Trigger sendet beim Absenden noch kein Event.</p></div></div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2"><Label htmlFor="meta-access-token">Zugangstoken</Label><Input id="meta-access-token" type="password" autoComplete="new-password" placeholder={query.data.metaServerSettings.hasAccessToken && !clearMetaAccessToken ? "Verschlüsseltes Token gespeichert – nur zum Ersetzen neu einfügen" : "Meta Conversions API Access Token"} value={metaAccessToken} onChange={event => { setMetaAccessToken(event.target.value); setClearMetaAccessToken(false); }} /><p className="text-xs text-muted-foreground">Das Token wird AES-256-GCM-verschlüsselt gespeichert, nie an Besucher ausgeliefert und hier nicht wieder angezeigt.</p></div>
               <div className="space-y-2"><Label htmlFor="meta-test-code">Test-Event-Code <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="meta-test-code" placeholder="TEST12345" value={metaTestEventCode} onChange={event => setMetaTestEventCode(event.target.value.slice(0, 160))} /><p className="text-xs text-muted-foreground">Nur für „Test Events“ im Meta Events Manager; vor Produktivbetrieb leeren.</p></div>
@@ -174,6 +201,85 @@ export default function Settings() {
           </div>
           <div className="flex justify-end"><Button className="bg-[#0165c3] hover:bg-[#0154a3]" disabled={save.isPending || saveMetaServer.isPending || (!dirty && !metaServerDirty)} aria-busy={save.isPending || saveMetaServer.isPending} onClick={persistSettings}>{save.isPending || saveMetaServer.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}{save.isPending || saveMetaServer.isPending ? "Wird gespeichert …" : "Tracking-Einstellungen speichern"}</Button></div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Eigene Hostname für diesen Funnel vorbereiten. DNS (CNAME) und SSL-Anbindung am Hosting bleiben ein Ops-Schritt; danach Domain als bereit markieren und in Meta für Conversion-Tracking verifizieren.</p></div></div>
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <Input
+            aria-label="Custom Hostname"
+            placeholder="karriere.dein-unternehmen.de"
+            value={customHostname}
+            onChange={event => setCustomHostname(event.target.value.toLowerCase())}
+          />
+          <Button
+            className="bg-[#0165c3] hover:bg-[#0154a3]"
+            disabled={!funnelId || !customHostname.trim() || registerCustomDomain.isPending}
+            onClick={() =>
+              funnelId &&
+              registerCustomDomain.mutate({
+                funnelId,
+                hostname: customHostname.trim(),
+              })
+            }
+          >
+            {registerCustomDomain.isPending ? <Loader2 className="size-4 animate-spin" /> : <Globe className="size-4" />}
+            Domain registrieren
+          </Button>
+        </div>
+        <ul className="mt-5 space-y-3">
+          {(customDomainsQuery.data ?? []).map(domain => (
+            <li className="rounded-xl border p-4" key={domain.id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold">{domain.hostname}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Status {domain.status} · CNAME → <code>{domain.dnsTarget}</code>
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    DNS: CNAME von <code>{domain.hostname}</code> auf <code>{domain.dnsTarget}</code>.
+                    Nach erfolgreicher SSL-/Hosting-Anbindung „Als bereit markieren“.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {domain.status === "PENDING_DNS" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={markCustomDomainReady.isPending}
+                      onClick={() =>
+                        funnelId &&
+                        markCustomDomainReady.mutate({
+                          funnelId,
+                          domainId: domain.id,
+                        })
+                      }
+                    >
+                      Als bereit markieren
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={revokeCustomDomain.isPending}
+                    onClick={() =>
+                      funnelId &&
+                      revokeCustomDomain.mutate({
+                        funnelId,
+                        domainId: domain.id,
+                      })
+                    }
+                  >
+                    Zurückziehen
+                  </Button>
+                </div>
+              </div>
+            </li>
+          ))}
+          {(customDomainsQuery.data?.length ?? 0) === 0 ? (
+            <li className="text-sm text-muted-foreground">Noch keine Custom Domain registriert. Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
+          ) : null}
+        </ul>
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">

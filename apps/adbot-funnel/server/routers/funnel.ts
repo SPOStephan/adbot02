@@ -40,6 +40,12 @@ import { sendApplicationNotification } from "../mail";
 import { buildApplicationsCsv, buildApplicationsPdf } from "../exports";
 import { sendMetaApplicationConversion } from "../metaConversions";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
+import {
+  listCustomDomainsForFunnel,
+  markCustomDomainReady,
+  registerCustomDomain,
+  revokeCustomDomain,
+} from "../funnelCustomDomains";
 
 function validateSubmission(config: FunnelConfig, submission: z.infer<typeof applicationSubmissionSchema>) {
   if (config.status !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "Dieser Funnel ist derzeit nicht veröffentlicht." });
@@ -265,6 +271,74 @@ export const funnelRouter = router({
     await requireOwnedFunnel(input.funnelId, ctx.user);
     return saveMetaServerSettings(input.funnelId, input);
   }),
+
+  customDomains: adminProcedure
+    .input(z.object({ funnelId: funnelIdSchema }))
+    .query(async ({ input, ctx }) => {
+      await requireOwnedFunnel(input.funnelId, ctx.user);
+      return listCustomDomainsForFunnel(input.funnelId);
+    }),
+
+  registerCustomDomain: adminProcedure
+    .input(
+      z.object({
+        funnelId: funnelIdSchema,
+        hostname: z.string().min(3).max(253),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await requireOwnedFunnel(input.funnelId, ctx.user);
+      try {
+        return await registerCustomDomain({
+          funnelId: input.funnelId,
+          hostname: input.hostname,
+          notes: input.notes,
+        });
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Custom Domain konnte nicht registriert werden.",
+        });
+      }
+    }),
+
+  markCustomDomainReady: adminProcedure
+    .input(z.object({ funnelId: funnelIdSchema, domainId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      await requireOwnedFunnel(input.funnelId, ctx.user);
+      try {
+        return await markCustomDomainReady(input);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Custom Domain konnte nicht als bereit markiert werden.",
+        });
+      }
+    }),
+
+  revokeCustomDomain: adminProcedure
+    .input(z.object({ funnelId: funnelIdSchema, domainId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      await requireOwnedFunnel(input.funnelId, ctx.user);
+      try {
+        return await revokeCustomDomain(input);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Custom Domain konnte nicht zurückgezogen werden.",
+        });
+      }
+    }),
 
   setFunnelStatus: adminProcedure
     .input(z.object({ id: funnelIdSchema, status: funnelStatusSchema }))
