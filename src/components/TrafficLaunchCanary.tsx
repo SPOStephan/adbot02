@@ -9,6 +9,7 @@ import {
   PlayCircle,
   Rocket,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 
 import type {
@@ -204,6 +205,7 @@ export function TrafficLaunchCanary({
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [suggestPending, setSuggestPending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [destinationUrl, setDestinationUrl] = useState("");
@@ -265,6 +267,57 @@ export function TrafficLaunchCanary({
 
   function refresh() {
     router.refresh();
+  }
+
+  /**
+   * No save required: reads the URL from the form, fills the same editable
+   * copy fields. Customer can edit further or prepare the launch immediately.
+   */
+  async function suggestCopyFromUrl() {
+    setSuggestPending(true);
+    setNotice(null);
+    try {
+      const landing = parseLandingUrl(destinationUrl);
+      const result = await apiJson<{
+        primaryText?: string;
+        headline?: string;
+        description?: string;
+        billing?: { creditsCharged?: number };
+      }>("POST", "/api/meta/automation/ad-copy-suggest", {
+        destinationUrl: landing.href,
+        objective: "OUTCOME_TRAFFIC",
+      });
+      if (!result.primaryText || !result.headline) {
+        throw new Error("Server lieferte unvollständige Textvorschläge.");
+      }
+      setPrimaryText(result.primaryText);
+      setHeadline(result.headline);
+      setDescription(
+        typeof result.description === "string" ? result.description : "",
+      );
+      const credits =
+        typeof result.billing?.creditsCharged === "number"
+          ? result.billing.creditsCharged
+          : null;
+      setNotice({
+        tone: "success",
+        message:
+          credits !== null
+            ? `Textvorschlag eingefügt (${credits} Credits). Du kannst die Felder noch anpassen.`
+            : "Textvorschlag eingefügt. Du kannst die Felder noch anpassen.",
+      });
+      refresh();
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Textvorschlag konnte nicht erzeugt werden.",
+      });
+    } finally {
+      setSuggestPending(false);
+    }
   }
 
   async function ensureFreeze(): Promise<void> {
@@ -634,7 +687,7 @@ export function TrafficLaunchCanary({
           Landingpage (HTTPS)
           <input
             className={inputClass}
-            disabled={pending}
+            disabled={pending || suggestPending}
             onChange={(event) => setDestinationUrl(event.target.value)}
             placeholder="https://www.example.de/angebot"
             required
@@ -642,6 +695,44 @@ export function TrafficLaunchCanary({
             value={destinationUrl}
           />
         </label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:col-span-2">
+          <button
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={
+              pending ||
+              suggestPending ||
+              !destinationUrl.trim() ||
+              Boolean(heldPlan)
+            }
+            onClick={() => void suggestCopyFromUrl()}
+            type="button"
+          >
+            {suggestPending ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Sparkles className="size-4" />
+            )}
+            Textvorschlag aus URL
+          </button>
+          <p className="text-xs font-medium leading-5 text-slate-500">
+            Kein Zwischenspeichern nötig. Vorschlag landet direkt in den
+            Textfeldern darunter — Credits werden abgezogen (
+            Aktion creative.generate_copy_set, mind. Katalogpreis, sonst
+            Providerkosten × 1,5).
+          </p>
+        </div>
+        {notice ? (
+          <p
+            className={`rounded-xl px-4 py-3 text-sm font-semibold lg:col-span-2 ${
+              notice.tone === "success"
+                ? "bg-emerald-50 text-emerald-800"
+                : "bg-rose-50 text-rose-800"
+            }`}
+            role="status"
+          >
+            {notice.message}
+          </p>
+        ) : null}
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">
           Anzeigentext (Primary Text)
           <textarea
@@ -788,19 +879,6 @@ export function TrafficLaunchCanary({
             Aktiv-Launch freigeben
           </button>
         </form>
-      ) : null}
-
-      {notice ? (
-        <p
-          className={`mt-5 rounded-xl px-4 py-3 text-sm font-semibold ${
-            notice.tone === "success"
-              ? "bg-emerald-50 text-emerald-800"
-              : "bg-red-50 text-red-800"
-          }`}
-          role={notice.tone === "error" ? "alert" : "status"}
-        >
-          {notice.message}
-        </p>
       ) : null}
     </section>
   );

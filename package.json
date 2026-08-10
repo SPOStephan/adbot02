@@ -26,6 +26,7 @@
     "test:meta-mutation-executor": "node scripts/test-meta-mutation-executor.mjs",
     "test:meta-customer-controls": "node scripts/test-meta-customer-controls.mjs",
     "test:campaign-assistant-brief": "node scripts/test-campaign-assistant-brief.mjs",
+    "test:ad-copy-pricing": "node scripts/test-ad-copy-pricing.mjs",
     "test:funnel-workspace": "node scripts/test-funnel-workspace.mjs",
     "test:meta-organic-boost": "node scripts/test-meta-organic-boost.mjs",
     "test:legal-pages": "node scripts/test-legal-pages.mjs",

@@ -164,6 +164,20 @@ export async function topUpCredits(input: {
   return asInt(data);
 }
 
+function parseReservationRow(data: unknown): CreditReservation {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!isRecord(row) || typeof row.reservation_id !== "string") {
+    throw new Error("Credit reservation returned an invalid payload");
+  }
+
+  return {
+    reservationId: row.reservation_id,
+    amount: asInt(row.amount),
+    balanceAfter: asInt(row.balance_after),
+    alreadyExisted: row.already_existed === true,
+  };
+}
+
 export async function reserveCredits(input: {
   userId: string;
   actionKey: CreditActionKey | string;
@@ -186,17 +200,46 @@ export async function reserveCredits(input: {
     throw creditErrorFromUnknown(error);
   }
 
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!isRecord(row) || typeof row.reservation_id !== "string") {
-    throw new Error("Credit reservation returned an invalid payload");
+  return parseReservationRow(data);
+}
+
+/**
+ * Reserve max(catalog floor, requested amount) for usage-priced AI actions.
+ * Markup/conversion happens in the caller before choosing `amount`.
+ */
+export async function reserveCreditsAmount(input: {
+  userId: string;
+  actionKey: CreditActionKey | string;
+  amount: number;
+  idempotencyKey: string;
+  referenceType?: string;
+  referenceId?: string;
+  ttlSeconds?: number;
+}): Promise<CreditReservation> {
+  if (
+    !Number.isInteger(input.amount) ||
+    input.amount <= 0 ||
+    input.amount > 1_000_000
+  ) {
+    throw new Error("Credit reservation amount is invalid");
   }
 
-  return {
-    reservationId: row.reservation_id,
-    amount: asInt(row.amount),
-    balanceAfter: asInt(row.balance_after),
-    alreadyExisted: row.already_existed === true,
-  };
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("reserve_credits_amount", {
+    p_user_id: input.userId,
+    p_action_key: input.actionKey,
+    p_idempotency_key: input.idempotencyKey,
+    p_amount: input.amount,
+    p_reference_type: input.referenceType ?? null,
+    p_reference_id: input.referenceId ?? null,
+    p_ttl_seconds: input.ttlSeconds ?? 900,
+  });
+
+  if (error) {
+    throw creditErrorFromUnknown(error);
+  }
+
+  return parseReservationRow(data);
 }
 
 export async function commitCreditReservation(input: {
