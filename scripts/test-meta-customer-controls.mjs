@@ -933,8 +933,22 @@ assert.match(launchRouteSource, /approveCustomerLaunch/);
 assert.match(serviceSource, /ensureActiveBrandProfileForLaunch/);
 assert.match(serviceSource, /ensureLaunchExposureSnapshot/);
 assert.match(serviceSource, /refreshCustomerMarketingIfNeeded/);
+assert.match(serviceSource, /ensureFreezeWritesForLaunch/);
+assert.match(serviceSource, /launchPreparationFailureMessage/);
 assert.match(serviceSource, /ensure_meta_organic_boost_exposure_snapshot/);
 assert.match(serviceSource, /syncMetaConnector/);
+
+const bindRebindMigration = await readFile(
+  path.join(
+    root,
+    "supabase/migrations/20260810183000_bind_customer_asset_rebind_for_launch.sql",
+  ),
+  "utf8",
+);
+assert.match(
+  bindRebindMigration,
+  /brand_profile_id is distinct from v_profile\.id/,
+);
 
 const trafficCanarySource = await readFile(
   path.join(root, "src/components/TrafficLaunchCanary.tsx"),
