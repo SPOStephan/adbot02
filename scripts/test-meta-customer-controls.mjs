@@ -945,6 +945,18 @@ const launchMarketingEnsureSource = await readFile(
 assert.match(launchMarketingEnsureSource, /syncMetaMarketingSnapshot/);
 assert.match(launchMarketingEnsureSource, /marketing_timezone_name/);
 assert.match(launchMarketingEnsureSource, /ensureLaunchMarketingReady/);
+assert.match(launchMarketingEnsureSource, /normalizeLaunchTimezoneIfNeeded/);
+assert.match(launchMarketingEnsureSource, /Always refresh on prepare/);
+assert.match(serviceSource, /Omit p_planned_at so Postgres uses now/);
+
+const timezoneHelperMigration = await readFile(
+  path.join(
+    root,
+    "supabase/migrations/20260810190000_meta_timezone_is_known.sql",
+  ),
+  "utf8",
+);
+assert.match(timezoneHelperMigration, /meta_timezone_is_known/);
 
 const bindRebindMigration = await readFile(
   path.join(

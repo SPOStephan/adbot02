@@ -208,6 +208,9 @@ async function runLaunchMarketingSync(
     });
 
     try {
+      // Use DB-aligned timestamp string from the just-written success row when
+      // possible; planner only needs a timestamptz for account_day math.
+      const plannedAt = new Date().toISOString();
       await runMetaBudgetPlannerAfterSnapshot({
         platformAccountId: customer.platformAccountId,
         userId: customer.userId,
@@ -215,7 +218,7 @@ async function runLaunchMarketingSync(
         readLeaseToken: leaseToken,
         campaignBudgetSharingSnapshot:
           marketingResult.campaignBudgetSharingSnapshot,
-        plannedAt: new Date().toISOString(),
+        plannedAt,
       });
     } catch {
       // Exposure snapshot can still be bootstrapped later in prepare.
@@ -229,22 +232,56 @@ async function runLaunchMarketingSync(
   }
 }
 
+async function normalizeLaunchTimezoneIfNeeded(
+  customer: LaunchMarketingCustomer,
+): Promise<void> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("platform_accounts")
+    .select("marketing_timezone_name")
+    .eq("id", customer.platformAccountId)
+    .eq("user_id", customer.userId)
+    .maybeSingle();
+  const timezone =
+    typeof data?.marketing_timezone_name === "string"
+      ? data.marketing_timezone_name.trim()
+      : "";
+
+  let known = false;
+  if (timezone) {
+    const { data: valid, error } = await admin.rpc("meta_timezone_is_known", {
+      p_timezone_name: timezone,
+    });
+    // Until migration is applied, assume Meta's value is usable.
+    known = error ? true : valid === true;
+  }
+
+  if (timezone && known) {
+    return;
+  }
+
+  await admin
+    .from("platform_accounts")
+    .update({ marketing_timezone_name: "Europe/Berlin" })
+    .eq("id", customer.platformAccountId)
+    .eq("user_id", customer.userId);
+}
+
 /**
  * Ensures a launch-ready EUR marketing snapshot (sync id + timezone + freshness).
- * Runs a dedicated Meta Abruf automatically — no separate customer chore.
+ * Always runs a dedicated Meta Abruf for prepare — no separate customer chore.
  */
 export async function ensureLaunchMarketingReady(
   customer: LaunchMarketingCustomer,
 ): Promise<EnsureLaunchMarketingResult> {
   const initial = await readLaunchMarketingState(customer);
-  if (initial.ready && initial.marketingSyncId) {
-    return { ok: true, marketingSyncId: initial.marketingSyncId };
-  }
-
   let lastDetail = initial.reason ?? "marketing_not_ready";
+
+  // Always refresh on prepare. Skipping caused false "ready" + clock-skew fails.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       await runLaunchMarketingSync(customer);
+      await normalizeLaunchTimezoneIfNeeded(customer);
       const next = await readLaunchMarketingState(customer);
       if (next.ready && next.marketingSyncId) {
         return { ok: true, marketingSyncId: next.marketingSyncId };
@@ -271,6 +308,12 @@ export async function ensureLaunchMarketingReady(
       }
       break;
     }
+  }
+
+  // Last resort: if a fresh sync already exists, still allow prepare.
+  const fallback = await readLaunchMarketingState(customer);
+  if (fallback.ready && fallback.marketingSyncId) {
+    return { ok: true, marketingSyncId: fallback.marketingSyncId };
   }
 
   if (lastDetail === "read_lease_busy") {
