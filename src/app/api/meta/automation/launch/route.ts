@@ -17,6 +17,8 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** May auto-run a Meta Abruf + snapshot ensure during prepare. */
+export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   try {

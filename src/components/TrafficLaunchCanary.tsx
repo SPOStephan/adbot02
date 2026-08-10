@@ -246,8 +246,6 @@ export function TrafficLaunchCanary({
       { label: "ads_management", ready: writeScopeGranted },
       { label: "EUR", ready: currency === "EUR" },
       { label: "Launch-Policy aktiv", ready: policyLaunchReady },
-      { label: "Exposure-Snapshot", ready: data.snapshotReady },
-      { label: "Brand-Profil", ready: Boolean(brandProfileId) },
       {
         label: "Creative bereit",
         ready: pickerAssets.length > 0 || Boolean(assetId),
@@ -255,9 +253,7 @@ export function TrafficLaunchCanary({
     ],
     [
       assetId,
-      brandProfileId,
       currency,
-      data.snapshotReady,
       pickerAssets.length,
       policyLaunchReady,
       writeScopeGranted,
@@ -419,9 +415,9 @@ export function TrafficLaunchCanary({
     setPending(true);
     setNotice(null);
     try {
-      if (!gatesReady || !brandProfileId) {
+      if (!gatesReady) {
         throw new Error(
-          "Voraussetzungen fehlen (Scope, EUR, Policy, Snapshot, Brand-Profil, Creative).",
+          "Voraussetzungen fehlen (Scope, EUR, Launch-Policy, Creative).",
         );
       }
       if (!assetId) {
@@ -455,7 +451,7 @@ export function TrafficLaunchCanary({
         brandAssetIds?: string[];
       }>("POST", "/api/meta/automation/launch", {
         blueprintId,
-        brandProfileId,
+        ...(brandProfileId ? { brandProfileId } : {}),
         brandAssetId: assetId,
         allowedDomainId,
         budgetType: "DAILY",
@@ -507,7 +503,7 @@ export function TrafficLaunchCanary({
       setNotice({
         tone: "success",
         message:
-          "Traffic-Plan vorbereitet (noch nichts an Meta). Prüfe die Vorschau und gib mit Freigabe frei.",
+          "Kampagne vorbereitet (noch nichts an Meta). Prüfe die Vorschau und starte mit Freigabe.",
       });
       refresh();
     } catch (error) {
@@ -516,7 +512,7 @@ export function TrafficLaunchCanary({
         message:
           error instanceof Error
             ? error.message
-            : "Traffic-Canary konnte nicht vorbereitet werden.",
+            : "Die Kampagne konnte nicht vorbereitet werden.",
       });
     } finally {
       setPending(false);
@@ -794,7 +790,7 @@ export function TrafficLaunchCanary({
             ) : (
               <PlayCircle className="size-4" />
             )}
-            Traffic vorbereiten
+            Kampagne vorbereiten
           </button>
           <button
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
@@ -870,7 +866,7 @@ export function TrafficLaunchCanary({
             ) : (
               <Rocket className="size-4" />
             )}
-            Aktiv-Launch freigeben
+            Kampagne starten
           </button>
         </form>
       ) : null}

@@ -305,6 +305,13 @@ function requiredUuid(value: unknown, field: string): string {
   return normalized.toLowerCase();
 }
 
+function optionalUuid(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  return requiredUuid(value, field);
+}
+
 function requiredEnum<const T extends readonly string[]>(
   value: unknown,
   field: string,
@@ -920,7 +927,11 @@ const LAUNCH_BUDGET_TYPES = ["DAILY", "LIFETIME"] as const;
 
 type LaunchCommon = {
   blueprintId: string;
-  brandProfileId: string;
+  /**
+   * Optional: server auto-ensures an ACTIVE brand profile (page/IG from Meta)
+   * when omitted — customers must not fill a brand form just to launch Traffic.
+   */
+  brandProfileId: string | null;
   brandAssetId: string;
   allowedDomainId: string;
   reason: string;
@@ -1038,7 +1049,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
 
   const common: LaunchCommon = {
     blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
-    brandProfileId: requiredUuid(body.brandProfileId, "Die Brand-Profil-ID"),
+    brandProfileId: optionalUuid(body.brandProfileId, "Die Brand-Profil-ID"),
     brandAssetId: requiredUuid(body.brandAssetId, "Die Brand-Asset-ID"),
     allowedDomainId: requiredUuid(body.allowedDomainId, "Die Domain-ID"),
     reason: requiredText(body.reason, "Die Begründung", 12, 500),
