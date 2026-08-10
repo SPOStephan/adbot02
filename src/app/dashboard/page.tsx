@@ -74,10 +74,12 @@ import {
 import { MetaContentSyncPanel } from "@/components/MetaContentSyncPanel";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
+import { CreditsSidebarBalance } from "@/components/CreditsSidebarBalance";
 import { SignOutButton } from "@/components/SignOutButton";
 import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
+import { getCreditBalanceForUser } from "@/lib/billing/credits";
 import { loadContentSyncSnapshot } from "@/lib/meta/content-sync-snapshot";
 import {
   drainHardCapStatusExecutionsForAccount,
@@ -384,6 +386,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const navigation = userIsSiteAdmin
     ? [...baseNavigation, ...adminNavigationItems]
     : [...baseNavigation];
+
+  let creditBalance: Awaited<ReturnType<typeof getCreditBalanceForUser>> = null;
+  try {
+    creditBalance = await getCreditBalanceForUser(user.id);
+  } catch (error) {
+    console.error("dashboard_credit_balance_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
 
   const { data: connectedAccounts, error: connectedAccountsError } = await supabase
     .from("platform_accounts")
@@ -1967,6 +1978,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </nav>
 
         <div className="mt-auto space-y-1 border-t border-slate-100 pt-5">
+          <CreditsSidebarBalance
+            balance={creditBalance ? creditBalance.balance : null}
+            planName={creditBalance?.planName ?? null}
+            periodEnd={creditBalance?.periodEnd ?? null}
+          />
           <span className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-500">
             <HelpCircle className="size-5" />
             Hilfe
@@ -1985,6 +2001,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <SiteBrandMark href="/dashboard" size="sm" tone="light" />
             </div>
             <div className="ml-auto flex items-center gap-2 sm:gap-4">
+              <span className="lg:hidden">
+                <CreditsSidebarBalance
+                  balance={creditBalance ? creditBalance.balance : null}
+                  compact
+                />
+              </span>
               <span className="hidden max-w-56 truncate text-sm text-slate-500 sm:block">
                 {user.email}
               </span>
