@@ -413,7 +413,11 @@ export function TrafficLaunchCanary({
   async function prepare(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
-    setNotice(null);
+    setNotice({
+      tone: "success",
+      message:
+        "Kampagne wird vorbereitet — Meta-Kontodaten werden bei Bedarf automatisch aktualisiert. Bitte warten…",
+    });
     try {
       if (!gatesReady) {
         throw new Error(
@@ -790,7 +794,9 @@ export function TrafficLaunchCanary({
             ) : (
               <PlayCircle className="size-4" />
             )}
-            Kampagne vorbereiten
+            {pending && !heldPlan
+              ? "Wird vorbereitet…"
+              : "Kampagne vorbereiten"}
           </button>
           <button
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
