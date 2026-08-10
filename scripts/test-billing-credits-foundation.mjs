@@ -32,6 +32,7 @@ assert.match(creditsTs, /CREDIT_ACTION_KEYS/);
 assert.match(creditsTs, /withCreditReservation/);
 assert.match(creditsTs, /InsufficientCreditsError/);
 assert.match(creditsTs, /reserveCredits/);
+assert.match(creditsTs, /reserveCreditsAmount/);
 assert.match(creditsTs, /topUpCredits/);
 assert.match(creditsTs, /assignBillingPlan/);
 
