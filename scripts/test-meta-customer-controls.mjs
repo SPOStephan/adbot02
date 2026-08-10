@@ -1063,14 +1063,14 @@ const launchArgOrderMigration = await readFile(
   "utf8",
 );
 assert.match(launchArgOrderMigration, /ROOT CAUSE/);
-assert.match(launchArgOrderMigration, /p_user_id before platform_account_id/);
+assert.match(launchArgOrderMigration, /CORRECT order/);
 assert.match(
   launchArgOrderMigration,
-  /p_platform_account_id,\s*\n\s*p_user_id,/,
+  /materialize_meta_launch_chain_plan\(\s*\n\s*p_platform_account_id,\s*\n\s*p_user_id,/,
 );
-assert.match(
+assert.doesNotMatch(
   launchArgOrderMigration,
-  /materialize_meta_launch_chain_plan\\\(\\s\*p_user_id/,
+  /materialize_meta_launch_chain_plan\(\s*\n\s*p_user_id,\s*\n\s*p_platform_account_id,/,
 );
 
 const lifetimeLaunchMigration = await readFile(
