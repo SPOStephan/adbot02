@@ -926,17 +926,25 @@ assert.match(assetImportRouteSource, /importCustomerBrandAsset/);
 assert.match(launchRouteSource, /export async function POST/);
 assert.match(launchRouteSource, /parseLaunchCommand/);
 assert.match(launchRouteSource, /materializeCustomerLaunch/);
-assert.match(launchRouteSource, /maxDuration = 120/);
+assert.match(launchRouteSource, /maxDuration = 180/);
 assert.match(launchRouteSource, /export async function PUT/);
 assert.match(launchRouteSource, /parseLaunchApprovalCommand/);
 assert.match(launchRouteSource, /approveCustomerLaunch/);
 assert.match(serviceSource, /ensureActiveBrandProfileForLaunch/);
 assert.match(serviceSource, /ensureLaunchExposureSnapshot/);
-assert.match(serviceSource, /refreshCustomerMarketingIfNeeded/);
+assert.match(serviceSource, /refreshCustomerMarketingForLaunch/);
+assert.match(serviceSource, /ensureLaunchMarketingReady/);
 assert.match(serviceSource, /ensureFreezeWritesForLaunch/);
 assert.match(serviceSource, /launchPreparationFailureMessage/);
 assert.match(serviceSource, /ensure_meta_organic_boost_exposure_snapshot/);
-assert.match(serviceSource, /syncMetaConnector/);
+
+const launchMarketingEnsureSource = await readFile(
+  path.join(root, "src/lib/meta/launch-marketing-ensure.ts"),
+  "utf8",
+);
+assert.match(launchMarketingEnsureSource, /syncMetaMarketingSnapshot/);
+assert.match(launchMarketingEnsureSource, /marketing_timezone_name/);
+assert.match(launchMarketingEnsureSource, /ensureLaunchMarketingReady/);
 
 const bindRebindMigration = await readFile(
   path.join(

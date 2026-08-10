@@ -34,7 +34,7 @@ import {
   releaseMetaAccountOperation,
   type MetaOrganicBoostPlannerResult,
 } from "@/lib/meta/planner";
-import { syncMetaConnector } from "@/lib/meta/sync";
+import { ensureLaunchMarketingReady } from "@/lib/meta/launch-marketing-ensure";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -1078,45 +1078,20 @@ function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
 }
 
 /**
- * Stale/missing marketing sync is handled inside prepare — customers must not
- * run a separate Abruf chore just to launch an uploaded Traffic creative.
+ * Launch prepare always ensures a fresh EUR marketing snapshot (incl. timezone).
+ * Runs a dedicated Meta Abruf automatically — no separate customer chore.
  */
-async function refreshCustomerMarketingIfNeeded(
+async function refreshCustomerMarketingForLaunch(
   customer: MetaCustomer,
 ): Promise<MetaCustomer> {
-  if (customer.marketingSyncId) {
-    return customer;
+  const ensured = await ensureLaunchMarketingReady(customer);
+  if (!ensured.ok) {
+    serviceError("fresh_sync_required", 409, ensured.message);
   }
-
-  const syncResult = await syncMetaConnector({
-    platformAccountId: customer.platformAccountId,
-    userId: customer.userId,
-    mode: "manual",
-    ensureOrganicBoost: false,
-  });
-
-  if (syncResult.outcome === "blocked") {
-    const reason = syncResult.blockedReason;
-    serviceError(
-      "fresh_sync_required",
-      409,
-      reason === "cooldown"
-        ? "Meta-Kontodaten werden gerade aktualisiert. Bitte in einer Minute erneut „Kampagne vorbereiten“ tippen."
-        : reason === "locked"
-          ? "Ein Meta-Abruf läuft bereits. Bitte kurz warten und erneut versuchen."
-          : "Für den Kampagnenstart braucht Adbot aktuelle Meta-Kontodaten. Bitte Meta verbinden oder später erneut versuchen.",
-    );
-  }
-
-  const refreshed = await authenticateMetaCustomer();
-  if (!refreshed.marketingSyncId) {
-    serviceError(
-      "fresh_sync_required",
-      409,
-      "Der Meta-Abruf konnte die Kontodaten nicht vollständig aktualisieren. Bitte später erneut versuchen.",
-    );
-  }
-  return refreshed;
+  return {
+    ...customer,
+    marketingSyncId: ensured.marketingSyncId,
+  };
 }
 
 function launchPreparationFailureMessage(error: unknown): string {
@@ -1424,7 +1399,7 @@ export async function materializeCustomerLaunch(
   command: LaunchCommand,
 ): Promise<CustomerLaunchResult> {
   requireWriteReadyCustomer(customer, "einen Aktiv-Launch vorbereitest");
-  const readyCustomer = await refreshCustomerMarketingIfNeeded(customer);
+  const readyCustomer = await refreshCustomerMarketingForLaunch(customer);
   // Do not rely on the UI alone — materialize SQL requires FREEZE_WRITES.
   await ensureFreezeWritesForLaunch(readyCustomer);
 
