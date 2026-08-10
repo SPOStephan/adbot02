@@ -35,5 +35,21 @@ assert.match(creditsTs, /reserveCredits/);
 assert.match(creditsTs, /reserveCreditsAmount/);
 assert.match(creditsTs, /topUpCredits/);
 assert.match(creditsTs, /assignBillingPlan/);
+assert.match(creditsTs, /getCreditBalanceForUser/);
+
+const creditsUi = readFileSync(
+  join(root, "src/components/CreditsSidebarBalance.tsx"),
+  "utf8",
+);
+const dashboardPage = readFileSync(
+  join(root, "src/app/dashboard/page.tsx"),
+  "utf8",
+);
+assert.match(creditsUi, /CreditsSidebarBalance/);
+assert.match(creditsUi, /Noch kein Guthaben/);
+assert.match(creditsUi, /Guthaben wird knapp/);
+assert.doesNotMatch(creditsUi, /markup|providerCost|actionKey|€0\.01/i);
+assert.match(dashboardPage, /getCreditBalanceForUser/);
+assert.match(dashboardPage, /CreditsSidebarBalance/);
 
 console.log("test-billing-credits-foundation: ok");
