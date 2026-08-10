@@ -63,12 +63,31 @@ const DEFAULT_LEAD_BLUEPRINT = {
     object_story_spec: {
       link_data: {
         message: "Jetzt bewerben.",
+        name: "Jetzt bewerben",
+        description: "",
         call_to_action: { type: "APPLY_NOW" },
       },
     },
   },
   ad: {},
 };
+
+const COPY_LIMITS = {
+  primary: { recommended: 125, max: 500 },
+  headline: { recommended: 40, max: 255 },
+  description: { recommended: 30, max: 255 },
+} as const;
+
+function copyLengthHint(value: string, recommended: number, max: number): string {
+  const length = value.length;
+  const tone =
+    length === 0
+      ? "noch leer"
+      : length <= recommended
+        ? "im empfohlenen Bereich"
+        : "länger als empfohlen — oft ok, kürzer wirkt meist klarer";
+  return `${length}/${max} Zeichen · Meta empfiehlt ca. ${recommended} · ${tone}`;
+}
 
 async function apiJson<T extends Record<string, unknown> = Record<string, unknown>>(
   method: "POST" | "PUT",
@@ -200,6 +219,8 @@ export function LeadLaunchCanary({
   const [destinationUrl, setDestinationUrl] = useState(defaultFunnelHint);
   const [dailyBudget, setDailyBudget] = useState("20.00");
   const [primaryText, setPrimaryText] = useState("Jetzt bewerben.");
+  const [headline, setHeadline] = useState("Jetzt bewerben");
+  const [description, setDescription] = useState("");
   const [pixelRowId, setPixelRowId] = useState(data.pixels[0]?.id ?? "");
   const [pickerAssets, setPickerAssets] = useState<PickerAsset[]>(() =>
     data.brandAssets.map((asset) => ({
@@ -266,18 +287,17 @@ export function LeadLaunchCanary({
     });
   }
 
+  /**
+   * Blueprint = Rezept. Formular-Texte dieses Launches haben immer Vorrang:
+   * frische Blueprint-Version mit aktuellen Copy-Feldern speichern/aktivieren.
+   */
   async function ensureLeadBlueprint(): Promise<string> {
-    const active = data.blueprints.find(
-      (blueprint) =>
-        blueprint.status === "ACTIVE" && blueprint.objective === "OUTCOME_LEADS",
-    );
-    if (active) {
-      return active.id;
-    }
-
     const template = structuredClone(DEFAULT_LEAD_BLUEPRINT);
     const message = primaryText.trim() || "Jetzt bewerben.";
+    const title = headline.trim() || "Jetzt bewerben";
     template.creative.object_story_spec.link_data.message = message;
+    template.creative.object_story_spec.link_data.name = title;
+    template.creative.object_story_spec.link_data.description = description.trim();
 
     const saved = await apiJson<{ blueprintId?: string }>(
       "POST",
@@ -665,13 +685,59 @@ export function LeadLaunchCanary({
         </label>
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">
           Anzeigentext (Primary Text)
+          <textarea
+            className={`${inputClass} min-h-24 resize-y`}
+            disabled={pending}
+            maxLength={COPY_LIMITS.primary.max}
+            onChange={(event) => setPrimaryText(event.target.value)}
+            required
+            value={primaryText}
+          />
+          <span className="mt-1 block text-xs font-medium text-slate-500">
+            {copyLengthHint(
+              primaryText,
+              COPY_LIMITS.primary.recommended,
+              COPY_LIMITS.primary.max,
+            )}
+            . Gilt immer für diesen Launch — auch wenn schon ein Rezept existiert.
+          </span>
+        </label>
+        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Überschrift (Headline)
           <input
             className={inputClass}
             disabled={pending}
-            maxLength={200}
-            onChange={(event) => setPrimaryText(event.target.value)}
-            value={primaryText}
+            maxLength={COPY_LIMITS.headline.max}
+            onChange={(event) => setHeadline(event.target.value)}
+            required
+            value={headline}
           />
+          <span className="mt-1 block text-xs font-medium text-slate-500">
+            {copyLengthHint(
+              headline,
+              COPY_LIMITS.headline.recommended,
+              COPY_LIMITS.headline.max,
+            )}
+          </span>
+        </label>
+        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Beschreibung{" "}
+          <span className="font-medium text-slate-500">(optional)</span>
+          <input
+            className={inputClass}
+            disabled={pending}
+            maxLength={COPY_LIMITS.description.max}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Kurzer Zusatz unter der Überschrift"
+            value={description}
+          />
+          <span className="mt-1 block text-xs font-medium text-slate-500">
+            {copyLengthHint(
+              description,
+              COPY_LIMITS.description.recommended,
+              COPY_LIMITS.description.max,
+            )}
+          </span>
         </label>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:col-span-2">
           <button
