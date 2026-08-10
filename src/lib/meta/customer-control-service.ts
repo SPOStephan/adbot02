@@ -1119,6 +1119,85 @@ async function refreshCustomerMarketingIfNeeded(
   return refreshed;
 }
 
+function launchPreparationFailureMessage(error: unknown): string {
+  const record =
+    error && typeof error === "object"
+      ? (error as { message?: unknown; details?: unknown; hint?: unknown })
+      : null;
+  const raw = [record?.message, record?.details, record?.hint]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join(" | ");
+
+  const rules: Array<[RegExp, string]> = [
+    [
+      /FREEZE_WRITES/i,
+      "Die kurze Schreibpause für die Vorbereitung fehlt noch. Bitte erneut „Kampagne vorbereiten“ tippen.",
+    ],
+    [
+      /exposure snapshot/i,
+      "Der Budget-Snapshot für heute fehlt noch. Bitte erneut „Kampagne vorbereiten“ tippen.",
+    ],
+    [
+      /EUR Meta snapshot|current successful EUR/i,
+      "Die Meta-Kontodaten sind nicht aktuell genug. Bitte erneut „Kampagne vorbereiten“ tippen.",
+    ],
+    [
+      /brand profile/i,
+      "Für Anzeigen fehlt eine gültige Facebook-Seite. Bitte Meta erneut verbinden.",
+    ],
+    [
+      /brand asset|READY approved/i,
+      "Das Creative ist nicht startbereit. Bitte ein anderes Bild wählen oder neu hochladen.",
+    ],
+    [
+      /destination must exactly match|exact launch host|verified domain|conversion_domain/i,
+      "Die Landingpage-Domain stimmt nicht mit der bestätigten Domain überein.",
+    ],
+    [
+      /hard cap|budget exceeds/i,
+      "Das Tagesbudget liegt über dem erlaubten Limit der Launch-Policy.",
+    ],
+    [
+      /launch- and status-enabled|Active launch/i,
+      "Die Launch-Policy erlaubt aktuell keine neuen Kampagnen.",
+    ],
+    [
+      /blueprint/i,
+      "Das Kampagnen-Rezept ist ungültig. Bitte erneut versuchen.",
+    ],
+    [
+      /READ_SYNC lease/i,
+      "Ein Meta-Abruf läuft gerade. Bitte kurz warten und erneut versuchen.",
+    ],
+  ];
+
+  for (const [pattern, message] of rules) {
+    if (pattern.test(raw)) {
+      return message;
+    }
+  }
+
+  if (raw) {
+    const short = raw
+      .replace(/^.*?:\s*/, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 160);
+    if (short) {
+      return `Die Kampagne konnte nicht vorbereitet werden (${short}).`;
+    }
+  }
+
+  return "Die Kampagne konnte nicht vorbereitet werden. Bitte erneut versuchen.";
+}
+
+async function ensureFreezeWritesForLaunch(customer: MetaCustomer): Promise<void> {
+  await setCustomerKillSwitch(customer, {
+    mode: "FREEZE_WRITES",
+    reason: "Automatische Freeze-Phase für Kampagnen-Vorbereitung",
+  });
+}
+
 /**
  * ACTIVE brand profile is required by Meta creative page_id wiring — but the
  * customer should not fill a brand form for a simple Traffic launch. Auto-create
@@ -1127,27 +1206,48 @@ async function refreshCustomerMarketingIfNeeded(
 async function ensureActiveBrandProfileForLaunch(
   customer: MetaCustomer,
   preferredId: string | null,
+  brandAssetId: string,
 ): Promise<string> {
   const admin = createAdminClient();
 
-  if (preferredId) {
-    const { data: preferred, error: preferredError } = await admin
+  const { data: assetRow, error: assetRowError } = await admin
+    .from("brand_assets")
+    .select("brand_profile_id")
+    .eq("id", brandAssetId)
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .maybeSingle();
+  if (assetRowError) {
+    serviceError(
+      "brand_asset_lookup_failed",
+      500,
+      "Das Creative konnte nicht sicher geprüft werden.",
+    );
+  }
+  const assetProfileId =
+    typeof assetRow?.brand_profile_id === "string"
+      ? assetRow.brand_profile_id
+      : null;
+
+  for (const candidateId of [preferredId, assetProfileId]) {
+    if (!candidateId) continue;
+    const { data: candidate, error: candidateError } = await admin
       .from("brand_profiles")
       .select("id,facebook_page_id")
-      .eq("id", preferredId)
+      .eq("id", candidateId)
       .eq("user_id", customer.userId)
       .eq("platform_account_id", customer.platformAccountId)
       .eq("status", "ACTIVE")
       .maybeSingle();
-    if (preferredError) {
+    if (candidateError) {
       serviceError(
         "brand_profile_lookup_failed",
         500,
         "Das Brand-Profil konnte nicht sicher geprüft werden.",
       );
     }
-    if (preferred?.id && preferred.facebook_page_id) {
-      return preferred.id;
+    if (candidate?.id && candidate.facebook_page_id) {
+      return candidate.id;
     }
   }
 
@@ -1325,6 +1425,8 @@ export async function materializeCustomerLaunch(
 ): Promise<CustomerLaunchResult> {
   requireWriteReadyCustomer(customer, "einen Aktiv-Launch vorbereitest");
   const readyCustomer = await refreshCustomerMarketingIfNeeded(customer);
+  // Do not rely on the UI alone — materialize SQL requires FREEZE_WRITES.
+  await ensureFreezeWritesForLaunch(readyCustomer);
 
   const leaseToken = await claimMetaReadOperation({
     platformAccountId: readyCustomer.platformAccountId,
@@ -1345,6 +1447,7 @@ export async function materializeCustomerLaunch(
     const brandProfileId = await ensureActiveBrandProfileForLaunch(
       readyCustomer,
       command.brandProfileId,
+      command.brandAssetId,
     );
     await ensureLaunchExposureSnapshot(readyCustomer, leaseToken);
 
@@ -1360,10 +1463,15 @@ export async function materializeCustomerLaunch(
       },
     );
     if (bindError) {
+      console.error("launch_bind_failed", {
+        message: bindError.message,
+        details: bindError.details,
+        hint: bindError.hint,
+      });
       serviceError(
         "launch_preparation_not_ready",
         409,
-        "Der Aktiv-Launch wurde nicht vorbereitet: FREEZE_WRITES, Launch-Policy, Budgetgrenzen, Domain und Creative müssen vollständig erfüllt sein.",
+        launchPreparationFailureMessage(bindError),
       );
     }
     const commonRpcArguments = {
@@ -1394,10 +1502,15 @@ export async function materializeCustomerLaunch(
             p_end_time: command.endTime,
           });
     if (error) {
+      console.error("launch_materialize_failed", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
       serviceError(
         "launch_preparation_not_ready",
         409,
-        "Der Aktiv-Launch wurde nicht vorbereitet: FREEZE_WRITES, Launch-Policy, Budgetgrenzen, Domain und Creative müssen vollständig erfüllt sein.",
+        launchPreparationFailureMessage(error),
       );
     }
     result = parseCustomerLaunchResult(data);
