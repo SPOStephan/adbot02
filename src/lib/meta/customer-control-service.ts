@@ -1114,7 +1114,7 @@ function launchPreparationFailureMessage(error: unknown): string {
     ],
     [
       /EUR Meta snapshot|current successful EUR/i,
-      "Die Meta-Kontodaten sind nicht aktuell genug. Bitte erneut „Kampagne vorbereiten“ tippen.",
+      "Die Meta-Kontodaten sind noch nicht startbereit. Bitte „Kampagne vorbereiten“ erneut tippen — der Abruf läuft automatisch mit.",
     ],
     [
       /brand profile/i,
@@ -1373,6 +1373,8 @@ async function ensureLaunchExposureSnapshot(
     );
   }
 
+  // Omit p_planned_at so Postgres uses now() — avoids Vercel/DB clock skew
+  // falsely failing the 2h marketing freshness gate.
   const { data, error } = await admin.rpc(
     "ensure_meta_organic_boost_exposure_snapshot",
     {
@@ -1381,7 +1383,6 @@ async function ensureLaunchExposureSnapshot(
       p_policy_id: policy.id,
       p_source_marketing_sync_id: customer.marketingSyncId,
       p_read_lease_token: leaseToken,
-      p_planned_at: new Date().toISOString(),
     },
   );
 
@@ -1449,6 +1450,8 @@ export async function materializeCustomerLaunch(
         launchPreparationFailureMessage(bindError),
       );
     }
+    // Omit p_planned_at so Postgres uses now() — Vercel clock skew against
+    // marketing_last_success_at (DB now) was failing the 2h freshness gate.
     const commonRpcArguments = {
       p_user_id: readyCustomer.userId,
       p_platform_account_id: readyCustomer.platformAccountId,
@@ -1462,7 +1465,6 @@ export async function materializeCustomerLaunch(
         ...command.launchInputs,
         preparation_reason: command.reason,
       },
-      p_planned_at: new Date().toISOString(),
     };
     const { data, error } =
       command.budgetType === "DAILY"
