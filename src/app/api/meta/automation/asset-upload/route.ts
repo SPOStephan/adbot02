@@ -12,20 +12,55 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+function asUploadFile(value: FormDataEntryValue | null): File | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  if (typeof File !== "undefined" && value instanceof File) {
+    return value.size > 0 ? value : null;
+  }
+  // Some runtimes expose Blob-like upload parts without a File prototype.
+  const candidate = value as Partial<File>;
+  if (
+    typeof candidate.arrayBuffer === "function" &&
+    typeof candidate.size === "number" &&
+    candidate.size > 0
+  ) {
+    return candidate as File;
+  }
+  return null;
+}
 
 export async function POST(request: NextRequest) {
   try {
     const customer = await authenticateMetaCustomer();
-    const form = await request.formData();
-    const file = form.get("file");
+
+    let form: FormData;
+    try {
+      form = await request.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Upload-Body konnte nicht gelesen werden. Datei ggf. zu groß oder Anfrage abgebrochen.",
+          code: "invalid_form_data",
+        },
+        { status: 400 },
+      );
+    }
+
+    const file = asUploadFile(form.get("file"));
     const brandProfileRaw = String(form.get("brandProfileId") ?? "").trim();
     const brandProfileId = /^[0-9a-f-]{36}$/i.test(brandProfileRaw)
       ? brandProfileRaw
       : null;
 
-    if (!(file instanceof File)) {
+    if (!file) {
       return NextResponse.json(
-        { ok: false, error: "Datei fehlt." },
+        { ok: false, error: "Datei fehlt.", code: "missing_file" },
         { status: 400 },
       );
     }
@@ -59,12 +94,19 @@ export async function POST(request: NextRequest) {
       generateMetaCropsRaw === "yes";
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    const fileName =
+      typeof file.name === "string" && file.name.trim()
+        ? file.name
+        : "upload.jpg";
+    const mimeType =
+      typeof file.type === "string" && file.type.trim() ? file.type : null;
+
     const result = await uploadCustomerLibraryImage({
       userId: customer.userId,
       platformAccountId: customer.platformAccountId,
       brandProfileId,
-      fileName: file.name || "upload.jpg",
-      mimeType: file.type || null,
+      fileName,
+      mimeType,
       bytes,
       generateMetaCrops,
     });
@@ -85,7 +127,11 @@ export async function POST(request: NextRequest) {
     }
     console.error("[asset-upload]", error);
     return NextResponse.json(
-      { ok: false, error: "Upload fehlgeschlagen." },
+      {
+        ok: false,
+        error: "Upload fehlgeschlagen.",
+        code: "upload_failed",
+      },
       { status: 500 },
     );
   }

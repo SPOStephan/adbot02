@@ -4,6 +4,8 @@ import { ExternalLink, ImagePlus, Loader2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { parseAssetUploadResponse } from "@/lib/media-library/parse-upload-response";
+
 export type MediaLibraryAssetView = {
   id: string;
   originalFilename: string;
@@ -51,13 +53,10 @@ export function MediaLibraryClient({
       }
       const response = await fetch("/api/meta/automation/asset-upload", {
         method: "POST",
+        credentials: "same-origin",
         body,
       });
-      const json = (await response.json()) as {
-        ok?: boolean;
-        error?: string;
-        brandAssetId?: string;
-      };
+      const json = await parseAssetUploadResponse(response);
       if (!response.ok || !json.ok) {
         throw new Error(json.error || "Upload fehlgeschlagen.");
       }
