@@ -1174,31 +1174,100 @@ async function ensureFreezeWritesForLaunch(customer: MetaCustomer): Promise<void
 }
 
 /**
- * ACTIVE brand profile is required by Meta creative page_id wiring — but the
- * customer should not fill a brand form for a simple Traffic launch. Auto-create
- * from the connected Facebook Page (+ optional Instagram actor).
+ * ACTIVE brand profile supplies Meta page_id / Instagram actor for creatives.
+ * Prefer the customer's explicit page/IG choice from the launch form.
  */
 async function ensureActiveBrandProfileForLaunch(
   customer: MetaCustomer,
   preferredId: string | null,
   brandAssetId: string,
+  actors: {
+    facebookPageId: string | null;
+    instagramActorId: string | null;
+  },
 ): Promise<string> {
   const admin = createAdminClient();
 
-  const { data: assetRow, error: assetRowError } = await admin
-    .from("brand_assets")
-    .select("brand_profile_id")
-    .eq("id", brandAssetId)
-    .eq("user_id", customer.userId)
-    .eq("platform_account_id", customer.platformAccountId)
-    .maybeSingle();
-  if (assetRowError) {
+  const [
+    { data: assets, error: assetError },
+    { data: account, error: accountError },
+    { data: assetRow, error: assetRowError },
+  ] = await Promise.all([
+    admin
+      .from("meta_assets")
+      .select("asset_type,meta_asset_id")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .in("asset_type", ["facebook_page", "instagram_account"])
+      .order("created_at", { ascending: false }),
+    admin
+      .from("platform_accounts")
+      .select("account_name")
+      .eq("id", customer.platformAccountId)
+      .eq("user_id", customer.userId)
+      .eq("platform", "meta")
+      .is("revoked_at", null)
+      .maybeSingle(),
+    admin
+      .from("brand_assets")
+      .select("brand_profile_id")
+      .eq("id", brandAssetId)
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .maybeSingle(),
+  ]);
+
+  if (assetError || accountError || !account || assetRowError) {
     serviceError(
-      "brand_asset_lookup_failed",
+      "brand_actor_lookup_failed",
       500,
-      "Das Creative konnte nicht sicher geprüft werden.",
+      "Die verbundenen Meta-Seiten konnten nicht sicher geprüft werden.",
     );
   }
+
+  const pageIds = new Set(
+    (assets ?? [])
+      .filter((asset) => asset.asset_type === "facebook_page")
+      .map((asset) => asset.meta_asset_id)
+      .filter((id): id is string => typeof id === "string" && /^\d{1,64}$/.test(id)),
+  );
+  const igIds = new Set(
+    (assets ?? [])
+      .filter((asset) => asset.asset_type === "instagram_account")
+      .map((asset) => asset.meta_asset_id)
+      .filter((id): id is string => typeof id === "string" && /^\d{1,64}$/.test(id)),
+  );
+
+  let facebookPageId = actors.facebookPageId;
+  if (facebookPageId && !pageIds.has(facebookPageId)) {
+    serviceError(
+      "facebook_page_required",
+      409,
+      "Die gewählte Facebook-Seite gehört nicht zu diesem Meta-Konto.",
+    );
+  }
+  if (!facebookPageId) {
+    facebookPageId = pageIds.values().next().value ?? null;
+  }
+  if (!facebookPageId) {
+    serviceError(
+      "facebook_page_required",
+      409,
+      "Für Anzeigen muss eine Facebook-Seite mit dem Meta-Konto verbunden sein. Bitte Meta erneut verbinden.",
+    );
+  }
+
+  let instagramActorId = actors.instagramActorId;
+  if (instagramActorId && !igIds.has(instagramActorId)) {
+    serviceError(
+      "invalid_instagram_actor",
+      409,
+      "Das gewählte Instagram-Konto gehört nicht zu diesem Meta-Konto.",
+    );
+  }
+  // Do not auto-pick Instagram: empty means "no IG placement" when the customer
+  // left the optional select blank. Facebook Page remains required above.
+
   const assetProfileId =
     typeof assetRow?.brand_profile_id === "string"
       ? assetRow.brand_profile_id
@@ -1208,7 +1277,7 @@ async function ensureActiveBrandProfileForLaunch(
     if (!candidateId) continue;
     const { data: candidate, error: candidateError } = await admin
       .from("brand_profiles")
-      .select("id,facebook_page_id")
+      .select("id,facebook_page_id,instagram_actor_id")
       .eq("id", candidateId)
       .eq("user_id", customer.userId)
       .eq("platform_account_id", customer.platformAccountId)
@@ -1221,93 +1290,37 @@ async function ensureActiveBrandProfileForLaunch(
         "Das Brand-Profil konnte nicht sicher geprüft werden.",
       );
     }
-    if (candidate?.id && candidate.facebook_page_id) {
+    if (
+      candidate?.id &&
+      candidate.facebook_page_id === facebookPageId &&
+      (candidate.instagram_actor_id ?? null) === (instagramActorId ?? null)
+    ) {
       return candidate.id;
     }
   }
 
-  const { data: active, error: activeError } = await admin
+  const { data: matching, error: matchingError } = await admin
     .from("brand_profiles")
-    .select("id,facebook_page_id")
+    .select("id,instagram_actor_id")
     .eq("user_id", customer.userId)
     .eq("platform_account_id", customer.platformAccountId)
     .eq("status", "ACTIVE")
+    .eq("facebook_page_id", facebookPageId)
     .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (activeError) {
+    .limit(5);
+  if (matchingError) {
     serviceError(
       "brand_profile_lookup_failed",
       500,
       "Das Brand-Profil konnte nicht sicher geprüft werden.",
     );
   }
-  if (active?.id && active.facebook_page_id) {
-    return active.id;
-  }
-
-  const [
-    { data: assets, error: assetError },
-    { data: account, error: accountError },
-  ] = await Promise.all([
-    admin
-      .from("meta_assets")
-      .select("asset_type,meta_asset_id")
-      .eq("user_id", customer.userId)
-      .eq("platform_account_id", customer.platformAccountId)
-      .in("asset_type", ["facebook_page", "instagram_account"])
-      .order("created_at", { ascending: false }),
-    admin
-      .from("platform_accounts")
-      .select("account_name,instagram_account_ids")
-      .eq("id", customer.platformAccountId)
-      .eq("user_id", customer.userId)
-      .eq("platform", "meta")
-      .is("revoked_at", null)
-      .maybeSingle(),
-  ]);
-
-  if (assetError || accountError || !account) {
-    serviceError(
-      "brand_actor_lookup_failed",
-      500,
-      "Die verbundenen Meta-Seiten konnten nicht sicher geprüft werden.",
-    );
-  }
-
-  const facebookPageId = assets?.find(
-    (asset) => asset.asset_type === "facebook_page",
-  )?.meta_asset_id;
-  if (!facebookPageId || !/^\d{1,64}$/.test(facebookPageId)) {
-    serviceError(
-      "facebook_page_required",
-      409,
-      "Für Anzeigen muss eine Facebook-Seite mit dem Meta-Konto verbunden sein. Bitte Meta erneut verbinden.",
-    );
-  }
-
-  const selectedInstagramIds = new Set(
-    Array.isArray(account.instagram_account_ids)
-      ? account.instagram_account_ids.filter(
-          (id): id is string =>
-            typeof id === "string" && /^[0-9]{1,64}$/.test(id),
-        )
-      : [],
+  const exactActors = matching?.find(
+    (row) => (row.instagram_actor_id ?? null) === (instagramActorId ?? null),
   );
-  const selectedIg = assets?.find(
-    (asset) =>
-      asset.asset_type === "instagram_account" &&
-      selectedInstagramIds.has(asset.meta_asset_id),
-  )?.meta_asset_id;
-  const anyIg = assets?.find(
-    (asset) => asset.asset_type === "instagram_account",
-  )?.meta_asset_id;
-  const instagramActorId =
-    selectedIg && /^\d{1,64}$/.test(selectedIg)
-      ? selectedIg
-      : anyIg && /^\d{1,64}$/.test(anyIg)
-        ? anyIg
-        : null;
+  if (exactActors?.id) {
+    return exactActors.id;
+  }
 
   const brandName = (
     customer.accountName ||
@@ -1340,7 +1353,7 @@ async function ensureActiveBrandProfileForLaunch(
 
 /**
  * Hard-cap reservation needs a COMPLETE exposure snapshot for today's sync.
- * Bootstrap via the same ensure used by Beitrag-Push — no separate customer chore.
+ * Uses a launch-specific ensure that bootstraps with DB now() (no clock skew).
  */
 async function ensureLaunchExposureSnapshot(
   customer: MetaCustomer,
@@ -1373,10 +1386,8 @@ async function ensureLaunchExposureSnapshot(
     );
   }
 
-  // Omit p_planned_at so Postgres uses now() — avoids Vercel/DB clock skew
-  // falsely failing the 2h marketing freshness gate.
   const { data, error } = await admin.rpc(
-    "ensure_meta_organic_boost_exposure_snapshot",
+    "ensure_meta_customer_launch_exposure_snapshot",
     {
       p_platform_account_id: customer.platformAccountId,
       p_user_id: customer.userId,
@@ -1386,11 +1397,36 @@ async function ensureLaunchExposureSnapshot(
     },
   );
 
-  if (error || !data) {
+  if (!error && typeof data === "string" && data.length > 0) {
+    return;
+  }
+
+  console.error("launch_exposure_snapshot_failed", {
+    message: error?.message,
+    details: error?.details,
+    hint: error?.hint,
+    data,
+  });
+
+  // Fallback for environments that have not applied the launch-specific migration yet.
+  // The organic-boost ensure requires p_planned_at (no default) — pass a value, but
+  // prefer the dedicated launch ensure above once migrated.
+  const fallback = await admin.rpc(
+    "ensure_meta_organic_boost_exposure_snapshot",
+    {
+      p_platform_account_id: customer.platformAccountId,
+      p_user_id: customer.userId,
+      p_policy_id: policy.id,
+      p_source_marketing_sync_id: customer.marketingSyncId,
+      p_read_lease_token: leaseToken,
+      p_planned_at: new Date().toISOString(),
+    },
+  );
+  if (fallback.error || !fallback.data) {
     serviceError(
       "launch_exposure_snapshot_required",
       409,
-      "Der Budget-Snapshot für den Kampagnenstart konnte nicht automatisch erzeugt werden. Bitte erneut versuchen.",
+      launchPreparationFailureMessage(error ?? fallback.error),
     );
   }
 }
@@ -1424,6 +1460,10 @@ export async function materializeCustomerLaunch(
       readyCustomer,
       command.brandProfileId,
       command.brandAssetId,
+      {
+        facebookPageId: command.facebookPageId,
+        instagramActorId: command.instagramActorId,
+      },
     );
     await ensureLaunchExposureSnapshot(readyCustomer, leaseToken);
 

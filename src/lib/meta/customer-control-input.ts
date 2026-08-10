@@ -925,6 +925,16 @@ function requiredHttpsUrl(value: unknown): string {
 
 const LAUNCH_BUDGET_TYPES = ["DAILY", "LIFETIME"] as const;
 
+function optionalMetaObjectId(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  if (typeof value !== "string" || !META_OBJECT_ID_PATTERN.test(value.trim())) {
+    inputError("invalid_meta_object_id", `${field} ist ungültig.`);
+  }
+  return value.trim();
+}
+
 type LaunchCommon = {
   blueprintId: string;
   /**
@@ -934,6 +944,10 @@ type LaunchCommon = {
   brandProfileId: string | null;
   brandAssetId: string;
   allowedDomainId: string;
+  /** Preferred Facebook Page for the ad identity (required when multiple pages). */
+  facebookPageId: string | null;
+  /** Preferred Instagram actor for placements (optional). */
+  instagramActorId: string | null;
   reason: string;
   launchInputs: {
     destination_url: string;
@@ -998,6 +1012,8 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     "brandProfileId",
     "brandAssetId",
     "allowedDomainId",
+    "facebookPageId",
+    "instagramActorId",
     "budgetOwnerType",
     "budgetType",
     "destinationUrl",
@@ -1052,6 +1068,14 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     brandProfileId: optionalUuid(body.brandProfileId, "Die Brand-Profil-ID"),
     brandAssetId: requiredUuid(body.brandAssetId, "Die Brand-Asset-ID"),
     allowedDomainId: requiredUuid(body.allowedDomainId, "Die Domain-ID"),
+    facebookPageId: optionalMetaObjectId(
+      body.facebookPageId,
+      "Die Facebook-Seiten-ID",
+    ),
+    instagramActorId: optionalMetaObjectId(
+      body.instagramActorId,
+      "Die Instagram-Konto-ID",
+    ),
     reason: requiredText(body.reason, "Die Begründung", 12, 500),
     launchInputs: {
       destination_url: requiredHttpsUrl(body.destinationUrl),
