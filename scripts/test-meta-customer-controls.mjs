@@ -1011,7 +1011,14 @@ assert.match(launchMarketingEnsureSource, /marketing_timezone_name/);
 assert.match(launchMarketingEnsureSource, /ensureLaunchMarketingReady/);
 assert.match(launchMarketingEnsureSource, /normalizeLaunchTimezoneIfNeeded/);
 assert.match(launchMarketingEnsureSource, /Always refresh on prepare/);
+assert.match(launchMarketingEnsureSource, /known = !error && valid === true/);
+assert.doesNotMatch(
+  launchMarketingEnsureSource,
+  /known = error \? true/,
+);
 assert.match(serviceSource, /Omit p_planned_at so Postgres uses now/);
+assert.match(serviceSource, /ads_management scope/i);
+assert.match(serviceSource, /fresh Meta marketing sync within 2 hours/i);
 
 const timezoneHelperMigration = await readFile(
   path.join(
@@ -1021,6 +1028,30 @@ const timezoneHelperMigration = await readFile(
   "utf8",
 );
 assert.match(timezoneHelperMigration, /meta_timezone_is_known/);
+
+const launchEurGateMigration = await readFile(
+  path.join(
+    root,
+    "supabase/migrations/20260810194500_harden_launch_eur_snapshot_gate.sql",
+  ),
+  "utf8",
+);
+assert.match(
+  launchEurGateMigration,
+  /normalize_meta_account_timezone_name/,
+);
+assert.match(
+  launchEurGateMigration,
+  /trg_normalize_platform_account_timezone/,
+);
+assert.match(
+  launchEurGateMigration,
+  /ensure_meta_customer_launch_exposure_snapshot/,
+);
+assert.match(
+  launchEurGateMigration,
+  /Customer launch requires ads_management scope/,
+);
 
 const bindRebindMigration = await readFile(
   path.join(

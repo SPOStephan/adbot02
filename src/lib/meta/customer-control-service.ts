@@ -1109,6 +1109,22 @@ function launchPreparationFailureMessage(error: unknown): string {
       "Die kurze Schreibpause für die Vorbereitung fehlt noch. Bitte erneut „Kampagne vorbereiten“ tippen.",
     ],
     [
+      /ads_management scope/i,
+      "Für den Kampagnenstart fehlt die Meta-Berechtigung „Anzeigen verwalten“. Bitte Meta erneut verbinden.",
+    ],
+    [
+      /EUR marketing currency/i,
+      "Das Meta-Werbekonto muss auf EUR laufen.",
+    ],
+    [
+      /fresh Meta marketing sync within 2 hours/i,
+      "Die Meta-Kontodaten sind nicht frisch genug. Bitte „Kampagne vorbereiten“ erneut tippen — der Abruf läuft automatisch mit.",
+    ],
+    [
+      /current successful Meta marketing sync/i,
+      "Die Meta-Kontodaten sind noch nicht startbereit. Bitte „Kampagne vorbereiten“ erneut tippen — der Abruf läuft automatisch mit.",
+    ],
+    [
       /exposure snapshot/i,
       "Der Budget-Snapshot für heute fehlt noch. Bitte erneut „Kampagne vorbereiten“ tippen.",
     ],
