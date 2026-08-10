@@ -745,7 +745,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         supabase
           .from("brand_profiles")
           .select(
-            "id,version,display_name,brand_name,guidelines,forbidden_content,generation_defaults,generated_asset_approval_mode,activated_at",
+            "id,version,display_name,brand_name,facebook_page_id,instagram_actor_id,guidelines,forbidden_content,generation_defaults,generated_asset_approval_mode,activated_at",
           )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
@@ -987,6 +987,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         version: toFiniteNumber(activeBrandProfile.version) ?? 1,
         displayName: String(activeBrandProfile.display_name),
         brandName: String(activeBrandProfile.brand_name),
+        facebookPageId:
+          typeof activeBrandProfile.facebook_page_id === "string" &&
+          /^\d{1,64}$/.test(activeBrandProfile.facebook_page_id)
+            ? activeBrandProfile.facebook_page_id
+            : null,
+        instagramActorId:
+          typeof activeBrandProfile.instagram_actor_id === "string" &&
+          /^\d{1,64}$/.test(activeBrandProfile.instagram_actor_id)
+            ? activeBrandProfile.instagram_actor_id
+            : null,
         guidelines:
           activeBrandProfile.guidelines &&
           typeof activeBrandProfile.guidelines === "object" &&
@@ -1010,6 +1020,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           : null,
       }
     : null;
+  const launchFacebookPages = pageAssets.map((asset) => ({
+    id: String(asset.meta_asset_id),
+    label: asset.name?.trim() || String(asset.meta_asset_id),
+  }));
+  const launchInstagramAccounts = instagramAssets.map((asset) => ({
+    id: String(asset.meta_asset_id),
+    label: asset.username
+      ? `@${asset.username}`
+      : asset.name?.trim() || String(asset.meta_asset_id),
+  }));
   const killSwitchView: KillSwitchView = latestKillSwitch
     ? {
         mode: normalizeKillSwitchMode(latestKillSwitch.mode),
@@ -2136,6 +2156,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               canPrepareBudgetCanary={canPrepareBudgetCanary}
               canConfirmBudgetCanary={canConfirmBudgetCanary}
               currency={marketingCurrency}
+              facebookPages={launchFacebookPages}
+              instagramAccounts={launchInstagramAccounts}
               killSwitch={killSwitchView}
               onboarding={onboardingData}
               initialTrafficAssetId={

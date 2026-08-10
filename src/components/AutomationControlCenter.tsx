@@ -29,7 +29,10 @@ import {
 } from "@/components/AutomationOnboardingControls";
 import { LeadLaunchCanary } from "@/components/LeadLaunchCanary";
 import { MetaPixelBinding } from "@/components/MetaPixelBinding";
-import { TrafficLaunchCanary } from "@/components/TrafficLaunchCanary";
+import {
+  TrafficLaunchCanary,
+  type LaunchAdActorOption,
+} from "@/components/TrafficLaunchCanary";
 import {
   AutomationScopeManager,
   type AutomationScopeCampaignView,
@@ -59,6 +62,8 @@ export type BrandProfileView = {
   version: number;
   displayName: string;
   brandName: string;
+  facebookPageId: string | null;
+  instagramActorId: string | null;
   guidelines: Record<string, unknown>;
   forbiddenContent: unknown[];
   generationDefaults: Record<string, unknown>;
@@ -96,6 +101,8 @@ type AutomationControlCenterProps = {
   boostEligibleAssets: BoostEligibleAssetView[];
   onboarding: AutomationOnboardingData;
   initialTrafficAssetId?: string | null;
+  facebookPages?: LaunchAdActorOption[];
+  instagramAccounts?: LaunchAdActorOption[];
   readiness: {
     writeScopeGranted: boolean;
     verifiedDomains: number;
@@ -317,6 +324,8 @@ export function AutomationControlCenter({
   killSwitch,
   onboarding,
   initialTrafficAssetId = null,
+  facebookPages = [],
+  instagramAccounts = [],
   policy,
   readiness,
 }: AutomationControlCenterProps) {
@@ -924,7 +933,11 @@ export function AutomationControlCenter({
           brandProfileId={brandProfile?.id ?? null}
           currency={currency}
           data={onboarding}
+          facebookPages={facebookPages}
+          instagramAccounts={instagramAccounts}
           initialAssetId={initialTrafficAssetId}
+          initialFacebookPageId={brandProfile?.facebookPageId}
+          initialInstagramActorId={brandProfile?.instagramActorId}
           killSwitchMode={killSwitch?.mode ?? "FREEZE_WRITES"}
           policyLaunchReady={Boolean(
             policy?.status === "ACTIVE" &&
@@ -940,6 +953,10 @@ export function AutomationControlCenter({
           brandProfileId={brandProfile?.id ?? null}
           currency={currency}
           data={onboarding}
+          facebookPages={facebookPages}
+          instagramAccounts={instagramAccounts}
+          initialFacebookPageId={brandProfile?.facebookPageId}
+          initialInstagramActorId={brandProfile?.instagramActorId}
           killSwitchMode={killSwitch?.mode ?? "FREEZE_WRITES"}
           policyLaunchReady={Boolean(
             policy?.status === "ACTIVE" &&

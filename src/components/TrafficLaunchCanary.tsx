@@ -38,6 +38,11 @@ type HeldPlan = {
   dailyBudgetMinor: string;
 };
 
+export type LaunchAdActorOption = {
+  id: string;
+  label: string;
+};
+
 type Props = {
   brandProfileId: string | null;
   currency: string;
@@ -46,6 +51,10 @@ type Props = {
   writeScopeGranted: boolean;
   data: AutomationOnboardingData;
   initialAssetId?: string | null;
+  facebookPages?: LaunchAdActorOption[];
+  instagramAccounts?: LaunchAdActorOption[];
+  initialFacebookPageId?: string | null;
+  initialInstagramActorId?: string | null;
 };
 
 const DEFAULT_TRAFFIC_BLUEPRINT = {
@@ -202,6 +211,10 @@ export function TrafficLaunchCanary({
   writeScopeGranted,
   data,
   initialAssetId = null,
+  facebookPages = [],
+  instagramAccounts = [],
+  initialFacebookPageId = null,
+  initialInstagramActorId = null,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -211,6 +224,18 @@ export function TrafficLaunchCanary({
   const [prepareElapsedSec, setPrepareElapsedSec] = useState(0);
   const [destinationUrl, setDestinationUrl] = useState("");
   const [dailyBudget, setDailyBudget] = useState("20.00");
+  const [facebookPageId, setFacebookPageId] = useState(
+    initialFacebookPageId &&
+      facebookPages.some((page) => page.id === initialFacebookPageId)
+      ? initialFacebookPageId
+      : (facebookPages[0]?.id ?? ""),
+  );
+  const [instagramActorId, setInstagramActorId] = useState(
+    initialInstagramActorId &&
+      instagramAccounts.some((account) => account.id === initialInstagramActorId)
+      ? initialInstagramActorId
+      : (instagramAccounts[0]?.id ?? ""),
+  );
   const [primaryText, setPrimaryText] = useState("Mehr erfahren.");
   const [headline, setHeadline] = useState("Jetzt mehr erfahren");
   const [description, setDescription] = useState("");
@@ -438,6 +463,9 @@ export function TrafficLaunchCanary({
       if (!assetId) {
         throw new Error("Bitte ein hochgeladenes Creative wählen.");
       }
+      if (facebookPages.length > 0 && !facebookPageId) {
+        throw new Error("Bitte die Facebook-Seite für die Anzeige wählen.");
+      }
 
       const landing = parseLandingUrl(destinationUrl);
       await ensureFreeze();
@@ -467,6 +495,8 @@ export function TrafficLaunchCanary({
       }>("POST", "/api/meta/automation/launch", {
         blueprintId,
         ...(brandProfileId ? { brandProfileId } : {}),
+        ...(facebookPageId ? { facebookPageId } : {}),
+        ...(instagramActorId ? { instagramActorId } : {}),
         brandAssetId: assetId,
         allowedDomainId,
         budgetType: "DAILY",
@@ -646,6 +676,43 @@ export function TrafficLaunchCanary({
       </ul>
 
       <form className="mt-6 grid gap-4 lg:grid-cols-2" onSubmit={prepare}>
+        {facebookPages.length > 0 ? (
+          <label className="text-sm font-bold text-slate-800">
+            Facebook-Seite (Werbetreibender)
+            <select
+              className={inputClass}
+              disabled={pending}
+              onChange={(event) => setFacebookPageId(event.target.value)}
+              required
+              value={facebookPageId}
+            >
+              {facebookPages.map((page) => (
+                <option key={page.id} value={page.id}>
+                  {page.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {instagramAccounts.length > 0 ? (
+          <label className="text-sm font-bold text-slate-800">
+            Instagram-Konto{" "}
+            <span className="font-medium text-slate-500">(empfohlen)</span>
+            <select
+              className={inputClass}
+              disabled={pending}
+              onChange={(event) => setInstagramActorId(event.target.value)}
+              value={instagramActorId}
+            >
+              <option value="">Ohne Instagram-Platzierung</option>
+              {instagramAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <div className="text-sm font-bold text-slate-800">
           Creative
           <button

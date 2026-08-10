@@ -414,6 +414,8 @@ assert.deepEqual(
     brandProfileId: "33333333-3333-4333-8333-333333333333",
     brandAssetId: "44444444-4444-4444-8444-444444444444",
     allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    facebookPageId: null,
+    instagramActorId: null,
     budgetType: "DAILY",
     budgetOwnerType: "AD_SET",
     dailyBudgetMinor: "2050",
@@ -516,6 +518,8 @@ assert.deepEqual(
     brandProfileId: "33333333-3333-4333-8333-333333333333",
     brandAssetId: "44444444-4444-4444-8444-444444444444",
     allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    facebookPageId: null,
+    instagramActorId: null,
     budgetType: "LIFETIME",
     budgetOwnerType: "CAMPAIGN",
     lifetimeBudgetMinor: "1500",
@@ -530,6 +534,36 @@ assert.deepEqual(
       ad_name: undefined,
     },
   },
+);
+
+assert.deepEqual(
+  [
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      facebookPageId: "17841400000000001",
+      instagramActorId: "17841400000000002",
+      budgetOwnerType: "AD_SET",
+      dailyBudget: "20,00",
+      destinationUrl: "https://www.example.de/angebot",
+      reason: "Kontrollierter Staging-Aktiv-Launch.",
+      confirmation: "AKTIV-LAUNCH VORBEREITEN",
+    }).facebookPageId,
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      facebookPageId: "17841400000000001",
+      instagramActorId: "17841400000000002",
+      budgetOwnerType: "AD_SET",
+      dailyBudget: "20,00",
+      destinationUrl: "https://www.example.de/angebot",
+      reason: "Kontrollierter Staging-Aktiv-Launch.",
+      confirmation: "AKTIV-LAUNCH VORBEREITEN",
+    }).instagramActorId,
+  ],
+  ["17841400000000001", "17841400000000002"],
 );
 expectInputError(
   () =>
@@ -936,7 +970,37 @@ assert.match(serviceSource, /refreshCustomerMarketingForLaunch/);
 assert.match(serviceSource, /ensureLaunchMarketingReady/);
 assert.match(serviceSource, /ensureFreezeWritesForLaunch/);
 assert.match(serviceSource, /launchPreparationFailureMessage/);
+assert.match(serviceSource, /ensure_meta_customer_launch_exposure_snapshot/);
 assert.match(serviceSource, /ensure_meta_organic_boost_exposure_snapshot/);
+assert.match(serviceSource, /p_planned_at: new Date\(\)\.toISOString\(\)/);
+assert.match(serviceSource, /facebookPageId: command\.facebookPageId/);
+assert.match(serviceSource, /instagramActorId: command\.instagramActorId/);
+
+const launchExposureMigration = await readFile(
+  path.join(
+    root,
+    "supabase/migrations/20260810193000_ensure_launch_exposure_snapshot.sql",
+  ),
+  "utf8",
+);
+assert.match(
+  launchExposureMigration,
+  /ensure_meta_customer_launch_exposure_snapshot/,
+);
+assert.match(
+  launchExposureMigration,
+  /p_planned_at timestamptz default now\(\)/,
+);
+
+const trafficLaunchSource = await readFile(
+  path.join(root, "src/components/TrafficLaunchCanary.tsx"),
+  "utf8",
+);
+assert.match(trafficLaunchSource, /Facebook-Seite \(Werbetreibender\)/);
+assert.match(trafficLaunchSource, /facebookPageId/);
+assert.match(trafficLaunchSource, /instagramActorId/);
+assert.match(pageSource, /facebookPages=\{launchFacebookPages\}/);
+assert.match(pageSource, /instagramAccounts=\{launchInstagramAccounts\}/);
 
 const launchMarketingEnsureSource = await readFile(
   path.join(root, "src/lib/meta/launch-marketing-ensure.ts"),
