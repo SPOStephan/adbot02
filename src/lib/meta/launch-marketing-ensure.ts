@@ -252,8 +252,10 @@ async function normalizeLaunchTimezoneIfNeeded(
     const { data: valid, error } = await admin.rpc("meta_timezone_is_known", {
       p_timezone_name: timezone,
     });
-    // Until migration is applied, assume Meta's value is usable.
-    known = error ? true : valid === true;
+    // Unknown OR helper/RPC unavailable → coerce. Launch SQL requires a
+    // pg_timezone_names entry; keeping an unchecked Meta value caused the
+    // opaque "EUR Meta snapshot" prepare failure.
+    known = !error && valid === true;
   }
 
   if (timezone && known) {
