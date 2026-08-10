@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -208,6 +208,7 @@ export function TrafficLaunchCanary({
   const [suggestPending, setSuggestPending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [prepareElapsedSec, setPrepareElapsedSec] = useState(0);
   const [destinationUrl, setDestinationUrl] = useState("");
   const [dailyBudget, setDailyBudget] = useState("20.00");
   const [primaryText, setPrimaryText] = useState("Mehr erfahren.");
@@ -237,6 +238,7 @@ export function TrafficLaunchCanary({
     }
     return null;
   });
+  const prepareInFlight = pending && !heldPlan;
   const [approveReason, setApproveReason] = useState(
     "Kontrollierter Traffic-Canary mit hochgeladenem Creative",
   );
@@ -264,6 +266,19 @@ export function TrafficLaunchCanary({
   function refresh() {
     router.refresh();
   }
+
+  useEffect(() => {
+    if (!prepareInFlight) {
+      setPrepareElapsedSec(0);
+      return;
+    }
+    setPrepareElapsedSec(0);
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setPrepareElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [prepareInFlight]);
 
   /**
    * No save required: reads the URL from the form, fills the same editable
@@ -413,11 +428,7 @@ export function TrafficLaunchCanary({
   async function prepare(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
-    setNotice({
-      tone: "success",
-      message:
-        "Kampagne wird vorbereitet — Meta-Kontodaten werden bei Bedarf automatisch aktualisiert. Bitte warten…",
-    });
+    setNotice(null);
     try {
       if (!gatesReady) {
         throw new Error(
@@ -783,20 +794,41 @@ export function TrafficLaunchCanary({
             )}
           </span>
         </label>
+        {prepareInFlight ? (
+          <div
+            className="flex gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-950 lg:col-span-2"
+            role="status"
+            aria-live="polite"
+          >
+            <LoaderCircle className="mt-0.5 size-5 shrink-0 animate-spin text-blue-700" />
+            <div className="min-w-0 space-y-1">
+              <p className="font-extrabold">Kampagne wird vorbereitet…</p>
+              <p className="font-medium leading-6 text-blue-900/90">
+                Adbot aktualisiert jetzt die Meta-Kontodaten und legt die
+                Vorschau an. Das kann bis zu etwa 2 Minuten dauern — bitte warte
+                und schließe diese Seite nicht.
+              </p>
+              {prepareElapsedSec >= 15 ? (
+                <p className="text-xs font-bold text-blue-800">
+                  Noch in Arbeit ({prepareElapsedSec}s) — das ist normal, nichts
+                  hängt.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:col-span-2">
           <button
             className={buttonClass}
             disabled={pending || !gatesReady || !assetId || Boolean(heldPlan)}
             type="submit"
           >
-            {pending && !heldPlan ? (
+            {prepareInFlight ? (
               <LoaderCircle className="size-4 animate-spin" />
             ) : (
               <PlayCircle className="size-4" />
             )}
-            {pending && !heldPlan
-              ? "Wird vorbereitet…"
-              : "Kampagne vorbereiten"}
+            {prepareInFlight ? "Bitte warten…" : "Kampagne vorbereiten"}
           </button>
           <button
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
