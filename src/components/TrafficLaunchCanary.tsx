@@ -587,12 +587,11 @@ export function TrafficLaunchCanary({
                   ? selectedAsset.originalFilename
                   : "Creative wählen oder hochladen"}
               </span>
-              <span className="mt-1 block text-xs font-medium text-slate-500">
-                {selectedAsset?.width && selectedAsset?.height
-                  ? `${selectedAsset.width}×${selectedAsset.height} · `
-                  : ""}
-                Öffnet Auswahl-Layer — ohne Seitenwechsel
-              </span>
+              {selectedAsset?.width && selectedAsset?.height ? (
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  {selectedAsset.width}×{selectedAsset.height}
+                </span>
+              ) : null}
             </span>
           </button>
         </div>

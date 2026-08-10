@@ -66,21 +66,27 @@ export function CreativePickerModal({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Keep Escape close without rebinding on every upload tick; never touch
+  // browser reload shortcuts (Cmd/Ctrl+R).
+  const uploadingRef = useRef(uploading);
+  uploadingRef.current = uploading;
+
   useEffect(() => {
     if (!open) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape" && !uploading) {
-        onClose();
-      }
+      if (event.key !== "Escape") return;
+      if (uploadingRef.current) return;
+      // Do not preventDefault — browser shortcuts (reload etc.) must stay intact.
+      onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = previous;
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose, uploading]);
+  }, [open, onClose]);
 
   if (!open) {
     return null;
