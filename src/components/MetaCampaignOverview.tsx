@@ -137,7 +137,7 @@ export function formatOrganicBoostFailureDetail(input: {
   if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
     // Never claim Meta is writing while the kill-switch soft-block is still set.
     if (input.writesAllowed) {
-      return "Lokal in Warteschlange — noch kein Meta-Versand";
+      return "Freigeben ist aktiv — Warteschlange wird automatisch nachgezogen";
     }
     return "Schreiben gestoppt (Sicherheitsschranke). Freigabe wurde ggf. systemseitig widerrufen — z. B. durch Traffic/Lead-Vorbereitung.";
   }
