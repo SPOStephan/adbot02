@@ -135,6 +135,35 @@ export async function runOrganicBoostPlannerForAccount(input: {
     };
   }
 
+  // Traffic/Lead prepare freezes ACCOUNT writes. Do not materialize organic AUTO
+  // plans while frozen — that used to bake fake REVIEW contracts forever.
+  const { data: killRow } = await admin
+    .from("kill_switch_state")
+    .select("mode")
+    .eq("user_id", input.userId)
+    .eq("platform_account_id", input.platformAccountId)
+    .eq("scope_type", "ACCOUNT")
+    .order("sequence", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if ((killRow?.mode ?? "FREEZE_WRITES") !== "ALLOW") {
+    const frozen: MetaOrganicBoostPlannerResult = {
+      status: "WRITES_FROZEN",
+      plansCreated: 0,
+      plansExisting: 0,
+      candidatesSkipped: 0,
+      candidatesFailed: 0,
+      candidatesConsidered: 0,
+      lastError: "organic_planner_skipped_kill_switch",
+    };
+    await persistOrganicBoostResult({
+      platformAccountId: input.platformAccountId,
+      userId: input.userId,
+      result: frozen,
+    }).catch(() => undefined);
+    return frozen;
+  }
+
   const marketingSyncId = await resolveLastGoodMarketingSyncId({
     platformAccountId: input.platformAccountId,
     userId: input.userId,
