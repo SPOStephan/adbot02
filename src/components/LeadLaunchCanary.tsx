@@ -472,7 +472,8 @@ export function LeadLaunchCanary({
       }
 
       const landing = parseLandingUrl(destinationUrl);
-      await ensureFreeze();
+      // Do NOT freeze here: server prepare uses a transient FREEZE window and
+      // restores Freigeben so Beitrag-Push AUTO is not stranded.
       const blueprintId = await ensureLeadBlueprint();
       const allowedDomainId = await ensureDomain(landing.hostname);
 

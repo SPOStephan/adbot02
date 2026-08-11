@@ -1203,11 +1203,79 @@ function withLaunchFailureDetail(message: string, error: unknown): string {
   return `${message} (Technik: ${raw})`;
 }
 
+type AccountKillSwitchMode = "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED";
+
+async function readAccountKillSwitchMode(
+  customer: MetaCustomer,
+): Promise<AccountKillSwitchMode | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("kill_switch_state")
+    .select("mode")
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("scope_type", "ACCOUNT")
+    .order("sequence", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const mode = data?.mode;
+  if (mode === "ALLOW" || mode === "FREEZE_WRITES" || mode === "PAUSE_MANAGED") {
+    return mode;
+  }
+  return null;
+}
+
+async function organicBoostAutoEnabled(customer: MetaCustomer): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("meta_boost_settings")
+    .select("enabled,boost_mode,auto_boost_new_candidates,require_manual_approval")
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("is_current", true)
+    .maybeSingle();
+
+  return (
+    data?.enabled === true &&
+    data?.boost_mode === "AUTO" &&
+    data?.auto_boost_new_candidates === true &&
+    data?.require_manual_approval === false
+  );
+}
+
 async function ensureFreezeWritesForLaunch(customer: MetaCustomer): Promise<void> {
   await setCustomerKillSwitch(customer, {
     mode: "FREEZE_WRITES",
     reason: "Automatische Freeze-Phase für Kampagnen-Vorbereitung",
   });
+}
+
+/**
+ * Launch materialize SQL needs FREEZE only for the prepare RPC.
+ * Leaving ACCOUNT frozen permanently breaks Beitrag-Push AUTO.
+ * Restore prior Freigeben (or AUTO settings) after prepare returns.
+ */
+async function restoreKillSwitchAfterLaunchPrepare(
+  customer: MetaCustomer,
+  previousMode: AccountKillSwitchMode | null,
+): Promise<void> {
+  const restoreAllow =
+    previousMode === "ALLOW" || (await organicBoostAutoEnabled(customer));
+  if (restoreAllow) {
+    await setCustomerKillSwitch(customer, {
+      mode: "ALLOW",
+      reason:
+        "Schreibfreigabe nach Launch-Prepare wiederhergestellt — Beitrag-Push bleibt aktiv",
+    });
+    return;
+  }
+  if (previousMode === "PAUSE_MANAGED") {
+    await setCustomerKillSwitch(customer, {
+      mode: "PAUSE_MANAGED",
+      reason: "Vorheriger Sicherheitsmodus nach Launch-Prepare wiederhergestellt",
+    });
+  }
 }
 
 /**
@@ -1475,7 +1543,10 @@ export async function materializeCustomerLaunch(
 ): Promise<CustomerLaunchResult> {
   requireWriteReadyCustomer(customer, "einen Aktiv-Launch vorbereitest");
   const readyCustomer = await refreshCustomerMarketingForLaunch(customer);
-  // Do not rely on the UI alone — materialize SQL requires FREEZE_WRITES.
+  // Materialize SQL requires FREEZE_WRITES only for the prepare RPC window.
+  // Capture prior mode and always restore Freigeben afterwards when Beitrag-Push
+  // AUTO is on — otherwise Traffic/Lead prepare strands organic Meta writes.
+  const previousKillMode = await readAccountKillSwitchMode(readyCustomer);
   await ensureFreezeWritesForLaunch(readyCustomer);
 
   const leaseToken = await claimMetaReadOperation({
@@ -1484,6 +1555,11 @@ export async function materializeCustomerLaunch(
     ownerId: `customer-launch-prepare:${randomUUID()}`,
   });
   if (!leaseToken) {
+    try {
+      await restoreKillSwitchAfterLaunchPrepare(readyCustomer, previousKillMode);
+    } catch {
+      // Freigeben UI remains the fallback.
+    }
     serviceError(
       "read_snapshot_busy",
       409,
@@ -1582,12 +1658,25 @@ export async function materializeCustomerLaunch(
       });
     } catch {
       if (!result) {
+        try {
+          await restoreKillSwitchAfterLaunchPrepare(
+            readyCustomer,
+            previousKillMode,
+          );
+        } catch {
+          // ignore nested restore failure
+        }
         serviceError(
           "read_lease_release_failed",
           500,
           "Der Aktiv-Launch wurde nicht vorbereitet, weil die sichere Read-Lease nicht freigegeben werden konnte.",
         );
       }
+    }
+    try {
+      await restoreKillSwitchAfterLaunchPrepare(readyCustomer, previousKillMode);
+    } catch {
+      // Launch result still stands; Freigeben UI remains the fallback.
     }
   }
 
