@@ -896,14 +896,13 @@ export function LeadLaunchCanary({
             <div className="min-w-0 space-y-1">
               <p className="font-extrabold">Kampagne wird vorbereitet…</p>
               <p className="font-medium leading-6 text-blue-900/90">
-                Adbot aktualisiert jetzt die Meta-Kontodaten und legt die
-                Vorschau an. Das kann bis zu etwa 2 Minuten dauern — bitte warte
-                und schließe diese Seite nicht.
+                Adbot legt die Launch-Vorschau an. Meist dauert das nur wenige
+                Sekunden — bitte diese Seite nicht schließen.
               </p>
-              {prepareElapsedSec >= 15 ? (
+              {prepareElapsedSec >= 20 ? (
                 <p className="text-xs font-bold text-blue-800">
-                  Noch in Arbeit ({prepareElapsedSec}s) — das ist normal, nichts
-                  hängt.
+                  Noch aktiv ({prepareElapsedSec}s). Falls Meta-Kontodaten fehlen,
+                  läuft ein kurzer Abgleich mit — bitte warten.
                 </p>
               ) : null}
             </div>

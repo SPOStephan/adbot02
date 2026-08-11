@@ -15,6 +15,7 @@ import {
 } from "@/lib/meta/planner";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/** Matches SQL launch freshness window (marketing_last_success_at >= now() - 2h). */
 const LAUNCH_MARKETING_FRESH_MS = 2 * 60 * 60 * 1_000;
 
 export type LaunchMarketingCustomer = {
@@ -24,7 +25,7 @@ export type LaunchMarketingCustomer = {
 };
 
 export type EnsureLaunchMarketingResult =
-  | { ok: true; marketingSyncId: string }
+  | { ok: true; marketingSyncId: string; refreshed: boolean }
   | { ok: false; message: string };
 
 type LaunchMarketingState = {
@@ -103,6 +104,16 @@ async function readLaunchMarketingState(
       timezoneName,
       currency,
       reason: "marketing_sync_stale",
+    };
+  }
+  // Reject absurd future timestamps (clock skew) — same idea as authenticateMetaCustomer.
+  if (lastSuccessAt > now + 60 * 1_000) {
+    return {
+      ready: false,
+      marketingSyncId,
+      timezoneName,
+      currency,
+      reason: "marketing_sync_clock_skew",
     };
   }
   if (!timezoneName) {
@@ -208,8 +219,6 @@ async function runLaunchMarketingSync(
     });
 
     try {
-      // Use DB-aligned timestamp string from the just-written success row when
-      // possible; planner only needs a timestamptz for account_day math.
       const plannedAt = new Date().toISOString();
       await runMetaBudgetPlannerAfterSnapshot({
         platformAccountId: customer.platformAccountId,
@@ -252,9 +261,7 @@ async function normalizeLaunchTimezoneIfNeeded(
     const { data: valid, error } = await admin.rpc("meta_timezone_is_known", {
       p_timezone_name: timezone,
     });
-    // Unknown OR helper/RPC unavailable → coerce. Launch SQL requires a
-    // pg_timezone_names entry; keeping an unchecked Meta value caused the
-    // opaque "EUR Meta snapshot" prepare failure.
+    // Unknown OR helper/RPC unavailable → coerce.
     known = !error && valid === true;
   }
 
@@ -270,23 +277,42 @@ async function normalizeLaunchTimezoneIfNeeded(
 }
 
 /**
- * Ensures a launch-ready EUR marketing snapshot (sync id + timezone + freshness).
- * Always runs a dedicated Meta Abruf for prepare — no separate customer chore.
+ * Ensures launch SQL gates can pass: EUR + timezone + sync id fresher than 2h.
+ *
+ * Launch does NOT need a full Meta Abruf (campaigns/ads/insights). That Abruf
+ * is for dashboard/boost inventory. Prepare reuses a fresh sync when present
+ * and only syncs when missing/stale — otherwise Traffic prepare takes ~1–2 min
+ * for no launch benefit.
  */
 export async function ensureLaunchMarketingReady(
   customer: LaunchMarketingCustomer,
 ): Promise<EnsureLaunchMarketingResult> {
   const initial = await readLaunchMarketingState(customer);
+  if (initial.ready && initial.marketingSyncId) {
+    await normalizeLaunchTimezoneIfNeeded(customer);
+    const afterNormalize = await readLaunchMarketingState(customer);
+    if (afterNormalize.ready && afterNormalize.marketingSyncId) {
+      return {
+        ok: true,
+        marketingSyncId: afterNormalize.marketingSyncId,
+        refreshed: false,
+      };
+    }
+  }
+
   let lastDetail = initial.reason ?? "marketing_not_ready";
 
-  // Always refresh on prepare. Skipping caused false "ready" + clock-skew fails.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       await runLaunchMarketingSync(customer);
       await normalizeLaunchTimezoneIfNeeded(customer);
       const next = await readLaunchMarketingState(customer);
       if (next.ready && next.marketingSyncId) {
-        return { ok: true, marketingSyncId: next.marketingSyncId };
+        return {
+          ok: true,
+          marketingSyncId: next.marketingSyncId,
+          refreshed: true,
+        };
       }
       lastDetail = next.reason ?? "marketing_not_ready";
     } catch (error) {
@@ -312,10 +338,13 @@ export async function ensureLaunchMarketingReady(
     }
   }
 
-  // Last resort: if a fresh sync already exists, still allow prepare.
   const fallback = await readLaunchMarketingState(customer);
   if (fallback.ready && fallback.marketingSyncId) {
-    return { ok: true, marketingSyncId: fallback.marketingSyncId };
+    return {
+      ok: true,
+      marketingSyncId: fallback.marketingSyncId,
+      refreshed: false,
+    };
   }
 
   if (lastDetail === "read_lease_busy") {

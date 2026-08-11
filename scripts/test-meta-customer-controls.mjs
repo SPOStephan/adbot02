@@ -1010,11 +1010,23 @@ assert.match(launchMarketingEnsureSource, /syncMetaMarketingSnapshot/);
 assert.match(launchMarketingEnsureSource, /marketing_timezone_name/);
 assert.match(launchMarketingEnsureSource, /ensureLaunchMarketingReady/);
 assert.match(launchMarketingEnsureSource, /normalizeLaunchTimezoneIfNeeded/);
-assert.match(launchMarketingEnsureSource, /Always refresh on prepare/);
+assert.match(launchMarketingEnsureSource, /refreshed: false/);
+assert.match(
+  launchMarketingEnsureSource,
+  /Launch does NOT need a full Meta Abruf/,
+);
+assert.doesNotMatch(
+  launchMarketingEnsureSource,
+  /Always refresh on prepare/,
+);
 assert.match(launchMarketingEnsureSource, /known = !error && valid === true/);
 assert.doesNotMatch(
   launchMarketingEnsureSource,
   /known = error \? true/,
+);
+assert.match(
+  await readFile(path.join(root, "src/components/TrafficLaunchCanary.tsx"), "utf8"),
+  /Meist dauert das nur wenige\s+Sekunden/,
 );
 assert.match(serviceSource, /Omit p_planned_at so Postgres uses now/);
 assert.match(serviceSource, /ads_management scope/i);
