@@ -1053,6 +1053,38 @@ assert.match(
   /Customer launch requires ads_management scope/,
 );
 
+// Daily customer launch must call the chain with (platform_account_id, user_id).
+// Swapped args caused a permanent "EUR Meta snapshot" failure after Abruf.
+const launchArgOrderMigration = await readFile(
+  path.join(
+    root,
+    "supabase/migrations/20260810200000_fix_launch_chain_arg_order.sql",
+  ),
+  "utf8",
+);
+assert.match(launchArgOrderMigration, /ROOT CAUSE/);
+assert.match(launchArgOrderMigration, /CORRECT order/);
+assert.match(
+  launchArgOrderMigration,
+  /materialize_meta_launch_chain_plan\(\s*\n\s*p_platform_account_id,\s*\n\s*p_user_id,/,
+);
+assert.doesNotMatch(
+  launchArgOrderMigration,
+  /materialize_meta_launch_chain_plan\(\s*\n\s*p_user_id,\s*\n\s*p_platform_account_id,/,
+);
+
+const lifetimeLaunchMigration = await readFile(
+  path.join(
+    root,
+    "supabase/migrations/20260802170000_meta_lifetime_launch_canary.sql",
+  ),
+  "utf8",
+);
+assert.match(
+  lifetimeLaunchMigration,
+  /materialize_meta_launch_chain_plan_v3\(\s*\n\s*p_platform_account_id,\s*\n\s*p_user_id,/,
+);
+
 const bindRebindMigration = await readFile(
   path.join(
     root,
