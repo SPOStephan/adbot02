@@ -139,7 +139,7 @@ export function formatOrganicBoostFailureDetail(input: {
     if (input.writesAllowed) {
       return "Lokal in Warteschlange — noch kein Meta-Versand";
     }
-    return "Schreiben gestoppt (Sicherheitsschranke). Freigabe wurde ggf. systemseitig widerrufen.";
+    return "Schreiben gestoppt (Sicherheitsschranke). Freigabe wurde ggf. systemseitig widerrufen — z. B. durch Traffic/Lead-Vorbereitung.";
   }
   if (reason?.startsWith("meta_graph_")) {
     if (stepDetail) {
@@ -676,13 +676,21 @@ export function MetaCampaignOverview({
         campaign.deliveryState === "queued",
     );
   // Sticky plan blocked_reason must not contradict Autonomie when already ALLOW.
+  // Also warn when FREEZE left plans queued without Meta wire (Traffic prepare
+  // freeze-bake / soft-skip can leave no Sicherheitsschranke text on the row).
   const organicBoostKillSwitchBlocked =
     killSwitchMode !== "ALLOW" &&
-    organicBoostCampaigns.some(
+    (organicBoostCampaigns.some(
       (campaign) =>
         typeof campaign.failureDetail === "string" &&
         campaign.failureDetail.includes("Sicherheitsschranke"),
-    );
+    ) ||
+      (organicBoostConfigured &&
+        organicBoostCampaigns.some(
+          (campaign) =>
+            campaign.deliveryState === "queued" ||
+            campaign.deliveryState === "starting",
+        )));
   const statusLabel =
     status === "success"
       ? "Meta Live"
