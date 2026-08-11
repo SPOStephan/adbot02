@@ -59,6 +59,31 @@ async function lastSuccessfulEnsureAtMs(input: {
   return Number.isFinite(ms) ? ms : null;
 }
 
+async function countQueuedOrganicBoostPlans(input: {
+  userId: string;
+  platformAccountId: string;
+}): Promise<number> {
+  const admin = createAdminClient();
+  const { count, error } = await admin
+    .from("mutation_plans")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", input.userId)
+    .eq("platform_account_id", input.platformAccountId)
+    .eq("source_rule_key", "organic-boost")
+    .eq("action_type", "LAUNCH_CHAIN")
+    .in("status", [
+      "PENDING",
+      "RETRYABLE",
+      "CLAIMED",
+      "EXECUTING",
+      "RECONCILING",
+    ]);
+  if (error || typeof count !== "number") {
+    return 0;
+  }
+  return count;
+}
+
 async function repairOrphanInstagramPageLinks(input: {
   userId: string;
   platformAccountId: string;
@@ -165,13 +190,23 @@ export async function planAndDrainOrganicBoostForAccount(input: {
   drain: OrganicBoostExecuteDrainResult | null;
   skippedRecent: boolean;
 }> {
+  let drainOnly = input.drainOnly === true;
   if (input.skipIfRecentMs && input.skipIfRecentMs > 0) {
     const lastAt = await lastSuccessfulEnsureAtMs({
       userId: input.userId,
       platformAccountId: input.platformAccountId,
     });
     if (lastAt != null && Date.now() - lastAt < input.skipIfRecentMs) {
-      return { planner: null, drain: null, skippedRecent: true };
+      // Never skip a local queue that has not reached Meta yet — sticky
+      // soft-blocks must be cleared on every dashboard tick under ALLOW.
+      const queued = await countQueuedOrganicBoostPlans({
+        userId: input.userId,
+        platformAccountId: input.platformAccountId,
+      });
+      if (queued < 1) {
+        return { planner: null, drain: null, skippedRecent: true };
+      }
+      drainOnly = true;
     }
   }
 
@@ -182,7 +217,7 @@ export async function planAndDrainOrganicBoostForAccount(input: {
 
   let planner: MetaOrganicBoostPlannerResult | null = null;
 
-  if (!input.drainOnly) {
+  if (!drainOnly) {
     try {
       planner = await runOrganicBoostPlannerForAccount({
         platformAccountId: input.platformAccountId,
