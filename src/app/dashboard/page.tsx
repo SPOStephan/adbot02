@@ -187,6 +187,10 @@ const META_ERROR_MESSAGES: Record<string, string> = {
   missing_ad_account_targets: "Meta hat keine Werbekonto-IDs aus der Dialog-Auswahl geliefert. Bitte trenne Meta vollständig und verbinde erneut mit ausdrücklicher Werbekonto-Auswahl.",
   missing_instagram_targets: "Meta hat keine Instagram-IDs aus der Dialog-Auswahl geliefert. Bitte trenne Meta vollständig und verbinde erneut mit ausdrücklicher Instagram-Auswahl.",
   storage: "Die Verbindung konnte nicht sicher gespeichert werden. Es wurde keine Verbindung aktiviert.",
+  extend_storage: "Die zusätzlichen Assets konnten nicht gespeichert werden. Bestehende Verbindungen bleiben unverändert.",
+  extend_no_assets: "Meta hat keine neuen Assets aus der Dialog-Auswahl geliefert. Bestehende Verbindungen bleiben unverändert — bitte im Dialog die zusätzlichen Seiten/Konten auswählen.",
+  extend_stale_system_user: "Meta lieferte ein Token ohne neue Ziel-IDs. Für additive Erweiterung bitte im Dialog die neuen Assets explizit wählen; bei Bedarf Meta einmal sicher neu verbinden.",
+  extend_start: "Der Erweiterungs-Dialog konnte nicht gestartet werden. Bestehende Verbindungen bleiben unverändert.",
   callback: "Die Meta-Antwort konnte nicht verarbeitet werden. Bitte starte die Verbindung erneut.",
 };
 
@@ -226,6 +230,15 @@ function getMetaNotice(
           ? "Der minimale Meta-Schreibscope wurde bestätigt. Ausführung bleibt bis zu Kunden-Policy, EUR-Caps, Readiness-Gates und ausdrücklichem ALLOW fail-closed."
           : "Der Connector ist verbunden, aber der minimale Schreibscope fehlt. Bitte führe den sicheren Reconnect aus."
         : "Die Meta-Berechtigungen wurden bestätigt. Die verbundenen Kontodaten werden gerade aktualisiert.",
+    };
+  }
+
+  if (meta === "extended") {
+    return {
+      tone: "success",
+      title: "Meta-Assets wurden erweitert.",
+      message:
+        "Neue Seiten oder Konten wurden additiv hinzugefügt. Bereits verbundene Assets und der Kampagnenstand bleiben erhalten. Bitte einmal Abruf starten.",
     };
   }
 

@@ -244,11 +244,11 @@ function missingReferencedIds(
 }
 
 /**
- * Insights are additive dashboard metrics. A Graph #100 (invalid parameter /
- * permission) or incomplete pagination must not fail the whole marketing
- * snapshot — campaigns/ads still persist so Beitrag-Push can keep planning.
+ * Marketing Graph collections must not fail the whole snapshot on Graph #100
+ * (invalid parameter / permission) or incomplete pagination. Empty items still
+ * allow account summary persistence (currency / sync_id) so Beitrag-Push can heal.
  */
-async function loadMarketingInsightsSafely<T>(
+async function loadMarketingCollectionSafely<T>(
   label: string,
   load: () => Promise<MetaMarketingCollection<T>>,
 ): Promise<MetaMarketingCollection<T>> {
@@ -260,7 +260,7 @@ async function loadMarketingInsightsSafely<T>(
         throw error;
       }
 
-      console.warn(`Meta ${label} rejected; continuing with empty insights`, {
+      console.warn(`Meta ${label} rejected; continuing with empty collection`, {
         code: error.code,
         subcode: error.subcode,
         diagnostic: error.diagnosticDetail,
@@ -269,7 +269,7 @@ async function loadMarketingInsightsSafely<T>(
     }
 
     if (error instanceof MetaCollectionLimitError) {
-      console.warn(`Meta ${label} incomplete; continuing with empty insights`, {
+      console.warn(`Meta ${label} incomplete; continuing with empty collection`, {
         reason: error.reason,
       });
       return { items: [], usage: error.usage };
@@ -495,31 +495,40 @@ export async function syncMetaMarketingSnapshot(input: {
     throw new MetaMarketingDataError("account_mismatch");
   }
 
-  const campaignsResult = await getMetaCampaigns(input);
+  const campaignsResult = await loadMarketingCollectionSafely(
+    "campaigns",
+    () => getMetaCampaigns(input),
+  );
   usage = mergeMetaUsage(usage, campaignsResult.usage);
   let campaigns = campaignsResult.items;
-  const adSetsResult = await getMetaAdSets(input);
+  const adSetsResult = await loadMarketingCollectionSafely("adsets", () =>
+    getMetaAdSets(input),
+  );
   usage = mergeMetaUsage(usage, adSetsResult.usage);
   let adSets = adSetsResult.items;
-  const adsResult = await getMetaAds(input);
+  const adsResult = await loadMarketingCollectionSafely("ads", () =>
+    getMetaAds(input),
+  );
   usage = mergeMetaUsage(usage, adsResult.usage);
   let ads = adsResult.items;
   const dateRange = completeInsightsDateRange(
     accountResult.account.timezoneName,
     input.now,
   );
-  const insightsResult = await loadMarketingInsightsSafely("ad insights", () =>
-    getMetaAdInsights({
-      ...input,
-      since: dateRange.since,
-      until: dateRange.until,
-    }),
+  const insightsResult = await loadMarketingCollectionSafely(
+    "ad insights",
+    () =>
+      getMetaAdInsights({
+        ...input,
+        since: dateRange.since,
+        until: dateRange.until,
+      }),
   );
   usage = mergeMetaUsage(usage, insightsResult.usage);
 
   // Campaign + account level: fewer join failure modes than ad grain, and the
   // source of truth for dashboard totals when ad rows lag behind delivery.
-  const campaignInsightsResult = await loadMarketingInsightsSafely(
+  const campaignInsightsResult = await loadMarketingCollectionSafely(
     "campaign insights",
     () =>
       getMetaCampaignInsights({
@@ -529,7 +538,7 @@ export async function syncMetaMarketingSnapshot(input: {
       }),
   );
   usage = mergeMetaUsage(usage, campaignInsightsResult.usage);
-  const accountInsightsResult = await loadMarketingInsightsSafely(
+  const accountInsightsResult = await loadMarketingCollectionSafely(
     "account insights",
     () =>
       getMetaAccountInsights({
@@ -544,11 +553,15 @@ export async function syncMetaMarketingSnapshot(input: {
     ads.map((ad) => ad.id),
     insightsResult.items.map((insight) => insight.adId),
   );
-  const historicalAdsResult = await getMetaAdsByIds({
-    adIds: missingAdIds,
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-  });
+  const historicalAdsResult = await loadMarketingCollectionSafely(
+    "historical ads",
+    () =>
+      getMetaAdsByIds({
+        adIds: missingAdIds,
+        accessToken: input.accessToken,
+        appSecret: input.appSecret,
+      }),
+  );
   usage = mergeMetaUsage(usage, historicalAdsResult.usage);
   ads = mergeUniqueById(ads, historicalAdsResult.items);
 
@@ -556,11 +569,15 @@ export async function syncMetaMarketingSnapshot(input: {
     adSets.map((adSet) => adSet.id),
     ads.map((ad) => ad.adSetId),
   );
-  const historicalAdSetsResult = await getMetaAdSetsByIds({
-    adSetIds: missingAdSetIds,
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-  });
+  const historicalAdSetsResult = await loadMarketingCollectionSafely(
+    "historical adsets",
+    () =>
+      getMetaAdSetsByIds({
+        adSetIds: missingAdSetIds,
+        accessToken: input.accessToken,
+        appSecret: input.appSecret,
+      }),
+  );
   usage = mergeMetaUsage(usage, historicalAdSetsResult.usage);
   adSets = mergeUniqueById(adSets, historicalAdSetsResult.items);
 
@@ -571,11 +588,15 @@ export async function syncMetaMarketingSnapshot(input: {
       ...ads.map((ad) => ad.campaignId),
     ],
   );
-  const historicalCampaignsResult = await getMetaCampaignsByIds({
-    campaignIds: missingCampaignIds,
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-  });
+  const historicalCampaignsResult = await loadMarketingCollectionSafely(
+    "historical campaigns",
+    () =>
+      getMetaCampaignsByIds({
+        campaignIds: missingCampaignIds,
+        accessToken: input.accessToken,
+        appSecret: input.appSecret,
+      }),
+  );
   usage = mergeMetaUsage(usage, historicalCampaignsResult.usage);
   campaigns = mergeUniqueById(campaigns, historicalCampaignsResult.items);
 
@@ -673,11 +694,13 @@ export async function syncMetaMarketingSnapshot(input: {
     });
   }
 
-  const creativesResult = await getMetaAdCreatives({
-    creativeIds: ads.flatMap((ad) => ad.creativeId ? [ad.creativeId] : []),
-    accessToken: input.accessToken,
-    appSecret: input.appSecret,
-  });
+  const creativesResult = await loadMarketingCollectionSafely("creatives", () =>
+    getMetaAdCreatives({
+      creativeIds: ads.flatMap((ad) => (ad.creativeId ? [ad.creativeId] : [])),
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+    }),
+  );
   usage = mergeMetaUsage(usage, creativesResult.usage);
 
   validateHierarchy({

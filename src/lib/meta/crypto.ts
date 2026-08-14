@@ -19,6 +19,8 @@ export type OAuthStatePayload = {
   iat: number;
   exp: number;
   authorizationReset: boolean;
+  /** extend = additive asset grant; reconnect = full revoke+replace (default). */
+  intent: "extend" | "reconnect";
 };
 
 export type EncryptedToken = {
@@ -72,6 +74,7 @@ export function createOAuthState(
   secret: string,
   now = Date.now(),
   authorizationReset = false,
+  intent: "extend" | "reconnect" = "reconnect",
 ): string {
   const issuedAt = Math.floor(now / 1000);
   const payload: OAuthStatePayload = {
@@ -81,6 +84,7 @@ export function createOAuthState(
     iat: issuedAt,
     exp: issuedAt + OAUTH_STATE_TTL_SECONDS,
     authorizationReset,
+    intent,
   };
   const encodedPayload = encodeBase64Url(JSON.stringify(payload));
   const signature = hmacBase64Url(encodedPayload, secret);
@@ -133,6 +137,9 @@ export function verifyOAuthState(
       typeof parsed.exp !== "number" ||
       (parsed.authorizationReset !== undefined
         && typeof parsed.authorizationReset !== "boolean")
+      || (parsed.intent !== undefined
+        && parsed.intent !== "extend"
+        && parsed.intent !== "reconnect")
     ) {
       return null;
     }
@@ -148,8 +155,9 @@ export function verifyOAuthState(
     }
 
     return {
-      ...(parsed as Omit<OAuthStatePayload, "authorizationReset">),
+      ...(parsed as Omit<OAuthStatePayload, "authorizationReset" | "intent">),
       authorizationReset: parsed.authorizationReset === true,
+      intent: parsed.intent === "extend" ? "extend" : "reconnect",
     };
   } catch {
     return null;

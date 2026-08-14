@@ -63,6 +63,8 @@ type ConnectorRow = {
   instagram_account_ids: unknown;
   marketing_sync_id: string | null;
   marketing_sync_status: string | null;
+  marketing_currency: string | null;
+  marketing_last_success_at: string | null;
 };
 
 type AssetRow = {
@@ -387,7 +389,7 @@ async function fetchConnector(
   let query = admin
     .from("platform_accounts")
     .select(
-      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids,marketing_sync_id,marketing_sync_status",
+      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids,marketing_sync_id,marketing_sync_status,marketing_currency,marketing_last_success_at",
     )
     .eq("id", platformAccountId)
     .eq("platform", "meta")
@@ -404,6 +406,23 @@ async function fetchConnector(
   }
 
   return data as ConnectorRow | null;
+}
+
+function needsMarketingHeal(connector: ConnectorRow, now = Date.now()): boolean {
+  if (connector.marketing_currency !== "EUR") {
+    return true;
+  }
+  if (
+    typeof connector.marketing_sync_id !== "string" ||
+    connector.marketing_sync_id.length === 0
+  ) {
+    return true;
+  }
+  const lastSuccess = parseDate(connector.marketing_last_success_at)?.getTime();
+  if (!lastSuccess || lastSuccess < now - 48 * 60 * 60 * 1000) {
+    return true;
+  }
+  return false;
 }
 
 function blockedReason(
@@ -423,8 +442,11 @@ function blockedReason(
     return "backoff";
   }
 
+  // After Asset-Reconnect marketing fields can be null — never block the heal
+  // Abruf behind the manual 60s cooldown (plan+execute would otherwise loop).
   if (
     mode === "manual" &&
+    !needsMarketingHeal(connector, now) &&
     lastStartedAt > now - MANUAL_SYNC_COOLDOWN_SECONDS * 1000
   ) {
     return "cooldown";
@@ -589,7 +611,9 @@ async function claimConnector(
     p_platform_account_id: connector.id,
     p_lock_seconds: SYNC_LOCK_SECONDS,
     p_min_interval_seconds:
-      mode === "manual" ? MANUAL_SYNC_COOLDOWN_SECONDS : 0,
+      mode === "manual" && !needsMarketingHeal(connector)
+        ? MANUAL_SYNC_COOLDOWN_SECONDS
+        : 0,
   });
 
   if (error) {

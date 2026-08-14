@@ -1,26 +1,40 @@
 # Meta-Assets erweitern
 
-Stand: 6. August 2026
+Stand: 14. August 2026
 
 ## Kundenziel
 
-Kampagnen laufen auf verbundenen Assets gut; der Kunde will weitere Facebook- oder Instagram-Seiten bzw. Werbekonten aus demselben Portfolio in Adbot nutzen.
+Kampagnen laufen auf verbundenen Assets gut; der Kunde will weitere Facebook-
+oder Instagram-Seiten bzw. Werbekonten aus demselben Portfolio in Adbot nutzen
+— **ohne** bestehende Assets neu zu verbinden und ohne Marketing-Stand zu löschen.
 
-## Weg in Adbot
+## Weg in Adbot (additiv)
 
-1. **Assets erweitern** (Plattformkarte) oder **Weitere Seiten oder Konten hinzufügen** (Asset-Liste)
-2. Meta-Dialog: **alle** gewünschten Assets wählen — bestehende **und** neue
-3. Nach dem Callback speichert Adbot die von Meta gelieferte Menge
-4. Überzählige „zuvor verbundene“ Assets bei Bedarf mit **Entfernen** bereinigen
+1. **Assets erweitern** (Plattformkarte) oder **Weitere Seiten oder Konten hinzufügen**
+2. Meta-Dialog: nur die **zusätzlichen** Assets wählen
+3. Callback speichert per `extend_meta_connection` (Union der IDs, Upsert der
+   `meta_assets`) — bereits verbundene Assets bleiben
+4. Kein App-Widerruf, kein `replace_meta_connection`, kein Marketing-Wipe
 
-## Warum erneut der Meta-Dialog
+## Technisch
 
-Neue Asset-Zuweisungen kann nur Meta im Login-for-Business-Dialog erteilen. Adbot kann Portfolio-Assets nicht selbst freischalten. Der technische Start ist derselbe Endpunkt wie beim Connect (`POST /api/connectors/meta/start`); OAuth-Callback und Asset-Ermittlung bleiben unverändert.
+| Schritt | Verhalten |
+| --- | --- |
+| `POST /api/connectors/meta/start?intent=extend` | Kein `resetStoredMetaAuthorization` |
+| OAuth-State | `intent=extend`, `authorizationReset=false` |
+| Callback | `extend_meta_connection` statt `replace_meta_connection` |
+| Marketing | `ad_account_ids`-Trigger wipe’t nicht, solange das aktive Werbekonto bleibt |
 
 ## Abgrenzung
 
 | Aktion | Wirkung |
 | --- | --- |
-| Assets erweitern | Neuer Meta-Dialog, Auswahl ersetzen/erweitern laut Meta |
-| Entfernen | Nur Adbot-Nutzung stoppen, Meta-Autorisierung bleibt |
-| Meta trennen | Vollständiger Widerruf + lokale Asset-Leere |
+| Assets erweitern | Additiv, bestehende bleiben |
+| Entfernen | Nur Adbot-Nutzung stoppen, Meta-Auth bleibt |
+| Meta trennen + neu verbinden | Vollständiger Widerruf + Replace (nur wenn nötig) |
+
+## Warum trotzdem Meta-Dialog
+
+Neue Asset-Zuweisungen kann nur Meta im Login-for-Business-Dialog erteilen.
+Adbot kann Portfolio-Assets ohne Dialog nicht freischalten. Der Dialog läuft
+aber ohne vorherigen Widerruf.

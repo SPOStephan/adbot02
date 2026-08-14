@@ -25,12 +25,10 @@ const DISCONNECT_ERROR_MESSAGES: Record<string, string> = {
 };
 
 const EXTEND_CONFIRM_MESSAGE =
-  "Adbot öffnet den Meta-Dialog.\n\n" +
-  "Wähle dort ALLE Assets, die Adbot nutzen soll:\n" +
-  "• die bereits verbundenen Seiten, Instagram- und Werbekonten\n" +
-  "• plus die neuen Assets aus deinem Portfolio\n\n" +
-  "Wenn Meta zusätzlich ältere „zuvor verbundene“ Assets mitliefert, " +
-  "entfernst du die unerwünschten danach wieder in Adbot.";
+  "Adbot öffnet den Meta-Dialog zum Erweitern.\n\n" +
+  "Bereits verbundene Seiten und Konten bleiben erhalten.\n" +
+  "Wähle im Dialog die ZUSÄTZLICHEN Assets aus deinem Portfolio.\n\n" +
+  "Kein Widerruf, kein Neuverbinden der bestehenden Assets.";
 
 export function MetaConnectionActions({
   reconnectHref,
@@ -102,9 +100,9 @@ export function MetaConnectionActions({
         </button>
       </form>
       <p className="text-xs leading-5 text-slate-500">
-        Weitere Facebook- oder Instagram-Seiten sowie Werbekonten hinzufügen:
-        Im Meta-Dialog bestehende und neue Assets gemeinsam auswählen. Überzählige
-        kannst du danach in Adbot entfernen.
+        Weitere Facebook- oder Instagram-Seiten sowie Werbekonten additiv
+        hinzufügen. Bestehende Verbindungen bleiben unverändert; im Meta-Dialog
+        nur die neuen Assets wählen.
       </p>
       <button
         className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition hover:border-red-300 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-60"

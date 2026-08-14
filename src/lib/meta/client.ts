@@ -1562,9 +1562,11 @@ const META_CAMPAIGN_MAX_PAGES = 100;
 const META_MARKETING_MAX_OBJECTS = 10_000;
 const META_OBJECT_BATCH_SIZE = 50;
 const META_INSIGHTS_MAX_ROWS = 50_000;
-const META_CAMPAIGN_FIELDS = "id,account_id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,bid_strategy,is_adset_budget_sharing_enabled,special_ad_categories,start_time,stop_time,created_time,updated_time";
+const META_CAMPAIGN_FIELDS = "id,account_id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,bid_strategy,special_ad_categories,start_time,stop_time,created_time,updated_time";
 const META_AD_SET_FIELDS = "id,account_id,campaign_id,name,status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,budget_remaining,bid_amount,bid_strategy,start_time,end_time,created_time,updated_time";
 const META_AD_FIELDS = "id,account_id,campaign_id,adset_id,creative{id},name,status,effective_status,created_time,updated_time";
+// is_adset_budget_sharing_enabled omitted: Graph #100 on some ad accounts when
+// requested on /campaigns collection (node-by-id refresh still works without it).
 const META_CREATIVE_FIELDS = "id,account_id,name,title,body,call_to_action_type,image_hash,image_url,thumbnail_url,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url,object_type,status";
 const META_MARKETING_NAME_MAX_LENGTH = 500;
 const META_CREATIVE_TEXT_MAX_LENGTH = 5_000;
