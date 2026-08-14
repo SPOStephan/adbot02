@@ -121,6 +121,17 @@ export function OrganicBoostPlanButton({
       const planBody = (await planResponse.json().catch(() => ({}))) as {
         ok?: boolean;
         message?: string;
+        marketingSync?: {
+          outcome?: string;
+          status?: string;
+          blockedReason?: string | null;
+          insightsCount?: number;
+          spendTotal?: number;
+          insightsUntil?: string | null;
+          marketingStatus?: string;
+          retryAt?: string | null;
+        } | null;
+        marketingSyncError?: string | null;
         organicBoost?: {
           status?: string;
           plansCreated?: number;
@@ -169,6 +180,7 @@ export function OrganicBoostPlanButton({
           spendTotal?: number;
           insightsUntil?: string | null;
           retryAt?: string | null;
+          marketingStatus?: string;
         } | null;
         marketingSyncError?: string | null;
         hardCapForceResume?: HardCapForceResumeNoticeInput | null;
@@ -215,15 +227,21 @@ export function OrganicBoostPlanButton({
       const skipped = planBody.organicBoost?.candidatesSkipped ?? 0;
       const diagnosis = planBody.organicBoost?.candidateDiagnosis ?? null;
 
-      const sync = executeBody.marketingSync;
-      const syncOk =
-        sync?.outcome === "completed" &&
-        (sync.status === "success" || sync.status === "partial");
+      const sync = executeBody.marketingSync ?? planBody.marketingSync;
+      const syncError =
+        executeBody.marketingSyncError ?? planBody.marketingSyncError ?? null;
+      const marketingOk =
+        sync?.marketingStatus === "success" ||
+        (sync?.outcome === "completed" &&
+          sync?.status === "success" &&
+          !syncError);
       const syncBlocked =
-        sync?.outcome === "blocked" || executeBody.marketingSyncError;
+        Boolean(syncError) ||
+        sync?.outcome === "blocked" ||
+        sync?.marketingStatus === "error";
 
       let syncNotice: string | null = null;
-      if (syncOk) {
+      if (marketingOk) {
         const spend = Number(sync?.spendTotal);
         const spendLabel = Number.isFinite(spend)
           ? new Intl.NumberFormat("de-DE", {
@@ -246,7 +264,7 @@ export function OrganicBoostPlanButton({
         syncNotice =
           "Kampagnenstand: Abruf kurz im Cooldown — Reaktivierung läuft trotzdem mit dem letzten Stand.";
       } else if (syncBlocked) {
-        syncNotice = `Kennzahlen-Abruf blockiert (${executeBody.marketingSyncError ?? sync?.blockedReason ?? sync?.status ?? "unbekannt"}).`;
+        syncNotice = `Kennzahlen-Abruf nicht erfolgreich (${syncError ?? sync?.blockedReason ?? sync?.marketingStatus ?? sync?.status ?? "unbekannt"}). Beitrag-Push braucht einen erfolgreichen Kampagnenabruf (EUR + marketing_sync_id).`;
       }
 
       const resumeNotice = formatHardCapResumeNotice(

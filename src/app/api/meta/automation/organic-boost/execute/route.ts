@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       spendTotal: number;
       insightsUntil: string | null;
       retryAt: string | null;
+      marketingStatus: string;
     } | null = null;
     let marketingSyncError: string | null = null;
     try {
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
         spendTotal: syncResult.spendTotal,
         insightsUntil: syncResult.insightsUntil,
         retryAt: syncResult.retryAt,
+        marketingStatus: syncResult.marketingStatus,
       };
     } catch (error) {
       marketingSyncError =
@@ -120,14 +122,33 @@ export async function POST(request: NextRequest) {
     try {
       const { data: accountRow } = await admin
         .from("platform_accounts")
-        .select("marketing_sync_id")
+        .select("marketing_sync_id,marketing_sync_status,marketing_sync_error_code")
         .eq("id", customer.platformAccountId)
         .eq("user_id", customer.userId)
         .maybeSingle();
-      const marketingSyncId =
+      let marketingSyncId =
         typeof accountRow?.marketing_sync_id === "string"
           ? accountRow.marketing_sync_id
           : null;
+
+      // Prefer last-good COMPLETE snapshot when Abruf wiped sync_id but history remains.
+      if (!marketingSyncId) {
+        const { data: snapshot } = await admin
+          .from("daily_budget_exposure_snapshots")
+          .select("source_marketing_sync_id")
+          .eq("platform_account_id", customer.platformAccountId)
+          .eq("user_id", customer.userId)
+          .eq("status", "COMPLETE")
+          .eq("currency", "EUR")
+          .not("source_marketing_sync_id", "is", null)
+          .order("completed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (typeof snapshot?.source_marketing_sync_id === "string") {
+          marketingSyncId = snapshot.source_marketing_sync_id;
+        }
+      }
 
       if (marketingSyncId) {
         const forceResume = await forceReactivatePausedOrganicBoostCampaigns({
@@ -155,7 +176,32 @@ export async function POST(request: NextRequest) {
           error: forceResume.error,
           statusRefresh: statusRefreshPayload,
         };
+      } else if ((statusRefresh.paused ?? 0) === 0) {
+        // Nothing to reactivate — do not sticky-banner marketing_sync_required.
+        hardCapForceResume = {
+          outcome: "SKIPPED",
+          reason: "no_paused_organic_boost",
+          created: 0,
+          existing: 0,
+          blocked: 0,
+          revived: 0,
+          exposuresCleared: 0,
+          scheduleEnded: 0,
+          candidates: 0,
+          linked: 0,
+          activeLocal: 0,
+          adsetPausedOnly: 0,
+          targetsRepaired: 0,
+          remainingUnder24h: 0,
+          missingCurrent: 0,
+          error: null,
+          statusRefresh: statusRefreshPayload,
+        };
       } else {
+        const syncErr =
+          typeof accountRow?.marketing_sync_error_code === "string"
+            ? accountRow.marketing_sync_error_code
+            : marketingSyncError ?? "marketing_sync_required";
         hardCapForceResume = {
           outcome: "ERROR",
           reason: "marketing_sync_required",
@@ -172,7 +218,7 @@ export async function POST(request: NextRequest) {
           targetsRepaired: 0,
           remainingUnder24h: 0,
           missingCurrent: 0,
-          error: "marketing_sync_required",
+          error: syncErr,
           statusRefresh: statusRefreshPayload,
         };
       }
