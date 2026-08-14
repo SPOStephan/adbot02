@@ -2304,15 +2304,16 @@ export function getMetaAdInsights(input: {
 }): Promise<MetaMarketingCollection<MetaAdInsight>> {
   const { since, until } = assertInsightsDateRange(input.since, input.until);
 
+  // Keep fields conservative: attribution_setting + use_account_attribution_setting
+  // have produced Meta Graph error 100 (Invalid parameter) on some accounts.
   const url = marketingCollectionUrl(
     input.adAccountId,
     "insights",
-    "account_id,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop,impressions,reach,frequency,clicks,inline_link_clicks,spend,cpm,cpc,ctr,actions,action_values,cost_per_action_type,attribution_setting",
+    "account_id,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop,impressions,reach,frequency,clicks,inline_link_clicks,spend,cpm,cpc,ctr,actions,action_values,cost_per_action_type",
   );
   url.searchParams.set("level", "ad");
   url.searchParams.set("time_increment", "1");
   applyInsightsTimeRange(url, since, until);
-  url.searchParams.set("use_account_attribution_setting", "true");
 
   return fetchMetaCollection({
     initialUrl: url,
@@ -2342,7 +2343,6 @@ export function getMetaCampaignInsights(input: {
   url.searchParams.set("level", "campaign");
   url.searchParams.set("time_increment", "1");
   applyInsightsTimeRange(url, since, until);
-  url.searchParams.set("use_account_attribution_setting", "true");
 
   return fetchMetaCollection({
     initialUrl: url,
@@ -2372,7 +2372,6 @@ export function getMetaAccountInsights(input: {
   url.searchParams.set("level", "account");
   url.searchParams.set("time_increment", "1");
   applyInsightsTimeRange(url, since, until);
-  url.searchParams.set("use_account_attribution_setting", "true");
 
   return fetchMetaCollection({
     initialUrl: url,
