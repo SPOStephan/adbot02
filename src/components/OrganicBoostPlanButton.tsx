@@ -260,7 +260,11 @@ export function OrganicBoostPlanButton({
           syncNotice +=
             " Noch keine positive Spend-Zeile von Meta — Ampel nutzt zusätzlich Kampagnen-Insights und Budgetrest.";
         }
-      } else if (sync?.blockedReason === "manual_cooldown" || sync?.retryAt) {
+      } else if (
+        sync?.blockedReason === "cooldown" ||
+        sync?.blockedReason === "manual_cooldown" ||
+        (sync?.outcome === "blocked" && Boolean(sync?.retryAt))
+      ) {
         syncNotice =
           "Kampagnenstand: Abruf kurz im Cooldown — Reaktivierung läuft trotzdem mit dem letzten Stand.";
       } else if (syncBlocked) {

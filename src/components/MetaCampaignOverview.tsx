@@ -949,7 +949,9 @@ export function MetaCampaignOverview({
                 Die zuletzt vollständig gespeicherten Live-Daten bleiben unverändert erhalten.
                 {errorCode === "marketing_meta_100"
                   ? " Meta hat einen Kampagnen-/Insights-Aufruf abgelehnt (Code 100, oft Parameter/Berechtigung). Beitrag-Abruf und Beitrag-Push laufen getrennt weiter."
-                  : null}{" "}
+                  : errorCode === "marketing_invalid_hierarchy"
+                    ? " Die Kampagnen-Hierarchie war inkonsistent — der Abruf speichert den Account-Stand (EUR/sync_id) trotzdem und belässt die letzten Live-Kampagnen."
+                    : null}{" "}
                 Fehlercode: {errorCode ?? "marketing_sync_failed"}.
               </p>
             </div>

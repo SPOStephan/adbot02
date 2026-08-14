@@ -276,8 +276,7 @@ export async function getMetaCampaignsByIds({ campaignIds }) {
 
 export async function getMetaAdCreatives({ creativeIds }) {
   globalThis.__marketingSyncTest.creativeRequests.push([...creativeIds]);
-  return {
-    items: [
+  const items = [
       {
         id: "creative-1",
         accountId: "123",
@@ -306,9 +305,11 @@ export async function getMetaAdCreatives({ creativeIds }) {
         objectType: null,
         status: "ARCHIVED",
       },
-    ].filter((creative) => creativeIds.includes(creative.id)),
-    usage,
-  };
+    ].filter((creative) => creativeIds.includes(creative.id));
+  if (globalThis.__marketingSyncTest.duplicateCreatives && items[0]) {
+    items.push({ ...items[0] });
+  }
+  return { items, usage };
 }
 
 export async function getMetaAdInsights() {
@@ -445,6 +446,17 @@ export async function getMetaAccountInsights() {
 
   const adminStub = `
 export function createAdminClient() {
+  const eqChain = {
+    eq() {
+      return eqChain;
+    },
+    async limit() {
+      return { data: [], error: null };
+    },
+    then(resolve) {
+      return resolve({ data: null, error: null });
+    },
+  };
   return {
     from() {
       return {
@@ -457,6 +469,26 @@ export function createAdminClient() {
                     async limit() {
                       return { data: [], error: null };
                     },
+                    in() {
+                      return { data: [], error: null };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+        update() {
+          globalThis.__marketingSyncTest.directUpdates =
+            (globalThis.__marketingSyncTest.directUpdates ?? 0) + 1;
+          return {
+            eq() {
+              return {
+                eq() {
+                  return {
+                    eq() {
+                      return { data: null, error: null };
+                    },
                   };
                 },
               };
@@ -467,6 +499,15 @@ export function createAdminClient() {
     },
     async rpc(name, args) {
       globalThis.__marketingSyncTest.rpcCalls.push({ name, args });
+      if (
+        name === "heal_meta_marketing_account_ready" &&
+        globalThis.__marketingSyncTest.failHealRpc
+      ) {
+        return {
+          data: null,
+          error: { code: "PGRST202", message: "Could not find the function" },
+        };
+      }
       const insightsCount =
         globalThis.__marketingSyncTest.rejectAdInsightsCode100 ? 0 : 3;
       return {
@@ -497,6 +538,9 @@ export function createAdminClient() {
     resolveHistoricalAds: true,
     rejectAdInsightsCode100: false,
     rejectCampaignsCode100: false,
+    failHealRpc: false,
+    directUpdates: 0,
+    duplicateCreatives: false,
   };
   const marketingModule = await import(pathToFileURL(modulePath).href);
   const result = await marketingModule.syncMetaMarketingSnapshot({
@@ -535,7 +579,11 @@ export function createAdminClient() {
     "creative-1",
     "historical-creative",
   ]]);
-  assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 3);
+  assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 4);
+  assert.equal(
+    globalThis.__marketingSyncTest.rpcCalls[0].name,
+    "heal_meta_marketing_account_ready",
+  );
   const call = globalThis.__marketingSyncTest.rpcCalls.find(
     (entry) => entry.name === "replace_meta_marketing_snapshot",
   );
@@ -692,7 +740,54 @@ export function createAdminClient() {
     .find((entry) => entry.name === "heal_meta_marketing_account_ready");
   assert.ok(healCall);
   assert.equal(healCall.args.p_account.currency, "EUR");
+  assert.equal(
+    globalThis.__marketingSyncTest.rpcCalls
+      .slice(healBefore)
+      .some((entry) => entry.name === "replace_meta_marketing_snapshot"),
+    false,
+  );
   globalThis.__marketingSyncTest.rejectCampaignsCode100 = false;
+
+  // Duplicate creatives used to throw marketing_invalid_hierarchy — must heal instead.
+  globalThis.__marketingSyncTest.duplicateCreatives = true;
+  const hierarchyBefore = globalThis.__marketingSyncTest.rpcCalls.length;
+  const hierarchyHealed = await marketingModule.syncMetaMarketingSnapshot({
+    platformAccountId: "00000000-0000-4000-8000-000000000001",
+    userId: "00000000-0000-4000-8000-000000000002",
+    adAccountId: "act_123",
+    accessToken: "test-user-token",
+    appSecret: "test-app-secret",
+    now: new Date("2026-07-29T12:00:00.000Z"),
+  });
+  assert.ok(hierarchyHealed.syncId);
+  assert.equal(hierarchyHealed.campaignsCount, 0);
+  assert.ok(
+    globalThis.__marketingSyncTest.rpcCalls
+      .slice(hierarchyBefore)
+      .some((entry) => entry.name === "heal_meta_marketing_account_ready"),
+  );
+  assert.equal(
+    globalThis.__marketingSyncTest.rpcCalls
+      .slice(hierarchyBefore)
+      .some((entry) => entry.name === "replace_meta_marketing_snapshot"),
+    false,
+  );
+  globalThis.__marketingSyncTest.duplicateCreatives = false;
+
+  // Heal RPC missing → direct platform_accounts update still restores readiness.
+  globalThis.__marketingSyncTest.failHealRpc = true;
+  const fallbackBefore = globalThis.__marketingSyncTest.directUpdates ?? 0;
+  const fallbackHealed = await marketingModule.syncMetaMarketingSnapshot({
+    platformAccountId: "00000000-0000-4000-8000-000000000001",
+    userId: "00000000-0000-4000-8000-000000000002",
+    adAccountId: "act_123",
+    accessToken: "test-user-token",
+    appSecret: "test-app-secret",
+    now: new Date("2026-07-29T12:00:00.000Z"),
+  });
+  assert.ok(fallbackHealed.syncId);
+  assert.ok(globalThis.__marketingSyncTest.directUpdates > fallbackBefore);
+  globalThis.__marketingSyncTest.failHealRpc = false;
 
   console.log("Meta Marketing snapshot payload tests passed.");
 } finally {
