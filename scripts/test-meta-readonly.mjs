@@ -94,6 +94,8 @@ try {
   assert.match(callbackSource, /resolvePersistedMetaAccessToken/);
   assert.match(callbackSource, /debugMetaAccessToken/);
   assert.match(callbackSource, /replace_meta_connection/);
+  assert.match(callbackSource, /extend_meta_connection/);
+  assert.match(callbackSource, /intent === "extend"/);
   assert.match(callbackSource, /p_meta_user_id:\s*identity\.id/);
   assert.match(callbackSource, /p_assets:\s*assetRows/);
   assert.match(callbackSource, /p_scopes:\s*\[\.\.\.META_ALLOWED_SCOPES\]/);

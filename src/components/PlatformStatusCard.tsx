@@ -74,7 +74,7 @@ export function PlatformStatusCard({
 
       <div className="mt-auto pt-5">
         {connected && showMetaConnectionActions ? (
-          <MetaConnectionActions reconnectHref="/api/connectors/meta/start" />
+          <MetaConnectionActions reconnectHref="/api/connectors/meta/start?intent=extend" />
         ) : connected ? (
           <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700">
             <CheckCircle2 className="size-4" />

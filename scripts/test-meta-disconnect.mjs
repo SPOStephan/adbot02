@@ -44,13 +44,14 @@ assert.match(dashboardSource, /Boolean\(account\)/);
 assert.match(dashboardSource, /\.is\("revoked_at", null\)/);
 
 assert.match(cardSource, /<MetaConnectionActions/);
-assert.match(cardSource, /reconnectHref="\/api\/connectors\/meta\/start"/);
+assert.match(cardSource, /reconnectHref="\/api\/connectors\/meta\/start\?intent=extend"/);
 assert.match(cardSource, /connected && showMetaConnectionActions/);
 assert.match(cardSource, /<form action=\{actionHref\} method="post">/);
 
 assert.match(actionsSource, /"use client"/);
 assert.match(actionsSource, /Assets erweitern/);
-assert.match(actionsSource, /bestehende und neue Assets gemeinsam auswählen/);
+assert.match(actionsSource, /nur die neuen Assets wählen/);
+assert.match(actionsSource, /Bestehende Verbindungen bleiben unverändert/);
 assert.match(actionsSource, /Meta trennen/);
 assert.match(actionsSource, /window\.confirm\(/);
 assert.match(actionsSource, /\/api\/connectors\/meta\/disconnect/);

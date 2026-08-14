@@ -340,7 +340,7 @@ export function MetaContentSyncPanel({
 
             <MetaConnectedAssets
               assets={connectedAssets}
-              extendHref="/api/connectors/meta/start"
+              extendHref="/api/connectors/meta/start?intent=extend"
               showExtraHint={showExtraAssetHint}
             />
           </div>

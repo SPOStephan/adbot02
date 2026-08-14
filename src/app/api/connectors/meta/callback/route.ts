@@ -43,7 +43,7 @@ function noStoreRedirect(url: URL) {
 }
 
 function dashboardRedirect(
-  status: "connected" | "error",
+  status: "connected" | "extended" | "error",
   reason?: string,
   details?: {
     missingScopes?: string[];
@@ -220,6 +220,12 @@ export async function GET(request: Request) {
       systemUserDirectAssetCandidate
       && !useSystemUserDirectAssetDiscovery
     ) {
+      if (oauthState.intent === "extend") {
+        // Additive extend must not revoke existing grants. Ask for a normal
+        // reconnect if Meta only offers a stale system-user token shape.
+        return dashboardRedirect("error", "extend_stale_system_user");
+      }
+
       stage = "authorization_reset";
       await revokeMetaAuthorization({
         userId: identity.id,
@@ -233,6 +239,7 @@ export async function GET(request: Request) {
         stateSecret,
         Date.now(),
         true,
+        "reconnect",
       );
       const freshLoginUrl = createMetaLoginUrl({
         appId,
@@ -248,6 +255,7 @@ export async function GET(request: Request) {
     console.info("[meta-oauth] Granulare Meta-Auswahl (Ziel-IDs)", {
       tokenType: tokenDebug.type,
       authorizationReset: oauthState.authorizationReset,
+      intent: oauthState.intent,
       instagramTargets: allowedInstagramAccountIds.size,
       adAccountTargets: allowedAdAccountIds.size,
       selectionMode: useSystemUserDirectAssetDiscovery
@@ -259,17 +267,25 @@ export async function GET(request: Request) {
       })),
     });
 
+    const isExtend = oauthState.intent === "extend";
+
     // When Meta provides target_ids, they remain the sole authority. Business
     // Integration System User tokens can instead return every granular scope
     // with an empty target list; those tokens are already asset-restricted by
     // the customer's dialog selection and are resolved directly below.
+    // Extend may only grant *new* asset types — do not require all three.
     if (
       !useSystemUserDirectAssetDiscovery
+      && !isExtend
       && !allowedInstagramAccountIds.size
     ) {
       return dashboardRedirect("error", "missing_instagram_targets");
     }
-    if (!useSystemUserDirectAssetDiscovery && !allowedAdAccountIds.size) {
+    if (
+      !useSystemUserDirectAssetDiscovery
+      && !isExtend
+      && !allowedAdAccountIds.size
+    ) {
       console.warn(
         "[meta-oauth] Meta lieferte keine ads_* target_ids trotz Dialog-Auswahl",
         {
@@ -304,7 +320,9 @@ export async function GET(request: Request) {
     });
 
     if (!useSystemUserDirectAssetDiscovery && !allowedPageIds?.size) {
-      return dashboardRedirect("error", "missing_page_targets");
+      if (!isExtend) {
+        return dashboardRedirect("error", "missing_page_targets");
+      }
     }
 
     const assets = await getMetaConnectionAssets({
@@ -323,9 +341,12 @@ export async function GET(request: Request) {
     const instagramAccounts = assets.instagramAccounts ?? [];
 
     if (
-      !assets.pages.length ||
-      !instagramAccounts.length ||
-      !assets.adAccounts.length
+      !isExtend
+      && (
+        !assets.pages.length ||
+        !instagramAccounts.length ||
+        !assets.adAccounts.length
+      )
     ) {
       console.warn("[meta-oauth] Ausgewählte Assets nicht lesbar", {
         pages: assets.pages.length,
@@ -338,6 +359,15 @@ export async function GET(request: Request) {
         instagramDiscovery: assets.instagramDiscovery,
       });
       return dashboardRedirect("error", "no_assets");
+    }
+
+    if (
+      isExtend
+      && !assets.pages.length
+      && !instagramAccounts.length
+      && !assets.adAccounts.length
+    ) {
+      return dashboardRedirect("error", "extend_no_assets");
     }
 
     console.info("[meta-oauth] Assetauswahl übernommen", {
@@ -398,7 +428,7 @@ export async function GET(request: Request) {
     });
     stage = "storage";
     const admin = createAdminClient();
-    const { error } = await admin.rpc("replace_meta_connection", {
+    const connectionPayload = {
       p_user_id: user.id,
       p_meta_user_id: identity.id,
       p_account_name: "Meta-Verbindung",
@@ -414,18 +444,25 @@ export async function GET(request: Request) {
       p_ad_account_ids: adAccountIds,
       p_instagram_account_ids: instagramAccountIds,
       p_assets: assetRows,
-    });
+    };
+    const { error } = isExtend
+      ? await admin.rpc("extend_meta_connection", connectionPayload)
+      : await admin.rpc("replace_meta_connection", connectionPayload);
 
     if (error) {
       console.error("[meta-oauth] Connector konnte nicht gespeichert werden", {
         code: error.code,
+        intent: oauthState.intent,
       });
-      return dashboardRedirect("error", "storage");
+      return dashboardRedirect(
+        "error",
+        isExtend ? "extend_storage" : "storage",
+      );
     }
 
     stage = "revalidation";
     revalidatePath("/dashboard", "page");
-    return dashboardRedirect("connected");
+    return dashboardRedirect(isExtend ? "extended" : "connected");
   } catch (error) {
     const graphCode = error instanceof MetaGraphError ? error.code : null;
     const graphMessage =

@@ -33,12 +33,10 @@ type MetaConnectedAssetsProps = {
 };
 
 const EXTEND_CONFIRM_MESSAGE =
-  "Adbot öffnet den Meta-Dialog.\n\n" +
-  "Wähle dort ALLE Assets, die Adbot nutzen soll:\n" +
-  "• die bereits verbundenen Seiten, Instagram- und Werbekonten\n" +
-  "• plus die neuen Assets aus deinem Portfolio\n\n" +
-  "Wenn Meta zusätzlich ältere „zuvor verbundene“ Assets mitliefert, " +
-  "entfernst du die unerwünschten danach wieder in Adbot.";
+  "Adbot öffnet den Meta-Dialog zum Erweitern.\n\n" +
+  "Bereits verbundene Seiten und Konten bleiben erhalten.\n" +
+  "Wähle im Dialog die ZUSÄTZLICHEN Assets aus deinem Portfolio.\n\n" +
+  "Kein Widerruf, kein Neuverbinden der bestehenden Assets.";
 
 export function MetaConnectedAssets({
   assets,
