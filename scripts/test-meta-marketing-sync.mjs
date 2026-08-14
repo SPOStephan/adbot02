@@ -125,6 +125,12 @@ export async function getMetaAdAccountSummary() {
 }
 
 export async function getMetaCampaigns() {
+  if (globalThis.__marketingSyncTest.rejectCampaignsCode100) {
+    throw new MetaGraphError(400, {
+      error: { code: 100, message: "Invalid parameter" },
+    });
+  }
+
   return {
     items: [{
       id: "campaign-1",
@@ -490,6 +496,7 @@ export function createAdminClient() {
     creativeRequests: [],
     resolveHistoricalAds: true,
     rejectAdInsightsCode100: false,
+    rejectCampaignsCode100: false,
   };
   const marketingModule = await import(pathToFileURL(modulePath).href);
   const result = await marketingModule.syncMetaMarketingSnapshot({
@@ -643,31 +650,49 @@ export function createAdminClient() {
 
   globalThis.__marketingSyncTest.resolveHistoricalAds = false;
   const persistedRpcCount = globalThis.__marketingSyncTest.rpcCalls.length;
-  const creativeRequestCount =
-    globalThis.__marketingSyncTest.creativeRequests.length;
 
-  await assert.rejects(
-    marketingModule.syncMetaMarketingSnapshot({
-      platformAccountId: "00000000-0000-4000-8000-000000000001",
-      userId: "00000000-0000-4000-8000-000000000002",
-      adAccountId: "act_123",
-      accessToken: "test-user-token",
-      appSecret: "test-app-secret",
-      now: new Date("2026-07-29T12:00:00.000Z"),
-    }),
-    (error) => (
-      error instanceof marketingModule.MetaMarketingDataError &&
-      error.code === "invalid_hierarchy"
+  // Orphan insight references are pruned — Abruf must still persist readiness.
+  const prunedResult = await marketingModule.syncMetaMarketingSnapshot({
+    platformAccountId: "00000000-0000-4000-8000-000000000001",
+    userId: "00000000-0000-4000-8000-000000000002",
+    adAccountId: "act_123",
+    accessToken: "test-user-token",
+    appSecret: "test-app-secret",
+    now: new Date("2026-07-29T12:00:00.000Z"),
+  });
+  assert.ok(prunedResult.syncId);
+  assert.ok(
+    globalThis.__marketingSyncTest.rpcCalls.length > persistedRpcCount,
+  );
+  const prunedReplace = globalThis.__marketingSyncTest.rpcCalls
+    .slice(persistedRpcCount)
+    .find((entry) => entry.name === "replace_meta_marketing_snapshot");
+  assert.ok(prunedReplace);
+  assert.equal(
+    prunedReplace.args.p_insights.every(
+      (row) => row.platform_ad_id !== "historical-ad",
     ),
+    true,
   );
-  assert.equal(
-    globalThis.__marketingSyncTest.rpcCalls.length,
-    persistedRpcCount,
-  );
-  assert.equal(
-    globalThis.__marketingSyncTest.creativeRequests.length,
-    creativeRequestCount,
-  );
+
+  globalThis.__marketingSyncTest.rejectCampaignsCode100 = true;
+  const healBefore = globalThis.__marketingSyncTest.rpcCalls.length;
+  const healed = await marketingModule.syncMetaMarketingSnapshot({
+    platformAccountId: "00000000-0000-4000-8000-000000000001",
+    userId: "00000000-0000-4000-8000-000000000002",
+    adAccountId: "act_123",
+    accessToken: "test-user-token",
+    appSecret: "test-app-secret",
+    now: new Date("2026-07-29T12:00:00.000Z"),
+  });
+  assert.ok(healed.syncId);
+  assert.equal(healed.campaignsCount, 0);
+  const healCall = globalThis.__marketingSyncTest.rpcCalls
+    .slice(healBefore)
+    .find((entry) => entry.name === "heal_meta_marketing_account_ready");
+  assert.ok(healCall);
+  assert.equal(healCall.args.p_account.currency, "EUR");
+  globalThis.__marketingSyncTest.rejectCampaignsCode100 = false;
 
   console.log("Meta Marketing snapshot payload tests passed.");
 } finally {

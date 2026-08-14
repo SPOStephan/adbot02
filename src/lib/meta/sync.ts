@@ -63,6 +63,7 @@ type ConnectorRow = {
   instagram_account_ids: unknown;
   marketing_sync_id: string | null;
   marketing_sync_status: string | null;
+  marketing_sync_error_code: string | null;
   marketing_currency: string | null;
   marketing_last_success_at: string | null;
 };
@@ -389,7 +390,7 @@ async function fetchConnector(
   let query = admin
     .from("platform_accounts")
     .select(
-      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids,marketing_sync_id,marketing_sync_status,marketing_currency,marketing_last_success_at",
+      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids,marketing_sync_id,marketing_sync_status,marketing_sync_error_code,marketing_currency,marketing_last_success_at",
     )
     .eq("id", platformAccountId)
     .eq("platform", "meta")
@@ -415,6 +416,12 @@ function needsMarketingHeal(connector: ConnectorRow, now = Date.now()): boolean 
   if (
     typeof connector.marketing_sync_id !== "string" ||
     connector.marketing_sync_id.length === 0
+  ) {
+    return true;
+  }
+  if (
+    typeof connector.marketing_sync_error_code === "string" &&
+    connector.marketing_sync_error_code.length > 0
   ) {
     return true;
   }
