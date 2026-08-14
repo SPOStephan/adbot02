@@ -14,6 +14,17 @@ Wenn Beitrag-Push = **AUTO** und Account-Schreiben = **ALLOW**:
 4. Canary-Sperren gehören auf **PLAN** des Canarys — nicht als Dauerzustand auf ACCOUNT.
 5. Aktuelle AUTO-Settings schlagen veraltete Plan-Flags (`require_manual_approval` im Payload).
 
+## Soft-Baseline (Content)
+
+Beim **ersten** Abruf eines neu verbundenen FB/IG-Assets:
+
+- Beiträge mit `published_at` **vor** Asset-Connect → Bestand (`is_new=false`)
+- Beiträge mit `published_at` **ab** Connect (−6h Grace) → `is_new=true`
+
+Sonst werden frische Posts beim Extend fälschlich als Bestand begraben.
+
+Smoke: nach Asset-Extend + neuem Post → Kandidat `is_new=true` ohne zweiten Abruf-Zyklus nötig.
+
 ## Hochrisiko-Dateien / Themen
 
 Jede Änderung hier ist Kollateral-Risiko — eng, additiv, mit Smoke danach:
