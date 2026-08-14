@@ -913,13 +913,13 @@ export function MetaCampaignOverview({
           )}
         </section>
 
-        <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
           {countLabels.map(([label, key]) => (
-            <div className="rounded-xl bg-slate-50 p-4" key={key}>
-              <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
+            <div className="min-w-0 rounded-xl bg-slate-50 p-4" key={key}>
+              <dt className="break-words text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
                 {label}
               </dt>
-              <dd className="mt-2 text-2xl font-extrabold text-slate-900">
+              <dd className="mt-2 text-2xl font-extrabold tabular-nums text-slate-900">
                 {new Intl.NumberFormat("de-DE").format(counts[key])}
               </dd>
             </div>
@@ -943,10 +943,14 @@ export function MetaCampaignOverview({
         {status === "error" ? (
           <div className="mt-5 flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-950" role="alert">
             <AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" />
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-bold">Der letzte Kampagnenabruf war unvollständig.</p>
-              <p className="mt-1 text-sm leading-6 text-red-800">
-                Die zuletzt vollständig gespeicherten Live-Daten bleiben unverändert erhalten. Fehlercode: {errorCode ?? "marketing_sync_failed"}.
+              <p className="mt-1 text-sm leading-6 break-words text-red-800">
+                Die zuletzt vollständig gespeicherten Live-Daten bleiben unverändert erhalten.
+                {errorCode === "marketing_meta_100"
+                  ? " Meta hat einen Kampagnen-/Insights-Aufruf abgelehnt (Code 100, oft Parameter/Berechtigung). Beitrag-Abruf und Beitrag-Push laufen getrennt weiter."
+                  : null}{" "}
+                Fehlercode: {errorCode ?? "marketing_sync_failed"}.
               </p>
             </div>
           </div>

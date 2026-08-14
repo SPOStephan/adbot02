@@ -126,7 +126,7 @@ function organicBoostNotice(boost: OrganicBoostResponse | null | undefined): str
   }
 
   if (considered === 0) {
-    return "Beitrag-Push: keine passenden Beiträge für die aktuellen Filter/Assets.";
+    return "Beitrag-Push: keine is_new-Kandidaten (Filter/Assets oder erster Abruf neuer Assets als Bestand).";
   }
 
   if (skipped > 0) {

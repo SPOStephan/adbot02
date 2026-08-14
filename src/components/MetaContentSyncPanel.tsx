@@ -291,48 +291,48 @@ export function MetaContentSyncPanel({
         </div>
 
         <div className="grid gap-6 px-5 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-bold text-slate-900">{syncInfo.description}</p>
-            <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <div className="rounded-xl bg-slate-50 p-4">
+            <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+              <div className="min-w-0 rounded-xl bg-slate-50 p-4">
                 <dt className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-                  <Clock3 className="size-4" />
-                  Letzter Abruf
+                  <Clock3 className="size-4 shrink-0" />
+                  <span className="min-w-0 break-words">Letzter Abruf</span>
                 </dt>
-                <dd className="mt-2 text-sm font-bold text-slate-900">
+                <dd className="mt-2 break-words text-sm font-bold text-slate-900">
                   {formatDateTime(snapshot.lastSyncedAt)}
                 </dd>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4">
+              <div className="min-w-0 rounded-xl bg-slate-50 p-4">
                 <dt className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
-                  <CalendarClock className="size-4" />
-                  Nächster Abruf
+                  <CalendarClock className="size-4 shrink-0" />
+                  <span className="min-w-0 break-words">Nächster Abruf</span>
                 </dt>
-                <dd className="mt-2 text-sm font-bold text-slate-900">
+                <dd className="mt-2 break-words text-sm font-bold text-slate-900">
                   {formatDateTime(displayNextSyncAt)}
                 </dd>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4">
+              <div className="min-w-0 rounded-xl bg-slate-50 p-4">
                 <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
                   Gesehen
                 </dt>
-                <dd className="mt-2 text-2xl font-extrabold text-slate-900">
+                <dd className="mt-2 text-2xl font-extrabold tabular-nums text-slate-900">
                   {snapshot.seenCount}
                 </dd>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4">
+              <div className="min-w-0 rounded-xl bg-slate-50 p-4">
                 <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
                   Neu erkannt
                 </dt>
-                <dd className="mt-2 text-2xl font-extrabold text-blue-700">
+                <dd className="mt-2 text-2xl font-extrabold tabular-nums text-blue-700">
                   {snapshot.newCount}
                 </dd>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4">
+              <div className="min-w-0 rounded-xl bg-slate-50 p-4">
                 <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
                   Gespeichert
                 </dt>
-                <dd className="mt-2 text-2xl font-extrabold text-slate-900">
+                <dd className="mt-2 text-2xl font-extrabold tabular-nums text-slate-900">
                   {snapshot.storedCandidateCount}
                 </dd>
               </div>
