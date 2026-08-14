@@ -1083,9 +1083,11 @@ export async function syncMetaConnector(
             ? (connector.marketing_sync_status ?? "error")
             : "error",
       // Lease contention is transient — do not sticky-banner the dashboard.
+      // When last-good marketing data is preserved, clear the sticky code so the
+      // overview does not keep showing a failed Abruf over still-valid Live data.
       marketing_sync_error_code: marketingResult
         ? null
-        : marketingLeaseBlocked
+        : marketingLeaseBlocked || preserveMarketingSuccess
           ? null
           : marketingErrorCode,
       marketing_last_sync_started_at: marketingStartedAt,

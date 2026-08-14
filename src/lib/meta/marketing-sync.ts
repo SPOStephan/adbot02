@@ -15,6 +15,8 @@ import {
   getMetaCampaigns,
   getMetaCampaignsByIds,
   mergeMetaUsage,
+  MetaCollectionLimitError,
+  MetaGraphError,
   normalizeMetaAdAccountId,
   type MetaAd,
   type MetaAdCreative,
@@ -22,6 +24,7 @@ import {
   type MetaAdSet,
   type MetaCampaign,
   type MetaCampaignInsight,
+  type MetaMarketingCollection,
   type MetaUsageSnapshot,
 } from "./client";
 import { createAdminClient } from "../supabase/admin";
@@ -238,6 +241,42 @@ function missingReferencedIds(
 ): string[] {
   const known = new Set(knownIds);
   return [...new Set(referencedIds)].filter((id) => !known.has(id)).sort();
+}
+
+/**
+ * Insights are additive dashboard metrics. A Graph #100 (invalid parameter /
+ * permission) or incomplete pagination must not fail the whole marketing
+ * snapshot — campaigns/ads still persist so Beitrag-Push can keep planning.
+ */
+async function loadMarketingInsightsSafely<T>(
+  label: string,
+  load: () => Promise<MetaMarketingCollection<T>>,
+): Promise<MetaMarketingCollection<T>> {
+  try {
+    return await load();
+  } catch (error) {
+    if (error instanceof MetaGraphError) {
+      if (error.rateLimited || error.reconnectRequired) {
+        throw error;
+      }
+
+      console.warn(`Meta ${label} rejected; continuing with empty insights`, {
+        code: error.code,
+        subcode: error.subcode,
+        diagnostic: error.diagnosticDetail,
+      });
+      return { items: [], usage: error.usage };
+    }
+
+    if (error instanceof MetaCollectionLimitError) {
+      console.warn(`Meta ${label} incomplete; continuing with empty insights`, {
+        reason: error.reason,
+      });
+      return { items: [], usage: error.usage };
+    }
+
+    throw error;
+  }
 }
 
 function validateHierarchy(input: {
@@ -469,26 +508,36 @@ export async function syncMetaMarketingSnapshot(input: {
     accountResult.account.timezoneName,
     input.now,
   );
-  const insightsResult = await getMetaAdInsights({
-    ...input,
-    since: dateRange.since,
-    until: dateRange.until,
-  });
+  const insightsResult = await loadMarketingInsightsSafely("ad insights", () =>
+    getMetaAdInsights({
+      ...input,
+      since: dateRange.since,
+      until: dateRange.until,
+    }),
+  );
   usage = mergeMetaUsage(usage, insightsResult.usage);
 
   // Campaign + account level: fewer join failure modes than ad grain, and the
   // source of truth for dashboard totals when ad rows lag behind delivery.
-  const campaignInsightsResult = await getMetaCampaignInsights({
-    ...input,
-    since: dateRange.since,
-    until: dateRange.until,
-  });
+  const campaignInsightsResult = await loadMarketingInsightsSafely(
+    "campaign insights",
+    () =>
+      getMetaCampaignInsights({
+        ...input,
+        since: dateRange.since,
+        until: dateRange.until,
+      }),
+  );
   usage = mergeMetaUsage(usage, campaignInsightsResult.usage);
-  const accountInsightsResult = await getMetaAccountInsights({
-    ...input,
-    since: dateRange.since,
-    until: dateRange.until,
-  });
+  const accountInsightsResult = await loadMarketingInsightsSafely(
+    "account insights",
+    () =>
+      getMetaAccountInsights({
+        ...input,
+        since: dateRange.since,
+        until: dateRange.until,
+      }),
+  );
   usage = mergeMetaUsage(usage, accountInsightsResult.usage);
 
   const missingAdIds = missingReferencedIds(

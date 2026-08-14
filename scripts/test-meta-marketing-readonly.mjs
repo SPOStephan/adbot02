@@ -479,6 +479,14 @@ try {
     requests[0].url.searchParams.get("time_range"),
     JSON.stringify({ since: "2026-07-01", until: "2026-07-31" }),
   );
+  assert.equal(
+    requests[0].url.searchParams.get("use_account_attribution_setting"),
+    null,
+  );
+  assert.equal(
+    requests[0].url.searchParams.get("fields")?.includes("attribution_setting"),
+    false,
+  );
   assert.equal(requests[0].init.method, "GET");
 
   await assert.rejects(

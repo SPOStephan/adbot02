@@ -49,6 +49,8 @@ try {
   getMetaCampaigns,
   getMetaCampaignsByIds,
   mergeMetaUsage,
+  MetaCollectionLimitError,
+  MetaGraphError,
   normalizeMetaAdAccountId,
 } from "./client.mjs";`,
     )
@@ -56,6 +58,41 @@ try {
 
   const clientStub = `
 const usage = ${JSON.stringify(emptyUsage)};
+
+export class MetaGraphError extends Error {
+  constructor(status, body = {}, nextUsage = usage) {
+    super("Meta Graph API request failed");
+    this.name = "MetaGraphError";
+    this.status = status;
+    this.code = body.error?.code ?? null;
+    this.subcode = body.error?.error_subcode ?? null;
+    this.graphMessage = body.error?.message ?? null;
+    this.errorUserTitle = null;
+    this.errorUserMessage = null;
+    this.usage = nextUsage;
+  }
+
+  get diagnosticDetail() {
+    return this.graphMessage;
+  }
+
+  get rateLimited() {
+    return this.status === 429 || this.code === 4 || this.code === 17 || this.code === 32;
+  }
+
+  get reconnectRequired() {
+    return this.code === 190;
+  }
+}
+
+export class MetaCollectionLimitError extends Error {
+  constructor(reason, nextUsage = usage) {
+    super(\`Meta collection could not be completed: \${reason}\`);
+    this.name = "MetaCollectionLimitError";
+    this.reason = reason;
+    this.usage = nextUsage;
+  }
+}
 
 export function normalizeMetaAdAccountId(value) {
   const normalized = String(value).trim();
@@ -269,6 +306,12 @@ export async function getMetaAdCreatives({ creativeIds }) {
 }
 
 export async function getMetaAdInsights() {
+  if (globalThis.__marketingSyncTest.rejectAdInsightsCode100) {
+    throw new MetaGraphError(400, {
+      error: { code: 100, message: "Invalid parameter" },
+    });
+  }
+
   const base = {
     campaignId: "campaign-1",
     campaignName: "Campaign 1",
@@ -397,15 +440,36 @@ export async function getMetaAccountInsights() {
   const adminStub = `
 export function createAdminClient() {
   return {
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                eq() {
+                  return {
+                    async limit() {
+                      return { data: [], error: null };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
     async rpc(name, args) {
       globalThis.__marketingSyncTest.rpcCalls.push({ name, args });
+      const insightsCount =
+        globalThis.__marketingSyncTest.rejectAdInsightsCode100 ? 0 : 3;
       return {
         data: [{
-          campaigns_count: 2,
-          ad_sets_count: 2,
-          ads_count: 2,
-          creatives_count: 2,
-          insights_count: 3,
+          campaigns_count: globalThis.__marketingSyncTest.rejectAdInsightsCode100 ? 1 : 2,
+          ad_sets_count: globalThis.__marketingSyncTest.rejectAdInsightsCode100 ? 1 : 2,
+          ads_count: globalThis.__marketingSyncTest.rejectAdInsightsCode100 ? 1 : 2,
+          creatives_count: globalThis.__marketingSyncTest.rejectAdInsightsCode100 ? 1 : 2,
+          insights_count: insightsCount,
           recommendations_count: 0,
         }],
         error: null,
@@ -425,6 +489,7 @@ export function createAdminClient() {
     historicalRequests: { ads: [], adSets: [], campaigns: [] },
     creativeRequests: [],
     resolveHistoricalAds: true,
+    rejectAdInsightsCode100: false,
   };
   const marketingModule = await import(pathToFileURL(modulePath).href);
   const result = await marketingModule.syncMetaMarketingSnapshot({
@@ -463,11 +528,21 @@ export function createAdminClient() {
     "creative-1",
     "historical-creative",
   ]]);
-  assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 2);
-  const call = globalThis.__marketingSyncTest.rpcCalls[0];
-  assert.equal(call.name, "replace_meta_marketing_snapshot");
-  const spendCall = globalThis.__marketingSyncTest.rpcCalls[1];
-  assert.equal(spendCall.name, "apply_meta_campaign_insight_spend");
+  assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 3);
+  const call = globalThis.__marketingSyncTest.rpcCalls.find(
+    (entry) => entry.name === "replace_meta_marketing_snapshot",
+  );
+  assert.ok(call);
+  const spendCall = globalThis.__marketingSyncTest.rpcCalls.find(
+    (entry) => entry.name === "apply_meta_campaign_insight_spend",
+  );
+  assert.ok(spendCall);
+  assert.equal(
+    globalThis.__marketingSyncTest.rpcCalls.some(
+      (entry) => entry.name === "retain_meta_organic_boost_campaigns",
+    ),
+    true,
+  );
   assert.equal(spendCall.args.p_account_spend_total, 81.5);
   assert.equal(spendCall.args.p_account_spend_today, 5);
   assert.ok(Array.isArray(spendCall.args.p_campaign_insights));
@@ -507,6 +582,25 @@ export function createAdminClient() {
   assert.deepEqual(call.args.p_insights[1].cost_per_action_type, {});
   assert.equal(Array.isArray(call.args.p_insights[0].actions), false);
   assert.doesNotMatch(JSON.stringify(call.args), /test-user-token|test-app-secret/);
+
+  globalThis.__marketingSyncTest.rejectAdInsightsCode100 = true;
+  const softFailResult = await marketingModule.syncMetaMarketingSnapshot({
+    platformAccountId: "00000000-0000-4000-8000-000000000001",
+    userId: "00000000-0000-4000-8000-000000000002",
+    adAccountId: "act_123",
+    accessToken: "test-user-token",
+    appSecret: "test-app-secret",
+    now: new Date("2026-07-29T12:00:00.000Z"),
+  });
+  assert.equal(softFailResult.insightsCount, 0);
+  assert.ok(softFailResult.campaignsCount >= 1);
+  const softFailCalls = globalThis.__marketingSyncTest.rpcCalls.slice(-3);
+  const softFailCall = softFailCalls.find(
+    (entry) => entry.name === "replace_meta_marketing_snapshot",
+  );
+  assert.ok(softFailCall);
+  assert.deepEqual(softFailCall.args.p_insights, []);
+  globalThis.__marketingSyncTest.rejectAdInsightsCode100 = false;
 
   const diagnostic = marketingModule.classifyMetaInsightSnapshot({
       ads: [{
