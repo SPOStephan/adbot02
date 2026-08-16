@@ -10,6 +10,14 @@ const dashboardSource = await readFile(
   join(projectRoot, "src/app/dashboard/page.tsx"),
   "utf8",
 );
+const contentSyncPanelSource = await readFile(
+  join(projectRoot, "src/components/MetaContentSyncPanel.tsx"),
+  "utf8",
+);
+const contentSyncSnapshotSource = await readFile(
+  join(projectRoot, "src/lib/meta/content-sync-snapshot.ts"),
+  "utf8",
+);
 const cardSource = await readFile(
   join(projectRoot, "src/components/PlatformStatusCard.tsx"),
   "utf8",
@@ -86,7 +94,7 @@ assert.match(dashboardSource, /missing_page_targets/);
 assert.match(dashboardSource, /missing_instagram_targets/);
 assert.match(dashboardSource, /authorization_reset/);
 assert.match(
-  dashboardSource,
+  contentSyncPanelSource,
   /<form action="\/api\/connectors\/meta\/start" method="post">/,
 );
 assert.doesNotMatch(dashboardSource, /InstagramAssetConfirm|instagramConfirmRequired/);
@@ -106,30 +114,29 @@ assert.doesNotMatch(
   /access_token_encrypted|token_iv|token_auth_tag|sync_backoff_until/,
 );
 
-assert.match(dashboardSource, /Meta Content Sync/);
-assert.match(dashboardSource, /Letzter Abruf/);
-assert.match(dashboardSource, /Nächster Abruf/);
-assert.match(dashboardSource, /Sicherer Ausgangsbestand/);
-assert.match(dashboardSource, /Wieder verbunden/);
-assert.match(dashboardSource, /Der gespeicherte Ausgangsbestand bleibt erhalten/);
-assert.match(
-  dashboardSource,
-  /syncStatus === "idle" && metaAccount\?\.baseline_completed_at/,
-);
-assert.match(dashboardSource, /Verbindung erneuern/);
-assert.match(dashboardSource, /Meta neu verbinden/);
-assert.match(dashboardSource, /Beitragskandidaten/);
-assert.match(dashboardSource, /Neu seit dem Ausgangsbestand/);
-assert.match(dashboardSource, /Gespeichert/);
-assert.match(dashboardSource, /select\("id", \{ count: "exact", head: true \}\)/);
-assert.match(dashboardSource, /storedCandidateCount \?\? 0/);
-assert.match(dashboardSource, /Originalbeitrag ansehen/);
-assert.match(dashboardSource, /preview_url/);
-assert.match(dashboardSource, /<ContentCandidatePreview/);
-assert.match(dashboardSource, /previewUrl=\{candidate\.preview_url\}/);
-assert.match(dashboardSource, /\.eq\("is_new", true\)/);
-assert.match(dashboardSource, /\.limit\(8\)/);
-assert.match(dashboardSource, /<MetaSyncButton/);
+assert.match(contentSyncPanelSource, /Meta Content Sync/);
+assert.match(contentSyncPanelSource, /Letzter Abruf/);
+assert.match(contentSyncPanelSource, /Nächster Abruf/);
+assert.match(contentSyncPanelSource, /Sicherer Ausgangsbestand/);
+assert.match(contentSyncPanelSource, /Wieder verbunden/);
+assert.match(contentSyncPanelSource, /Der gespeicherte Ausgangsbestand bleibt erhalten/);
+assert.match(dashboardSource, /loadContentSyncSnapshot/);
+assert.match(contentSyncPanelSource, /Verbindung erneuern/);
+assert.match(contentSyncPanelSource, /Meta neu verbinden/);
+assert.match(contentSyncPanelSource, /Beitragskandidaten/);
+assert.match(contentSyncPanelSource, /Neu seit dem Ausgangsbestand/);
+assert.match(contentSyncPanelSource, /Gespeichert/);
+assert.match(contentSyncSnapshotSource, /select\("id", \{ count: "exact", head: true \}\)/);
+assert.match(contentSyncSnapshotSource, /storedCandidateCount: storedCandidateCount \?\? 0/);
+assert.match(contentSyncPanelSource, /Originalbeitrag ansehen/);
+assert.match(contentSyncSnapshotSource, /preview_url/);
+assert.match(contentSyncPanelSource, /<ContentCandidatePreview/);
+assert.match(contentSyncPanelSource, /previewUrl=\{candidate\.previewUrl\}/);
+assert.match(contentSyncSnapshotSource, /\.eq\("is_new", true\)/);
+assert.match(contentSyncSnapshotSource, /CANDIDATE_DISPLAY_LIMIT = 8/);
+assert.match(contentSyncSnapshotSource, /shouldListAsContentCandidate/);
+assert.match(contentSyncPanelSource, /<MetaSyncButton/);
+assert.match(contentSyncPanelSource, /shouldListAsContentCandidate/);
 assert.match(dashboardSource, /meta_account_performance_daily/);
 assert.match(dashboardSource, /meta_campaign_performance_30d/);
 assert.match(dashboardSource, /campaign_recommendations/);
@@ -138,7 +145,7 @@ assert.match(dashboardSource, /\.gt\("expires_at", new Date\(\)\.toISOString\(\)
 assert.match(dashboardSource, /recommendations=\{recommendationRows\}/);
 assert.match(dashboardSource, /Ausführung nur mit aktiver Kunden-Policy/);
 assert.match(dashboardSource, /writeScopeGranted/);
-assert.match(dashboardSource, /minimale Schreibscope muss bestätigt werden/);
+assert.match(contentSyncPanelSource, /minimale Schreibscope muss bestätigt werden/);
 assert.match(dashboardSource, /error: connectedAccountsError/);
 assert.match(dashboardSource, /platformAccountReadFailed/);
 assert.match(dashboardSource, /Verbindungsdaten konnten nicht geladen werden\./);
@@ -258,7 +265,10 @@ assert.doesNotMatch(
 );
 
 assert.match(callbackSource, /revalidatePath\("\/dashboard", "page"\)/);
-assert.match(callbackSource, /dashboardRedirect\("connected"/);
+assert.match(
+  callbackSource,
+  /dashboardRedirect\(isExtend \? "extended" : "connected"\)/,
+);
 assert.doesNotMatch(callbackSource, /instagram-onboarding/);
 assert.match(
   callbackSource,
@@ -301,7 +311,10 @@ assert.doesNotMatch(
 );
 assert.match(callbackSource, /resolvePersistedMetaAccessToken/);
 assert.match(callbackSource, /meta_callback_stage/);
-assert.match(callbackSource, /dashboardRedirect\("error", "storage"\)/);
+assert.match(
+  callbackSource,
+  /dashboardRedirect\(\s*"error",\s*isExtend \? "extend_storage" : "storage",?\s*\)/,
+);
 assert.match(callbackSource, /dashboardRedirect\("error", "invalid_state"\)/);
 assert.match(callbackSource, /dashboardRedirect\("error", "scope_validation",/);
 assert.match(callbackSource, /dashboardRedirect\("error", "token_validation"\)/);
