@@ -25,6 +25,8 @@ export type HeldOrganicBoostPlanView = {
   durationDays: number;
   destinationUrl: string | null;
   status: string;
+  /** infinity / far-future = Freigeben canary; otherwise boost already progressed. */
+  notBefore: string | null;
 };
 
 type BoostMode = "OFF" | "REVIEW" | "AUTO";
@@ -349,6 +351,7 @@ export function ContentCandidateBoostControls({
               ? null
               : String(result.destinationUrl),
           status: String(result.status ?? "HELD"),
+          notBefore: "infinity",
         });
         setNotice("Boost-Plan vorbereitet und wartet auf Freigabe.");
       } else {

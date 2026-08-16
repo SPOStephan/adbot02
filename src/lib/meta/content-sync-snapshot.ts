@@ -1,5 +1,6 @@
 import "server-only";
 
+import { shouldListAsContentCandidate } from "@/lib/meta/content-candidate-lifecycle";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -29,6 +30,45 @@ export type ContentSyncSnapshot = {
   candidates: ContentSyncCandidate[];
 };
 
+const CANDIDATE_FETCH_LIMIT = 40;
+const CANDIDATE_DISPLAY_LIMIT = 8;
+
+function mapCandidate(candidate: Record<string, unknown>): ContentSyncCandidate {
+  return {
+    id: String(candidate.id),
+    source: String(candidate.source ?? ""),
+    metaAssetId:
+      candidate.meta_asset_id === null || candidate.meta_asset_id === undefined
+        ? null
+        : String(candidate.meta_asset_id),
+    contentType:
+      candidate.content_type === null || candidate.content_type === undefined
+        ? null
+        : String(candidate.content_type),
+    captionExcerpt:
+      candidate.caption_excerpt === null ||
+      candidate.caption_excerpt === undefined
+        ? null
+        : String(candidate.caption_excerpt),
+    permalinkUrl:
+      candidate.permalink_url === null || candidate.permalink_url === undefined
+        ? null
+        : String(candidate.permalink_url),
+    previewUrl:
+      candidate.preview_url === null || candidate.preview_url === undefined
+        ? null
+        : String(candidate.preview_url),
+    publishedAt:
+      candidate.published_at === null || candidate.published_at === undefined
+        ? null
+        : String(candidate.published_at),
+    firstSeenAt:
+      candidate.first_seen_at === null || candidate.first_seen_at === undefined
+        ? null
+        : String(candidate.first_seen_at),
+  };
+}
+
 export async function loadContentSyncSnapshot(input: {
   supabase: SupabaseClient;
   userId: string;
@@ -46,7 +86,7 @@ export async function loadContentSyncSnapshot(input: {
   now?: Date;
 }): Promise<ContentSyncSnapshot> {
   const now = input.now ?? new Date();
-  const [{ data: candidates }, { count: storedCandidateCount }] =
+  const [{ data: rawCandidates }, { count: storedCandidateCount }] =
     await Promise.all([
       input.supabase
         .from("meta_content_candidates")
@@ -57,13 +97,89 @@ export async function loadContentSyncSnapshot(input: {
         .eq("user_id", input.userId)
         .eq("is_new", true)
         .order("published_at", { ascending: false, nullsFirst: false })
-        .limit(8),
+        .limit(CANDIDATE_FETCH_LIMIT),
       input.supabase
         .from("meta_content_candidates")
         .select("id", { count: "exact", head: true })
         .eq("platform_account_id", input.platformAccountId)
         .eq("user_id", input.userId),
     ]);
+
+  const mapped = (rawCandidates ?? []).map((row) =>
+    mapCandidate(row as Record<string, unknown>),
+  );
+
+  let candidates = mapped;
+  if (mapped.length > 0) {
+    const candidateIds = mapped.map((row) => row.id);
+    const { data: linkRows } = await input.supabase
+      .from("meta_organic_boost_links")
+      .select("content_candidate_id, plan_id")
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("user_id", input.userId)
+      .in("content_candidate_id", candidateIds);
+
+    const planIds = [
+      ...new Set(
+        (linkRows ?? [])
+          .map((row) =>
+            typeof row.plan_id === "string" ? row.plan_id : null,
+          )
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const planById = new Map<
+      string,
+      { status: string; notBefore: string | null }
+    >();
+    if (planIds.length > 0) {
+      const { data: planRows } = await input.supabase
+        .from("mutation_plans")
+        .select("id, status, not_before")
+        .eq("platform_account_id", input.platformAccountId)
+        .eq("user_id", input.userId)
+        .in("id", planIds);
+      for (const plan of planRows ?? []) {
+        planById.set(String(plan.id), {
+          status: String(plan.status ?? ""),
+          notBefore:
+            typeof plan.not_before === "string" ? plan.not_before : null,
+        });
+      }
+    }
+
+    const heldByCandidate = new Map<
+      string,
+      { status: string; notBefore: string | null }
+    >();
+    for (const link of linkRows ?? []) {
+      const candidateId =
+        typeof link.content_candidate_id === "string"
+          ? link.content_candidate_id
+          : null;
+      const planId = typeof link.plan_id === "string" ? link.plan_id : null;
+      if (!candidateId || !planId) continue;
+      const plan = planById.get(planId);
+      if (!plan) {
+        // Link without readable plan: treat as progressed (hide from list).
+        heldByCandidate.set(candidateId, {
+          status: "UNKNOWN",
+          notBefore: null,
+        });
+        continue;
+      }
+      heldByCandidate.set(candidateId, plan);
+    }
+
+    candidates = mapped
+      .filter((candidate) =>
+        shouldListAsContentCandidate({
+          heldPlan: heldByCandidate.get(candidate.id) ?? null,
+        }),
+      )
+      .slice(0, CANDIDATE_DISPLAY_LIMIT);
+  }
 
   return {
     status: input.connector.sync_status,
@@ -79,38 +195,6 @@ export async function loadContentSyncSnapshot(input: {
     seenCount: input.connector.last_sync_seen_count ?? 0,
     newCount: input.connector.last_sync_new_count ?? 0,
     storedCandidateCount: storedCandidateCount ?? 0,
-    candidates: (candidates ?? []).map((candidate) => ({
-      id: String(candidate.id),
-      source: String(candidate.source ?? ""),
-      metaAssetId:
-        candidate.meta_asset_id === null || candidate.meta_asset_id === undefined
-          ? null
-          : String(candidate.meta_asset_id),
-      contentType:
-        candidate.content_type === null || candidate.content_type === undefined
-          ? null
-          : String(candidate.content_type),
-      captionExcerpt:
-        candidate.caption_excerpt === null ||
-        candidate.caption_excerpt === undefined
-          ? null
-          : String(candidate.caption_excerpt),
-      permalinkUrl:
-        candidate.permalink_url === null || candidate.permalink_url === undefined
-          ? null
-          : String(candidate.permalink_url),
-      previewUrl:
-        candidate.preview_url === null || candidate.preview_url === undefined
-          ? null
-          : String(candidate.preview_url),
-      publishedAt:
-        candidate.published_at === null || candidate.published_at === undefined
-          ? null
-          : String(candidate.published_at),
-      firstSeenAt:
-        candidate.first_seen_at === null || candidate.first_seen_at === undefined
-          ? null
-          : String(candidate.first_seen_at),
-    })),
+    candidates,
   };
 }

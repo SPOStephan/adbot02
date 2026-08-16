@@ -839,7 +839,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           .limit(50),
         supabase
           .from("mutation_plans")
-          .select("id,status,created_at,payload_hash,planned_payload,source_rule_key")
+          .select(
+            "id,status,created_at,payload_hash,planned_payload,source_rule_key,not_before",
+          )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .eq("source_rule_key", "organic-boost")
@@ -1393,6 +1395,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ? null
           : String(payload.destination_url),
       status: String(plan.status ?? "PENDING"),
+      notBefore:
+        typeof plan.not_before === "string" ? plan.not_before : null,
     });
   }
   const eligiblePendingBoostCandidates = contentCandidates.filter(

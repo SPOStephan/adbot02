@@ -23,6 +23,7 @@ import {
 } from "@/components/MetaConnectedAssets";
 import { MetaSyncButton } from "@/components/MetaSyncButton";
 import { OrganicBoostAutoPlanner } from "@/components/OrganicBoostAutoPlanner";
+import { shouldListAsContentCandidate } from "@/lib/meta/content-candidate-lifecycle";
 import type { ContentSyncCandidate } from "@/lib/meta/content-sync-snapshot";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 
@@ -263,6 +264,16 @@ export function MetaContentSyncPanel({
       .length;
   }, [boost.pendingBoostCandidateIds, snapshot.candidates]);
 
+  const visibleCandidates = useMemo(
+    () =>
+      snapshot.candidates.filter((candidate) =>
+        shouldListAsContentCandidate({
+          heldPlan: boost.heldPlanByCandidate[candidate.id] ?? null,
+        }),
+      ),
+    [boost.heldPlanByCandidate, snapshot.candidates],
+  );
+
   return (
     <>
       <section className="mt-10 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -403,14 +414,15 @@ export function MetaContentSyncPanel({
             </h2>
           </div>
           <p className="max-w-xl text-sm leading-6 text-slate-500">
-            Neue Beiträge werden erkannt und — bei aktivem automatischem Beitrag-Push —
-            sofort mit den Konto-Standards beworben. Anpassungen je Beitrag sind optional.
+            Offene neue Beiträge seit dem Ausgangsbestand. Sobald ein Beitrag-Push
+            gestartet ist (oder die Freigabe erteilt wurde), verschwindet er hier und
+            erscheint unter Kampagnen.
           </p>
         </div>
 
-        {snapshot.candidates.length ? (
+        {visibleCandidates.length ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {snapshot.candidates.map((candidate) => (
+            {visibleCandidates.map((candidate) => (
               <article
                 className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
                 key={candidate.id}
