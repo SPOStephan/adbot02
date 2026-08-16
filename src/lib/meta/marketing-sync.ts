@@ -332,13 +332,17 @@ function validateHierarchy(input: {
   ads: MetaAd[];
   creatives: MetaAdCreative[];
   insights: MetaAdInsight[];
-}) {
+}): "ok" | "account_mismatch" | "invalid_hierarchy" {
   const expectedAccountId = normalizeMetaAdAccountId(input.accountId).slice(4);
 
-  assertUnique(input.campaigns);
-  assertUnique(input.adSets);
-  assertUnique(input.ads);
-  assertUnique(input.creatives);
+  try {
+    assertUnique(input.campaigns);
+    assertUnique(input.adSets);
+    assertUnique(input.ads);
+    assertUnique(input.creatives);
+  } catch {
+    return "invalid_hierarchy";
+  }
 
   const accountScopedItems = [
     ...input.campaigns,
@@ -352,7 +356,7 @@ function validateHierarchy(input: {
       (item) => item.accountId !== null && item.accountId !== expectedAccountId,
     )
   ) {
-    throw new MetaMarketingDataError("account_mismatch");
+    return "account_mismatch";
   }
 
   const campaignIds = new Set(input.campaigns.map((campaign) => campaign.id));
@@ -373,8 +377,10 @@ function validateHierarchy(input: {
         insight.accountId !== null && insight.accountId !== expectedAccountId,
     )
   ) {
-    throw new MetaMarketingDataError("invalid_hierarchy");
+    return "invalid_hierarchy";
   }
+
+  return "ok";
 }
 
 function serializeCampaigns(items: MetaCampaign[]) {
@@ -541,208 +547,10 @@ export async function syncMetaMarketingSnapshot(input: {
     throw new MetaMarketingDataError("account_mismatch");
   }
 
-  const campaignsResult = await loadMarketingCollectionSafely(
-    "campaigns",
-    () => getMetaCampaigns(input),
-  );
-  usage = mergeMetaUsage(usage, campaignsResult.usage);
-  let campaigns = campaignsResult.items;
-  let collectionsSoftFailed = campaignsResult.softFailed;
-
-  const adSetsResult = await loadMarketingCollectionSafely("adsets", () =>
-    getMetaAdSets(input),
-  );
-  usage = mergeMetaUsage(usage, adSetsResult.usage);
-  let adSets = adSetsResult.items;
-  collectionsSoftFailed = collectionsSoftFailed || adSetsResult.softFailed;
-
-  const adsResult = await loadMarketingCollectionSafely("ads", () =>
-    getMetaAds(input),
-  );
-  usage = mergeMetaUsage(usage, adsResult.usage);
-  let ads = adsResult.items;
-  collectionsSoftFailed = collectionsSoftFailed || adsResult.softFailed;
-
   const dateRange = completeInsightsDateRange(
     accountResult.account.timezoneName,
     input.now,
   );
-  const insightsResult = await loadMarketingCollectionSafely(
-    "ad insights",
-    () =>
-      getMetaAdInsights({
-        ...input,
-        since: dateRange.since,
-        until: dateRange.until,
-      }),
-  );
-  usage = mergeMetaUsage(usage, insightsResult.usage);
-  let insights = insightsResult.items;
-  collectionsSoftFailed = collectionsSoftFailed || insightsResult.softFailed;
-
-  // Campaign + account level: fewer join failure modes than ad grain, and the
-  // source of truth for dashboard totals when ad rows lag behind delivery.
-  const campaignInsightsResult = await loadMarketingCollectionSafely(
-    "campaign insights",
-    () =>
-      getMetaCampaignInsights({
-        ...input,
-        since: dateRange.since,
-        until: dateRange.until,
-      }),
-  );
-  usage = mergeMetaUsage(usage, campaignInsightsResult.usage);
-  collectionsSoftFailed =
-    collectionsSoftFailed || campaignInsightsResult.softFailed;
-
-  const accountInsightsResult = await loadMarketingCollectionSafely(
-    "account insights",
-    () =>
-      getMetaAccountInsights({
-        ...input,
-        since: dateRange.since,
-        until: dateRange.until,
-      }),
-  );
-  usage = mergeMetaUsage(usage, accountInsightsResult.usage);
-  collectionsSoftFailed =
-    collectionsSoftFailed || accountInsightsResult.softFailed;
-
-  const missingAdIds = missingReferencedIds(
-    ads.map((ad) => ad.id),
-    insights.map((insight) => insight.adId),
-  );
-  const historicalAdsResult = await loadMarketingCollectionSafely(
-    "historical ads",
-    () =>
-      getMetaAdsByIds({
-        adIds: missingAdIds,
-        accessToken: input.accessToken,
-        appSecret: input.appSecret,
-      }),
-  );
-  usage = mergeMetaUsage(usage, historicalAdsResult.usage);
-  ads = mergeUniqueById(ads, historicalAdsResult.items);
-  collectionsSoftFailed =
-    collectionsSoftFailed || historicalAdsResult.softFailed;
-
-  const missingAdSetIds = missingReferencedIds(
-    adSets.map((adSet) => adSet.id),
-    ads.map((ad) => ad.adSetId),
-  );
-  const historicalAdSetsResult = await loadMarketingCollectionSafely(
-    "historical adsets",
-    () =>
-      getMetaAdSetsByIds({
-        adSetIds: missingAdSetIds,
-        accessToken: input.accessToken,
-        appSecret: input.appSecret,
-      }),
-  );
-  usage = mergeMetaUsage(usage, historicalAdSetsResult.usage);
-  adSets = mergeUniqueById(adSets, historicalAdSetsResult.items);
-  collectionsSoftFailed =
-    collectionsSoftFailed || historicalAdSetsResult.softFailed;
-
-  const missingCampaignIds = missingReferencedIds(
-    campaigns.map((campaign) => campaign.id),
-    [
-      ...adSets.map((adSet) => adSet.campaignId),
-      ...ads.map((ad) => ad.campaignId),
-    ],
-  );
-  const historicalCampaignsResult = await loadMarketingCollectionSafely(
-    "historical campaigns",
-    () =>
-      getMetaCampaignsByIds({
-        campaignIds: missingCampaignIds,
-        accessToken: input.accessToken,
-        appSecret: input.appSecret,
-      }),
-  );
-  usage = mergeMetaUsage(usage, historicalCampaignsResult.usage);
-  campaigns = mergeUniqueById(campaigns, historicalCampaignsResult.items);
-  collectionsSoftFailed =
-    collectionsSoftFailed || historicalCampaignsResult.softFailed;
-
-  // Beitrag-Push campaigns must stay in the snapshot even when Meta's account
-  // edge omits completed/archived objects — otherwise is_current flips false.
-  const adminForBoost = createAdminClient();
-  const { data: boostLinkRows } = await adminForBoost
-    .from("meta_organic_boost_links")
-    .select("plan_id")
-    .eq("user_id", input.userId)
-    .eq("platform_account_id", input.platformAccountId)
-    .limit(100);
-  const boostPlanIds = [
-    ...new Set(
-      (boostLinkRows ?? [])
-        .map((row) => (typeof row.plan_id === "string" ? row.plan_id : null))
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
-  let boostCampaignIds: string[] = [];
-  if (boostPlanIds.length > 0) {
-    const { data: boostBindings } = await adminForBoost
-      .from("remote_object_bindings")
-      .select("remote_object_id")
-      .eq("user_id", input.userId)
-      .eq("platform_account_id", input.platformAccountId)
-      .eq("object_type", "CAMPAIGN")
-      .in("plan_id", boostPlanIds);
-    boostCampaignIds = [
-      ...new Set(
-        (boostBindings ?? [])
-          .map((row) =>
-            typeof row.remote_object_id === "string"
-              ? row.remote_object_id
-              : null,
-          )
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ];
-  }
-  const knownCampaignIds = new Set(campaigns.map((campaign) => campaign.id));
-  const missingBoostCampaignIds = boostCampaignIds.filter(
-    (id) => !knownCampaignIds.has(id),
-  );
-  if (missingBoostCampaignIds.length > 0) {
-    const boostHistorical = await loadMarketingCollectionSafely(
-      "boost campaigns",
-      () =>
-        getMetaCampaignsByIds({
-          campaignIds: missingBoostCampaignIds,
-          accessToken: input.accessToken,
-          appSecret: input.appSecret,
-        }),
-    );
-    usage = mergeMetaUsage(usage, boostHistorical.usage);
-    campaigns = mergeUniqueById(campaigns, boostHistorical.items);
-    collectionsSoftFailed =
-      collectionsSoftFailed || boostHistorical.softFailed;
-  }
-
-  const pruned = pruneMarketingHierarchy({
-    campaigns,
-    adSets,
-    ads,
-    insights,
-  });
-  campaigns = pruned.campaigns;
-  adSets = pruned.adSets;
-  ads = pruned.ads;
-  insights = pruned.insights;
-  if (
-    pruned.dropped.adSets > 0 ||
-    pruned.dropped.ads > 0 ||
-    pruned.dropped.insights > 0
-  ) {
-    console.warn("Meta Marketing hierarchy pruned orphans instead of failing", {
-      ...pruned.dropped,
-      collectionsSoftFailed,
-    });
-  }
-
   const accountPayload = {
     meta_ad_account_id: accountResult.account.id,
     name: accountResult.account.name,
@@ -752,30 +560,249 @@ export async function syncMetaMarketingSnapshot(input: {
     account_status: accountResult.account.accountStatus,
   };
 
-  // Soft-failed empty campaigns: restore EUR/sync_id without wiping Live rows.
-  if (campaigns.length === 0 && collectionsSoftFailed) {
-    return healMarketingAccountReady({
-      platformAccountId: input.platformAccountId,
-      userId: input.userId,
-      account: accountPayload,
-      usage,
-      dateRange,
-      campaignInsights: campaignInsightsResult.items,
-      accountInsights: accountInsightsResult.items,
-    });
-  }
-
-  const creativesResult = await loadMarketingCollectionSafely("creatives", () =>
-    getMetaAdCreatives({
-      creativeIds: ads.flatMap((ad) => (ad.creativeId ? [ad.creativeId] : [])),
-      accessToken: input.accessToken,
-      appSecret: input.appSecret,
-    }),
-  );
-  usage = mergeMetaUsage(usage, creativesResult.usage);
+  // Readiness FIRST — never leave EUR/sync_id null because later collections fail.
+  const readinessHeal = await healMarketingAccountReady({
+    platformAccountId: input.platformAccountId,
+    userId: input.userId,
+    account: accountPayload,
+    usage,
+    dateRange,
+    campaignInsights: [],
+    accountInsights: [],
+  });
 
   try {
-    validateHierarchy({
+    const campaignsResult = await loadMarketingCollectionSafely(
+      "campaigns",
+      () => getMetaCampaigns(input),
+    );
+    usage = mergeMetaUsage(usage, campaignsResult.usage);
+    let campaigns = campaignsResult.items;
+    let collectionsSoftFailed = campaignsResult.softFailed;
+
+    const adSetsResult = await loadMarketingCollectionSafely("adsets", () =>
+      getMetaAdSets(input),
+    );
+    usage = mergeMetaUsage(usage, adSetsResult.usage);
+    let adSets = adSetsResult.items;
+    collectionsSoftFailed = collectionsSoftFailed || adSetsResult.softFailed;
+
+    const adsResult = await loadMarketingCollectionSafely("ads", () =>
+      getMetaAds(input),
+    );
+    usage = mergeMetaUsage(usage, adsResult.usage);
+    let ads = adsResult.items;
+    collectionsSoftFailed = collectionsSoftFailed || adsResult.softFailed;
+
+    const insightsResult = await loadMarketingCollectionSafely(
+      "ad insights",
+      () =>
+        getMetaAdInsights({
+          ...input,
+          since: dateRange.since,
+          until: dateRange.until,
+        }),
+    );
+    usage = mergeMetaUsage(usage, insightsResult.usage);
+    let insights = insightsResult.items;
+    collectionsSoftFailed = collectionsSoftFailed || insightsResult.softFailed;
+
+    // Campaign + account level: fewer join failure modes than ad grain, and the
+    // source of truth for dashboard totals when ad rows lag behind delivery.
+    const campaignInsightsResult = await loadMarketingCollectionSafely(
+      "campaign insights",
+      () =>
+        getMetaCampaignInsights({
+          ...input,
+          since: dateRange.since,
+          until: dateRange.until,
+        }),
+    );
+    usage = mergeMetaUsage(usage, campaignInsightsResult.usage);
+    collectionsSoftFailed =
+      collectionsSoftFailed || campaignInsightsResult.softFailed;
+
+    const accountInsightsResult = await loadMarketingCollectionSafely(
+      "account insights",
+      () =>
+        getMetaAccountInsights({
+          ...input,
+          since: dateRange.since,
+          until: dateRange.until,
+        }),
+    );
+    usage = mergeMetaUsage(usage, accountInsightsResult.usage);
+    collectionsSoftFailed =
+      collectionsSoftFailed || accountInsightsResult.softFailed;
+
+    const missingAdIds = missingReferencedIds(
+      ads.map((ad) => ad.id),
+      insights.map((insight) => insight.adId),
+    );
+    const historicalAdsResult = await loadMarketingCollectionSafely(
+      "historical ads",
+      () =>
+        getMetaAdsByIds({
+          adIds: missingAdIds,
+          accessToken: input.accessToken,
+          appSecret: input.appSecret,
+        }),
+    );
+    usage = mergeMetaUsage(usage, historicalAdsResult.usage);
+    ads = mergeUniqueById(ads, historicalAdsResult.items);
+    collectionsSoftFailed =
+      collectionsSoftFailed || historicalAdsResult.softFailed;
+
+    const missingAdSetIds = missingReferencedIds(
+      adSets.map((adSet) => adSet.id),
+      ads.map((ad) => ad.adSetId),
+    );
+    const historicalAdSetsResult = await loadMarketingCollectionSafely(
+      "historical adsets",
+      () =>
+        getMetaAdSetsByIds({
+          adSetIds: missingAdSetIds,
+          accessToken: input.accessToken,
+          appSecret: input.appSecret,
+        }),
+    );
+    usage = mergeMetaUsage(usage, historicalAdSetsResult.usage);
+    adSets = mergeUniqueById(adSets, historicalAdSetsResult.items);
+    collectionsSoftFailed =
+      collectionsSoftFailed || historicalAdSetsResult.softFailed;
+
+    const missingCampaignIds = missingReferencedIds(
+      campaigns.map((campaign) => campaign.id),
+      [
+        ...adSets.map((adSet) => adSet.campaignId),
+        ...ads.map((ad) => ad.campaignId),
+      ],
+    );
+    const historicalCampaignsResult = await loadMarketingCollectionSafely(
+      "historical campaigns",
+      () =>
+        getMetaCampaignsByIds({
+          campaignIds: missingCampaignIds,
+          accessToken: input.accessToken,
+          appSecret: input.appSecret,
+        }),
+    );
+    usage = mergeMetaUsage(usage, historicalCampaignsResult.usage);
+    campaigns = mergeUniqueById(campaigns, historicalCampaignsResult.items);
+    collectionsSoftFailed =
+      collectionsSoftFailed || historicalCampaignsResult.softFailed;
+
+    // Beitrag-Push campaigns must stay in the snapshot even when Meta's account
+    // edge omits completed/archived objects — otherwise is_current flips false.
+    const adminForBoost = createAdminClient();
+    const { data: boostLinkRows } = await adminForBoost
+      .from("meta_organic_boost_links")
+      .select("plan_id")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .limit(100);
+    const boostPlanIds = [
+      ...new Set(
+        (boostLinkRows ?? [])
+          .map((row) => (typeof row.plan_id === "string" ? row.plan_id : null))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    let boostCampaignIds: string[] = [];
+    if (boostPlanIds.length > 0) {
+      const { data: boostBindings } = await adminForBoost
+        .from("remote_object_bindings")
+        .select("remote_object_id")
+        .eq("user_id", input.userId)
+        .eq("platform_account_id", input.platformAccountId)
+        .eq("object_type", "CAMPAIGN")
+        .in("plan_id", boostPlanIds);
+      boostCampaignIds = [
+        ...new Set(
+          (boostBindings ?? [])
+            .map((row) =>
+              typeof row.remote_object_id === "string"
+                ? row.remote_object_id
+                : null,
+            )
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+    }
+    const knownCampaignIds = new Set(campaigns.map((campaign) => campaign.id));
+    const missingBoostCampaignIds = boostCampaignIds.filter(
+      (id) => !knownCampaignIds.has(id),
+    );
+    if (missingBoostCampaignIds.length > 0) {
+      const boostHistorical = await loadMarketingCollectionSafely(
+        "boost campaigns",
+        () =>
+          getMetaCampaignsByIds({
+            campaignIds: missingBoostCampaignIds,
+            accessToken: input.accessToken,
+            appSecret: input.appSecret,
+          }),
+      );
+      usage = mergeMetaUsage(usage, boostHistorical.usage);
+      campaigns = mergeUniqueById(campaigns, boostHistorical.items);
+      collectionsSoftFailed =
+        collectionsSoftFailed || boostHistorical.softFailed;
+    }
+
+    const pruned = pruneMarketingHierarchy({
+      campaigns,
+      adSets,
+      ads,
+      insights,
+    });
+    campaigns = pruned.campaigns;
+    adSets = pruned.adSets;
+    ads = pruned.ads;
+    insights = pruned.insights.filter(
+      (insight) =>
+        insight.accountId === null ||
+        insight.accountId === accountPayload.meta_ad_account_id,
+    );
+    if (
+      pruned.dropped.adSets > 0 ||
+      pruned.dropped.ads > 0 ||
+      pruned.dropped.insights > 0
+    ) {
+      console.warn("Meta Marketing hierarchy pruned orphans instead of failing", {
+        ...pruned.dropped,
+        collectionsSoftFailed,
+      });
+    }
+
+    if (campaigns.length === 0) {
+      console.warn(
+        "Meta Marketing campaigns empty after load/prune; keeping account heal",
+        { collectionsSoftFailed },
+      );
+      return {
+        ...readinessHeal,
+        usage,
+        spendTotal: Math.max(
+          sumInsightSpend(accountInsightsResult.items),
+          sumInsightSpend(campaignInsightsResult.items),
+        ),
+      };
+    }
+
+    const creativesResult = await loadMarketingCollectionSafely(
+      "creatives",
+      () =>
+        getMetaAdCreatives({
+          creativeIds: ads.flatMap((ad) =>
+            ad.creativeId ? [ad.creativeId] : [],
+          ),
+          accessToken: input.accessToken,
+          appSecret: input.appSecret,
+        }),
+    );
+    usage = mergeMetaUsage(usage, creativesResult.usage);
+
+    const hierarchyStatus = validateHierarchy({
       accountId: input.adAccountId,
       campaigns,
       adSets,
@@ -783,182 +810,207 @@ export async function syncMetaMarketingSnapshot(input: {
       creatives: creativesResult.items,
       insights,
     });
+    if (hierarchyStatus === "account_mismatch") {
+      throw new MetaMarketingDataError("account_mismatch");
+    }
+    if (hierarchyStatus === "invalid_hierarchy") {
+      console.warn(
+        "Meta Marketing hierarchy still invalid after prune; keeping account heal",
+      );
+      return {
+        ...readinessHeal,
+        usage,
+        spendTotal: Math.max(
+          sumInsightSpend(accountInsightsResult.items),
+          sumInsightSpend(campaignInsightsResult.items),
+        ),
+      };
+    }
+
+    const insightSnapshotDiagnostic = classifyMetaInsightSnapshot({
+      ads,
+      insights,
+      since: dateRange.since,
+      until: dateRange.until,
+    });
+    // Drop diagnostic outliers instead of aborting the Abruf (was marketing_invalid_hierarchy).
+    if (Object.values(insightSnapshotDiagnostic).some((count) => count > 0)) {
+      console.warn("Meta Marketing insight snapshot pruned diagnostic outliers", {
+        ...insightSnapshotDiagnostic,
+        adsCount: ads.length,
+        insightsCount: insights.length,
+      });
+      insights = insights.filter((insight) => {
+        const ad = ads.find((row) => row.id === insight.adId);
+        if (!ad) return false;
+        if (
+          insight.campaignId !== ad.campaignId ||
+          insight.adSetId !== ad.adSetId
+        ) {
+          return false;
+        }
+        if (insight.dateStart !== insight.dateStop) return false;
+        if (
+          insight.dateStart < dateRange.since ||
+          insight.dateStart > dateRange.until
+        ) {
+          return false;
+        }
+        return true;
+      });
+    }
+
+    const syncId = randomUUID();
+    const serializedCampaigns = serializeCampaigns(campaigns);
+    const campaignBudgetSharingSnapshot = serializedCampaigns.map(
+      (campaign) => ({
+        platform_campaign_id: campaign.platform_campaign_id,
+        is_adset_budget_sharing_enabled:
+          campaign.is_adset_budget_sharing_enabled,
+      }),
+    );
+    const admin = adminForBoost;
+    const { data, error } = await admin.rpc("replace_meta_marketing_snapshot", {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+      p_sync_id: syncId,
+      p_account: accountPayload,
+      p_campaigns: serializedCampaigns,
+      p_ad_sets: serializeAdSets(adSets),
+      p_ads: serializeAds(ads),
+      p_creatives: serializeCreatives(creativesResult.items),
+      p_insights: serializeInsights(insights),
+      p_insights_since: dateRange.since,
+      p_insights_until: dateRange.until,
+      p_usage: usage,
+    });
+
+    if (error) {
+      console.error(
+        "Meta Marketing snapshot persistence failed",
+        persistenceDiagnostic(error),
+      );
+      return {
+        ...readinessHeal,
+        usage,
+        spendTotal: Math.max(
+          sumInsightSpend(accountInsightsResult.items),
+          sumInsightSpend(campaignInsightsResult.items),
+        ),
+      };
+    }
+
+    // Soft-expire from replace_meta_marketing_snapshot must not hide Beitrag-Push.
+    const { error: retainError } = await admin.rpc(
+      "retain_meta_organic_boost_campaigns",
+      {
+        p_platform_account_id: input.platformAccountId,
+        p_user_id: input.userId,
+      },
+    );
+    if (retainError) {
+      // RPC absent until migration applied; snapshot still usable.
+    }
+
+    const persisted = Array.isArray(data) ? data[0] : data;
+
+    const adSpendTotal = sumInsightSpend(insights);
+    const campaignSpendTotal = sumInsightSpend(campaignInsightsResult.items);
+    const accountSpendTotal = sumInsightSpend(accountInsightsResult.items);
+    const spendToday = sumInsightSpend(
+      accountInsightsResult.items.filter(
+        (row) => row.dateStart === dateRange.until,
+      ),
+    );
+    // Prefer account rollup, then campaign, then ad — never under-report a higher
+    // authoritative Meta total when a finer grain lagged.
+    const spendTotal = Math.max(
+      accountSpendTotal,
+      campaignSpendTotal,
+      adSpendTotal,
+    );
+    const insightSpendRows = Math.max(
+      countInsightSpendRows(accountInsightsResult.items),
+      countInsightSpendRows(campaignInsightsResult.items),
+      countInsightSpendRows(insights),
+    );
+
+    const { error: spendError } = await admin.rpc(
+      "apply_meta_campaign_insight_spend",
+      {
+        p_platform_account_id: input.platformAccountId,
+        p_user_id: input.userId,
+        p_campaign_insights: serializeCampaignInsights(
+          campaignInsightsResult.items,
+        ),
+        p_account_spend_total: spendTotal,
+        p_account_spend_today: spendToday,
+        p_insight_spend_rows: insightSpendRows,
+        p_insights_until: dateRange.until,
+      },
+    );
+
+    if (spendError) {
+      console.error(
+        "Meta campaign insight spend persistence failed",
+        persistenceDiagnostic(spendError),
+      );
+      // Snapshot already written — do not fail Abruf for spend rollup alone.
+    }
+
+    return {
+      syncId,
+      campaignBudgetSharingSnapshot,
+      campaignsCount: persistedCount(
+        persisted,
+        "campaigns_count",
+        campaigns.length,
+      ),
+      adSetsCount: persistedCount(
+        persisted,
+        "ad_sets_count",
+        adSets.length,
+      ),
+      adsCount: persistedCount(persisted, "ads_count", ads.length),
+      creativesCount: persistedCount(
+        persisted,
+        "creatives_count",
+        creativesResult.items.length,
+      ),
+      insightsCount: persistedCount(
+        persisted,
+        "insights_count",
+        insights.length,
+      ),
+      spendTotal,
+      recommendationsCount: persistedCount(
+        persisted,
+        "recommendations_count",
+        0,
+      ),
+      insightsSince: dateRange.since,
+      insightsUntil: dateRange.until,
+      usage,
+    };
   } catch (error) {
     if (
       error instanceof MetaMarketingDataError &&
-      error.code === "invalid_hierarchy" &&
-      collectionsSoftFailed
+      error.code === "account_mismatch"
     ) {
-      console.warn(
-        "Meta Marketing hierarchy invalid after soft-fail; healing account only",
-      );
-      return healMarketingAccountReady({
-        platformAccountId: input.platformAccountId,
-        userId: input.userId,
-        account: accountPayload,
-        usage,
-        dateRange,
-        campaignInsights: campaignInsightsResult.items,
-        accountInsights: accountInsightsResult.items,
-      });
+      throw error;
     }
-    throw error;
-  }
-
-  const insightSnapshotDiagnostic = classifyMetaInsightSnapshot({
-    ads,
-    insights,
-    since: dateRange.since,
-    until: dateRange.until,
-  });
-  // Drop diagnostic outliers instead of aborting the Abruf (was marketing_invalid_hierarchy).
-  if (Object.values(insightSnapshotDiagnostic).some((count) => count > 0)) {
-    console.warn("Meta Marketing insight snapshot pruned diagnostic outliers", {
-      ...insightSnapshotDiagnostic,
-      adsCount: ads.length,
-      insightsCount: insights.length,
-    });
-    insights = insights.filter((insight) => {
-      const ad = ads.find((row) => row.id === insight.adId);
-      if (!ad) return false;
-      if (
-        insight.campaignId !== ad.campaignId ||
-        insight.adSetId !== ad.adSetId
-      ) {
-        return false;
-      }
-      if (insight.dateStart !== insight.dateStop) return false;
-      if (insight.dateStart < dateRange.since || insight.dateStart > dateRange.until) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  const syncId = randomUUID();
-  const serializedCampaigns = serializeCampaigns(campaigns);
-  const campaignBudgetSharingSnapshot = serializedCampaigns.map((campaign) => ({
-    platform_campaign_id: campaign.platform_campaign_id,
-    is_adset_budget_sharing_enabled:
-      campaign.is_adset_budget_sharing_enabled,
-  }));
-  const admin = adminForBoost;
-  const { data, error } = await admin.rpc("replace_meta_marketing_snapshot", {
-    p_platform_account_id: input.platformAccountId,
-    p_user_id: input.userId,
-    p_sync_id: syncId,
-    p_account: accountPayload,
-    p_campaigns: serializedCampaigns,
-    p_ad_sets: serializeAdSets(adSets),
-    p_ads: serializeAds(ads),
-    p_creatives: serializeCreatives(creativesResult.items),
-    p_insights: serializeInsights(insights),
-    p_insights_since: dateRange.since,
-    p_insights_until: dateRange.until,
-    p_usage: usage,
-  });
-
-  if (error) {
-    console.error(
-      "Meta Marketing snapshot persistence failed",
-      persistenceDiagnostic(error),
+    if (
+      error instanceof MetaGraphError &&
+      (error.rateLimited || error.reconnectRequired)
+    ) {
+      throw error;
+    }
+    console.warn(
+      "Meta Marketing snapshot best-effort failed after account heal; keeping readiness",
+      error instanceof Error ? error.message : "unknown",
     );
-    // Prefer readiness heal over sticky ACCOUNT_UNAVAILABLE when replace fails.
-    return healMarketingAccountReady({
-      platformAccountId: input.platformAccountId,
-      userId: input.userId,
-      account: accountPayload,
-      usage,
-      dateRange,
-      campaignInsights: campaignInsightsResult.items,
-      accountInsights: accountInsightsResult.items,
-    });
+    return readinessHeal;
   }
-
-  // Soft-expire from replace_meta_marketing_snapshot must not hide Beitrag-Push.
-  const { error: retainError } = await admin.rpc(
-    "retain_meta_organic_boost_campaigns",
-    {
-      p_platform_account_id: input.platformAccountId,
-      p_user_id: input.userId,
-    },
-  );
-  if (retainError) {
-    // RPC absent until migration applied; snapshot still usable.
-  }
-
-  const persisted = Array.isArray(data) ? data[0] : data;
-
-  const adSpendTotal = sumInsightSpend(insights);
-  const campaignSpendTotal = sumInsightSpend(campaignInsightsResult.items);
-  const accountSpendTotal = sumInsightSpend(accountInsightsResult.items);
-  const spendToday = sumInsightSpend(
-    accountInsightsResult.items.filter(
-      (row) => row.dateStart === dateRange.until,
-    ),
-  );
-  // Prefer account rollup, then campaign, then ad — never under-report a higher
-  // authoritative Meta total when a finer grain lagged.
-  const spendTotal = Math.max(accountSpendTotal, campaignSpendTotal, adSpendTotal);
-  const insightSpendRows = Math.max(
-    countInsightSpendRows(accountInsightsResult.items),
-    countInsightSpendRows(campaignInsightsResult.items),
-    countInsightSpendRows(insights),
-  );
-
-  const { error: spendError } = await admin.rpc(
-    "apply_meta_campaign_insight_spend",
-    {
-      p_platform_account_id: input.platformAccountId,
-      p_user_id: input.userId,
-      p_campaign_insights: serializeCampaignInsights(
-        campaignInsightsResult.items,
-      ),
-      p_account_spend_total: spendTotal,
-      p_account_spend_today: spendToday,
-      p_insight_spend_rows: insightSpendRows,
-      p_insights_until: dateRange.until,
-    },
-  );
-
-  if (spendError) {
-    console.error(
-      "Meta campaign insight spend persistence failed",
-      persistenceDiagnostic(spendError),
-    );
-    // Snapshot already written — do not fail Abruf for spend rollup alone.
-  }
-
-  return {
-    syncId,
-    campaignBudgetSharingSnapshot,
-    campaignsCount: persistedCount(
-      persisted,
-      "campaigns_count",
-      campaigns.length,
-    ),
-    adSetsCount: persistedCount(
-      persisted,
-      "ad_sets_count",
-      adSets.length,
-    ),
-    adsCount: persistedCount(persisted, "ads_count", ads.length),
-    creativesCount: persistedCount(
-      persisted,
-      "creatives_count",
-      creativesResult.items.length,
-    ),
-    insightsCount: persistedCount(
-      persisted,
-      "insights_count",
-      insights.length,
-    ),
-    spendTotal,
-    recommendationsCount: persistedCount(persisted, "recommendations_count", 0),
-    insightsSince: dateRange.since,
-    insightsUntil: dateRange.until,
-    usage,
-  };
 }
 
 async function healMarketingAccountReady(input: {
@@ -979,20 +1031,53 @@ async function healMarketingAccountReady(input: {
 }): Promise<MetaMarketingSyncResult> {
   const syncId = randomUUID();
   const admin = createAdminClient();
-  const { error } = await admin.rpc("heal_meta_marketing_account_ready", {
-    p_platform_account_id: input.platformAccountId,
-    p_user_id: input.userId,
-    p_sync_id: syncId,
-    p_account: input.account,
-    p_usage: input.usage,
-  });
+  const healedAt = new Date().toISOString();
+  const { error: rpcError } = await admin.rpc(
+    "heal_meta_marketing_account_ready",
+    {
+      p_platform_account_id: input.platformAccountId,
+      p_user_id: input.userId,
+      p_sync_id: syncId,
+      p_account: input.account,
+      p_usage: input.usage,
+    },
+  );
 
-  if (error) {
-    console.error(
-      "Meta Marketing account heal failed",
-      persistenceDiagnostic(error),
+  if (rpcError) {
+    // SQL may not be applied yet — direct update must still clear ACCOUNT_UNAVAILABLE.
+    console.warn(
+      "heal_meta_marketing_account_ready RPC unavailable; using direct update",
+      persistenceDiagnostic(rpcError),
     );
-    throw new MetaMarketingDataError("persistence_failed");
+    const { error: updateError } = await admin
+      .from("platform_accounts")
+      .update({
+        marketing_meta_ad_account_id: input.account.meta_ad_account_id,
+        marketing_currency: input.account.currency,
+        marketing_timezone_name: input.account.timezone_name,
+        marketing_timezone_offset_hours_utc:
+          input.account.timezone_offset_hours_utc,
+        marketing_account_status: input.account.account_status,
+        marketing_sync_status: "success",
+        marketing_sync_error_code: null,
+        marketing_last_success_at: healedAt,
+        marketing_backoff_until: null,
+        marketing_consecutive_failures: 0,
+        marketing_sync_id: syncId,
+        marketing_usage: input.usage,
+        updated_at: healedAt,
+      })
+      .eq("id", input.platformAccountId)
+      .eq("user_id", input.userId)
+      .eq("platform", "meta");
+
+    if (updateError) {
+      console.error(
+        "Meta Marketing account heal failed",
+        persistenceDiagnostic(updateError),
+      );
+      throw new MetaMarketingDataError("persistence_failed");
+    }
   }
 
   const spendTotal = Math.max(
