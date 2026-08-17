@@ -1066,18 +1066,22 @@ async function refreshCustomerMarketingForLaunch(
   };
 }
 
-function launchPreparationFailureMessage(error: unknown): string {
+function launchRpcFailureRaw(error: unknown): string {
   const record =
     error && typeof error === "object"
       ? (error as { message?: unknown; details?: unknown; hint?: unknown })
       : null;
-  const raw = [record?.message, record?.details, record?.hint]
+  return [record?.message, record?.details, record?.hint]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
     .join(" | ");
+}
+
+function launchPreparationFailureMessage(error: unknown): string {
+  const raw = launchRpcFailureRaw(error);
 
   const rules: Array<[RegExp, string]> = [
     [
-      /FREEZE_WRITES/i,
+      /FREEZE_WRITES|must remain frozen/i,
       "Die kurze Schreibpause für die Vorbereitung fehlt noch. Bitte erneut „Kampagne vorbereiten“ tippen.",
     ],
     [
@@ -1089,8 +1093,8 @@ function launchPreparationFailureMessage(error: unknown): string {
       "Das Meta-Werbekonto muss auf EUR laufen.",
     ],
     [
-      /fresh Meta marketing sync within 2 hours/i,
-      "Die Meta-Kontodaten sind nicht frisch genug. Bitte „Kampagne vorbereiten“ erneut tippen — der Abruf läuft automatisch mit.",
+      /Fresh write-ready EUR Meta account|fresh Meta marketing sync within 2 hours/i,
+      "Die Meta-Kontodaten sind nicht frisch genug oder der Abruf hat sich geändert. Bitte „Kampagne vorbereiten“ erneut tippen — der Abruf läuft automatisch mit.",
     ],
     [
       /current successful Meta marketing sync/i,
@@ -1109,11 +1113,11 @@ function launchPreparationFailureMessage(error: unknown): string {
       "Für Anzeigen fehlt eine gültige Facebook-Seite. Bitte Meta erneut verbinden.",
     ],
     [
-      /brand asset|READY approved/i,
+      /brand asset|READY approved|Approved launch asset/i,
       "Das Creative ist nicht startbereit. Bitte ein anderes Bild wählen oder neu hochladen.",
     ],
     [
-      /destination must exactly match|exact launch host|verified domain|conversion_domain/i,
+      /destination must exactly match|exact launch host|verified domain|conversion_domain|Confirmed launch destination/i,
       "Die Landingpage-Domain stimmt nicht mit der bestätigten Domain überein.",
     ],
     [
@@ -1121,7 +1125,7 @@ function launchPreparationFailureMessage(error: unknown): string {
       "Das Tagesbudget liegt über dem erlaubten Limit der Launch-Policy.",
     ],
     [
-      /launch- and status-enabled|Active launch/i,
+      /launch- and status-enabled|Active launch|Current launch- and status-enabled/i,
       "Die Launch-Policy erlaubt aktuell keine neuen Kampagnen.",
     ],
     [
@@ -1131,6 +1135,18 @@ function launchPreparationFailureMessage(error: unknown): string {
     [
       /READ_SYNC lease/i,
       "Ein Meta-Abruf läuft gerade. Bitte kurz warten und erneut versuchen.",
+    ],
+    [
+      /exclusive idle account/i,
+      "Ein anderer Meta-Schreibauftrag läuft oder ist fällig. Bitte 1–2 Minuten warten (Beitrag-Push fertig werden lassen) und erneut „Kampagne starten“ tippen.",
+    ],
+    [
+      /fingerprint mismatch|Launch canary plan is invalid|Invalid launch canary/i,
+      "Die vorbereitete Kampagne passt nicht mehr zum aktuellen Stand. Bitte erneut „Kampagne vorbereiten“.",
+    ],
+    [
+      /Launch step graph/i,
+      "Der Startplan ist ungültig oder wurde schon an Meta geschickt. Bitte erneut „Kampagne vorbereiten“.",
     ],
   ];
 
@@ -1152,6 +1168,60 @@ function launchPreparationFailureMessage(error: unknown): string {
   }
 
   return "Die Kampagne konnte nicht vorbereitet werden. Bitte erneut versuchen.";
+}
+
+function launchApprovalFailureMessage(error: unknown): string {
+  const raw = launchRpcFailureRaw(error);
+  const rules: Array<[RegExp, string]> = [
+    [
+      /must remain frozen|FREEZE_WRITES/i,
+      "Die kurze Schreibpause vor dem Start fehlt. Bitte „Kampagne starten“ erneut tippen.",
+    ],
+    [
+      /exclusive idle account/i,
+      "Ein anderer Meta-Schreibauftrag läuft oder ist fällig. Bitte 1–2 Minuten warten (Beitrag-Push fertig werden lassen) und erneut „Kampagne starten“ tippen.",
+    ],
+    [
+      /Fresh write-ready EUR Meta account|fresh Meta marketing sync|current successful Meta marketing sync/i,
+      "Die Meta-Kontodaten sind nicht mehr aktuell genug für diese Vorschau. Bitte erneut „Kampagne vorbereiten“, dann starten.",
+    ],
+    [
+      /fingerprint mismatch|Launch canary plan is invalid|Invalid launch canary/i,
+      "Die vorbereitete Kampagne passt nicht mehr zum aktuellen Stand. Bitte erneut „Kampagne vorbereiten“.",
+    ],
+    [
+      /Launch step graph/i,
+      "Der Startplan ist ungültig oder wurde schon an Meta geschickt. Bitte erneut „Kampagne vorbereiten“.",
+    ],
+    [
+      /Approved launch asset|brand asset|READY approved/i,
+      "Das Creative ist nicht mehr startbereit. Bitte Creative prüfen und erneut vorbereiten.",
+    ],
+    [
+      /Confirmed launch destination|verified domain|conversion_domain/i,
+      "Die Landingpage-Domain stimmt nicht mehr. Bitte erneut „Kampagne vorbereiten“.",
+    ],
+    [
+      /blueprint|brand profile|exposure snapshot|launch- and status-enabled|hard cap/i,
+      "Voraussetzungen für den Start haben sich geändert. Bitte erneut „Kampagne vorbereiten“.",
+    ],
+  ];
+  for (const [pattern, message] of rules) {
+    if (pattern.test(raw)) {
+      return message;
+    }
+  }
+  if (raw) {
+    const short = raw
+      .replace(/^.*?:\s*/, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 160);
+    if (short) {
+      return `Die Kampagne konnte nicht gestartet werden (${short}).`;
+    }
+  }
+  return "Die Kampagne konnte nicht gestartet werden. Bitte erneut versuchen.";
 }
 
 /** Keep a short SQL/detail suffix so opaque gates stop hiding the real failure. */
@@ -1673,6 +1743,9 @@ export async function approveCustomerLaunch(
   planStatus: "PENDING";
   executableAt: string;
   approvedAt: string;
+  executorRuns: number;
+  executorSucceeded: number;
+  executorLastOutcome: string | null;
 }> {
   requireWriteReadyCustomer(customer, "einen Aktiv-Launch freigibst");
   if (!customer.marketingSyncId) {
@@ -1699,6 +1772,10 @@ export async function approveCustomerLaunch(
     p_expected_ad_name: command.adName,
     p_reason: command.reason,
   };
+  // Ensure FREEZE from the server side — UI props can be stale after prepare
+  // restored ALLOW for Beitrag-Push.
+  await ensureFreezeWritesForLaunch(customer);
+
   const { data, error } =
     command.budgetType === "DAILY"
       ? await admin.rpc("approve_meta_launch_canary_plan", {
@@ -1717,7 +1794,7 @@ export async function approveCustomerLaunch(
     serviceError(
       "launch_approval_not_ready",
       409,
-      "Der Aktiv-Launch ist nicht mehr exakt ausführbar. Bitte Plan, Fingerprint, FREEZE_WRITES, Policy und aktuellen Meta-Abruf erneut prüfen.",
+      withLaunchFailureDetail(launchApprovalFailureMessage(error), error),
     );
   }
   if (
@@ -1730,12 +1807,49 @@ export async function approveCustomerLaunch(
     rpcFailure("Die Aktiv-Launch-Freigabe");
   }
 
+  // Kick the shared mutation executor so Meta objects appear without waiting
+  // solely on the minutely cron (best-effort; Freigabe already succeeded).
+  let executorRuns = 0;
+  let executorSucceeded = 0;
+  let executorLastOutcome: string | null = null;
+  try {
+    const { processNextMetaMutation } = await import("@/lib/meta/executor");
+    for (let index = 0; index < 6; index += 1) {
+      const result = await processNextMetaMutation(
+        `customer-launch-approve:${customer.platformAccountId}:${randomUUID()}`,
+      );
+      if (!result.processed || result.outcome === "idle") {
+        break;
+      }
+      if (
+        result.platformAccountId &&
+        result.platformAccountId !== customer.platformAccountId
+      ) {
+        break;
+      }
+      executorRuns += 1;
+      executorLastOutcome = result.outcome;
+      if (result.outcome === "succeeded") {
+        executorSucceeded += 1;
+      }
+      if (result.planId === command.planId && result.outcome === "succeeded") {
+        // Continue a few more ticks so PAUSED→ACTIVE steps can progress.
+        continue;
+      }
+    }
+  } catch {
+    // Cron remains the safety net.
+  }
+
   return {
     approvalId: row.approval_id,
     planId: row.plan_id,
     planStatus: "PENDING",
     executableAt: row.executable_at,
     approvedAt: row.approved_at,
+    executorRuns,
+    executorSucceeded,
+    executorLastOutcome,
   };
 }
 
