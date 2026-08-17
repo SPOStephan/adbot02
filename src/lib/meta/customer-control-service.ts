@@ -34,6 +34,10 @@ import {
   releaseMetaAccountOperation,
   type MetaOrganicBoostPlannerResult,
 } from "@/lib/meta/planner";
+import {
+  describeCustomerLaunchParseGaps,
+  enrichCustomerLaunchRpcData,
+} from "@/lib/meta/launch-prepare-result";
 import { ensureLaunchMarketingReady } from "@/lib/meta/launch-marketing-ensure";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -992,9 +996,16 @@ export type CustomerLaunchResult = CustomerLaunchCommonResult &
 function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
   const raw = Array.isArray(value) ? value[0] : value;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    rpcFailure("Die Aktiv-Launch-Vorbereitung");
+    rpcFailure("Die Aktiv-Launch-Vorbereitung", "leere oder ungültige RPC-Antwort");
   }
   const record = raw as Record<string, unknown>;
+  const gaps = describeCustomerLaunchParseGaps(record);
+  if (gaps.length > 0) {
+    rpcFailure(
+      "Die Aktiv-Launch-Vorbereitung",
+      `unvollständige Plan-Antwort (${gaps.join(", ")})`,
+    );
+  }
   const budgetType = record.budget_type === "LIFETIME" ? "LIFETIME" : "DAILY";
   const brandAssetIds = Array.isArray(record.brand_asset_ids)
     ? record.brand_asset_ids.filter(
@@ -1002,78 +1013,39 @@ function parseCustomerLaunchResult(value: unknown): CustomerLaunchResult {
           typeof assetId === "string" && /^[0-9a-f-]{36}$/i.test(assetId),
       )
     : [];
-  if (
-    (record.budget_type !== undefined &&
-      record.budget_type !== "DAILY" &&
-      record.budget_type !== "LIFETIME") ||
-    (record.outcome !== "CREATED" && record.outcome !== "EXISTING") ||
-    typeof record.plan_id !== "string" ||
-    !/^[0-9a-f-]{36}$/i.test(record.plan_id) ||
-    record.status !== "HELD" ||
-    typeof record.payload_hash !== "string" ||
-    !/^[0-9a-f]{64}$/.test(record.payload_hash) ||
-    typeof record.objective !== "string" ||
-    typeof record.destination_url !== "string" ||
-    record.target_status !== "ACTIVE" ||
-    (record.budget_owner_type !== "CAMPAIGN" &&
-      record.budget_owner_type !== "AD_SET") ||
-    typeof record.campaign_name !== "string" ||
-    typeof record.ad_set_name !== "string" ||
-    typeof record.creative_name !== "string" ||
-    typeof record.ad_name !== "string" ||
-    brandAssetIds.length < 1 ||
-    typeof record.prepared_at !== "string"
-  ) {
-    rpcFailure("Die Aktiv-Launch-Vorbereitung");
-  }
   const common: CustomerLaunchCommonResult = {
-    outcome: record.outcome,
-    planId: record.plan_id,
+    outcome: record.outcome as "CREATED" | "EXISTING",
+    planId: String(record.plan_id),
     status: "HELD",
-    payloadHash: record.payload_hash,
-    objective: record.objective,
-    destinationUrl: record.destination_url,
+    payloadHash: String(record.payload_hash),
+    objective: String(record.objective),
+    destinationUrl: String(record.destination_url),
     targetStatus: "ACTIVE",
-    campaignName: record.campaign_name,
-    adSetName: record.ad_set_name,
-    creativeName: record.creative_name,
-    adName: record.ad_name,
+    campaignName: String(record.campaign_name),
+    adSetName: String(record.ad_set_name),
+    creativeName: String(record.creative_name),
+    adName: String(record.ad_name),
     brandAssetIds,
-    preparedAt: record.prepared_at,
+    preparedAt: String(record.prepared_at),
   };
 
   if (budgetType === "DAILY") {
     const dailyBudgetMinor = String(record.daily_budget_minor ?? "");
-    if (!/^[1-9][0-9]*$/.test(dailyBudgetMinor)) {
-      rpcFailure("Die Aktiv-Launch-Vorbereitung");
-    }
     return {
       ...common,
       budgetType,
-      budgetOwnerType: record.budget_owner_type,
+      budgetOwnerType: record.budget_owner_type as "CAMPAIGN" | "AD_SET",
       dailyBudgetMinor,
     };
   }
 
-  const lifetimeBudgetMinor = String(record.lifetime_budget_minor ?? "");
-  if (
-    record.budget_owner_type !== "CAMPAIGN" ||
-    !/^[1-9][0-9]*$/.test(lifetimeBudgetMinor) ||
-    typeof record.start_time !== "string" ||
-    typeof record.end_time !== "string" ||
-    !Number.isFinite(Date.parse(record.start_time)) ||
-    !Number.isFinite(Date.parse(record.end_time)) ||
-    Date.parse(record.end_time) <= Date.parse(record.start_time)
-  ) {
-    rpcFailure("Die Aktiv-Launch-Vorbereitung");
-  }
   return {
     ...common,
     budgetType,
     budgetOwnerType: "CAMPAIGN",
-    lifetimeBudgetMinor,
-    startTime: new Date(record.start_time).toISOString(),
-    endTime: new Date(record.end_time).toISOString(),
+    lifetimeBudgetMinor: String(record.lifetime_budget_minor ?? ""),
+    startTime: new Date(String(record.start_time)).toISOString(),
+    endTime: new Date(String(record.end_time)).toISOString(),
   };
 }
 
@@ -1648,7 +1620,13 @@ export async function materializeCustomerLaunch(
         withLaunchFailureDetail(launchPreparationFailureMessage(error), error),
       );
     }
-    result = parseCustomerLaunchResult(data);
+    // Chain RPC omits brand_asset_ids + prepared_at; fill from the prepare command.
+    result = parseCustomerLaunchResult(
+      enrichCustomerLaunchRpcData(data, {
+        brandAssetId: command.brandAssetId,
+        budgetType: command.budgetType,
+      }),
+    );
   } finally {
     try {
       await releaseMetaAccountOperation({
