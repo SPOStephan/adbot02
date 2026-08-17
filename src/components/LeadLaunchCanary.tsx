@@ -41,7 +41,25 @@ type HeldPlan = {
   dailyBudgetMinor: string;
   pixelId: string;
   customEventType: string;
+  primaryText: string;
+  headline: string;
+  description: string;
 };
+
+function objectiveLabel(objective: string): string {
+  if (objective === "OUTCOME_LEADS") return "Lead-Generierung";
+  if (objective === "OUTCOME_TRAFFIC") return "Traffic (Link-Klicks)";
+  return objective;
+}
+
+function friendlyCampaignLabel(name: string): string {
+  const trimmed = name.replace(/\s*\[[0-9a-f-]{8,}\]\s*$/i, "").trim();
+  const withoutStamp = trimmed.replace(
+    /\s+\d{4}-\d{2}-\d{2}T[\d-]+$/i,
+    "",
+  );
+  return withoutStamp.trim() || "Lead-Kampagne";
+}
 
 type Props = {
   brandProfileId: string | null;
@@ -206,6 +224,9 @@ function toHeldFromRecent(
     dailyBudgetMinor: plan.dailyBudgetMinor,
     pixelId: pixel.pixelId,
     customEventType: pixel.customEventType,
+    primaryText: plan.primaryText ?? "",
+    headline: plan.headline ?? "",
+    description: plan.description ?? "",
   };
 }
 
@@ -363,12 +384,9 @@ export function LeadLaunchCanary({
   }
 
   async function ensureFreeze(): Promise<void> {
-    if (killSwitchMode === "FREEZE_WRITES") {
-      return;
-    }
     await apiJson("POST", "/api/meta/automation/kill-switch", {
       mode: "FREEZE_WRITES",
-      reason: "Lead-Canary: kurze Freeze-Phase für prepare/approve",
+      reason: "Lead-Canary: kurze Freeze-Phase für Freigabe",
     });
   }
 
@@ -552,11 +570,14 @@ export function LeadLaunchCanary({
         dailyBudgetMinor: result.dailyBudgetMinor,
         pixelId: selectedPixel.pixelId,
         customEventType: selectedPixel.customEventType,
+        primaryText: primaryText.trim(),
+        headline: headline.trim(),
+        description: description.trim(),
       });
       setNotice({
         tone: "success",
         message:
-          "Lead-Plan vorbereitet (noch nichts an Meta). Prüfe die Vorschau und gib mit Freigabe frei.",
+          "Lead-Plan vorbereitet (noch nichts an Meta). Prüfe die Vorschau unten und starte mit Freigabe.",
       });
       refresh();
     } catch (error) {
@@ -608,7 +629,7 @@ export function LeadLaunchCanary({
       setNotice({
         tone: "success",
         message:
-          "Lead-Canary freigegeben. Meta-Executor legt die Kette PAUSED an und aktiviert nach Read-back. Kill-Switch ist wieder ALLOW.",
+          "Kampagne freigegeben. Adbot legt sie bei Meta zuerst pausiert an und schaltet sie danach aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager unter Kampagnen (auch „Aus“/pausiert) nach.",
       });
       refresh();
     } catch (error) {
@@ -675,7 +696,7 @@ export function LeadLaunchCanary({
         ))}
       </ul>
 
-      {notice ? (
+      {notice && !heldPlan ? (
         <p
           className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
             notice.tone === "success"
@@ -960,12 +981,45 @@ export function LeadLaunchCanary({
           onSubmit={approve}
         >
           <h3 className="text-sm font-extrabold text-slate-950">
-            Vorschau — noch nichts an Meta
+            Vorschau prüfen
           </h3>
-          <dl className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+          <p className="mt-1 text-sm text-slate-600">
+            So geht die Anzeige live — noch nichts ist bei Meta angelegt.
+          </p>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt="Creative-Vorschau"
+                className="aspect-square w-full object-cover"
+                src={`/api/media-library/preview?assetId=${heldPlan.brandAssetIds[0]}`}
+              />
+            </div>
+            <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-bold leading-6 text-slate-950">
+                {heldPlan.headline || "Überschrift"}
+              </p>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                {heldPlan.primaryText || "Anzeigentext"}
+              </p>
+              {heldPlan.description ? (
+                <p className="text-sm text-slate-500">{heldPlan.description}</p>
+              ) : null}
+              <p className="break-all text-xs font-medium text-blue-700">
+                {heldPlan.destinationUrl}
+              </p>
+            </div>
+          </div>
+
+          <dl className="mt-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
             <div>
               <dt className="font-bold text-slate-500">Ziel</dt>
-              <dd>{heldPlan.objective}</dd>
+              <dd>{objectiveLabel(heldPlan.objective)}</dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-500">Budget / Tag</dt>
+              <dd>{displayMinor(heldPlan.dailyBudgetMinor)}</dd>
             </div>
             <div>
               <dt className="font-bold text-slate-500">Pixel</dt>
@@ -973,19 +1027,25 @@ export function LeadLaunchCanary({
                 {heldPlan.pixelId} · {heldPlan.customEventType}
               </dd>
             </div>
-            <div className="sm:col-span-2">
-              <dt className="font-bold text-slate-500">Destination</dt>
-              <dd className="break-all">{heldPlan.destinationUrl}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-slate-500">Budget</dt>
-              <dd>{displayMinor(heldPlan.dailyBudgetMinor)} / Tag</dd>
-            </div>
             <div>
               <dt className="font-bold text-slate-500">Kampagne</dt>
-              <dd>{heldPlan.campaignName}</dd>
+              <dd>{friendlyCampaignLabel(heldPlan.campaignName)}</dd>
             </div>
           </dl>
+
+          {notice ? (
+            <p
+              className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
+                notice.tone === "success"
+                  ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                  : "bg-rose-50 text-rose-900 ring-1 ring-rose-200"
+              }`}
+              role="status"
+            >
+              {notice.message}
+            </p>
+          ) : null}
+
           <label className="mt-4 block text-sm font-bold text-slate-800">
             Freigabe-Begründung
             <input

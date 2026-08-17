@@ -76,6 +76,10 @@ export type RecentLaunchPlanView = {
   creativeName: string | null;
   adName: string | null;
   brandAssetIds: string[];
+  /** Ad copy from planned creative link_data (customer preview). */
+  primaryText: string | null;
+  headline: string | null;
+  description: string | null;
 };
 
 type HeldLaunchPlanCommon = {

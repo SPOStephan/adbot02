@@ -830,7 +830,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         supabase
           .from("mutation_plans")
           .select(
-            "id,status,created_at,payload_hash,planned_payload,source_rule_key,not_before",
+            "id,status,created_at,payload_hash,planned_payload,source_rule_key,not_before,intended_after",
           )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
@@ -1571,6 +1571,28 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             typeof assetId === "string" && /^[0-9a-f-]{36}$/i.test(assetId),
         )
       : [];
+    const creative =
+      payload.creative &&
+      typeof payload.creative === "object" &&
+      !Array.isArray(payload.creative)
+        ? (payload.creative as Record<string, unknown>)
+        : null;
+    const objectStory =
+      creative?.object_story_spec &&
+      typeof creative.object_story_spec === "object" &&
+      !Array.isArray(creative.object_story_spec)
+        ? (creative.object_story_spec as Record<string, unknown>)
+        : null;
+    const linkData =
+      objectStory?.link_data &&
+      typeof objectStory.link_data === "object" &&
+      !Array.isArray(objectStory.link_data)
+        ? (objectStory.link_data as Record<string, unknown>)
+        : null;
+    const copyField = (key: string): string | null => {
+      const value = linkData?.[key];
+      return typeof value === "string" && value.trim() ? value : null;
+    };
 
     return {
       id: String(plan.id),
@@ -1589,7 +1611,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         typeof payload.destination_url === "string"
           ? payload.destination_url
           : null,
-      targetStatus: payload.target_status === "ACTIVE" ? "ACTIVE" : null,
+      targetStatus:
+        payload.target_status === "ACTIVE" ||
+        (plan.intended_after &&
+          typeof plan.intended_after === "object" &&
+          !Array.isArray(plan.intended_after) &&
+          (plan.intended_after as Record<string, unknown>).status === "ACTIVE")
+          ? "ACTIVE"
+          : null,
       budgetType,
       budgetOwnerType:
         payload.budget_owner_type === "CAMPAIGN" ||
@@ -1611,6 +1640,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       creativeName: nestedName("creative"),
       adName: nestedName("ad"),
       brandAssetIds,
+      primaryText: copyField("message"),
+      headline: copyField("name"),
+      description: copyField("description"),
     };
   });
   const currentMarketingSyncAt = Date.parse(
