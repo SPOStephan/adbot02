@@ -42,6 +42,7 @@ type HeldPlan = {
   headlines: string[];
   descriptions: string[];
   structuralAdCount: 1 | 2;
+  structuralAdSetCount?: 1 | 2;
   structuralAds?: Array<{
     message: string;
     name: string;
@@ -241,6 +242,7 @@ function toHeldFromRecent(plan: RecentLaunchPlanView): HeldPlan | null {
     headlines: plan.headline ? [plan.headline] : [""],
     descriptions: plan.description ? [plan.description] : [""],
     structuralAdCount: 1,
+    structuralAdSetCount: 1,
   };
 }
 
@@ -280,7 +282,10 @@ export function TrafficLaunchCanary({
   const [primaryTexts, setPrimaryTexts] = useState<string[]>(["Mehr erfahren."]);
   const [headlines, setHeadlines] = useState<string[]>(["Jetzt mehr erfahren"]);
   const [descriptions, setDescriptions] = useState<string[]>([""]);
-  const [structuralMultiAd, setStructuralMultiAd] = useState(false);
+  const [structuralMode, setStructuralMode] = useState<
+    "off" | "two_ads" | "two_ad_sets"
+  >("off");
+  const structuralOn = structuralMode !== "off";
   const [ad2Primary, setAd2Primary] = useState("Mehr erfahren — Variante B.");
   const [ad2Headline, setAd2Headline] = useState("Jetzt entdecken");
   const [ad2Description, setAd2Description] = useState("");
@@ -415,15 +420,15 @@ export function TrafficLaunchCanary({
    */
   async function ensureTrafficBlueprint(): Promise<string> {
     const template = structuredClone(DEFAULT_TRAFFIC_BLUEPRINT);
-    // Structural 2-ad mode: classic link_data only (Ad-1 texts). DCA forbidden.
+    // Structural modes: classic link_data only (Ad-1 texts). DCA forbidden.
     const parts = buildLinkCreativeBlueprintParts({
-      primaryTexts: structuralMultiAd
+      primaryTexts: structuralOn
         ? [primaryTexts[0] ?? "Mehr erfahren."]
         : primaryTexts,
-      headlines: structuralMultiAd
+      headlines: structuralOn
         ? [headlines[0] ?? "Jetzt mehr erfahren"]
         : headlines,
-      descriptions: structuralMultiAd
+      descriptions: structuralOn
         ? [descriptions[0] ?? ""]
         : descriptions,
       callToActionType: "LEARN_MORE",
@@ -431,7 +436,7 @@ export function TrafficLaunchCanary({
       defaultHeadline: "Jetzt mehr erfahren",
     });
     template.creative.object_story_spec = parts.objectStorySpec as typeof template.creative.object_story_spec;
-    if (!structuralMultiAd && parts.assetFeedSpec) {
+    if (!structuralOn && parts.assetFeedSpec) {
       (template.creative as Record<string, unknown>).asset_feed_spec =
         parts.assetFeedSpec;
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
@@ -534,7 +539,7 @@ export function TrafficLaunchCanary({
         .toISOString()
         .replace(/[:.]/g, "-")
         .slice(0, 19);
-      const structuralAds = structuralMultiAd
+      const structuralAds = structuralOn
         ? [
             {
               message: (primaryTexts[0] ?? "").trim() || "Mehr erfahren.",
@@ -548,6 +553,12 @@ export function TrafficLaunchCanary({
             },
           ]
         : undefined;
+      const structuralAdSetCount =
+        structuralMode === "two_ad_sets"
+          ? 2
+          : structuralMode === "two_ads"
+            ? 1
+            : undefined;
       const result = await apiJson<{
         planId?: string;
         status?: string;
@@ -581,8 +592,12 @@ export function TrafficLaunchCanary({
         adName: `Traffic Ad ${stamp}`,
         reason: PROTOCOL_APPROVE_REASON,
         confirmation: "AKTIV-LAUNCH VORBEREITEN",
-        ...(structuralMultiAd
-          ? { structuralAdCount: 2, structuralAds }
+        ...(structuralOn
+          ? {
+              structuralAdCount: 2,
+              structuralAdSetCount,
+              structuralAds,
+            }
           : {}),
       });
 
@@ -619,17 +634,20 @@ export function TrafficLaunchCanary({
         budgetType: "DAILY",
         budgetOwnerType: result.budgetOwnerType,
         dailyBudgetMinor: result.dailyBudgetMinor,
-        primaryTexts: structuralMultiAd
+        primaryTexts: structuralOn
           ? [structuralAds![0].message]
           : primaryTexts,
-        headlines: structuralMultiAd
+        headlines: structuralOn
           ? [structuralAds![0].name]
           : headlines,
-        descriptions: structuralMultiAd
+        descriptions: structuralOn
           ? [structuralAds![0].description]
           : descriptions,
-        structuralAdCount: structuralMultiAd ? 2 : 1,
-        ...(structuralMultiAd ? { structuralAds } : {}),
+        structuralAdCount: structuralOn ? 2 : 1,
+        ...(structuralAdSetCount
+          ? { structuralAdSetCount: structuralAdSetCount as 1 | 2 }
+          : {}),
+        ...(structuralOn ? { structuralAds } : {}),
       });
       setNotice({
         tone: "success",
@@ -948,26 +966,55 @@ export function TrafficLaunchCanary({
             {notice.message}
           </p>
         ) : null}
-        <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 lg:col-span-2">
-          <input
-            checked={structuralMultiAd}
-            className="mt-1 size-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-            disabled={pending || Boolean(heldPlan)}
-            onChange={(event) => setStructuralMultiAd(event.target.checked)}
-            type="checkbox"
-          />
-          <span className="min-w-0">
-            <span className="block text-sm font-bold text-slate-800">
-              Struktur-Test: 2 Anzeigen
-            </span>
-            <span className="mt-0.5 block text-xs font-medium text-slate-500">
+        <fieldset className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 lg:col-span-2">
+          <legend className="px-1 text-sm font-bold text-slate-800">
+            Struktur-Test
+          </legend>
+          <p className="mt-1 text-xs font-medium text-slate-500">
+            Opt-in für getrennte Anzeigen statt Dynamic Creative. Standard bleibt
+            eine Anzeige.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-4">
+            {(
+              [
+                { value: "off" as const, label: "Aus" },
+                { value: "two_ads" as const, label: "2 Anzeigen" },
+                { value: "two_ad_sets" as const, label: "2 Ad Sets" },
+              ] as const
+            ).map((option) => (
+              <label
+                className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-800"
+                key={option.value}
+              >
+                <input
+                  checked={structuralMode === option.value}
+                  className="size-4 border-slate-300 text-blue-700 focus:ring-blue-500"
+                  disabled={pending || Boolean(heldPlan)}
+                  name="structural-mode"
+                  onChange={() => setStructuralMode(option.value)}
+                  type="radio"
+                  value={option.value}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+          {structuralMode === "two_ads" ? (
+            <p className="mt-2 text-xs font-medium text-slate-500">
               Eine Kampagne, eine Anzeigengruppe, zwei getrennte Anzeigen mit
               gleichem Bild und unterschiedlichem Text. Deaktiviert Textvarianten
               (Dynamic Creative).
-            </span>
-          </span>
-        </label>
-        {structuralMultiAd ? (
+            </p>
+          ) : null}
+          {structuralMode === "two_ad_sets" ? (
+            <p className="mt-2 text-xs font-medium text-slate-500">
+              Eine Kampagne, zwei Anzeigengruppen, je eine Anzeige. Tagesbudget
+              wird hälftig auf beide Anzeigengruppen verteilt. Deaktiviert
+              Textvarianten (Dynamic Creative).
+            </p>
+          ) : null}
+        </fieldset>
+        {structuralOn ? (
           <>
             <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 lg:col-span-2">
               <p className="text-sm font-extrabold text-slate-900">Anzeige 1</p>
@@ -1226,13 +1273,22 @@ export function TrafficLaunchCanary({
             </div>
             <div className="min-w-0 space-y-4">
               {heldPlan.structuralAdCount === 2 && heldPlan.structuralAds ? (
-                heldPlan.structuralAds.map((ad, index) => (
+                <>
+                  <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                    {heldPlan.structuralAdSetCount === 2
+                      ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Budget hälftig)"
+                      : "Struktur: 1 Kampagne → 1 Anzeigengruppe → 2 Anzeigen"}
+                  </p>
+                  {heldPlan.structuralAds.map((ad, index) => (
                   <div
                     className="space-y-2 rounded-xl border border-slate-200 bg-white p-4"
                     key={`structural-ad-${index}`}
                   >
                     <p className="text-xs font-extrabold uppercase tracking-wide text-slate-500">
                       Anzeige {index + 1}
+                      {heldPlan.structuralAdSetCount === 2
+                        ? ` · Anzeigengruppe ${index + 1}`
+                        : ""}
                     </p>
                     <p className="text-sm font-bold leading-6 text-slate-950">
                       {ad.name || "Überschrift"}
@@ -1244,7 +1300,8 @@ export function TrafficLaunchCanary({
                       <p className="text-sm text-slate-500">{ad.description}</p>
                     ) : null}
                   </div>
-                ))
+                ))}
+                </>
               ) : (
                 <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
                   <div className="space-y-2">
