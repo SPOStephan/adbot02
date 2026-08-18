@@ -20,6 +20,8 @@ import {
   CreativePickerModal,
   type PickerAsset,
 } from "@/components/CreativePickerModal";
+import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
+import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 
 type Notice = { tone: "success" | "error"; message: string } | null;
 
@@ -36,9 +38,9 @@ type HeldPlan = {
   budgetType: "DAILY";
   budgetOwnerType: "CAMPAIGN" | "AD_SET";
   dailyBudgetMinor: string;
-  primaryText: string;
-  headline: string;
-  description: string;
+  primaryTexts: string[];
+  headlines: string[];
+  descriptions: string[];
 };
 
 function objectiveLabel(objective: string): string {
@@ -229,9 +231,9 @@ function toHeldFromRecent(plan: RecentLaunchPlanView): HeldPlan | null {
     budgetType: "DAILY",
     budgetOwnerType: plan.budgetOwnerType,
     dailyBudgetMinor: plan.dailyBudgetMinor,
-    primaryText: plan.primaryText ?? "",
-    headline: plan.headline ?? "",
-    description: plan.description ?? "",
+    primaryTexts: plan.primaryText ? [plan.primaryText] : [""],
+    headlines: plan.headline ? [plan.headline] : [""],
+    descriptions: plan.description ? [plan.description] : [""],
   };
 }
 
@@ -268,9 +270,9 @@ export function TrafficLaunchCanary({
       ? initialInstagramActorId
       : (instagramAccounts[0]?.id ?? ""),
   );
-  const [primaryText, setPrimaryText] = useState("Mehr erfahren.");
-  const [headline, setHeadline] = useState("Jetzt mehr erfahren");
-  const [description, setDescription] = useState("");
+  const [primaryTexts, setPrimaryTexts] = useState<string[]>(["Mehr erfahren."]);
+  const [headlines, setHeadlines] = useState<string[]>(["Jetzt mehr erfahren"]);
+  const [descriptions, setDescriptions] = useState<string[]>([""]);
   const [pickerAssets, setPickerAssets] = useState<PickerAsset[]>(() =>
     data.brandAssets.map((asset) => ({
       id: asset.id,
@@ -356,11 +358,11 @@ export function TrafficLaunchCanary({
       if (!result.primaryText || !result.headline) {
         throw new Error("Server lieferte unvollständige Textvorschläge.");
       }
-      setPrimaryText(result.primaryText);
-      setHeadline(result.headline);
-      setDescription(
+      setPrimaryTexts([result.primaryText]);
+      setHeadlines([result.headline]);
+      setDescriptions([
         typeof result.description === "string" ? result.description : "",
-      );
+      ]);
       const credits =
         typeof result.billing?.creditsCharged === "number"
           ? result.billing.creditsCharged
@@ -402,12 +404,20 @@ export function TrafficLaunchCanary({
    */
   async function ensureTrafficBlueprint(): Promise<string> {
     const template = structuredClone(DEFAULT_TRAFFIC_BLUEPRINT);
-    const message = primaryText.trim() || "Mehr erfahren.";
-    const title = headline.trim() || "Jetzt mehr erfahren";
-    const linkDescription = description.trim();
-    template.creative.object_story_spec.link_data.message = message;
-    template.creative.object_story_spec.link_data.name = title;
-    template.creative.object_story_spec.link_data.description = linkDescription;
+    const parts = buildLinkCreativeBlueprintParts({
+      primaryTexts,
+      headlines,
+      descriptions,
+      callToActionType: "LEARN_MORE",
+      defaultPrimary: "Mehr erfahren.",
+      defaultHeadline: "Jetzt mehr erfahren",
+    });
+    template.creative.object_story_spec = parts.objectStorySpec as typeof template.creative.object_story_spec;
+    if (parts.assetFeedSpec) {
+      (template.creative as Record<string, unknown>).asset_feed_spec =
+        parts.assetFeedSpec;
+      (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
+    }
 
     const saved = await apiJson<{ blueprintId?: string }>(
       "POST",
@@ -574,9 +584,9 @@ export function TrafficLaunchCanary({
         budgetType: "DAILY",
         budgetOwnerType: result.budgetOwnerType,
         dailyBudgetMinor: result.dailyBudgetMinor,
-        primaryText: primaryText.trim(),
-        headline: headline.trim(),
-        description: description.trim(),
+        primaryTexts,
+        headlines,
+        descriptions,
       });
       setNotice({
         tone: "success",
@@ -895,62 +905,41 @@ export function TrafficLaunchCanary({
             {notice.message}
           </p>
         ) : null}
-        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
-          Anzeigentext (Primary Text)
-          <textarea
-            className={`${inputClass} min-h-24 resize-y`}
-            disabled={pending}
-            maxLength={COPY_LIMITS.primary.max}
-            onChange={(event) => setPrimaryText(event.target.value)}
-            required
-            value={primaryText}
-          />
-          <span className="mt-1 block text-xs font-medium text-slate-500">
-            {copyLengthHint(
-              primaryText,
-              COPY_LIMITS.primary.recommended,
-              COPY_LIMITS.primary.max,
-            )}
-            . Gilt immer für diesen Launch — auch wenn schon ein Rezept existiert.
-          </span>
-        </label>
-        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
-          Überschrift (Headline)
-          <input
-            className={inputClass}
-            disabled={pending}
-            maxLength={COPY_LIMITS.headline.max}
-            onChange={(event) => setHeadline(event.target.value)}
-            required
-            value={headline}
-          />
-          <span className="mt-1 block text-xs font-medium text-slate-500">
-            {copyLengthHint(
-              headline,
-              COPY_LIMITS.headline.recommended,
-              COPY_LIMITS.headline.max,
-            )}
-          </span>
-        </label>
-        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
-          Beschreibung{" "}
-          <span className="font-medium text-slate-500">(optional)</span>
-          <input
-            className={inputClass}
-            disabled={pending}
-            maxLength={COPY_LIMITS.description.max}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Kurzer Zusatz unter der Überschrift"
-            value={description}
-          />
-          <span className="mt-1 block text-xs font-medium text-slate-500">
-            {copyLengthHint(
-              description,
-              COPY_LIMITS.description.recommended,
-              COPY_LIMITS.description.max,
-            )}
-          </span>
-        </label>
+        <CreativeTextVariantFields
+          disabled={pending}
+          hint="eine Anzeige, Meta kombiniert die Texte"
+          inputClass={inputClass}
+          label="Anzeigentext (Primary Text)"
+          lengthHint={copyLengthHint}
+          maxLength={COPY_LIMITS.primary.max}
+          multiline
+          onChange={setPrimaryTexts}
+          recommended={COPY_LIMITS.primary.recommended}
+          values={primaryTexts}
+        />
+        <CreativeTextVariantFields
+          disabled={pending}
+          hint="Varianten für dieselbe Anzeige"
+          inputClass={inputClass}
+          label="Überschrift (Headline)"
+          lengthHint={copyLengthHint}
+          maxLength={COPY_LIMITS.headline.max}
+          onChange={setHeadlines}
+          recommended={COPY_LIMITS.headline.recommended}
+          values={headlines}
+        />
+        <CreativeTextVariantFields
+          disabled={pending}
+          hint="optional"
+          inputClass={inputClass}
+          label="Beschreibung"
+          lengthHint={copyLengthHint}
+          maxLength={COPY_LIMITS.description.max}
+          onChange={setDescriptions}
+          optional
+          recommended={COPY_LIMITS.description.recommended}
+          values={descriptions}
+        />
         {prepareInFlight ? (
           <div
             className="flex gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-950 lg:col-span-2"
@@ -1039,14 +1028,46 @@ export function TrafficLaunchCanary({
               />
             </div>
             <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-bold leading-6 text-slate-950">
-                {heldPlan.headline || "Überschrift"}
-              </p>
-              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                {heldPlan.primaryText || "Anzeigentext"}
-              </p>
-              {heldPlan.description ? (
-                <p className="text-sm text-slate-500">{heldPlan.description}</p>
+              <div className="space-y-2">
+                {(heldPlan.headlines.filter(Boolean).length
+                  ? heldPlan.headlines.filter(Boolean)
+                  : ["Überschrift"]
+                ).map((line, index) => (
+                  <p
+                    className="text-sm font-bold leading-6 text-slate-950"
+                    key={`h-${index}`}
+                  >
+                    {heldPlan.headlines.filter(Boolean).length > 1
+                      ? `${index + 1}. ${line}`
+                      : line}
+                  </p>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {(heldPlan.primaryTexts.filter(Boolean).length
+                  ? heldPlan.primaryTexts.filter(Boolean)
+                  : ["Anzeigentext"]
+                ).map((line, index) => (
+                  <p
+                    className="whitespace-pre-wrap text-sm leading-6 text-slate-700"
+                    key={`p-${index}`}
+                  >
+                    {heldPlan.primaryTexts.filter(Boolean).length > 1
+                      ? `${index + 1}. ${line}`
+                      : line}
+                  </p>
+                ))}
+              </div>
+              {heldPlan.descriptions.filter(Boolean).length ? (
+                <div className="space-y-1">
+                  {heldPlan.descriptions.filter(Boolean).map((line, index) => (
+                    <p className="text-sm text-slate-500" key={`d-${index}`}>
+                      {heldPlan.descriptions.filter(Boolean).length > 1
+                        ? `${index + 1}. ${line}`
+                        : line}
+                    </p>
+                  ))}
+                </div>
               ) : null}
               <p className="break-all text-xs font-medium text-blue-700">
                 {heldPlan.destinationUrl}
