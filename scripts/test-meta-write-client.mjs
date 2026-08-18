@@ -543,6 +543,49 @@ try {
   assert.match(creativeFields, /object_story_id/);
   assert.doesNotMatch(creativeFields, /(^|,)updated_time(,|$)/);
 
+  const sanitizedSpec = writeClient.sanitizeCreativeInstagramFields({
+    name: "Traffic Creative",
+    object_story_spec: {
+      page_id: "111",
+      instagram_actor_id: "999888777",
+      link_data: { link: "https://example.com", message: "Hallo" },
+    },
+    instagram_actor_id: "999888777",
+    instagram_user_id: "555444333",
+  });
+  assert.equal("instagram_actor_id" in sanitizedSpec, false);
+  assert.equal(sanitizedSpec.instagram_user_id, "555444333");
+  assert.equal(
+    "instagram_actor_id" in sanitizedSpec.object_story_spec,
+    false,
+  );
+  assert.equal(sanitizedSpec.object_story_spec.page_id, "111");
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: new URL(String(input)), init });
+    return jsonResponse({ id: "900000010", success: true });
+  };
+  await writeClient.createMetaAdCreative({
+    ...auth,
+    adAccountId: "123456789",
+    mode: "execute",
+    payload: {
+      name: "Legacy Actor Field",
+      object_story_spec: {
+        page_id: "111",
+        instagram_actor_id: "999888777",
+        link_data: { link: "https://example.com", message: "Hallo" },
+      },
+    },
+  });
+  assert.equal(requests[0].url.pathname, "/v25.0/act_123456789/adcreatives");
+  const creativeBody = encodedBody(requests[0].init);
+  assert.equal(creativeBody.has("instagram_actor_id"), false);
+  const storySpec = JSON.parse(creativeBody.get("object_story_spec"));
+  assert.equal("instagram_actor_id" in storySpec, false);
+  assert.equal(storySpec.page_id, "111");
+
   console.log("Meta write client regression passed.");
 } finally {
   globalThis.fetch = originalFetch;
