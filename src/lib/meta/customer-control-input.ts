@@ -966,8 +966,10 @@ type LaunchCommon = {
       pixel_id: string;
       custom_event_type: string;
     };
-    /** Opt-in structural multi-ad (1 campaign → 1 ad set → 2 ads). Default 1. */
+    /** Opt-in structural multi-ad. Default omitted (=1). */
     structural_ad_count?: 1 | 2;
+    /** 1 = two ads in one ad set; 2 = two ad sets with one ad each. Requires structural_ad_count=2. */
+    structural_ad_set_count?: 1 | 2;
     structural_ads?: StructuralLaunchAd[];
   };
 };
@@ -1012,16 +1014,34 @@ function assertLifetimeWindow(startTime: string, endTime: string): void {
 
 function parseStructuralLaunchAds(body: Record<string, unknown>): {
   structural_ad_count: 1 | 2;
+  structural_ad_set_count?: 1 | 2;
   structural_ads?: StructuralLaunchAd[];
   explicitCount1: boolean;
 } {
   const rawCount = body.structuralAdCount;
+  const rawAdSetCount = body.structuralAdSetCount;
   const rawAds = body.structuralAds;
   const hasCount = rawCount !== undefined && rawCount !== null && rawCount !== "";
+  const hasAdSetCount =
+    rawAdSetCount !== undefined && rawAdSetCount !== null && rawAdSetCount !== "";
   const hasAds = rawAds !== undefined && rawAds !== null;
 
-  if (!hasCount && !hasAds) {
+  if (!hasCount && !hasAds && !hasAdSetCount) {
     return { structural_ad_count: 1, explicitCount1: false };
+  }
+
+  if (hasAdSetCount && rawAdSetCount !== 1 && rawAdSetCount !== 2) {
+    inputError(
+      "invalid_structural_ad_set_count",
+      "Struktur-Test erlaubt nur 1 oder 2 Anzeigengruppen.",
+    );
+  }
+
+  if (!hasCount && hasAdSetCount) {
+    inputError(
+      "structural_ad_count_required",
+      "structuralAdSetCount erfordert structuralAdCount=2.",
+    );
   }
 
   if (rawCount !== 1 && rawCount !== 2) {
@@ -1038,7 +1058,17 @@ function parseStructuralLaunchAds(body: Record<string, unknown>): {
         "Bei einer Anzeige dürfen keine structuralAds gesendet werden.",
       );
     }
-    return { structural_ad_count: 1, explicitCount1: true };
+    if (hasAdSetCount && rawAdSetCount === 2) {
+      inputError(
+        "invalid_structural_topology",
+        "2 Anzeigengruppen erfordern structuralAdCount=2 (nicht 1).",
+      );
+    }
+    return {
+      structural_ad_count: 1,
+      ...(hasAdSetCount ? { structural_ad_set_count: 1 as const } : {}),
+      explicitCount1: true,
+    };
   }
 
   if (!Array.isArray(rawAds) || rawAds.length !== 2) {
@@ -1086,8 +1116,14 @@ function parseStructuralLaunchAds(body: Record<string, unknown>): {
     };
   });
 
+  // Omitted structuralAdSetCount → treat as 1 (backward compat with 2-ads mode).
+  const structural_ad_set_count: 1 | 2 = hasAdSetCount
+    ? (rawAdSetCount as 1 | 2)
+    : 1;
+
   return {
     structural_ad_count: 2,
+    structural_ad_set_count,
     structural_ads,
     explicitCount1: false,
   };
@@ -1120,6 +1156,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     "customEventType",
     // Optional structural multi-ad (mutually exclusive with DCA text variants).
     "structuralAdCount",
+    "structuralAdSetCount",
     "structuralAds",
   ];
   assertExactKeys(
@@ -1160,6 +1197,23 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
 
   const structural = parseStructuralLaunchAds(body);
 
+  const structuralLaunchInputs =
+    structural.structural_ad_count === 2
+      ? {
+          structural_ad_count: 2 as const,
+          structural_ad_set_count: (structural.structural_ad_set_count ??
+            1) as 1 | 2,
+          structural_ads: structural.structural_ads,
+        }
+      : structural.explicitCount1
+        ? {
+            structural_ad_count: 1 as const,
+            ...(structural.structural_ad_set_count === 1
+              ? { structural_ad_set_count: 1 as const }
+              : {}),
+          }
+        : {};
+
   const common: LaunchCommon = {
     blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
     brandProfileId: optionalUuid(body.brandProfileId, "Die Brand-Profil-ID"),
@@ -1181,14 +1235,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       creative_name: optionalLaunchName(body.creativeName, "Der Creative-Name"),
       ad_name: optionalLaunchName(body.adName, "Der Anzeigenname"),
       ...(promotedObject ? { promoted_object: promotedObject } : {}),
-      ...(structural.structural_ad_count === 2
-        ? {
-            structural_ad_count: 2 as const,
-            structural_ads: structural.structural_ads,
-          }
-        : structural.explicitCount1
-          ? { structural_ad_count: 1 as const }
-          : {}),
+      ...structuralLaunchInputs,
     },
   };
   const budgetOwnerType = requiredEnum(
@@ -1198,14 +1245,32 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
   );
 
   if (budgetType === "DAILY") {
+    const dailyBudgetMinor = parseEuroAmountToMinor(
+      body.dailyBudget,
+      "Das Launch-Tagesbudget",
+    );
+    if (
+      structural.structural_ad_count === 2 &&
+      (structural.structural_ad_set_count ?? 1) === 2
+    ) {
+      if (budgetOwnerType !== "AD_SET") {
+        inputError(
+          "structural_two_adsets_requires_ad_set_budget",
+          "2 Ad Sets erfordern Budgetträger Anzeigengruppe (AD_SET).",
+        );
+      }
+      if (BigInt(dailyBudgetMinor) < BigInt(200)) {
+        inputError(
+          "structural_two_adsets_budget_too_small",
+          "Für 2 Ad Sets muss das Tagesbudget mindestens 2,00 EUR betragen (hälftige Verteilung, je mind. 1,00 EUR).",
+        );
+      }
+    }
     return {
       ...common,
       budgetType,
       budgetOwnerType,
-      dailyBudgetMinor: parseEuroAmountToMinor(
-        body.dailyBudget,
-        "Das Launch-Tagesbudget",
-      ),
+      dailyBudgetMinor,
     };
   }
 
@@ -1213,6 +1278,15 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     inputError(
       "invalid_budget_owner",
       "Ein Laufzeitbudget muss für diesen Canary auf Kampagnenebene liegen.",
+    );
+  }
+  if (
+    structural.structural_ad_count === 2 &&
+    (structural.structural_ad_set_count ?? 1) === 2
+  ) {
+    inputError(
+      "structural_two_adsets_daily_only",
+      "2 Ad Sets sind nur mit Tagesbudget und AD_SET-Budgetträger erlaubt.",
     );
   }
   const startTime = requiredUtcTimestamp(body.startTime, "Der Laufzeitbeginn");
