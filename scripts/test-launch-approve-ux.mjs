@@ -57,6 +57,8 @@ assert.match(traffic, /Weitere Traffic-Kampagne starten/);
 assert.match(traffic, /Erledigt — Kampagne ist live/);
 assert.match(traffic, /PROTOCOL_APPROVE_REASON/);
 assert.match(traffic, /launchSucceeded/);
+assert.match(traffic, /CreativeTextVariantFields/);
+assert.match(traffic, /primaryTexts/);
 assert.doesNotMatch(traffic, /Freigabe-Begründung/);
 assert.doesNotMatch(traffic, /approveReason/);
 assert.match(
@@ -73,7 +75,8 @@ const lead = await readFile(
   "utf8",
 );
 assert.match(lead, /Vorschau prüfen/);
-assert.match(lead, /primaryText: primaryText\.trim\(\)/);
+assert.match(lead, /CreativeTextVariantFields/);
+assert.match(lead, /primaryTexts/);
 assert.match(lead, /Weitere Lead-Kampagne starten/);
 assert.match(lead, /PROTOCOL_APPROVE_REASON/);
 assert.doesNotMatch(lead, /Freigabe-Begründung/);
