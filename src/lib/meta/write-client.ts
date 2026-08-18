@@ -768,6 +768,12 @@ export function createMetaAdSet(input: MetaAccountMutationInput): Promise<MetaMu
         ? { destination_type: "ON_POST" }
         : {}
     ),
+    ...(
+      String(input.payload.optimization_goal ?? "") === "LINK_CLICKS"
+        && input.payload.destination_type === undefined
+        ? { destination_type: "WEBSITE" }
+        : {}
+    ),
   };
 
   assertExclusiveBudget(payload);
