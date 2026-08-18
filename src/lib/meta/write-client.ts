@@ -798,15 +798,39 @@ function isInstagramOrganicMediaCreative(payload: MetaWritePayload): boolean {
     && META_NUMERIC_ID.test(payload.instagram_user_id);
 }
 
+/**
+ * Meta Marketing API rejects deprecated object_story_spec.instagram_actor_id
+ * (#100 "must be a valid Instagram account id"). Strip actor_id only —
+ * callers must set instagram_user_id when a connected IG asset is known.
+ */
+export function sanitizeCreativeInstagramFields(
+  payload: MetaWritePayload,
+): MetaWritePayload {
+  let next: MetaWritePayload = { ...payload };
+  if (isRecord(next.object_story_spec)) {
+    const spec: Record<string, MetaWriteValue> = {
+      ...(next.object_story_spec as Record<string, MetaWriteValue>),
+    };
+    delete spec.instagram_actor_id;
+    next = { ...next, object_story_spec: spec };
+  }
+  if ("instagram_actor_id" in next) {
+    const { instagram_actor_id: _removed, ...rest } = next;
+    return rest;
+  }
+  return next;
+}
+
 export function createMetaAdCreative(input: MetaAccountMutationInput): Promise<MetaMutationResult> {
-  assertAllowedPayload(input.payload, CREATIVE_CREATE_FIELDS);
-  assertRequiredString(input.payload, "name");
+  const sanitized = sanitizeCreativeInstagramFields(input.payload);
+  assertAllowedPayload(sanitized, CREATIVE_CREATE_FIELDS);
+  assertRequiredString(sanitized, "name");
 
   if (
-    input.payload.object_story_spec === undefined
-    && input.payload.object_story_id === undefined
-    && input.payload.asset_feed_spec === undefined
-    && !isInstagramOrganicMediaCreative(input.payload)
+    sanitized.object_story_spec === undefined
+    && sanitized.object_story_id === undefined
+    && sanitized.asset_feed_spec === undefined
+    && !isInstagramOrganicMediaCreative(sanitized)
   ) {
     throw new TypeError(
       "Creative requires object_story_spec, object_story_id, asset_feed_spec, or Instagram organic media fields",
@@ -815,15 +839,15 @@ export function createMetaAdCreative(input: MetaAccountMutationInput): Promise<M
 
   // Organic boost creatives must not send top-level CTA/link next to
   // object_story_id / Instagram media fields — Meta Graph rejects that (#100).
-  const organicStoryBoost = typeof input.payload.object_story_id === "string"
-    || isInstagramOrganicMediaCreative(input.payload);
+  const organicStoryBoost = typeof sanitized.object_story_id === "string"
+    || isInstagramOrganicMediaCreative(sanitized);
   const payload = organicStoryBoost
     ? Object.fromEntries(
-      Object.entries(input.payload).filter(
+      Object.entries(sanitized).filter(
         ([key]) => key !== "call_to_action_type" && key !== "link_url",
       ),
     )
-    : input.payload;
+    : sanitized;
 
   if (isInstagramOrganicMediaCreative(payload)) {
     normalizeMetaObjectId(String(payload.object_id));
