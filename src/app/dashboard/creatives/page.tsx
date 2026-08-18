@@ -12,6 +12,19 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** Row shape for MEDIA_LIBRARY_ASSET_LIST_SELECT (must stay in sync). */
+type MediaLibraryAssetRow = {
+  id: string;
+  original_filename: string | null;
+  width: number | null;
+  height: number | null;
+  source_type: string | null;
+  status: string | null;
+  meta_image_hash: string | null;
+  created_at: string;
+  library_scope: string | null;
+};
+
 export default async function CreativesPage() {
   const supabase = await createClient();
   const {
@@ -35,6 +48,7 @@ export default async function CreativesPage() {
     metaAccount
       ? supabase
           .from("brand_assets")
+          // Dynamic select string loses Supabase row typing — cast after fetch.
           .select(MEDIA_LIBRARY_ASSET_LIST_SELECT)
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
@@ -42,7 +56,7 @@ export default async function CreativesPage() {
           .neq("status", "REVOKED")
           .order("created_at", { ascending: false })
           .limit(100)
-      : Promise.resolve({ data: [] as const, error: null }),
+      : Promise.resolve({ data: [] as MediaLibraryAssetRow[], error: null }),
     metaAccount
       ? supabase
           .from("brand_profiles")
@@ -63,7 +77,9 @@ export default async function CreativesPage() {
     console.error("[creatives] brand_assets list failed", assetsResult.error);
   }
 
-  const assets = assetsResult.error ? [] : (assetsResult.data ?? []);
+  const assets: MediaLibraryAssetRow[] = assetsResult.error
+    ? []
+    : ((assetsResult.data ?? []) as MediaLibraryAssetRow[]);
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
