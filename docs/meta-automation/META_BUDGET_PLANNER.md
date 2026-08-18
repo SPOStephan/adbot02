@@ -39,8 +39,11 @@ Eine Budgetänderung verwendet immer das aktuell synchronisierte Budget als Ausg
 | `spend_without_results_7d` | Budget um 20 % senken | Aktuelle Empfehlung aus demselben Snapshot; Mindestdaten bereits durch die Recommendation Engine belegt. |
 | `cost_per_result_up_30pct` | Budget um 20 % senken | Aktuelle Empfehlung aus demselben Snapshot. |
 | `cost_per_result_down_15pct` | Budget um 10 % erhöhen | Je mindestens fünf Ergebnisse in beiden Siebentagesfenstern; Kosten je Ergebnis mindestens 15 % besser. |
+| `abo_sibling_reallocate_v1` | Bis 10 % des **Verlierer**-Tagesbudgets zum Gewinner umschichten (ABO, ≥2 aktive Ad-Set-Owner) | **Relative** Erfolgsrangfolge je Ziel (Traffic: Link-Klicks / CPC; Leads: Leads / CPL; Sales: Purchases). Keine Mindestvolumen-Stopps — niedrige Volumina beenden keine Kampagne. Summe der Geschwister-Tagesbudgets bleibt konstant. Cooldown, 20 %/24 h, Policy und Kill-Switch gelten weiter. DECREASE zuerst, dann INCREASE. |
 | Hard-Cap-Verletzung | Aktive MANAGED-Kampagnen pausieren, **außer Beitrag-Push** (`organic-boost`) | Sicherheitspfad über **Exposure** (`Tagesbudget × Flexfaktor`), nicht über beobachteten Spend. Beitrag-Push bleibt mid-flight ACTIVE; neue Launches bleiben über Preflight am Hard-Cap geblockt. Bereits fälschlich pausierte Beitrag-Pushes werden auch im `HARD_CAP_SAFETY`-Pfad per `force_resume_meta_organic_boost_hard_cap_pauses` wieder `ACTIVATE`t. |
 | Neuer Werbekonto-Tag unter Cap | Zuvor per Hard-Cap `SAFETY_PAUSE`te MANAGED-Kampagnen wieder `ACTIVATE` (`safety_action`) | PAUSED Owner werden am neuen Tag nicht erneut in die SNAPSHOT-Exposure aufgenommen; Same-Day-Reserve bleibt erhalten. `mutation_plans_safety_type_check` erlaubt `safety_action` für `SAFETY_PAUSE` und `ACTIVATE`. |
+
+Analyse-Empfehlung `abo_sibling_success_rank_7d` (Severity `opportunity`) spiegelt dieselbe relative Rangfolge und den vorgeschlagenen Delta-Betrag wider, ohne Remote-Mutation.
 
 Jeder Budgetplan besitzt die vier ausführbaren Schritte `VALIDATE_REMOTE`, `UPDATE_BUDGET`, `READ_AFTER_WRITE` und `RECONCILE`. Ein Sicherheitspausenplan besitzt `VALIDATE_REMOTE`, `UPDATE_STATUS`, `READ_AFTER_WRITE` und `RECONCILE`. Planneroutput ist idempotent über Policy, Marketing-Snapshot, Target, Regel und Regelversion.
 
@@ -64,6 +67,7 @@ Der Campaign-Sharing-Vektor muss exakt so viele eindeutige, numerische Campaign-
 
 ```bash
 npm run test:meta-budget-planner
+npm run test:success-control-rank
 npm run test:meta-content-sync
 npm run test:meta-marketing-sync
 npm run test:meta-write-control-plane

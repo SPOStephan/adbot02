@@ -1028,8 +1028,9 @@ export function LeadLaunchCanary({
           {structuralMode === "two_ad_sets" ? (
             <p className="mt-2 text-xs font-medium text-slate-500">
               Eine Kampagne, zwei Anzeigengruppen, je eine Anzeige.
-              Tagesbudget wird hälftig auf beide Anzeigengruppen verteilt.
-              Deaktiviert Textvarianten (Dynamic Creative).
+              Startbudget wird zunächst aufgeteilt; danach schichtet Adbot nach
+              Erfolg um (Summe bleibt gleich). Deaktiviert Textvarianten
+              (Dynamic Creative).
             </p>
           ) : null}
         </fieldset>
@@ -1296,7 +1297,7 @@ export function LeadLaunchCanary({
                 <>
                   <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
                     {heldPlan.structuralAdSetCount === 2
-                      ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Budget hälftig)"
+                      ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
                       : "Struktur: 1 Kampagne → 1 Anzeigengruppe → 2 Anzeigen"}
                   </p>
                   {heldPlan.structuralAds.map((ad, index) => (
