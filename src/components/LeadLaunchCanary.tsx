@@ -7,6 +7,7 @@ import {
   ImagePlus,
   LoaderCircle,
   PlayCircle,
+  Rocket,
   Target,
   ShieldCheck,
   Sparkles,
@@ -95,6 +96,10 @@ const DEFAULT_LEAD_BLUEPRINT = {
   },
   ad: {},
 };
+
+/** Protocol-only; never shown in the customer dashboard. */
+const PROTOCOL_APPROVE_REASON =
+  "Kontrollierter Lead-Canary mit Funnel und bestätigtem Pixel";
 
 const COPY_LIMITS = {
   primary: { recommended: 125, max: 500 },
@@ -289,9 +294,7 @@ export function LeadLaunchCanary({
     return null;
   });
   const prepareInFlight = pending && !heldPlan;
-  const [approveReason, setApproveReason] = useState(
-    "Kontrollierter Lead-Canary mit Funnel und bestätigtem Pixel",
-  );
+  const [launchSucceeded, setLaunchSucceeded] = useState(false);
 
   const gates = useMemo(
     () => [
@@ -531,7 +534,7 @@ export function LeadLaunchCanary({
         adName: `Lead Ad ${stamp}`,
         pixelId: selectedPixel.pixelId,
         customEventType: selectedPixel.customEventType,
-        reason: "Kontrollierter Lead-Canary mit Funnel und bestätigtem Pixel",
+        reason: PROTOCOL_APPROVE_REASON,
         confirmation: "AKTIV-LAUNCH VORBEREITEN",
       });
 
@@ -600,9 +603,6 @@ export function LeadLaunchCanary({
     setNotice(null);
     try {
       await ensureFreeze();
-      if (approveReason.trim().length < 12) {
-        throw new Error("Begründung für die Freigabe mindestens 12 Zeichen.");
-      }
       const result = await apiJson<{
         planStatus?: string;
         approvalId?: string;
@@ -621,7 +621,7 @@ export function LeadLaunchCanary({
         adSetName: heldPlan.adSetName,
         creativeName: heldPlan.creativeName,
         adName: heldPlan.adName,
-        reason: approveReason.trim(),
+        reason: PROTOCOL_APPROVE_REASON,
         confirmation: "AKTIV-LAUNCH FREIGEBEN",
       });
       if (!result.approvalId || result.planStatus !== "PENDING") {
@@ -632,17 +632,20 @@ export function LeadLaunchCanary({
         typeof result.executionWarning === "string" &&
         result.executionWarning.trim()
       ) {
+        setLaunchSucceeded(false);
         setNotice({
           tone: "error",
           message: result.executionWarning.trim(),
         });
       } else if (result.executorSucceeded === 1) {
+        setLaunchSucceeded(true);
         setNotice({
           tone: "success",
           message:
             "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.",
         });
       } else {
+        setLaunchSucceeded(true);
         setNotice({
           tone: "success",
           message:
@@ -661,6 +664,12 @@ export function LeadLaunchCanary({
     } finally {
       setPending(false);
     }
+  }
+
+  function startAnotherLeadCampaign() {
+    setLaunchSucceeded(false);
+    setHeldPlan(null);
+    setNotice(null);
   }
 
   const inputClass =
@@ -693,6 +702,39 @@ export function LeadLaunchCanary({
           </p>
         </div>
       </div>
+
+      {launchSucceeded ? (
+        <div
+          className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6"
+          role="status"
+        >
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+              <Check className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-extrabold text-emerald-950">
+                Erledigt — Kampagne ist live
+              </h3>
+              <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
+                {notice?.tone === "success"
+                  ? notice.message
+                  : "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."}
+              </p>
+              <button
+                className={`${buttonClass} mt-5`}
+                disabled={pending}
+                onClick={startAnotherLeadCampaign}
+                type="button"
+              >
+                <Rocket className="size-4" />
+                Weitere Lead-Kampagne starten
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
 
       <ul className="mt-5 flex flex-wrap gap-2">
         {gates.map((gate) => (
@@ -1064,16 +1106,6 @@ export function LeadLaunchCanary({
             </p>
           ) : null}
 
-          <label className="mt-4 block text-sm font-bold text-slate-800">
-            Freigabe-Begründung
-            <input
-              className={inputClass}
-              disabled={pending}
-              onChange={(event) => setApproveReason(event.target.value)}
-              required
-              value={approveReason}
-            />
-          </label>
           <button className={`${buttonClass} mt-4`} disabled={pending} type="submit">
             {pending ? (
               <LoaderCircle className="size-4 animate-spin" />
@@ -1084,6 +1116,8 @@ export function LeadLaunchCanary({
           </button>
         </form>
       ) : null}
+        </>
+      )}
     </section>
   );
 }

@@ -53,6 +53,12 @@ assert.match(traffic, /objectiveLabel/);
 assert.match(traffic, /friendlyCampaignLabel/);
 assert.match(traffic, /\/api\/media-library\/preview\?assetId=/);
 assert.match(traffic, /notice && !heldPlan/);
+assert.match(traffic, /Weitere Traffic-Kampagne starten/);
+assert.match(traffic, /Erledigt — Kampagne ist live/);
+assert.match(traffic, /PROTOCOL_APPROVE_REASON/);
+assert.match(traffic, /launchSucceeded/);
+assert.doesNotMatch(traffic, /Freigabe-Begründung/);
+assert.doesNotMatch(traffic, /approveReason/);
 assert.match(
   traffic,
   /Traffic-Canary: kurze Freeze-Phase für Freigabe/,
@@ -68,6 +74,10 @@ const lead = await readFile(
 );
 assert.match(lead, /Vorschau prüfen/);
 assert.match(lead, /primaryText: primaryText\.trim\(\)/);
+assert.match(lead, /Weitere Lead-Kampagne starten/);
+assert.match(lead, /PROTOCOL_APPROVE_REASON/);
+assert.doesNotMatch(lead, /Freigabe-Begründung/);
+assert.doesNotMatch(lead, /approveReason/);
 assert.match(
   lead,
   /Lead-Canary: kurze Freeze-Phase für Freigabe/,
