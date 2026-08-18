@@ -148,6 +148,8 @@ export function formatLabelForDimensions(
   }
   return null;
 }
+
+/** Read pixel size in the browser before upload (Schnellcheck). */
 export async function readImageDimensions(
   file: File,
 ): Promise<{ width: number; height: number }> {
