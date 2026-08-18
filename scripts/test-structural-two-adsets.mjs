@@ -66,7 +66,12 @@ const traffic = await readFile(
 assert.match(traffic, /2 Ad Sets/);
 assert.match(traffic, /structuralAdSetCount/);
 assert.match(traffic, /structuralMode/);
-assert.match(traffic, /Tagesbudget\s+wird hälftig/);
+assert.match(
+  traffic,
+  /Startbudget wird zunächst aufgeteilt; danach schichtet Adbot nach/,
+);
+assert.match(traffic, /Summe bleibt gleich/);
+assert.match(traffic, /Erfolgsumschichtung/);
 assert.match(traffic, /Anzeige 1/);
 assert.match(traffic, /Anzeige 2/);
 
@@ -77,6 +82,12 @@ const lead = await readFile(
 assert.match(lead, /2 Ad Sets/);
 assert.match(lead, /structuralAdSetCount/);
 assert.match(lead, /structuralMode/);
+assert.match(
+  lead,
+  /Startbudget wird zunächst aufgeteilt; danach schichtet Adbot nach/,
+);
+assert.match(lead, /Summe bleibt gleich/);
+assert.match(lead, /Erfolgsumschichtung/);
 
 const inputSourcePath = join(root, "src/lib/meta/customer-control-input.ts");
 const inputSource = await readFile(inputSourcePath, "utf8");

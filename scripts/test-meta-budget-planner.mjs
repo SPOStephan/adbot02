@@ -171,6 +171,46 @@ try {
     /HARD_CAP_SAFETY/,
   );
 
+  const siblingSuccessReallocateMigration = await readFile(
+    join(
+      projectRoot,
+      "supabase/migrations/20260818210000_meta_abo_sibling_success_reallocate.sql",
+    ),
+    "utf8",
+  );
+  assert.match(
+    siblingSuccessReallocateMigration,
+    /abo_sibling_reallocate_v1/,
+  );
+  assert.match(
+    siblingSuccessReallocateMigration,
+    /abo_sibling_success_rank_7d/,
+  );
+  assert.match(
+    siblingSuccessReallocateMigration,
+    /queue_meta_sibling_budget_reallocate_internal/,
+  );
+  assert.match(
+    siblingSuccessReallocateMigration,
+    /meta_ad_set_performance_7d/,
+  );
+  assert.match(
+    siblingSuccessReallocateMigration,
+    /Sum of sibling ABO ad-set daily budgets stays constant/,
+  );
+  assert.match(
+    siblingSuccessReallocateMigration,
+    /queue_meta_sibling_budget_reallocate_internal/,
+  );
+  assert.doesNotMatch(
+    siblingSuccessReallocateMigration,
+    /materialize_meta_organic_boost_plan/,
+  );
+  assert.match(
+    siblingSuccessReallocateMigration,
+    /no_min_volume_stop/,
+  );
+
   const finishBoostHardCapResumeMigration = await readFile(
     join(
       projectRoot,
