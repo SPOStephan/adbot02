@@ -32,11 +32,12 @@
     "test:content-candidate-lifecycle": "node scripts/test-content-candidate-lifecycle.mjs",
     "test:launch-prepare-result": "node scripts/test-launch-prepare-result.mjs",
     "test:launch-approve-ux": "node scripts/test-launch-approve-ux.mjs",
+    "test:launch-chain-delivery": "node scripts/test-launch-chain-delivery.mjs",
     "test:legal-pages": "node scripts/test-legal-pages.mjs",
     "test:legal-plain-text": "node scripts/test-legal-plain-text.mjs",
     "test:site-admin": "node scripts/test-site-admin.mjs",
     "test:site-logo": "node scripts/test-site-logo.mjs",
-    "test:meta-all": "npm run test:meta-security && npm run test:meta-scope-policy && npm run test:meta-readonly && npm run test:supabase-admin-env && npm run test:staging-routing && npm run test:password-reset && npm run test:dashboard-meta-connector && npm run test:meta-disconnect && npm run test:meta-asset-prune && npm run test:meta-content-sync && npm run test:meta-marketing-readonly && npm run test:meta-marketing-sync && npm run test:meta-write-client && npm run test:meta-customer-controls && npm run test:meta-mutation-executor && npm run test:meta-write-control-plane && npm run test:meta-organic-boost && npm run test:content-candidate-lifecycle && npm run test:launch-prepare-result && npm run test:launch-approve-ux && npm run test:legal-pages && npm run test:legal-plain-text && npm run test:site-admin && npm run test:site-logo"
+    "test:meta-all": "npm run test:meta-security && npm run test:meta-scope-policy && npm run test:meta-readonly && npm run test:supabase-admin-env && npm run test:staging-routing && npm run test:password-reset && npm run test:dashboard-meta-connector && npm run test:meta-disconnect && npm run test:meta-asset-prune && npm run test:meta-content-sync && npm run test:meta-marketing-readonly && npm run test:meta-marketing-sync && npm run test:meta-write-client && npm run test:meta-customer-controls && npm run test:meta-mutation-executor && npm run test:meta-write-control-plane && npm run test:meta-organic-boost && npm run test:content-candidate-lifecycle && npm run test:launch-prepare-result && npm run test:launch-approve-ux && npm run test:launch-chain-delivery && npm run test:legal-pages && npm run test:legal-plain-text && npm run test:site-admin && npm run test:site-logo"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

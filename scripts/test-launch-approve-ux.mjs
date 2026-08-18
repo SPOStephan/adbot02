@@ -12,7 +12,7 @@ const serviceSource = await readFile(
 assert.match(serviceSource, /function launchApprovalFailureMessage/);
 assert.match(serviceSource, /exclusive idle account/);
 assert.match(serviceSource, /ensureFreezeWritesForLaunch\(customer\)/);
-assert.match(serviceSource, /processNextMetaMutation/);
+assert.match(serviceSource, /drainApprovedLaunchChainForAccount/);
 assert.match(
   serviceSource,
   /withLaunchFailureDetail\(launchApprovalFailureMessage\(error\), error\)/,

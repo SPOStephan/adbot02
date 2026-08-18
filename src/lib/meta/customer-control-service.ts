@@ -27,6 +27,10 @@ import {
   type PolicyCommand,
 } from "@/lib/meta/customer-control-input";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
+import {
+  describeLaunchChainDrainFailure,
+  drainApprovedLaunchChainForAccount,
+} from "@/lib/meta/launch-chain-execute";
 import { planAndDrainOrganicBoostForAccount } from "@/lib/meta/organic-boost-ensure";
 import { runOrganicBoostPlannerForAccount } from "@/lib/meta/organic-boost-runner";
 import {
@@ -1746,6 +1750,8 @@ export async function approveCustomerLaunch(
   executorRuns: number;
   executorSucceeded: number;
   executorLastOutcome: string | null;
+  executionPlanStatus: string | null;
+  executionWarning: string | null;
 }> {
   requireWriteReadyCustomer(customer, "einen Aktiv-Launch freigibst");
   if (!customer.marketingSyncId) {
@@ -1807,38 +1813,30 @@ export async function approveCustomerLaunch(
     rpcFailure("Die Aktiv-Launch-Freigabe");
   }
 
-  // Kick the shared mutation executor so Meta objects appear without waiting
-  // solely on the minutely cron (best-effort; Freigabe already succeeded).
+  // Kick the account-scoped launch drain so campaign→ad→ACTIVE finishes in this
+  // request when possible. Freigabe itself already succeeded.
   let executorRuns = 0;
   let executorSucceeded = 0;
   let executorLastOutcome: string | null = null;
+  let executionPlanStatus: string | null = null;
+  let executionWarning: string | null = null;
   try {
-    const { processNextMetaMutation } = await import("@/lib/meta/executor");
-    for (let index = 0; index < 6; index += 1) {
-      const result = await processNextMetaMutation(
-        `customer-launch-approve:${customer.platformAccountId}:${randomUUID()}`,
-      );
-      if (!result.processed || result.outcome === "idle") {
-        break;
-      }
-      if (
-        result.platformAccountId &&
-        result.platformAccountId !== customer.platformAccountId
-      ) {
-        break;
-      }
-      executorRuns += 1;
-      executorLastOutcome = result.outcome;
-      if (result.outcome === "succeeded") {
-        executorSucceeded += 1;
-      }
-      if (result.planId === command.planId && result.outcome === "succeeded") {
-        // Continue a few more ticks so PAUSED→ACTIVE steps can progress.
-        continue;
-      }
-    }
-  } catch {
-    // Cron remains the safety net.
+    const drain = await drainApprovedLaunchChainForAccount({
+      planId: command.planId,
+      userId: customer.userId,
+      platformAccountId: customer.platformAccountId,
+      maxRuns: 8,
+    });
+    executorRuns = drain.runs;
+    executorSucceeded = drain.succeeded ? 1 : 0;
+    executorLastOutcome = drain.lastOutcome;
+    executionPlanStatus = drain.planStatus;
+    executionWarning = describeLaunchChainDrainFailure(drain);
+  } catch (error) {
+    executionWarning =
+      error instanceof Error
+        ? `Meta-Ausführung nach Freigabe unterbrochen (${error.message.slice(0, 120)}). Bitte Werbeanzeigenmanager prüfen.`
+        : "Meta-Ausführung nach Freigabe unterbrochen. Bitte Werbeanzeigenmanager prüfen.";
   }
 
   return {
@@ -1850,6 +1848,8 @@ export async function approveCustomerLaunch(
     executorRuns,
     executorSucceeded,
     executorLastOutcome,
+    executionPlanStatus,
+    executionWarning,
   };
 }
 

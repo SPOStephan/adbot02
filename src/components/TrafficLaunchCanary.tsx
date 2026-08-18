@@ -86,6 +86,7 @@ const DEFAULT_TRAFFIC_BLUEPRINT = {
     billing_event: "IMPRESSIONS",
     optimization_goal: "LINK_CLICKS",
     bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+    destination_type: "WEBSITE",
     targeting: { geo_locations: { countries: ["DE"] } },
   },
   creative: {
@@ -606,6 +607,9 @@ export function TrafficLaunchCanary({
       const result = await apiJson<{
         planStatus?: string;
         approvalId?: string;
+        executionWarning?: string | null;
+        executionPlanStatus?: string | null;
+        executorSucceeded?: number;
       }>("PUT", "/api/meta/automation/launch", {
         planId: heldPlan.id,
         payloadHash: heldPlan.payloadHash,
@@ -626,11 +630,27 @@ export function TrafficLaunchCanary({
         throw new Error("Freigabe wurde vom Server nicht bestätigt.");
       }
       setHeldPlan(null);
-      setNotice({
-        tone: "success",
-        message:
-          "Kampagne freigegeben. Adbot legt sie bei Meta zuerst pausiert an und schaltet sie danach aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager unter Kampagnen (auch „Aus“/pausiert) nach.",
-      });
+      if (
+        typeof result.executionWarning === "string" &&
+        result.executionWarning.trim()
+      ) {
+        setNotice({
+          tone: "error",
+          message: result.executionWarning.trim(),
+        });
+      } else if (result.executorSucceeded === 1) {
+        setNotice({
+          tone: "success",
+          message:
+            "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.",
+        });
+      } else {
+        setNotice({
+          tone: "success",
+          message:
+            "Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.",
+        });
+      }
       refresh();
     } catch (error) {
       setNotice({
