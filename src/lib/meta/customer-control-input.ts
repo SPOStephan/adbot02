@@ -935,6 +935,12 @@ function optionalMetaObjectId(value: unknown, field: string): string | null {
   return value.trim();
 }
 
+export type StructuralLaunchAd = {
+  message: string;
+  name: string;
+  description: string;
+};
+
 type LaunchCommon = {
   blueprintId: string;
   /**
@@ -960,6 +966,9 @@ type LaunchCommon = {
       pixel_id: string;
       custom_event_type: string;
     };
+    /** Opt-in structural multi-ad (1 campaign → 1 ad set → 2 ads). Default 1. */
+    structural_ad_count?: 1 | 2;
+    structural_ads?: StructuralLaunchAd[];
   };
 };
 
@@ -1001,6 +1010,89 @@ function assertLifetimeWindow(startTime: string, endTime: string): void {
   }
 }
 
+function parseStructuralLaunchAds(body: Record<string, unknown>): {
+  structural_ad_count: 1 | 2;
+  structural_ads?: StructuralLaunchAd[];
+  explicitCount1: boolean;
+} {
+  const rawCount = body.structuralAdCount;
+  const rawAds = body.structuralAds;
+  const hasCount = rawCount !== undefined && rawCount !== null && rawCount !== "";
+  const hasAds = rawAds !== undefined && rawAds !== null;
+
+  if (!hasCount && !hasAds) {
+    return { structural_ad_count: 1, explicitCount1: false };
+  }
+
+  if (rawCount !== 1 && rawCount !== 2) {
+    inputError(
+      "invalid_structural_ad_count",
+      "Struktur-Test erlaubt nur 1 oder 2 Anzeigen.",
+    );
+  }
+
+  if (rawCount === 1) {
+    if (hasAds) {
+      inputError(
+        "structural_ads_not_allowed",
+        "Bei einer Anzeige dürfen keine structuralAds gesendet werden.",
+      );
+    }
+    return { structural_ad_count: 1, explicitCount1: true };
+  }
+
+  if (!Array.isArray(rawAds) || rawAds.length !== 2) {
+    inputError(
+      "invalid_structural_ads",
+      "Struktur-Test mit 2 Anzeigen benötigt genau zwei Textgruppen.",
+    );
+  }
+
+  const structural_ads = rawAds.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      inputError(
+        "invalid_structural_ads",
+        `Anzeige ${index + 1} ist ungültig.`,
+      );
+    }
+    const ad = entry as Record<string, unknown>;
+    const unknown = Object.keys(ad).filter(
+      (key) => !["message", "name", "description"].includes(key),
+    );
+    if (unknown.length > 0) {
+      inputError(
+        "unknown_field",
+        `Anzeige ${index + 1} enthält ein nicht erlaubtes Feld: ${unknown[0]}.`,
+      );
+    }
+    return {
+      message: requiredText(
+        ad.message,
+        `Anzeigentext (Anzeige ${index + 1})`,
+        1,
+        2_200,
+      ),
+      name: requiredText(
+        ad.name,
+        `Überschrift (Anzeige ${index + 1})`,
+        1,
+        255,
+      ),
+      description: optionalText(
+        ad.description,
+        `Beschreibung (Anzeige ${index + 1})`,
+        255,
+      ),
+    };
+  });
+
+  return {
+    structural_ad_count: 2,
+    structural_ads,
+    explicitCount1: false,
+  };
+}
+
 export function parseLaunchCommand(value: unknown): LaunchCommand {
   const body = asJsonObject(value);
   const budgetType =
@@ -1026,6 +1118,9 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     // Optional Lead fields — Traffic Canary simply omits them.
     "pixelId",
     "customEventType",
+    // Optional structural multi-ad (mutually exclusive with DCA text variants).
+    "structuralAdCount",
+    "structuralAds",
   ];
   assertExactKeys(
     body,
@@ -1063,6 +1158,8 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     );
   }
 
+  const structural = parseStructuralLaunchAds(body);
+
   const common: LaunchCommon = {
     blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
     brandProfileId: optionalUuid(body.brandProfileId, "Die Brand-Profil-ID"),
@@ -1084,6 +1181,14 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       creative_name: optionalLaunchName(body.creativeName, "Der Creative-Name"),
       ad_name: optionalLaunchName(body.adName, "Der Anzeigenname"),
       ...(promotedObject ? { promoted_object: promotedObject } : {}),
+      ...(structural.structural_ad_count === 2
+        ? {
+            structural_ad_count: 2 as const,
+            structural_ads: structural.structural_ads,
+          }
+        : structural.explicitCount1
+          ? { structural_ad_count: 1 as const }
+          : {}),
     },
   };
   const budgetOwnerType = requiredEnum(
