@@ -107,6 +107,37 @@ try {
     "utf8",
   );
   assert.match(creativesPage, /\.neq\("status", "REVOKED"\)/);
+  assert.match(creativesPage, /MEDIA_LIBRARY_ASSET_LIST_SELECT/);
+  assert.doesNotMatch(creativesPage, /metadata/);
+  assert.match(creativesPage, /loadError/);
+  assert.match(
+    creativesPage,
+    /Creatives sind nicht gelöscht|vorübergehend nicht verfügbar|brand_assets list failed/,
+  );
+
+  const columnsSource = await readFile(
+    join(root, "src/lib/media-library/customer-asset-columns.ts"),
+    "utf8",
+  );
+  assert.match(columnsSource, /CUSTOMER_BRAND_ASSET_LIST_COLUMNS/);
+  assert.match(columnsSource, /MEDIA_LIBRARY_ASSET_LIST_SELECT/);
+  assert.doesNotMatch(columnsSource, /"metadata"/);
+
+  const grantSource = await readFile(
+    join(
+      root,
+      "supabase/migrations/20260809190000_media_library_and_inspiration_vault.sql",
+    ),
+    "utf8",
+  );
+  assert.match(grantSource, /grant select \([\s\S]*?original_filename[\s\S]*?\) on table public\.brand_assets to authenticated/);
+  assert.doesNotMatch(
+    grantSource.slice(
+      grantSource.indexOf("grant select ("),
+      grantSource.indexOf(") on table public.brand_assets to authenticated") + 50,
+    ),
+    /\bmetadata\b/,
+  );
 
   console.log("Meta creative format slots contract tests passed.");
 } finally {
