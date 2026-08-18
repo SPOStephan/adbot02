@@ -9,6 +9,8 @@ export type AssetUploadResponse = {
   originalFilename?: string;
   width?: number;
   height?: number;
+  cropsGenerated?: number;
+  cropsSkipped?: number;
   assets?: Array<{
     brandAssetId?: string;
     originalFilename?: string;

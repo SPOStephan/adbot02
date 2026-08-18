@@ -4,33 +4,16 @@ import sharp from "sharp";
 
 import { inspectCreativeImage } from "@/lib/creative-assets/image";
 import type { CreativeImageMimeType } from "@/lib/creative-assets/types";
+import {
+  META_FORMAT_SLOTS,
+  type MetaFormatKey,
+  presetsNeedingCrop,
+} from "@/lib/media-library/meta-formats";
 
-/** Common Meta placements for feed / link ads (cover-crop targets). */
-export const META_CROP_PRESETS = [
-  {
-    key: "meta_feed_1x1",
-    label: "Feed 1:1",
-    width: 1080,
-    height: 1080,
-    preferredForLaunch: true,
-  },
-  {
-    key: "meta_feed_4x5",
-    label: "Feed 4:5",
-    width: 1080,
-    height: 1350,
-    preferredForLaunch: false,
-  },
-  {
-    key: "meta_link_191x1",
-    label: "Link 1,91:1",
-    width: 1200,
-    height: 628,
-    preferredForLaunch: false,
-  },
-] as const;
+/** @deprecated Prefer META_FORMAT_SLOTS — kept as alias for existing imports. */
+export const META_CROP_PRESETS = META_FORMAT_SLOTS;
 
-export type MetaCropPresetKey = (typeof META_CROP_PRESETS)[number]["key"];
+export type MetaCropPresetKey = MetaFormatKey;
 
 export type GeneratedMetaCrop = {
   key: MetaCropPresetKey;
@@ -45,16 +28,27 @@ export type GeneratedMetaCrop = {
 };
 
 /**
- * Content-aware cover crop (sharp attention/entropy) into Meta-ready sizes.
- * Does not mutate the original bytes — caller must store the original separately.
+ * Content-aware cover crop into Meta-ready sizes.
+ * Skips presets the original already matches (smart crop).
  */
 export async function generateMetaCropsFromOriginal(input: {
   bytes: Uint8Array;
   mimeType: CreativeImageMimeType;
+  originalWidth: number;
+  originalHeight: number;
+  /** Override which presets to generate; default = only missing formats. */
+  onlyKeys?: readonly MetaFormatKey[];
 }): Promise<GeneratedMetaCrop[]> {
+  const keys = new Set(
+    input.onlyKeys ??
+      presetsNeedingCrop(input.originalWidth, input.originalHeight),
+  );
   const crops: GeneratedMetaCrop[] = [];
 
-  for (const preset of META_CROP_PRESETS) {
+  for (const preset of META_FORMAT_SLOTS) {
+    if (!keys.has(preset.key)) {
+      continue;
+    }
     try {
       let out: Buffer;
       try {
@@ -84,7 +78,8 @@ export async function generateMetaCropsFromOriginal(input: {
       const bytes = new Uint8Array(out);
       const inspected = inspectCreativeImage({
         bytes,
-        declaredMimeType: input.mimeType === "image/png" ? "image/png" : "image/jpeg",
+        declaredMimeType:
+          input.mimeType === "image/png" ? "image/png" : "image/jpeg",
       });
 
       crops.push({

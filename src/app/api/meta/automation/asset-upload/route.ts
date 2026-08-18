@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isMetaFormatKey } from "@/lib/media-library/meta-formats";
 import {
   MediaLibraryError,
   uploadCustomerLibraryImage,
@@ -93,6 +94,21 @@ export async function POST(request: NextRequest) {
       generateMetaCropsRaw === "true" ||
       generateMetaCropsRaw === "yes";
 
+    const metaFormatRaw = String(form.get("metaFormatKey") ?? "").trim();
+    const metaFormatKey = isMetaFormatKey(metaFormatRaw)
+      ? metaFormatRaw
+      : null;
+    if (metaFormatRaw && !metaFormatKey) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Unbekanntes Meta-Format.",
+          code: "invalid_meta_format",
+        },
+        { status: 400 },
+      );
+    }
+
     const bytes = new Uint8Array(await file.arrayBuffer());
     const fileName =
       typeof file.name === "string" && file.name.trim()
@@ -108,7 +124,9 @@ export async function POST(request: NextRequest) {
       fileName,
       mimeType,
       bytes,
-      generateMetaCrops,
+      // Dedicated format slots skip auto-crop; free upload uses smart crops.
+      generateMetaCrops: metaFormatKey ? false : generateMetaCrops,
+      metaFormatKey,
     });
 
     return NextResponse.json({ ok: true, ...result });
