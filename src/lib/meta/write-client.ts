@@ -801,7 +801,7 @@ function isInstagramOrganicMediaCreative(payload: MetaWritePayload): boolean {
 /**
  * Meta Marketing API rejects deprecated object_story_spec.instagram_actor_id
  * (#100 "must be a valid Instagram account id"). Strip actor_id only —
- * callers must set instagram_user_id when a connected IG asset is known.
+ * launch materialize must set instagram_user_id when Instagram is selected.
  */
 export function sanitizeCreativeInstagramFields(
   payload: MetaWritePayload,

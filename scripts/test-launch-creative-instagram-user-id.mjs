@@ -19,12 +19,14 @@ assert.equal(
   1,
 );
 
-// Deprecated actor_id must be stripped; user_id only when IG asset is connected.
+// Deprecated actor_id must be stripped; selected IG must map to user_id (hard require).
 assert.match(migration, /v_object_story_spec := v_object_story_spec - 'instagram_actor_id'/);
 assert.match(migration, /v_creative_payload := v_creative_payload - 'instagram_actor_id'/);
-assert.match(
-  migration,
-  /ma\.asset_type = 'instagram_account'[\s\S]*?\{instagram_user_id\}/,
+assert.match(migration, /message = 'instagram_account_required'/);
+assert.match(migration, /Never strip a selected IG into Facebook-only/);
+assert.equal(
+  (migration.match(/\{instagram_user_id\}/g) || []).length,
+  4,
 );
 assert.equal(
   (migration.match(/\{instagram_actor_id\}/g) || []).length,

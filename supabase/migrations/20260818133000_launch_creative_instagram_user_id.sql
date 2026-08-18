@@ -1,7 +1,9 @@
 -- Fix Aktiv-Launch creative: Meta Graph #100
 -- "Param instagram_actor_id must be a valid Instagram account id".
--- object_story_spec.instagram_actor_id is deprecated; use instagram_user_id
--- and only when meta_assets has a connected instagram_account for this account.
+-- object_story_spec.instagram_actor_id is deprecated. brand_profiles.instagram_actor_id
+-- already stores the Instagram user / business account id from meta_assets —
+-- send it as instagram_user_id (spec + creative top-level). When set, require a
+-- connected instagram_account asset (never silently drop Instagram placements).
 -- Does not touch organic-boost materialize.
 
 create or replace function public.materialize_meta_launch_chain_plan(
@@ -434,10 +436,11 @@ begin
     true
   );
   -- Meta rejects deprecated object_story_spec.instagram_actor_id (#100).
-  -- Prefer instagram_user_id, and only when the ID is a connected IG asset.
+  -- Profile column still named instagram_actor_id; value is the IG user id —
+  -- map to instagram_user_id. Never strip a selected IG into Facebook-only.
   v_object_story_spec := v_object_story_spec - 'instagram_actor_id';
-  if nullif(btrim(coalesce(v_profile.instagram_actor_id, '')), '') is not null
-    and exists (
+  if nullif(btrim(coalesce(v_profile.instagram_actor_id, '')), '') is not null then
+    if not exists (
       select 1
       from public.meta_assets ma
       where ma.platform_account_id = p_platform_account_id
@@ -445,6 +448,11 @@ begin
         and ma.asset_type = 'instagram_account'
         and ma.meta_asset_id = v_profile.instagram_actor_id
     ) then
+      raise exception
+        using errcode = 'P0001',
+              message = 'instagram_account_required',
+              detail = 'Das gewählte Instagram-Konto ist nicht (mehr) mit diesem Meta-Konto verbunden. Bitte Instagram erneut wählen oder Meta verbinden.';
+    end if;
     v_object_story_spec := jsonb_set(
       v_object_story_spec,
       '{instagram_user_id}',
@@ -474,15 +482,7 @@ begin
     );
 
   v_creative_payload := v_creative_payload - 'instagram_actor_id';
-  if nullif(btrim(coalesce(v_profile.instagram_actor_id, '')), '') is not null
-    and exists (
-      select 1
-      from public.meta_assets ma
-      where ma.platform_account_id = p_platform_account_id
-        and ma.user_id = p_user_id
-        and ma.asset_type = 'instagram_account'
-        and ma.meta_asset_id = v_profile.instagram_actor_id
-    ) then
+  if nullif(btrim(coalesce(v_profile.instagram_actor_id, '')), '') is not null then
     v_creative_payload := jsonb_set(
       v_creative_payload,
       '{instagram_user_id}',
@@ -1583,10 +1583,11 @@ begin
     true
   );
   -- Meta rejects deprecated object_story_spec.instagram_actor_id (#100).
-  -- Prefer instagram_user_id, and only when the ID is a connected IG asset.
+  -- Profile column still named instagram_actor_id; value is the IG user id —
+  -- map to instagram_user_id. Never strip a selected IG into Facebook-only.
   v_object_story_spec := v_object_story_spec - 'instagram_actor_id';
-  if nullif(btrim(coalesce(v_profile.instagram_actor_id, '')), '') is not null
-    and exists (
+  if nullif(btrim(coalesce(v_profile.instagram_actor_id, '')), '') is not null then
+    if not exists (
       select 1
       from public.meta_assets ma
       where ma.platform_account_id = p_platform_account_id
@@ -1594,6 +1595,11 @@ begin
         and ma.asset_type = 'instagram_account'
         and ma.meta_asset_id = v_profile.instagram_actor_id
     ) then
+      raise exception
+        using errcode = 'P0001',
+              message = 'instagram_account_required',
+              detail = 'Das gewählte Instagram-Konto ist nicht (mehr) mit diesem Meta-Konto verbunden. Bitte Instagram erneut wählen oder Meta verbinden.';
+    end if;
     v_object_story_spec := jsonb_set(
       v_object_story_spec,
       '{instagram_user_id}',
@@ -1623,15 +1629,7 @@ begin
     );
 
   v_creative_payload := v_creative_payload - 'instagram_actor_id';
-  if nullif(btrim(coalesce(v_profile.instagram_actor_id, '')), '') is not null
-    and exists (
-      select 1
-      from public.meta_assets ma
-      where ma.platform_account_id = p_platform_account_id
-        and ma.user_id = p_user_id
-        and ma.asset_type = 'instagram_account'
-        and ma.meta_asset_id = v_profile.instagram_actor_id
-    ) then
+  if nullif(btrim(coalesce(v_profile.instagram_actor_id, '')), '') is not null then
     v_creative_payload := jsonb_set(
       v_creative_payload,
       '{instagram_user_id}',
