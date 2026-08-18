@@ -5,6 +5,11 @@ import { ArrowLeft, ImageIcon } from "lucide-react";
 import { MediaLibraryClient } from "@/components/MediaLibraryClient";
 import { SignOutButton } from "@/components/SignOutButton";
 import { SiteFooter } from "@/components/SiteFooter";
+import {
+  formatLabelForDimensions,
+  getMetaFormatSlot,
+  isMetaFormatKey,
+} from "@/lib/media-library/meta-formats";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -34,11 +39,12 @@ export default async function CreativesPage() {
       ? supabase
           .from("brand_assets")
           .select(
-            "id,original_filename,width,height,source_type,status,meta_image_hash,created_at,library_scope",
+            "id,original_filename,width,height,source_type,status,meta_image_hash,created_at,library_scope,metadata",
           )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .eq("library_scope", "CUSTOMER")
+          .neq("status", "REVOKED")
           .order("created_at", { ascending: false })
           .limit(100)
       : Promise.resolve({ data: [] as const }),
@@ -84,17 +90,33 @@ export default async function CreativesPage() {
 
       <div className="mx-auto max-w-5xl px-6 py-8">
         <MediaLibraryClient
-          assets={(assets ?? []).map(asset => ({
-            id: String(asset.id),
-            originalFilename: String(asset.original_filename ?? "Creative"),
-            width: typeof asset.width === "number" ? asset.width : null,
-            height: typeof asset.height === "number" ? asset.height : null,
-            sourceType: String(asset.source_type ?? "UPLOADED"),
-            status: String(asset.status ?? "READY"),
-            metaImageHashPresent: Boolean(asset.meta_image_hash),
-            createdAt: String(asset.created_at),
-          }))}
-          brandProfiles={(profiles ?? []).map(profile => ({
+          assets={(assets ?? []).map((asset) => {
+            const metadata =
+              asset.metadata && typeof asset.metadata === "object"
+                ? (asset.metadata as Record<string, unknown>)
+                : null;
+            const role =
+              typeof metadata?.role === "string" ? metadata.role : null;
+            const roleLabel =
+              role && isMetaFormatKey(role)
+                ? getMetaFormatSlot(role).label
+                : formatLabelForDimensions(
+                    typeof asset.width === "number" ? asset.width : null,
+                    typeof asset.height === "number" ? asset.height : null,
+                  );
+            return {
+              id: String(asset.id),
+              originalFilename: String(asset.original_filename ?? "Creative"),
+              width: typeof asset.width === "number" ? asset.width : null,
+              height: typeof asset.height === "number" ? asset.height : null,
+              sourceType: String(asset.source_type ?? "UPLOADED"),
+              status: String(asset.status ?? "READY"),
+              metaImageHashPresent: Boolean(asset.meta_image_hash),
+              createdAt: String(asset.created_at),
+              label: roleLabel,
+            };
+          })}
+          brandProfiles={(profiles ?? []).map((profile) => ({
             id: String(profile.id),
             brandName: String(profile.brand_name ?? "Brand"),
           }))}
