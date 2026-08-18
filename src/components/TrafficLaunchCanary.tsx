@@ -102,6 +102,11 @@ const DEFAULT_TRAFFIC_BLUEPRINT = {
   ad: {},
 };
 
+/** Protocol-only; never shown in the customer dashboard. */
+const PROTOCOL_APPROVE_REASON =
+  "Kontrollierter Traffic-Canary mit hochgeladenem Creative";
+
+
 /** Soft Meta guidance — hard caps stay generous so longer copy is still allowed. */
 const COPY_LIMITS = {
   primary: { recommended: 125, max: 500 },
@@ -291,9 +296,7 @@ export function TrafficLaunchCanary({
     return null;
   });
   const prepareInFlight = pending && !heldPlan;
-  const [approveReason, setApproveReason] = useState(
-    "Kontrollierter Traffic-Canary mit hochgeladenem Creative",
-  );
+  const [launchSucceeded, setLaunchSucceeded] = useState(false);
 
   const gates = useMemo(
     () => [
@@ -534,7 +537,7 @@ export function TrafficLaunchCanary({
         adSetName: `Traffic AdSet ${stamp}`,
         creativeName: `Traffic Creative ${stamp}`,
         adName: `Traffic Ad ${stamp}`,
-        reason: "Kontrollierter Traffic-Canary mit hochgeladenem Creative",
+        reason: PROTOCOL_APPROVE_REASON,
         confirmation: "AKTIV-LAUNCH VORBEREITEN",
       });
 
@@ -601,9 +604,6 @@ export function TrafficLaunchCanary({
     setNotice(null);
     try {
       await ensureFreeze();
-      if (approveReason.trim().length < 12) {
-        throw new Error("Begründung für die Freigabe mindestens 12 Zeichen.");
-      }
       const result = await apiJson<{
         planStatus?: string;
         approvalId?: string;
@@ -623,7 +623,7 @@ export function TrafficLaunchCanary({
         adSetName: heldPlan.adSetName,
         creativeName: heldPlan.creativeName,
         adName: heldPlan.adName,
-        reason: approveReason.trim(),
+        reason: PROTOCOL_APPROVE_REASON,
         confirmation: "AKTIV-LAUNCH FREIGEBEN",
       });
       if (!result.approvalId || result.planStatus !== "PENDING") {
@@ -634,17 +634,20 @@ export function TrafficLaunchCanary({
         typeof result.executionWarning === "string" &&
         result.executionWarning.trim()
       ) {
+        setLaunchSucceeded(false);
         setNotice({
           tone: "error",
           message: result.executionWarning.trim(),
         });
       } else if (result.executorSucceeded === 1) {
+        setLaunchSucceeded(true);
         setNotice({
           tone: "success",
           message:
             "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.",
         });
       } else {
+        setLaunchSucceeded(true);
         setNotice({
           tone: "success",
           message:
@@ -663,6 +666,12 @@ export function TrafficLaunchCanary({
     } finally {
       setPending(false);
     }
+  }
+
+  function startAnotherTrafficCampaign() {
+    setLaunchSucceeded(false);
+    setHeldPlan(null);
+    setNotice(null);
   }
 
   const inputClass =
@@ -694,6 +703,38 @@ export function TrafficLaunchCanary({
         </div>
       </div>
 
+      {launchSucceeded ? (
+        <div
+          className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6"
+          role="status"
+        >
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+              <Check className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-extrabold text-emerald-950">
+                Erledigt — Kampagne ist live
+              </h3>
+              <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
+                {notice?.tone === "success"
+                  ? notice.message
+                  : "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."}
+              </p>
+              <button
+                className={`${buttonClass} mt-5`}
+                disabled={pending}
+                onClick={startAnotherTrafficCampaign}
+                type="button"
+              >
+                <Rocket className="size-4" />
+                Weitere Traffic-Kampagne starten
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
       <ul className="mt-5 flex flex-wrap gap-2">
         {gates.map((gate) => (
           <li
@@ -1041,17 +1082,6 @@ export function TrafficLaunchCanary({
             </p>
           ) : null}
 
-          <label className="mt-4 block text-sm font-bold text-slate-800">
-            Freigabe-Begründung
-            <input
-              className={inputClass}
-              disabled={pending}
-              minLength={12}
-              onChange={(event) => setApproveReason(event.target.value)}
-              required
-              value={approveReason}
-            />
-          </label>
           <button className={`${buttonClass} mt-4`} disabled={pending} type="submit">
             {pending ? (
               <LoaderCircle className="size-4 animate-spin" />
@@ -1062,6 +1092,8 @@ export function TrafficLaunchCanary({
           </button>
         </form>
       ) : null}
+        </>
+      )}
     </section>
   );
 }
