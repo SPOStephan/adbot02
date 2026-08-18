@@ -66,7 +66,7 @@ const traffic = await readFile(
 assert.match(traffic, /2 Ad Sets/);
 assert.match(traffic, /structuralAdSetCount/);
 assert.match(traffic, /structuralMode/);
-assert.match(traffic, /Tagesbudget wird hälftig/);
+assert.match(traffic, /Tagesbudget\s+wird hälftig/);
 assert.match(traffic, /Anzeige 1/);
 assert.match(traffic, /Anzeige 2/);
 

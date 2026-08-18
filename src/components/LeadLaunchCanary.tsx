@@ -1027,9 +1027,9 @@ export function LeadLaunchCanary({
           ) : null}
           {structuralMode === "two_ad_sets" ? (
             <p className="mt-2 text-xs font-medium text-slate-500">
-              Eine Kampagne, zwei Anzeigengruppen, je eine Anzeige. Tagesbudget
-              wird hälftig auf beide Anzeigengruppen verteilt. Deaktiviert
-              Textvarianten (Dynamic Creative).
+              Eine Kampagne, zwei Anzeigengruppen, je eine Anzeige.
+              Tagesbudget wird hälftig auf beide Anzeigengruppen verteilt.
+              Deaktiviert Textvarianten (Dynamic Creative).
             </p>
           ) : null}
         </fieldset>
