@@ -87,10 +87,10 @@ export function MediaLibraryClient({
               Creative hochladen
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              PNG/JPEG (256–4096px). Einfach hochladen — ein Brand-Profil ist dafür
-              nicht nötig. Später kann Adbot aus deinen Creatives z.&nbsp;B.
-              Farbvorschläge ableiten; für Active Launch reicht die Zuordnung zum
-              Profil zum Launch-Zeitpunkt.
+              PNG/JPEG (256–4096px). Ein Bild: Adbot schneidet nur fehlende
+              Meta-Formate zu. Fertige Formate (1:1, 4:5, 1,91:1) kannst du im
+              Creative-Dialog beim Launch einzeln hochladen. Brand-Profil ist
+              optional — für Active Launch reicht die Zuordnung zum Launch.
             </p>
             {!metaConnected ? (
               <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">

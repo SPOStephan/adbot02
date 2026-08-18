@@ -4,6 +4,13 @@ import { getCreativeAssetStorageBucket } from "@/lib/creative-assets/env";
 import { inspectCreativeImage } from "@/lib/creative-assets/image";
 import { CreativeAssetProviderError } from "@/lib/creative-assets/types";
 import {
+  describeMetaFormatCheck,
+  getMetaFormatSlot,
+  isMetaFormatKey,
+  matchesMetaFormat,
+  type MetaFormatKey,
+} from "@/lib/media-library/meta-formats";
+import {
   storeCustomerLibraryAsset,
   storeInspirationVaultAsset,
 } from "@/lib/media-library/storage";
@@ -25,6 +32,8 @@ export type UploadCustomerLibraryResult = {
   height: number;
   preferredLaunchAssetId: string;
   assets: UploadedLibraryAsset[];
+  cropsGenerated: number;
+  cropsSkipped: number;
 };
 
 export class MediaLibraryError extends Error {
@@ -54,8 +63,13 @@ export async function uploadCustomerLibraryImage(input: {
   fileName: string;
   mimeType: string | null;
   bytes: Uint8Array;
-  /** When true, also store Meta cover-crops; original remains full-size. */
+  /** When true, also store Meta cover-crops for formats the original lacks. */
   generateMetaCrops?: boolean;
+  /**
+   * Dedicated format slot upload: validate against this Meta format and
+   * do not auto-crop other sizes (caller supplies formats separately).
+   */
+  metaFormatKey?: MetaFormatKey | null;
 }): Promise<UploadCustomerLibraryResult> {
   const declared = asImageMime(input.mimeType);
   if (!declared) {
@@ -83,6 +97,24 @@ export async function uploadCustomerLibraryImage(input: {
     );
   }
 
+  const metaFormatKey =
+    typeof input.metaFormatKey === "string" &&
+    isMetaFormatKey(input.metaFormatKey)
+      ? input.metaFormatKey
+      : null;
+
+  if (metaFormatKey) {
+    const slot = getMetaFormatSlot(metaFormatKey);
+    const check = describeMetaFormatCheck(
+      inspected.width,
+      inspected.height,
+      slot,
+    );
+    if (!check.ok) {
+      throw new MediaLibraryError("format_mismatch", 400, check.message);
+    }
+  }
+
   const bucket = getCreativeAssetStorageBucket();
   const stored = await storeCustomerLibraryAsset({
     userId: input.userId,
@@ -100,6 +132,10 @@ export async function uploadCustomerLibraryImage(input: {
       : null;
 
   const originalFilename = input.fileName.slice(0, 255) || "upload.jpg";
+  const formatSlot = metaFormatKey ? getMetaFormatSlot(metaFormatKey) : null;
+  const role = formatSlot?.key ?? "original";
+  const label = formatSlot?.label ?? "Original";
+
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("register_uploaded_brand_asset", {
     p_user_id: input.userId,
@@ -116,9 +152,18 @@ export async function uploadCustomerLibraryImage(input: {
     p_metadata: {
       contract_version: 1,
       library: "customer",
-      source_kind: "customer_upload",
-      role: "original",
+      source_kind: formatSlot
+        ? "customer_upload_format"
+        : "customer_upload",
+      role,
       brand_profile_optional: true,
+      ...(formatSlot
+        ? {
+            meta_format_key: formatSlot.key,
+            recommended_width: formatSlot.width,
+            recommended_height: formatSlot.height,
+          }
+        : {}),
     },
   });
 
@@ -137,23 +182,39 @@ export async function uploadCustomerLibraryImage(input: {
       originalFilename,
       width: inspected.width,
       height: inspected.height,
-      role: "original",
-      label: "Original",
+      role,
+      label,
     },
   ];
   let preferredLaunchAssetId = originalId;
+  if (
+    !formatSlot &&
+    matchesMetaFormat(inspected.width, inspected.height, {
+      width: 1080,
+      height: 1080,
+    })
+  ) {
+    preferredLaunchAssetId = originalId;
+  }
 
-  // Crops are best-effort and dynamically loaded so a sharp/runtime failure
-  // never blocks the original full-size library upload.
-  if (input.generateMetaCrops) {
+  let cropsGenerated = 0;
+  let cropsSkipped = 0;
+
+  // Format-slot uploads: no auto-crops (user supplies the three formats).
+  // Free upload: crops only for formats the original does not already match.
+  if (input.generateMetaCrops && !formatSlot) {
     try {
-      const { generateMetaCropsFromOriginal } = await import(
+      const { generateMetaCropsFromOriginal, META_CROP_PRESETS } = await import(
         "@/lib/media-library/meta-crops"
       );
       const crops = await generateMetaCropsFromOriginal({
         bytes: inspected.bytes,
         mimeType: inspected.mimeType,
+        originalWidth: inspected.width,
+        originalHeight: inspected.height,
       });
+      cropsGenerated = crops.length;
+      cropsSkipped = Math.max(0, META_CROP_PRESETS.length - crops.length);
 
       for (const crop of crops) {
         try {
@@ -224,6 +285,8 @@ export async function uploadCustomerLibraryImage(input: {
     height: inspected.height,
     preferredLaunchAssetId,
     assets,
+    cropsGenerated,
+    cropsSkipped,
   };
 }
 
