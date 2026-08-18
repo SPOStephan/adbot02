@@ -211,6 +211,38 @@ try {
     /no_min_volume_stop/,
   );
 
+  const adSiblingSuccessPauseMigration = await readFile(
+    join(
+      projectRoot,
+      "supabase/migrations/20260818220000_meta_ad_sibling_success_pause.sql",
+    ),
+    "utf8",
+  );
+  assert.match(
+    adSiblingSuccessPauseMigration,
+    /ad_sibling_success_pause_7d/,
+  );
+  assert.match(
+    adSiblingSuccessPauseMigration,
+    /queue_meta_ad_sibling_success_pause_internal/,
+  );
+  assert.match(
+    adSiblingSuccessPauseMigration,
+    /queue_meta_ad_sibling_success_pause_scan_internal/,
+  );
+  assert.match(
+    adSiblingSuccessPauseMigration,
+    /'PAUSE'/,
+  );
+  assert.doesNotMatch(
+    adSiblingSuccessPauseMigration,
+    /materialize_meta_organic_boost_plan/,
+  );
+  assert.match(
+    adSiblingSuccessPauseMigration,
+    /would_leave_zero_active_ads/,
+  );
+
   const finishBoostHardCapResumeMigration = await readFile(
     join(
       projectRoot,

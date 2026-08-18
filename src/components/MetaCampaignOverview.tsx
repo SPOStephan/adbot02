@@ -380,12 +380,20 @@ export function deriveOrganicBoostDelivery(input: {
   };
 }
 
+const SUCCESS_CONTROL_RULE_KEYS = new Set([
+  "abo_sibling_success_rank_7d",
+  "ad_sibling_success_pause_7d",
+]);
+
 type MetaCampaignOverviewProps = {
   campaigns: CampaignPerformance[];
   organicBoostCampaigns: OrganicBoostCampaignView[];
   organicBoostConfigured: boolean;
   /** Effective ACCOUNT kill-switch; banner must not nag Freigeben when already ALLOW */
   killSwitchMode?: "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED" | null;
+  /** When true with killSwitch ALLOW, success-control cards show Automatik instead of Nur Analyse */
+  allowBudgetChanges?: boolean;
+  allowStatusChanges?: boolean;
   organicPlannerStatus?: string | null;
   organicPlannerLastError?: string | null;
   pendingBoostCandidateCount?: number;
@@ -506,6 +514,17 @@ function evidenceNumber(evidence: Record<string, unknown>, key: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function evidenceRecord(
+  evidence: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | null {
+  const value = evidence[key];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
 function recommendationEvidence(
   recommendation: CampaignRecommendation,
   fallbackCurrency: string,
@@ -545,7 +564,81 @@ function recommendationEvidence(
     ];
   }
 
+  if (recommendation.ruleKey === "abo_sibling_success_rank_7d") {
+    const winner = evidenceRecord(evidence, "winner");
+    const loser = evidenceRecord(evidence, "loser");
+    const deltaMinor = evidenceNumber(evidence, "proposed_delta_minor");
+    const changeBps = evidenceNumber(evidence, "change_bps");
+    const kind =
+      typeof evidence.success_kind === "string" ? evidence.success_kind : null;
+    const kindLabel =
+      kind === "traffic"
+        ? "Traffic (Link-Klicks)"
+        : kind === "leads"
+          ? "Leads"
+          : kind === "sales"
+            ? "Käufe"
+            : "Erfolg";
+    return [
+      `KPI: ${kindLabel}`,
+      `Gewinner: ${formatNumber(evidenceNumber(winner ?? {}, "primary_results"))} Ergebnisse · Budget ${formatMinorMoney(evidenceNumber(winner ?? {}, "daily_budget_minor"), currency)} → ${formatMinorMoney(evidenceNumber(winner ?? {}, "budget_after_minor"), currency)}`,
+      `Schwächer: ${formatNumber(evidenceNumber(loser ?? {}, "primary_results"))} Ergebnisse · Budget ${formatMinorMoney(evidenceNumber(loser ?? {}, "daily_budget_minor"), currency)} → ${formatMinorMoney(evidenceNumber(loser ?? {}, "budget_after_minor"), currency)}`,
+      `Umschichtung ${formatMinorMoney(deltaMinor, currency)}${changeBps != null ? ` (bis ${formatNumber(changeBps / 100)} % vom Schwächeren)` : ""} · Summe bleibt gleich`,
+    ];
+  }
+
+  if (recommendation.ruleKey === "ad_sibling_success_pause_7d") {
+    const weaker = evidenceRecord(evidence, "weaker_ad") ?? evidenceRecord(evidence, "loser");
+    const stronger =
+      evidenceRecord(evidence, "stronger_ad") ?? evidenceRecord(evidence, "winner");
+    return [
+      `Schwächste Anzeige pausieren (relativ)`,
+      `Behalten: ${formatNumber(evidenceNumber(stronger ?? {}, "primary_results"))} Ergebnisse`,
+      `Pausieren: ${formatNumber(evidenceNumber(weaker ?? {}, "primary_results"))} Ergebnisse`,
+      `Mindestens eine Anzeige bleibt aktiv`,
+    ];
+  }
+
   return ["Strukturierte Evidenz liegt vor"];
+}
+
+function recommendationAutomationBadge(
+  ruleKey: string,
+  options: {
+    killSwitchMode: string | null | undefined;
+    allowBudgetChanges: boolean;
+    allowStatusChanges: boolean;
+  },
+): { label: string; className: string } | null {
+  if (!SUCCESS_CONTROL_RULE_KEYS.has(ruleKey)) {
+    return null;
+  }
+  const writesReady = options.killSwitchMode === "ALLOW";
+  if (ruleKey === "abo_sibling_success_rank_7d") {
+    if (writesReady && options.allowBudgetChanges) {
+      return {
+        label: "Automatik: Umschichtung",
+        className: "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200",
+      };
+    }
+    return {
+      label: "Empfehlung (Budget-Autonomie aus)",
+      className: "bg-slate-100 text-slate-700",
+    };
+  }
+  if (ruleKey === "ad_sibling_success_pause_7d") {
+    if (writesReady && options.allowStatusChanges) {
+      return {
+        label: "Automatik: Anzeige pausieren",
+        className: "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200",
+      };
+    }
+    return {
+      label: "Empfehlung (Status-Autonomie aus)",
+      className: "bg-slate-100 text-slate-700",
+    };
+  }
+  return null;
 }
 
 function formatObjective(value: string | null) {
@@ -653,6 +746,8 @@ export function MetaCampaignOverview({
   organicBoostCampaigns,
   organicBoostConfigured,
   killSwitchMode = null,
+  allowBudgetChanges = false,
+  allowStatusChanges = false,
   organicPlannerStatus = null,
   organicPlannerLastError = null,
   pendingBoostCandidateCount = 0,
@@ -976,25 +1071,31 @@ export function MetaCampaignOverview({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
-                Deterministische Empfehlungen
+                Erfolgskontrolle &amp; Prüfhilfen
               </p>
               <h3 className="mt-2 text-lg font-extrabold" id="meta-recommendations-title">
-                Prüfhilfen aus festen Schwellenwerten
+                Ranking, Umschichtung und feste Schwellen
               </h3>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                Jede Empfehlung nennt Regel, Zeitraum und Evidenz. Sie kann weder Budgets noch Status oder Anzeigen verändern.
+                Klassische Regeln bleiben Analyse. Erfolgskontrolle (Budget zwischen
+                Ad Sets / schwächste Anzeige) kann bei aktiver Autonomie automatisch
+                handeln — Summe des Kundenbudgets bleibt gleich.
               </p>
             </div>
-            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
-              <LockKeyhole className="size-3.5" />
-              Nur Analyse
-            </span>
           </div>
 
           {recommendations.length ? (
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               {recommendations.map((recommendation) => {
                 const style = recommendationStyle(recommendation.severity);
+                const automationBadge = recommendationAutomationBadge(
+                  recommendation.ruleKey,
+                  {
+                    killSwitchMode,
+                    allowBudgetChanges,
+                    allowStatusChanges,
+                  },
+                );
 
                 return (
                   <article
@@ -1008,6 +1109,21 @@ export function MetaCampaignOverview({
                       <span className="text-xs font-semibold text-slate-500">
                         {recommendation.campaignName}
                       </span>
+                    </div>
+                    <div className="mt-3">
+                      {automationBadge ? (
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${automationBadge.className}`}
+                        >
+                          <ShieldCheck className="size-3.5" />
+                          {automationBadge.label}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+                          <LockKeyhole className="size-3.5" />
+                          Nur Analyse
+                        </span>
+                      )}
                     </div>
                     <h4 className="mt-4 font-extrabold text-slate-950">
                       {recommendation.title}
