@@ -21,11 +21,11 @@ export const META_FORMAT_SLOTS = [
     preferredForLaunch: false,
   },
   {
-    key: "meta_link_191x1",
-    label: "Link 1,91:1",
-    width: 1200,
-    height: 628,
-    note: "Klassisches Link-Format",
+    key: "meta_story_9x16",
+    label: "Story 9:16",
+    width: 1080,
+    height: 1920,
+    note: "Stories, Reels und hochkantige Platzierungen",
     preferredForLaunch: false,
   },
 ] as const;
@@ -127,6 +127,26 @@ export function describeMetaFormatCheck(
       `${Math.round(slot.height * META_FORMAT_MIN_EDGE_RATIO)}, ` +
       `ideal ${slot.width}×${slot.height}).`,
   };
+}
+
+export function formatLabelForDimensions(
+  width: number | null | undefined,
+  height: number | null | undefined,
+): string | null {
+  if (
+    typeof width !== "number" ||
+    typeof height !== "number" ||
+    width < 1 ||
+    height < 1
+  ) {
+    return null;
+  }
+  for (const slot of META_FORMAT_SLOTS) {
+    if (matchesMetaFormat(width, height, slot)) {
+      return slot.label;
+    }
+  }
+  return null;
 }
 
 /** Read pixel size in the browser before upload (Schnellcheck). */

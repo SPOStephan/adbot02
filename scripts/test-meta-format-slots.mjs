@@ -28,12 +28,19 @@ try {
   assert.equal(formats.matchesMetaFormat(1080, 1080, formats.META_FORMAT_SLOTS[0]), true);
   assert.equal(formats.matchesMetaFormat(1200, 1200, formats.META_FORMAT_SLOTS[0]), true);
   assert.equal(formats.matchesMetaFormat(1080, 1350, formats.META_FORMAT_SLOTS[1]), true);
-  assert.equal(formats.matchesMetaFormat(1200, 628, formats.META_FORMAT_SLOTS[2]), true);
+  assert.equal(formats.matchesMetaFormat(1080, 1920, formats.META_FORMAT_SLOTS[2]), true);
+  assert.equal(formats.matchesMetaFormat(1200, 628, formats.META_FORMAT_SLOTS[2]), false);
   assert.equal(formats.matchesMetaFormat(1080, 1920, formats.META_FORMAT_SLOTS[0]), false);
   assert.equal(formats.matchesMetaFormat(400, 400, formats.META_FORMAT_SLOTS[0]), false);
 
   const needing = formats.presetsNeedingCrop(1080, 1080);
-  assert.deepEqual(needing, ["meta_feed_4x5", "meta_link_191x1"]);
+  assert.deepEqual(needing, ["meta_feed_4x5", "meta_story_9x16"]);
+
+  assert.equal(formats.META_FORMAT_SLOTS[2].key, "meta_story_9x16");
+  assert.equal(formats.META_FORMAT_SLOTS[2].width, 1080);
+  assert.equal(formats.META_FORMAT_SLOTS[2].height, 1920);
+  assert.equal(formats.formatLabelForDimensions(1080, 1920), "Story 9:16");
+  assert.equal(formats.formatLabelForDimensions(1200, 628), null);
 
   const allNeed = formats.presetsNeedingCrop(2000, 1500);
   assert.equal(allNeed.length, 3);
@@ -74,7 +81,32 @@ try {
   assert.match(picker, /Ein Bild · Auto-Zuschnitt/);
   assert.match(picker, /uploadFormatSlot/);
   assert.match(picker, /readImageDimensions/);
+  assert.match(picker, /meta_story_9x16/);
+  assert.doesNotMatch(picker, /meta_link_191x1/);
   assert.doesNotMatch(picker, /createImageBitmap/); // lives in meta-formats
+
+  const mediaLibrary = await readFile(
+    join(root, "src/components/MediaLibraryClient.tsx"),
+    "utf8",
+  );
+  assert.match(mediaLibrary, /Trash2/);
+  assert.match(mediaLibrary, /\/api\/media-library\/asset/);
+  assert.match(mediaLibrary, /media-library\/preview\?assetId=/);
+  assert.match(mediaLibrary, /formatLabelForDimensions/);
+
+  const deleteRoute = await readFile(
+    join(root, "src/app/api/media-library/asset/route.ts"),
+    "utf8",
+  );
+  assert.match(deleteRoute, /revoke_brand_asset/);
+  assert.match(deleteRoute, /export async function DELETE/);
+  assert.match(deleteRoute, /parent_asset_id/);
+
+  const creativesPage = await readFile(
+    join(root, "src/app/dashboard/creatives/page.tsx"),
+    "utf8",
+  );
+  assert.match(creativesPage, /\.neq\("status", "REVOKED"\)/);
 
   console.log("Meta creative format slots contract tests passed.");
 } finally {

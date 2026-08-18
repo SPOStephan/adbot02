@@ -68,7 +68,7 @@ function emptySlots(): Record<MetaFormatKey, SlotState> {
       height: null,
       filename: null,
     },
-    meta_link_191x1: {
+    meta_story_9x16: {
       status: "idle",
       message: null,
       assetId: null,
@@ -434,7 +434,7 @@ export function CreativePickerModal({
               </h3>
               <p className="mt-2 text-xs leading-5 text-slate-600">
                 PNG/JPEG, Kantenlänge 256–4096 px. Adbot schneidet nur Formate zu,
-                die noch nicht passen (1:1, 4:5, 1,91:1). Das Original bleibt
+                die noch nicht passen (1:1, 4:5, 9:16). Das Original bleibt
                 unverändert erhalten.
               </p>
               <ul className="mt-3 grid gap-2 sm:grid-cols-3">
