@@ -41,6 +41,12 @@ type HeldPlan = {
   primaryTexts: string[];
   headlines: string[];
   descriptions: string[];
+  structuralAdCount: 1 | 2;
+  structuralAds?: Array<{
+    message: string;
+    name: string;
+    description: string;
+  }>;
 };
 
 function objectiveLabel(objective: string): string {
@@ -234,6 +240,7 @@ function toHeldFromRecent(plan: RecentLaunchPlanView): HeldPlan | null {
     primaryTexts: plan.primaryText ? [plan.primaryText] : [""],
     headlines: plan.headline ? [plan.headline] : [""],
     descriptions: plan.description ? [plan.description] : [""],
+    structuralAdCount: 1,
   };
 }
 
@@ -273,6 +280,10 @@ export function TrafficLaunchCanary({
   const [primaryTexts, setPrimaryTexts] = useState<string[]>(["Mehr erfahren."]);
   const [headlines, setHeadlines] = useState<string[]>(["Jetzt mehr erfahren"]);
   const [descriptions, setDescriptions] = useState<string[]>([""]);
+  const [structuralMultiAd, setStructuralMultiAd] = useState(false);
+  const [ad2Primary, setAd2Primary] = useState("Mehr erfahren — Variante B.");
+  const [ad2Headline, setAd2Headline] = useState("Jetzt entdecken");
+  const [ad2Description, setAd2Description] = useState("");
   const [pickerAssets, setPickerAssets] = useState<PickerAsset[]>(() =>
     data.brandAssets.map((asset) => ({
       id: asset.id,
@@ -404,16 +415,23 @@ export function TrafficLaunchCanary({
    */
   async function ensureTrafficBlueprint(): Promise<string> {
     const template = structuredClone(DEFAULT_TRAFFIC_BLUEPRINT);
+    // Structural 2-ad mode: classic link_data only (Ad-1 texts). DCA forbidden.
     const parts = buildLinkCreativeBlueprintParts({
-      primaryTexts,
-      headlines,
-      descriptions,
+      primaryTexts: structuralMultiAd
+        ? [primaryTexts[0] ?? "Mehr erfahren."]
+        : primaryTexts,
+      headlines: structuralMultiAd
+        ? [headlines[0] ?? "Jetzt mehr erfahren"]
+        : headlines,
+      descriptions: structuralMultiAd
+        ? [descriptions[0] ?? ""]
+        : descriptions,
       callToActionType: "LEARN_MORE",
       defaultPrimary: "Mehr erfahren.",
       defaultHeadline: "Jetzt mehr erfahren",
     });
     template.creative.object_story_spec = parts.objectStorySpec as typeof template.creative.object_story_spec;
-    if (parts.assetFeedSpec) {
+    if (!structuralMultiAd && parts.assetFeedSpec) {
       (template.creative as Record<string, unknown>).asset_feed_spec =
         parts.assetFeedSpec;
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
@@ -516,6 +534,20 @@ export function TrafficLaunchCanary({
         .toISOString()
         .replace(/[:.]/g, "-")
         .slice(0, 19);
+      const structuralAds = structuralMultiAd
+        ? [
+            {
+              message: (primaryTexts[0] ?? "").trim() || "Mehr erfahren.",
+              name: (headlines[0] ?? "").trim() || "Jetzt mehr erfahren",
+              description: (descriptions[0] ?? "").trim(),
+            },
+            {
+              message: ad2Primary.trim() || "Mehr erfahren — Variante B.",
+              name: ad2Headline.trim() || "Jetzt entdecken",
+              description: ad2Description.trim(),
+            },
+          ]
+        : undefined;
       const result = await apiJson<{
         planId?: string;
         status?: string;
@@ -549,6 +581,9 @@ export function TrafficLaunchCanary({
         adName: `Traffic Ad ${stamp}`,
         reason: PROTOCOL_APPROVE_REASON,
         confirmation: "AKTIV-LAUNCH VORBEREITEN",
+        ...(structuralMultiAd
+          ? { structuralAdCount: 2, structuralAds }
+          : {}),
       });
 
       if (
@@ -584,9 +619,17 @@ export function TrafficLaunchCanary({
         budgetType: "DAILY",
         budgetOwnerType: result.budgetOwnerType,
         dailyBudgetMinor: result.dailyBudgetMinor,
-        primaryTexts,
-        headlines,
-        descriptions,
+        primaryTexts: structuralMultiAd
+          ? [structuralAds![0].message]
+          : primaryTexts,
+        headlines: structuralMultiAd
+          ? [structuralAds![0].name]
+          : headlines,
+        descriptions: structuralMultiAd
+          ? [structuralAds![0].description]
+          : descriptions,
+        structuralAdCount: structuralMultiAd ? 2 : 1,
+        ...(structuralMultiAd ? { structuralAds } : {}),
       });
       setNotice({
         tone: "success",
@@ -905,41 +948,195 @@ export function TrafficLaunchCanary({
             {notice.message}
           </p>
         ) : null}
-        <CreativeTextVariantFields
-          disabled={pending}
-          hint="eine Anzeige, Meta kombiniert die Texte"
-          inputClass={inputClass}
-          label="Anzeigentext (Primary Text)"
-          lengthHint={copyLengthHint}
-          maxLength={COPY_LIMITS.primary.max}
-          multiline
-          onChange={setPrimaryTexts}
-          recommended={COPY_LIMITS.primary.recommended}
-          values={primaryTexts}
-        />
-        <CreativeTextVariantFields
-          disabled={pending}
-          hint="Varianten für dieselbe Anzeige"
-          inputClass={inputClass}
-          label="Überschrift (Headline)"
-          lengthHint={copyLengthHint}
-          maxLength={COPY_LIMITS.headline.max}
-          onChange={setHeadlines}
-          recommended={COPY_LIMITS.headline.recommended}
-          values={headlines}
-        />
-        <CreativeTextVariantFields
-          disabled={pending}
-          hint="optional"
-          inputClass={inputClass}
-          label="Beschreibung"
-          lengthHint={copyLengthHint}
-          maxLength={COPY_LIMITS.description.max}
-          onChange={setDescriptions}
-          optional
-          recommended={COPY_LIMITS.description.recommended}
-          values={descriptions}
-        />
+        <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 lg:col-span-2">
+          <input
+            checked={structuralMultiAd}
+            className="mt-1 size-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+            disabled={pending || Boolean(heldPlan)}
+            onChange={(event) => setStructuralMultiAd(event.target.checked)}
+            type="checkbox"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-slate-800">
+              Struktur-Test: 2 Anzeigen
+            </span>
+            <span className="mt-0.5 block text-xs font-medium text-slate-500">
+              Eine Kampagne, eine Anzeigengruppe, zwei getrennte Anzeigen mit
+              gleichem Bild und unterschiedlichem Text. Deaktiviert Textvarianten
+              (Dynamic Creative).
+            </span>
+          </span>
+        </label>
+        {structuralMultiAd ? (
+          <>
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 lg:col-span-2">
+              <p className="text-sm font-extrabold text-slate-900">Anzeige 1</p>
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">
+                  Anzeigentext (Primary Text)
+                </span>
+                <textarea
+                  className={`${inputClass} min-h-24 resize-y`}
+                  disabled={pending}
+                  maxLength={COPY_LIMITS.primary.max}
+                  onChange={(event) =>
+                    setPrimaryTexts([event.target.value])
+                  }
+                  required
+                  value={primaryTexts[0] ?? ""}
+                />
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  {copyLengthHint(
+                    primaryTexts[0] ?? "",
+                    COPY_LIMITS.primary.recommended,
+                    COPY_LIMITS.primary.max,
+                  )}
+                </span>
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">
+                  Überschrift (Headline)
+                </span>
+                <input
+                  className={inputClass}
+                  disabled={pending}
+                  maxLength={COPY_LIMITS.headline.max}
+                  onChange={(event) => setHeadlines([event.target.value])}
+                  required
+                  value={headlines[0] ?? ""}
+                />
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  {copyLengthHint(
+                    headlines[0] ?? "",
+                    COPY_LIMITS.headline.recommended,
+                    COPY_LIMITS.headline.max,
+                  )}
+                </span>
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">
+                  Beschreibung{" "}
+                  <span className="font-medium text-slate-500">(optional)</span>
+                </span>
+                <input
+                  className={inputClass}
+                  disabled={pending}
+                  maxLength={COPY_LIMITS.description.max}
+                  onChange={(event) => setDescriptions([event.target.value])}
+                  value={descriptions[0] ?? ""}
+                />
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  {copyLengthHint(
+                    descriptions[0] ?? "",
+                    COPY_LIMITS.description.recommended,
+                    COPY_LIMITS.description.max,
+                  )}
+                </span>
+              </label>
+            </div>
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 lg:col-span-2">
+              <p className="text-sm font-extrabold text-slate-900">Anzeige 2</p>
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">
+                  Anzeigentext (Primary Text)
+                </span>
+                <textarea
+                  className={`${inputClass} min-h-24 resize-y`}
+                  disabled={pending}
+                  maxLength={COPY_LIMITS.primary.max}
+                  onChange={(event) => setAd2Primary(event.target.value)}
+                  required
+                  value={ad2Primary}
+                />
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  {copyLengthHint(
+                    ad2Primary,
+                    COPY_LIMITS.primary.recommended,
+                    COPY_LIMITS.primary.max,
+                  )}
+                </span>
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">
+                  Überschrift (Headline)
+                </span>
+                <input
+                  className={inputClass}
+                  disabled={pending}
+                  maxLength={COPY_LIMITS.headline.max}
+                  onChange={(event) => setAd2Headline(event.target.value)}
+                  required
+                  value={ad2Headline}
+                />
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  {copyLengthHint(
+                    ad2Headline,
+                    COPY_LIMITS.headline.recommended,
+                    COPY_LIMITS.headline.max,
+                  )}
+                </span>
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">
+                  Beschreibung{" "}
+                  <span className="font-medium text-slate-500">(optional)</span>
+                </span>
+                <input
+                  className={inputClass}
+                  disabled={pending}
+                  maxLength={COPY_LIMITS.description.max}
+                  onChange={(event) => setAd2Description(event.target.value)}
+                  value={ad2Description}
+                />
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  {copyLengthHint(
+                    ad2Description,
+                    COPY_LIMITS.description.recommended,
+                    COPY_LIMITS.description.max,
+                  )}
+                </span>
+              </label>
+            </div>
+          </>
+        ) : (
+          <>
+            <CreativeTextVariantFields
+              disabled={pending}
+              hint="eine Anzeige, Meta kombiniert die Texte"
+              inputClass={inputClass}
+              label="Anzeigentext (Primary Text)"
+              lengthHint={copyLengthHint}
+              maxLength={COPY_LIMITS.primary.max}
+              multiline
+              onChange={setPrimaryTexts}
+              recommended={COPY_LIMITS.primary.recommended}
+              values={primaryTexts}
+            />
+            <CreativeTextVariantFields
+              disabled={pending}
+              hint="Varianten für dieselbe Anzeige"
+              inputClass={inputClass}
+              label="Überschrift (Headline)"
+              lengthHint={copyLengthHint}
+              maxLength={COPY_LIMITS.headline.max}
+              onChange={setHeadlines}
+              recommended={COPY_LIMITS.headline.recommended}
+              values={headlines}
+            />
+            <CreativeTextVariantFields
+              disabled={pending}
+              hint="optional"
+              inputClass={inputClass}
+              label="Beschreibung"
+              lengthHint={copyLengthHint}
+              maxLength={COPY_LIMITS.description.max}
+              onChange={setDescriptions}
+              optional
+              recommended={COPY_LIMITS.description.recommended}
+              values={descriptions}
+            />
+          </>
+        )}
         {prepareInFlight ? (
           <div
             className="flex gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-950 lg:col-span-2"
@@ -1027,51 +1224,82 @@ export function TrafficLaunchCanary({
                 src={`/api/media-library/preview?assetId=${heldPlan.brandAssetIds[0]}`}
               />
             </div>
-            <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-              <div className="space-y-2">
-                {(heldPlan.headlines.filter(Boolean).length
-                  ? heldPlan.headlines.filter(Boolean)
-                  : ["Überschrift"]
-                ).map((line, index) => (
-                  <p
-                    className="text-sm font-bold leading-6 text-slate-950"
-                    key={`h-${index}`}
+            <div className="min-w-0 space-y-4">
+              {heldPlan.structuralAdCount === 2 && heldPlan.structuralAds ? (
+                heldPlan.structuralAds.map((ad, index) => (
+                  <div
+                    className="space-y-2 rounded-xl border border-slate-200 bg-white p-4"
+                    key={`structural-ad-${index}`}
                   >
-                    {heldPlan.headlines.filter(Boolean).length > 1
-                      ? `${index + 1}. ${line}`
-                      : line}
-                  </p>
-                ))}
-              </div>
-              <div className="space-y-2">
-                {(heldPlan.primaryTexts.filter(Boolean).length
-                  ? heldPlan.primaryTexts.filter(Boolean)
-                  : ["Anzeigentext"]
-                ).map((line, index) => (
-                  <p
-                    className="whitespace-pre-wrap text-sm leading-6 text-slate-700"
-                    key={`p-${index}`}
-                  >
-                    {heldPlan.primaryTexts.filter(Boolean).length > 1
-                      ? `${index + 1}. ${line}`
-                      : line}
-                  </p>
-                ))}
-              </div>
-              {heldPlan.descriptions.filter(Boolean).length ? (
-                <div className="space-y-1">
-                  {heldPlan.descriptions.filter(Boolean).map((line, index) => (
-                    <p className="text-sm text-slate-500" key={`d-${index}`}>
-                      {heldPlan.descriptions.filter(Boolean).length > 1
-                        ? `${index + 1}. ${line}`
-                        : line}
+                    <p className="text-xs font-extrabold uppercase tracking-wide text-slate-500">
+                      Anzeige {index + 1}
                     </p>
-                  ))}
+                    <p className="text-sm font-bold leading-6 text-slate-950">
+                      {ad.name || "Überschrift"}
+                    </p>
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {ad.message || "Anzeigentext"}
+                    </p>
+                    {ad.description ? (
+                      <p className="text-sm text-slate-500">{ad.description}</p>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="space-y-2">
+                    {(heldPlan.headlines.filter(Boolean).length
+                      ? heldPlan.headlines.filter(Boolean)
+                      : ["Überschrift"]
+                    ).map((line, index) => (
+                      <p
+                        className="text-sm font-bold leading-6 text-slate-950"
+                        key={`h-${index}`}
+                      >
+                        {heldPlan.headlines.filter(Boolean).length > 1
+                          ? `${index + 1}. ${line}`
+                          : line}
+                      </p>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    {(heldPlan.primaryTexts.filter(Boolean).length
+                      ? heldPlan.primaryTexts.filter(Boolean)
+                      : ["Anzeigentext"]
+                    ).map((line, index) => (
+                      <p
+                        className="whitespace-pre-wrap text-sm leading-6 text-slate-700"
+                        key={`p-${index}`}
+                      >
+                        {heldPlan.primaryTexts.filter(Boolean).length > 1
+                          ? `${index + 1}. ${line}`
+                          : line}
+                      </p>
+                    ))}
+                  </div>
+                  {heldPlan.descriptions.filter(Boolean).length ? (
+                    <div className="space-y-1">
+                      {heldPlan.descriptions
+                        .filter(Boolean)
+                        .map((line, index) => (
+                          <p className="text-sm text-slate-500" key={`d-${index}`}>
+                            {heldPlan.descriptions.filter(Boolean).length > 1
+                              ? `${index + 1}. ${line}`
+                              : line}
+                          </p>
+                        ))}
+                    </div>
+                  ) : null}
+                  <p className="break-all text-xs font-medium text-blue-700">
+                    {heldPlan.destinationUrl}
+                  </p>
                 </div>
+              )}
+              {heldPlan.structuralAdCount === 2 ? (
+                <p className="break-all text-xs font-medium text-blue-700">
+                  {heldPlan.destinationUrl}
+                </p>
               ) : null}
-              <p className="break-all text-xs font-medium text-blue-700">
-                {heldPlan.destinationUrl}
-              </p>
             </div>
           </div>
 
