@@ -5,15 +5,25 @@ import { ArrowLeft, ImageIcon } from "lucide-react";
 import { MediaLibraryClient } from "@/components/MediaLibraryClient";
 import { SignOutButton } from "@/components/SignOutButton";
 import { SiteFooter } from "@/components/SiteFooter";
-import {
-  formatLabelForDimensions,
-  getMetaFormatSlot,
-  isMetaFormatKey,
-} from "@/lib/media-library/meta-formats";
+import { MEDIA_LIBRARY_ASSET_LIST_SELECT } from "@/lib/media-library/customer-asset-columns";
+import { formatLabelForDimensions } from "@/lib/media-library/meta-formats";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** Row shape for MEDIA_LIBRARY_ASSET_LIST_SELECT (must stay in sync). */
+type MediaLibraryAssetRow = {
+  id: string;
+  original_filename: string | null;
+  width: number | null;
+  height: number | null;
+  source_type: string | null;
+  status: string | null;
+  meta_image_hash: string | null;
+  created_at: string;
+  library_scope: string | null;
+};
 
 export default async function CreativesPage() {
   const supabase = await createClient();
@@ -34,20 +44,19 @@ export default async function CreativesPage() {
     .limit(1)
     .maybeSingle();
 
-  const [{ data: assets }, { data: profiles }] = await Promise.all([
+  const [assetsResult, profilesResult] = await Promise.all([
     metaAccount
       ? supabase
           .from("brand_assets")
-          .select(
-            "id,original_filename,width,height,source_type,status,meta_image_hash,created_at,library_scope,metadata",
-          )
+          // Dynamic select string loses Supabase row typing — cast after fetch.
+          .select(MEDIA_LIBRARY_ASSET_LIST_SELECT)
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
           .eq("library_scope", "CUSTOMER")
           .neq("status", "REVOKED")
           .order("created_at", { ascending: false })
           .limit(100)
-      : Promise.resolve({ data: [] as const }),
+      : Promise.resolve({ data: [] as MediaLibraryAssetRow[], error: null }),
     metaAccount
       ? supabase
           .from("brand_profiles")
@@ -57,8 +66,20 @@ export default async function CreativesPage() {
           .eq("status", "ACTIVE")
           .order("activated_at", { ascending: false })
           .limit(20)
-      : Promise.resolve({ data: [] as const }),
+      : Promise.resolve({ data: [] as const, error: null }),
   ]);
+
+  const loadError = assetsResult.error
+    ? "Die Media Library konnte nicht geladen werden. Bitte Seite neu laden — deine Creatives sind nicht gelöscht."
+    : null;
+
+  if (assetsResult.error) {
+    console.error("[creatives] brand_assets list failed", assetsResult.error);
+  }
+
+  const assets: MediaLibraryAssetRow[] = assetsResult.error
+    ? []
+    : ((assetsResult.data ?? []) as MediaLibraryAssetRow[]);
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -90,36 +111,25 @@ export default async function CreativesPage() {
 
       <div className="mx-auto max-w-5xl px-6 py-8">
         <MediaLibraryClient
-          assets={(assets ?? []).map((asset) => {
-            const metadata =
-              asset.metadata && typeof asset.metadata === "object"
-                ? (asset.metadata as Record<string, unknown>)
-                : null;
-            const role =
-              typeof metadata?.role === "string" ? metadata.role : null;
-            const roleLabel =
-              role && isMetaFormatKey(role)
-                ? getMetaFormatSlot(role).label
-                : formatLabelForDimensions(
-                    typeof asset.width === "number" ? asset.width : null,
-                    typeof asset.height === "number" ? asset.height : null,
-                  );
-            return {
-              id: String(asset.id),
-              originalFilename: String(asset.original_filename ?? "Creative"),
-              width: typeof asset.width === "number" ? asset.width : null,
-              height: typeof asset.height === "number" ? asset.height : null,
-              sourceType: String(asset.source_type ?? "UPLOADED"),
-              status: String(asset.status ?? "READY"),
-              metaImageHashPresent: Boolean(asset.meta_image_hash),
-              createdAt: String(asset.created_at),
-              label: roleLabel,
-            };
-          })}
-          brandProfiles={(profiles ?? []).map((profile) => ({
+          assets={assets.map((asset) => ({
+            id: String(asset.id),
+            originalFilename: String(asset.original_filename ?? "Creative"),
+            width: typeof asset.width === "number" ? asset.width : null,
+            height: typeof asset.height === "number" ? asset.height : null,
+            sourceType: String(asset.source_type ?? "UPLOADED"),
+            status: String(asset.status ?? "READY"),
+            metaImageHashPresent: Boolean(asset.meta_image_hash),
+            createdAt: String(asset.created_at),
+            label: formatLabelForDimensions(
+              typeof asset.width === "number" ? asset.width : null,
+              typeof asset.height === "number" ? asset.height : null,
+            ),
+          }))}
+          brandProfiles={(profilesResult.data ?? []).map((profile) => ({
             id: String(profile.id),
             brandName: String(profile.brand_name ?? "Brand"),
           }))}
+          loadError={loadError}
           metaConnected={Boolean(metaAccount)}
         />
       </div>

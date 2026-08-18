@@ -28,10 +28,13 @@ export function MediaLibraryClient({
   assets: initialAssets,
   brandProfiles,
   metaConnected,
+  loadError = null,
 }: {
   assets: MediaLibraryAssetView[];
   brandProfiles: BrandProfileOption[];
   metaConnected: boolean;
+  /** Set when the server list query failed — never imply an empty library. */
+  loadError?: string | null;
 }) {
   const router = useRouter();
   const [assets, setAssets] = useState(initialAssets);
@@ -183,6 +186,11 @@ export function MediaLibraryClient({
                 </label>
               </div>
             )}
+            {loadError ? (
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+                {loadError}
+              </p>
+            ) : null}
             {error ? (
               <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">
                 {error}
@@ -203,6 +211,11 @@ export function MediaLibraryClient({
           Vorschau direkt in der Karte — bereit für Meta-Launch, sobald Autonomie
           und Brand-Profil im Control Center stehen.
         </p>
+        {loadError ? (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+            {loadError}
+          </p>
+        ) : null}
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {assets.map((asset) => {
             const formatLabel =
@@ -268,9 +281,15 @@ export function MediaLibraryClient({
               </article>
             );
           })}
-          {!assets.length ? (
+          {!assets.length && !loadError ? (
             <p className="text-sm text-slate-500 sm:col-span-2 lg:col-span-3">
               Noch keine Uploads.
+            </p>
+          ) : null}
+          {!assets.length && loadError ? (
+            <p className="text-sm font-semibold text-amber-900 sm:col-span-2 lg:col-span-3">
+              Liste vorübergehend nicht verfügbar — Creatives sind weiterhin
+              gespeichert.
             </p>
           ) : null}
         </div>
