@@ -9,6 +9,10 @@ import {
   toCreativeAssetProviderError,
 } from "../map-generation-input";
 import {
+  loadVerifiedStyleReferenceAssets,
+  styleReferenceToDataUrl,
+} from "../style-reference-load";
+import {
   CREATIVE_ASSET_PROVIDER_CONTRACT_VERSION,
   CreativeAssetProviderError,
   SUPPORTED_CREATIVE_IMAGE_MIME_TYPES,
@@ -468,6 +472,28 @@ export class OpenRouterCreativeAssetProvider implements CreativeAssetProvider {
       body.aspect_ratio = generation.output.aspect_hint;
     }
 
+    let styleReferenceMeta: Array<{
+      asset_id: string;
+      sha256: string;
+      source: string;
+    }> = [];
+    if (generation.reference_asset_ids.length > 0) {
+      const refs = await loadVerifiedStyleReferenceAssets({
+        userId: request.job.userId,
+        platformAccountId: request.job.platformAccountId,
+        assetIds: generation.reference_asset_ids,
+      });
+      body.input_references = refs.map((ref) => ({
+        type: "image_url",
+        image_url: { url: styleReferenceToDataUrl(ref) },
+      }));
+      styleReferenceMeta = refs.map((ref) => ({
+        asset_id: ref.assetId,
+        sha256: ref.sha256,
+        source: ref.source,
+      }));
+    }
+
     const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
     const signal = AbortSignal.any([request.signal, timeoutSignal]);
     const headers: Record<string, string> = {
@@ -549,6 +575,9 @@ export class OpenRouterCreativeAssetProvider implements CreativeAssetProvider {
         ...parsed.metadata,
         generation_mode: generation.mode,
         model_id: model,
+        ...(styleReferenceMeta.length > 0
+          ? { style_references: styleReferenceMeta }
+          : {}),
       },
     };
   }

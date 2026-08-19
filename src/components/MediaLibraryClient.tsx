@@ -70,6 +70,7 @@ export function MediaLibraryClient({
   const [genPrompt, setGenPrompt] = useState("");
   const [genModelId, setGenModelId] = useState("");
   const [genLockedAssetId, setGenLockedAssetId] = useState("");
+  const [genStyleIds, setGenStyleIds] = useState<string[]>([]);
   const [genPending, setGenPending] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [genMessage, setGenMessage] = useState<string | null>(null);
@@ -129,6 +130,18 @@ export function MediaLibraryClient({
         (asset) =>
           asset.assetRole === "LOCKED_PHOTO" &&
           asset.status === "READY",
+      ),
+    [assets],
+  );
+
+  const styleReferenceOptions = useMemo(
+    () =>
+      assets.filter(
+        (asset) =>
+          asset.status === "READY" &&
+          (asset.trainingStatus === "marked_good" ||
+            asset.trainingStatus === "performance_winner" ||
+            asset.assetRole === "STYLE_REFERENCE"),
       ),
     [assets],
   );
@@ -325,7 +338,7 @@ export function MediaLibraryClient({
         provider_key: genConfig.providerKey,
         model_id: genModelId,
         prompt: genPrompt.trim() || undefined,
-        reference_asset_ids: [],
+        reference_asset_ids: genStyleIds.slice(0, 4),
         locked_photo_asset_ids:
           genMode === "locked_photo" ? [genLockedAssetId] : [],
         output: { mime_type: "image/png", aspect_hint: "1:1" },
@@ -461,7 +474,8 @@ export function MediaLibraryClient({
               </h2>
               <p className="mt-1 text-sm text-slate-600">
                 Free: vollständiges KI-Bild. Locked Photo: KI-Hintergrund mit
-                unverändert eingebettetem Foto. Ergebnis erscheint nach dem
+                unverändert eingebettetem Foto. Optional Style-Referenzen aus
+                markierten Beispielen (max. 4). Ergebnis erscheint nach dem
                 Worker-Lauf in der Library.
               </p>
 
@@ -565,6 +579,56 @@ export function MediaLibraryClient({
                       Schloss-Symbol.
                     </p>
                   ) : null}
+
+                  {styleReferenceOptions.length > 0 ? (
+                    <fieldset className="grid gap-2">
+                      <legend className="text-sm font-medium">
+                        Style-Referenzen (optional, max. 4)
+                      </legend>
+                      <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                        {styleReferenceOptions.map((asset) => {
+                          const checked = genStyleIds.includes(asset.id);
+                          const atLimit =
+                            !checked && genStyleIds.length >= 4;
+                          return (
+                            <label
+                              key={asset.id}
+                              className="flex items-center gap-2 text-sm text-slate-700"
+                            >
+                              <input
+                                checked={checked}
+                                disabled={busy || atLimit}
+                                onChange={() => {
+                                  setGenStyleIds((previous) =>
+                                    checked
+                                      ? previous.filter((id) => id !== asset.id)
+                                      : previous.length >= 4
+                                        ? previous
+                                        : [...previous, asset.id],
+                                  );
+                                }}
+                                type="checkbox"
+                              />
+                              <span className="truncate">
+                                {asset.originalFilename}
+                                {asset.trainingStatus === "marked_good"
+                                  ? " · gut"
+                                  : ""}
+                                {asset.trainingStatus === "performance_winner"
+                                  ? " · winner"
+                                  : ""}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Style-Referenzen: markiere Creatives mit dem Stern als
+                      gutes Beispiel.
+                    </p>
+                  )}
 
                   <label className="grid gap-1 text-sm font-medium">
                     Prompt (optional)

@@ -138,6 +138,7 @@ try {
     ["image.ts", "image.mjs"],
     ["generation-contract.ts", "generation-contract.mjs"],
     ["locked-photo-constants.ts", "locked-photo-constants.mjs"],
+    ["style-reference-constants.ts", "style-reference-constants.mjs"],
     ["locked-photo-compose.ts", "locked-photo-compose.mjs"],
     ["map-generation-input.ts", "map-generation-input.mjs"],
     ["enqueue.ts", "enqueue.mjs"],
@@ -156,6 +157,10 @@ try {
       .replaceAll(
         'from "./locked-photo-constants";',
         'from "./locked-photo-constants.mjs";',
+      )
+      .replaceAll(
+        'from "./style-reference-constants";',
+        'from "./style-reference-constants.mjs";',
       )
       .replaceAll(
         'from "./locked-photo-compose";',
@@ -324,11 +329,28 @@ try {
         ...job,
         inputPayload: {
           ...job.inputPayload,
-          reference_asset_ids: ["10000000-0000-4000-8000-000000000088"],
+          reference_asset_ids: [
+            "10000000-0000-4000-8000-000000000088",
+            "10000000-0000-4000-8000-000000000081",
+            "10000000-0000-4000-8000-000000000082",
+            "10000000-0000-4000-8000-000000000083",
+            "10000000-0000-4000-8000-000000000084",
+          ],
         },
       }),
-    (error) => /reference_asset_ids/i.test(error.message),
+    (error) => /Style-Referenzen|style_reference_limit/i.test(error.message),
   );
+
+  const withStyle = mapMod.mapCreativeGenerationInputForExecution({
+    ...job,
+    inputPayload: {
+      ...job.inputPayload,
+      mode: "free",
+      locked_photo_asset_ids: [],
+      reference_asset_ids: ["10000000-0000-4000-8000-000000000088"],
+    },
+  });
+  assert.equal(withStyle.reference_asset_ids.length, 1);
 
   const parsed = enqueueMod.parseCreativeAssetEnqueueBody({
     brandProfileId: "10000000-0000-4000-8000-000000000004",

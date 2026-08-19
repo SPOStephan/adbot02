@@ -183,3 +183,7 @@ Phase 3 schaltet **mode=`locked_photo`** frei: KI-Hintergrund + 1:1-Embed eines 
 ## Phase 4 (Media Library UI)
 
 Phase 4: Generate + Markieren in `/dashboard/creatives`, Config-API ohne Secrets, RPC `set_brand_asset_locked_photo_role`. Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE4.md`.
+
+## Phase 5 (Style-Referenzen)
+
+Phase 5 verdrahtet `reference_asset_ids` an OpenRouter `input_references` (max. 4; marked_good / winners / Inspiration Vault). Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE5.md`.

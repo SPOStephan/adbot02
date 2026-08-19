@@ -10,6 +10,7 @@ import {
   type CreativeGenerationInput,
 } from "./generation-contract";
 import { PHASE3_MAX_LOCKED_PHOTOS } from "./locked-photo-constants";
+import { PHASE5_MAX_STYLE_REFERENCES } from "./style-reference-constants";
 import {
   CreativeAssetProviderError,
   type CreativeAssetJob,
@@ -62,7 +63,7 @@ export function inputHasGenerationContract(value: unknown): boolean {
 
 /**
  * Validate execution constraints on an already-asserted contract input.
- * Phase 3: free + locked_photo (≤1). Style references still deferred.
+ * Phase 5: free + locked_photo; style references ≤4; locked ≤1.
  */
 export function assertExecutableGenerationInput(
   input: CreativeGenerationInput,
@@ -95,11 +96,10 @@ export function assertExecutableGenerationInput(
     });
   }
 
-  if (input.reference_asset_ids.length > 0) {
+  if (input.reference_asset_ids.length > PHASE5_MAX_STYLE_REFERENCES) {
     throw new CreativeGenerationExecutionError({
-      code: "POLICY_REJECTED",
-      message:
-        "reference_asset_ids (Style-Wiring) sind noch nicht freigeschaltet.",
+      code: "style_reference_limit",
+      message: `Höchstens ${PHASE5_MAX_STYLE_REFERENCES} Style-Referenzen pro Job.`,
       failureMode: "POLICY_REJECTED",
       safeToRetry: false,
     });
