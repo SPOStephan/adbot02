@@ -122,3 +122,33 @@ Vercel ruft `/api/cron/creative-assets` alle fünf Minuten auf. Die Route verarb
 ## Audit und Mandantentrennung
 
 Jeder relevante Übergang schreibt in die accountweise SHA-256-verkettete `mutation_audit_events`-Historie. Browserrollen erhalten ausschließlich eigene Zeilen per RLS und bei Jobs nur eine explizite Spaltenliste ohne `input_payload`, Lease-Token, Providerrequest-ID oder interne Fehlerdetails. Alle mutierenden RPCs sind ausschließlich für `service_role` ausführbar. Cross-Tenant-Verknüpfungen werden zusätzlich durch Trigger geprüft, auch wenn ein privilegierter Prozess einen falschen Fremdschlüssel übermittelt.
+
+## Generation contract v1 (Phase 1)
+
+Phase 1 legt nur **Schema + Validierung** fest. Es gibt **keine** Live-Aufrufe an OpenRouter oder andere Bild-APIs und keine Worker-Änderungen für externe Generation.
+
+| Baustein | Ort |
+| --- | --- |
+| Spalten `asset_role`, `training_status`, `marked_good_*`, `style_notes` | `brand_assets` |
+| SQL-Validator | `creative_generation_input_contract_valid(jsonb)` |
+| TypeScript | `src/lib/creative-assets/generation-contract.ts` |
+| Migration | `supabase/migrations/20260818230000_creative_generation_phase1_contract.sql` |
+
+**Model-open / OpenRouter-ready:** `provider_key` folgt `^[a-z][a-z0-9_-]{1,63}$` (z. B. `openrouter`, `http`); `model_id` ist 1–160 Zeichen. Phase 2 verdrahtet den konkreten Provider.
+
+Beispiel-Input (Shape):
+
+```json
+{
+  "contract_version": "adbot-creative-generation-v1",
+  "mode": "free",
+  "provider_key": "openrouter",
+  "model_id": "google/gemini-2.5-flash-image",
+  "prompt": "optional",
+  "reference_asset_ids": [],
+  "locked_photo_asset_ids": [],
+  "output": { "mime_type": "image/png", "aspect_hint": "1:1" }
+}
+```
+
+Modi: `free` | `locked_photo` (`locked_photo_asset_ids` nicht-leer genau dann). Secrets werden über `meta_jsonb_has_sensitive_key` / TS-Spiegel abgelehnt. Details: `docs/meta-automation/CREATIVE_GENERATION_PHASE1.md`.
