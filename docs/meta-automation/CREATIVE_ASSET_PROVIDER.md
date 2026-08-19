@@ -175,3 +175,7 @@ Modi: `free` | `locked_photo` (`locked_photo_asset_ids` nicht-leer genau dann). 
 ## Phase 2 (OpenRouter live)
 
 Phase 2 verdrahtet den OpenRouter Image API-Client, die Provider-Registry, den Worker und `POST /api/meta/automation/creative-assets/enqueue` für **mode=`free`**. Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE2.md`.
+
+## Phase 3 (Locked-Photo Compose)
+
+Phase 3 schaltet **mode=`locked_photo`** frei: KI-Hintergrund + 1:1-Embed eines `LOCKED_PHOTO` mit Pixel-Guard (PNG). Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE3.md`.
