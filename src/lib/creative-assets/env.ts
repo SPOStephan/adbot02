@@ -280,3 +280,61 @@ export function isModelAllowlistedForConfiguredProvider(
   // HTTP provider has no model allowlist beyond job.providerModel length checks.
   return modelId.length >= 1 && modelId.length <= 160;
 }
+
+/**
+ * Safe public config for Media Library UI — never exposes API keys/secrets.
+ */
+export type PublicCreativeGenerationConfig = {
+  configured: boolean;
+  providerKey: string | null;
+  defaultModelId: string | null;
+  modelAllowlist: string[];
+  modes: readonly ["free", "locked_photo"];
+};
+
+export function getPublicCreativeGenerationConfig(): PublicCreativeGenerationConfig {
+  const modes = ["free", "locked_photo"] as const;
+  if (!hasCreativeAssetProviderConfig()) {
+    return {
+      configured: false,
+      providerKey: null,
+      defaultModelId: null,
+      modelAllowlist: [],
+      modes,
+    };
+  }
+
+  try {
+    const runtime = getCreativeAssetRuntimeConfig();
+    if (runtime.kind === "openrouter") {
+      const allowlist = [...runtime.provider.modelAllowlist];
+      const defaultModelId =
+        runtime.provider.defaultModel &&
+        allowlist.includes(runtime.provider.defaultModel)
+          ? runtime.provider.defaultModel
+          : (allowlist[0] ?? null);
+      return {
+        configured: true,
+        providerKey: "openrouter",
+        defaultModelId,
+        modelAllowlist: allowlist,
+        modes,
+      };
+    }
+    return {
+      configured: true,
+      providerKey: runtime.provider.key,
+      defaultModelId: "http-default",
+      modelAllowlist: ["http-default"],
+      modes,
+    };
+  } catch {
+    return {
+      configured: false,
+      providerKey: null,
+      defaultModelId: null,
+      modelAllowlist: [],
+      modes,
+    };
+  }
+}
