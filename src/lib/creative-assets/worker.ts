@@ -21,6 +21,10 @@ import {
 } from "./types";
 import { getCreativeAssetRuntimeConfig } from "./env";
 import { createCreativeAssetProviders } from "./providers";
+import {
+  commitCreditReservation,
+  releaseCreditReservation,
+} from "../billing/credits";
 import { createAdminClient } from "../supabase/admin";
 import {
   storeCreativeAssetInSupabase,
@@ -95,6 +99,7 @@ type CreativeAssetJobRow = {
   input_hash: string;
   attempt_count: number;
   lease_token: string;
+  credit_reservation_id: string | null;
 };
 
 function asJob(row: CreativeAssetJobRow): CreativeAssetJob {
@@ -111,7 +116,41 @@ function asJob(row: CreativeAssetJobRow): CreativeAssetJob {
     inputHash: row.input_hash,
     attemptCount: row.attempt_count,
     leaseToken: row.lease_token,
+    creditReservationId:
+      typeof row.credit_reservation_id === "string"
+        ? row.credit_reservation_id
+        : null,
   };
+}
+
+async function settleCreativeJobCredits(input: {
+  job: CreativeAssetJob;
+  outcome: "commit" | "release";
+}): Promise<void> {
+  const reservationId = input.job.creditReservationId;
+  if (!reservationId) {
+    return;
+  }
+  try {
+    if (input.outcome === "commit") {
+      await commitCreditReservation({
+        userId: input.job.userId,
+        reservationId,
+      });
+    } else {
+      await releaseCreditReservation({
+        userId: input.job.userId,
+        reservationId,
+      });
+    }
+  } catch (error) {
+    console.error("creative_asset_credit_settle_failed", {
+      jobId: input.job.jobId,
+      reservationId,
+      outcome: input.outcome,
+      message: error instanceof Error ? error.message : "settle_failed",
+    });
+  }
 }
 
 function calculateBackoff(attemptCount: number): number {
@@ -162,6 +201,9 @@ export async function runCreativeAssetWorkerOnce(input: {
       backoffSeconds: calculateBackoff(job.attemptCount),
       providerRequestId: null,
     });
+    if (status === "FAILED" || status === "AMBIGUOUS") {
+      await settleCreativeJobCredits({ job, outcome: "release" });
+    }
     return { outcome: "failed", jobId: job.jobId, status, assetId: null };
   }
   if (!provider.guaranteesIdempotency) {
@@ -174,6 +216,9 @@ export async function runCreativeAssetWorkerOnce(input: {
       backoffSeconds: calculateBackoff(job.attemptCount),
       providerRequestId: null,
     });
+    if (status === "FAILED" || status === "AMBIGUOUS") {
+      await settleCreativeJobCredits({ job, outcome: "release" });
+    }
     return { outcome: "failed", jobId: job.jobId, status, assetId: null };
   }
 
@@ -194,6 +239,7 @@ export async function runCreativeAssetWorkerOnce(input: {
     };
 
     // Phase 3: locked_photo → AI background + 1:1 embed + pixel guard (PNG).
+    // Phase 6: attach billing audit fields when contract is present.
     if (inputHasGenerationContract(job.inputPayload)) {
       const generation = mapCreativeGenerationInputForExecution(job);
       if (generation.mode === "locked_photo") {
@@ -219,6 +265,18 @@ export async function runCreativeAssetWorkerOnce(input: {
           },
         };
       }
+      metadata = {
+        ...metadata,
+        billing: {
+          action_key: "creative.generate_image_master",
+          credit_reservation_id: job.creditReservationId,
+          mode: generation.mode,
+          model_id: generation.model_id,
+          provider_key: generation.provider_key,
+          reference_asset_ids: generation.reference_asset_ids,
+          locked_photo_asset_ids: generation.locked_photo_asset_ids,
+        },
+      };
     }
 
     const fileName = safeCreativeFileName({
@@ -248,6 +306,8 @@ export async function runCreativeAssetWorkerOnce(input: {
       metadata: sanitizedMetadata,
     });
 
+    await settleCreativeJobCredits({ job, outcome: "commit" });
+
     return {
       outcome: "completed",
       jobId: job.jobId,
@@ -257,6 +317,9 @@ export async function runCreativeAssetWorkerOnce(input: {
   } catch (error) {
     const failure = safeFailure(error, job);
     const status = await input.dependencies.fail(failure);
+    if (status === "FAILED" || status === "AMBIGUOUS") {
+      await settleCreativeJobCredits({ job, outcome: "release" });
+    }
     return { outcome: "failed", jobId: job.jobId, status, assetId: null };
   }
 }

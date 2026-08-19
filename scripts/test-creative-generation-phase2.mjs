@@ -198,7 +198,8 @@ try {
         "./map-generation-input.mjs",
       )
       .replaceAll("@/lib/meta/customer-control-input", "./customer-control-input-stub.mjs")
-      .replaceAll("@/lib/supabase/admin", "./admin-stub.mjs");
+      .replaceAll("@/lib/supabase/admin", "./admin-stub.mjs")
+      .replaceAll("@/lib/billing/credits", "./billing-credits-stub.mjs");
     await writeFile(
       join(temporaryDirectory, outName),
       transpile(source)
@@ -230,6 +231,26 @@ try {
       "utf8",
     );
   }
+
+  await writeFile(
+    join(temporaryDirectory, "billing-credits-stub.mjs"),
+    [
+      "export class InsufficientCreditsError extends Error {",
+      "  constructor() {",
+      "    super('INSUFFICIENT_CREDITS');",
+      "    this.name = 'InsufficientCreditsError';",
+      "    this.code = 'INSUFFICIENT_CREDITS';",
+      "  }",
+      "}",
+      "export async function reserveCredits() {",
+      "  return { reservationId: '10000000-0000-4000-8000-000000000077', amount: 20, balanceAfter: 80, alreadyExisted: false };",
+      "}",
+      "export async function releaseCreditReservation() { return true; }",
+      "export async function commitCreditReservation() { return true; }",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
 
   await writeFile(
     join(temporaryDirectory, "customer-control-input-stub.mjs"),
@@ -291,6 +312,7 @@ try {
     inputHash: "b".repeat(64),
     attemptCount: 1,
     leaseToken: "10000000-0000-4000-8000-000000000005",
+    creditReservationId: null,
   };
 
   const mapped = mapMod.mapCreativeGenerationInputForPhase2Execution(job);

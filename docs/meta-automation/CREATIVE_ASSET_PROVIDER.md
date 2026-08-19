@@ -187,3 +187,7 @@ Phase 4: Generate + Markieren in `/dashboard/creatives`, Config-API ohne Secrets
 ## Phase 5 (Style-Referenzen)
 
 Phase 5 verdrahtet `reference_asset_ids` an OpenRouter `input_references` (max. 4; marked_good / winners / Inspiration Vault). Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE5.md`.
+
+## Phase 6 (Credits & Audit)
+
+Phase 6 reserviert/committed `creative.generate_image_master` (20 Credits) für Free und Locked-Photo. Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE6.md`.

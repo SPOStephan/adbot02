@@ -21,6 +21,8 @@ export type CreativeAssetJob = {
   inputHash: string;
   attemptCount: number;
   leaseToken: string;
+  /** Phase 6: pending credit reservation to commit/release. */
+  creditReservationId: string | null;
 };
 
 export type CreativeAssetModerationStatus =
