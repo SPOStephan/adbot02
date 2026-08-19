@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 
-import { enqueueCreativeAssetGenerationJob, parseCreativeAssetEnqueueBody } from "@/lib/creative-assets/enqueue";
+import {
+  enqueueCreativeAssetGenerationJob,
+  parseCreativeAssetEnqueueBody,
+} from "@/lib/creative-assets/enqueue";
+import { InsufficientCreditsError } from "@/lib/billing/credits";
 import {
   controlErrorResponse,
   controlJson,
@@ -17,8 +21,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 /**
- * Authenticated enqueue for Creative Generation (Phase 2 free + Phase 3 locked_photo).
- * Does not charge credits yet — see CREATIVE_GENERATION_PHASE3.md.
+ * Authenticated enqueue for Creative Generation (free + locked_photo + style refs).
+ * Phase 6: reserves creative.generate_image_master before queueing.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -34,8 +38,20 @@ export async function POST(request: NextRequest) {
     return controlJson({
       ok: true,
       jobId: result.jobId,
+      creditsReserved: result.creditsReserved,
     });
   } catch (error) {
+    if (error instanceof InsufficientCreditsError) {
+      return controlJson(
+        {
+          ok: false,
+          code: "INSUFFICIENT_CREDITS",
+          message:
+            "Nicht genügend Credits für die KI-Grafik. Bitte Guthaben prüfen.",
+        },
+        402,
+      );
+    }
     if (error instanceof CustomerControlServiceError) {
       return controlErrorResponse(error);
     }

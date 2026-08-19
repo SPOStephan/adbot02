@@ -91,6 +91,8 @@ try {
     "image",
     "http-provider",
     "generation-contract",
+    "locked-photo-constants",
+    "style-reference-constants",
     "map-generation-input",
     "env",
     "storage",
@@ -111,20 +113,79 @@ try {
         'from "./generation-contract.mjs";',
       )
       .replaceAll(
+        'from "./locked-photo-constants";',
+        'from "./locked-photo-constants.mjs";',
+      )
+      .replaceAll(
+        'from "./style-reference-constants";',
+        'from "./style-reference-constants.mjs";',
+      )
+      .replaceAll(
         'from "./map-generation-input";',
         'from "./map-generation-input.mjs";',
+      )
+      .replaceAll(
+        'from "./locked-photo-compose";',
+        'from "./locked-photo-compose-stub.mjs";',
+      )
+      .replaceAll(
+        'from "./locked-photo-load";',
+        'from "./locked-photo-load-stub.mjs";',
       )
       .replaceAll('from "./providers";', 'from "./providers-stub.mjs";')
       .replace(
         'from "../supabase/admin";',
         'from "./admin-stub.mjs";',
+      )
+      .replace(
+        'from "../billing/credits";',
+        'from "./billing-credits-stub.mjs";',
       );
     await writeFile(
       join(temporaryDirectory, `${name}.mjs`),
-      transpile(source),
+      transpile(source)
+        .replace(
+          /from\s+["'][^"']*locked-photo-compose[^"']*["']/g,
+          'from "./locked-photo-compose-stub.mjs"',
+        )
+        .replace(
+          /from\s+["'][^"']*locked-photo-load[^"']*["']/g,
+          'from "./locked-photo-load-stub.mjs"',
+        )
+        .replace(
+          /from\s+["'][^"']*billing\/credits[^"']*["']/g,
+          'from "./billing-credits-stub.mjs"',
+        )
+        .replaceAll(
+          'from "./locked-photo-constants"',
+          'from "./locked-photo-constants.mjs"',
+        )
+        .replaceAll(
+          'from "./style-reference-constants"',
+          'from "./style-reference-constants.mjs"',
+        ),
       "utf8",
     );
   }
+  await writeFile(
+    join(temporaryDirectory, "locked-photo-compose-stub.mjs"),
+    "export async function composeLockedPhotoCreative() { throw new Error('compose stub'); }\n",
+    "utf8",
+  );
+  await writeFile(
+    join(temporaryDirectory, "locked-photo-load-stub.mjs"),
+    "export async function loadVerifiedLockedPhotoAssets() { return []; }\n",
+    "utf8",
+  );
+  await writeFile(
+    join(temporaryDirectory, "billing-credits-stub.mjs"),
+    [
+      "export async function commitCreditReservation() { return true; }",
+      "export async function releaseCreditReservation() { return true; }",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
   await writeFile(
     join(temporaryDirectory, "providers-stub.mjs"),
     [
@@ -331,6 +392,7 @@ try {
     inputHash: "b".repeat(64),
     attemptCount: 1,
     leaseToken: "10000000-0000-4000-8000-000000000005",
+    creditReservationId: null,
   };
 
   const requests = [];

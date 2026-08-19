@@ -360,14 +360,26 @@ export function MediaLibraryClient({
         error?: string;
       };
       if (!response.ok || !result.ok) {
+        const code =
+          typeof (result as { code?: unknown }).code === "string"
+            ? (result as { code: string }).code
+            : "";
         throw new Error(
           result.message ||
             result.error ||
-            "Generierung konnte nicht gestartet werden.",
+            (code === "INSUFFICIENT_CREDITS"
+              ? "Nicht genügend Credits für die KI-Grafik."
+              : "Generierung konnte nicht gestartet werden."),
         );
       }
+      const creditsReserved = (result as { creditsReserved?: unknown })
+        .creditsReserved;
       setGenMessage(
-        `Generierung gestartet${result.jobId ? ` (Job ${result.jobId.slice(0, 8)}…)` : ""}. Das Ergebnis erscheint in der Library, sobald der Worker fertig ist.`,
+        `Generierung gestartet${result.jobId ? ` (Job ${result.jobId.slice(0, 8)}…)` : ""}${
+          typeof creditsReserved === "number"
+            ? ` · ${creditsReserved} Credits reserviert`
+            : ""
+        }. Das Ergebnis erscheint in der Library, sobald der Worker fertig ist.`,
       );
       router.refresh();
     } catch (generateError) {
