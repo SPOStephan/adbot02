@@ -87,7 +87,15 @@ try {
     readFile(vercelPath, "utf8"),
   ]);
   const sourceFiles = [
-    "types", "image", "http-provider", "env", "storage", "worker", "catalog",
+    "types",
+    "image",
+    "http-provider",
+    "generation-contract",
+    "map-generation-input",
+    "env",
+    "storage",
+    "worker",
+    "catalog",
   ];
   for (const name of sourceFiles) {
     let source = await readFile(join(sourceRoot, `${name}.ts`), "utf8");
@@ -98,6 +106,15 @@ try {
       .replaceAll('from "./http-provider";', 'from "./http-provider.mjs";')
       .replaceAll('from "./env";', 'from "./env.mjs";')
       .replaceAll('from "./storage";', 'from "./storage.mjs";')
+      .replaceAll(
+        'from "./generation-contract";',
+        'from "./generation-contract.mjs";',
+      )
+      .replaceAll(
+        'from "./map-generation-input";',
+        'from "./map-generation-input.mjs";',
+      )
+      .replaceAll('from "./providers";', 'from "./providers-stub.mjs";')
       .replace(
         'from "../supabase/admin";',
         'from "./admin-stub.mjs";',
@@ -108,6 +125,19 @@ try {
       "utf8",
     );
   }
+  await writeFile(
+    join(temporaryDirectory, "providers-stub.mjs"),
+    [
+      "export function createCreativeAssetProviders() {",
+      '  throw new Error("providers stub — inject providers in worker tests");',
+      "}",
+      "export function getConfiguredCreativeAssetProviderKey() {",
+      '  return "stub";',
+      "}",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
   await writeFile(
     join(temporaryDirectory, "admin-stub.mjs"),
     [
