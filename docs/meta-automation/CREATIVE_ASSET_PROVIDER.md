@@ -21,15 +21,34 @@ Bestehende geprüfte Brand-Assets werden über den Katalog bevorzugt wiederverwe
 
 Alle Werte werden ausschließlich als serverseitige Vercel-Umgebungsvariablen hinterlegt. Eine teilweise Konfiguration wird abgelehnt; Providerjobs werden dann nicht geclaimt.
 
+`CREATIVE_ASSET_PROVIDER_KEY` wählt den aktiven Adapter:
+
+- `openrouter` → OpenRouter Image API (Phase 2; siehe `CREATIVE_GENERATION_PHASE2.md`)
+- jeder andere gültige Key (z. B. `http`) → bestehender HTTP-v1-Provider
+
+### HTTP-Provider
+
 | Variable | Pflicht | Bedeutung |
 | --- | --- | --- |
-| `CREATIVE_ASSET_PROVIDER_KEY` | Ja | Stabiler Providerbezeichner gemäß `^[a-z][a-z0-9_-]{1,63}$` |
+| `CREATIVE_ASSET_PROVIDER_KEY` | Ja | Stabiler Providerbezeichner gemäß `^[a-z][a-z0-9_-]{1,63}$` (nicht `openrouter`) |
 | `CREATIVE_ASSET_PROVIDER_ENDPOINT` | Ja | Credential-freie HTTPS-POST-URL, ausschließlich Port 443 |
 | `CREATIVE_ASSET_PROVIDER_API_KEY` | Ja | Serverseitiger Bearer-Key; niemals Datenbank- oder Browserinhalt |
 | `CREATIVE_ASSET_PROVIDER_ASSET_HOSTS` | Ja | Kommaseparierte exakte Hostnamen für Assetdownloads; keine Wildcards |
 | `CREATIVE_ASSET_PROVIDER_TIMEOUT_MS` | Nein | Providerzeitlimit von 5.000 bis 120.000 Millisekunden; Standard 60.000 |
 | `CREATIVE_ASSET_STORAGE_BUCKET` | Nein | Privater Supabase-Bucket; Standard `creative-assets` |
 | `CRON_SECRET` | Ja | Gemeinsames Cron-Bearer-Secret mit mindestens 32 Zeichen |
+
+### OpenRouter-Provider (`CREATIVE_ASSET_PROVIDER_KEY=openrouter`)
+
+| Variable | Pflicht | Bedeutung |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` oder `CREATIVE_ASSET_OPENROUTER_API_KEY` | Ja | Bearer-Key |
+| `CREATIVE_ASSET_OPENROUTER_MODEL_ALLOWLIST` | Ja | Kommaseparierte Modell-Slugs |
+| `CREATIVE_ASSET_OPENROUTER_DEFAULT_MODEL` | Nein | Optional; muss in der Allowlist liegen |
+| `CREATIVE_ASSET_OPENROUTER_BASE_URL` | Nein | Standard `https://openrouter.ai/api/v1` |
+| `CREATIVE_ASSET_OPENROUTER_TIMEOUT_MS` | Nein | 5.000–120.000; Fallback `CREATIVE_ASSET_PROVIDER_TIMEOUT_MS` |
+| `CREATIVE_ASSET_OPENROUTER_ASSET_HOSTS` | Nein* | Nur nötig, wenn Antworten URLs statt `b64_json` liefern |
+| `CREATIVE_ASSET_OPENROUTER_HTTP_REFERER` / `CREATIVE_ASSET_OPENROUTER_APP_TITLE` | Nein | Empfohlene OpenRouter-Header |
 
 ## HTTP-v1-Anfrage
 
@@ -134,7 +153,7 @@ Phase 1 legt nur **Schema + Validierung** fest. Es gibt **keine** Live-Aufrufe a
 | TypeScript | `src/lib/creative-assets/generation-contract.ts` |
 | Migration | `supabase/migrations/20260818230000_creative_generation_phase1_contract.sql` |
 
-**Model-open / OpenRouter-ready:** `provider_key` folgt `^[a-z][a-z0-9_-]{1,63}$` (z. B. `openrouter`, `http`); `model_id` ist 1–160 Zeichen. Phase 2 verdrahtet den konkreten Provider.
+**Model-open / OpenRouter-ready:** `provider_key` folgt `^[a-z][a-z0-9_-]{1,63}$` (z. B. `openrouter`, `http`); `model_id` ist 1–160 Zeichen.
 
 Beispiel-Input (Shape):
 
@@ -152,3 +171,7 @@ Beispiel-Input (Shape):
 ```
 
 Modi: `free` | `locked_photo` (`locked_photo_asset_ids` nicht-leer genau dann). Secrets werden über `meta_jsonb_has_sensitive_key` / TS-Spiegel abgelehnt. Details: `docs/meta-automation/CREATIVE_GENERATION_PHASE1.md`.
+
+## Phase 2 (OpenRouter live)
+
+Phase 2 verdrahtet den OpenRouter Image API-Client, die Provider-Registry, den Worker und `POST /api/meta/automation/creative-assets/enqueue` für **mode=`free`**. Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE2.md`.

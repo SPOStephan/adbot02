@@ -1,11 +1,14 @@
 import "server-only";
 
-import { HttpCreativeAssetProvider } from "./http-provider";
 import {
   inspectCreativeImage,
   safeCreativeFileName,
   sanitizeAssetMetadata,
 } from "./image";
+import {
+  assertCreativeAssetJobInputForProvider,
+  toCreativeAssetProviderError,
+} from "./map-generation-input";
 import {
   CreativeAssetProviderError,
   type CreativeAssetJob,
@@ -13,6 +16,7 @@ import {
   type CreativeProviderFailureMode,
 } from "./types";
 import { getCreativeAssetRuntimeConfig } from "./env";
+import { createCreativeAssetProviders } from "./providers";
 import { createAdminClient } from "../supabase/admin";
 import {
   storeCreativeAssetInSupabase,
@@ -112,27 +116,16 @@ function calculateBackoff(attemptCount: number): number {
 }
 
 function safeFailure(error: unknown, job: CreativeAssetJob): CreativeAssetFailure {
-  if (error instanceof CreativeAssetProviderError) {
-    return {
-      job,
-      failureMode: error.failureMode,
-      errorClass: error.code,
-      safeMessage: error.message,
-      safeToRetry: error.safeToRetry,
-      backoffSeconds:
-        error.retryAfterSeconds ?? calculateBackoff(job.attemptCount),
-      providerRequestId: error.providerRequestId,
-    };
-  }
-
+  const providerError = toCreativeAssetProviderError(error);
   return {
     job,
-    failureMode: "POST_PROCESSING",
-    errorClass: "asset_post_processing_failed",
-    safeMessage: "Assetverarbeitung konnte nicht sicher abgeschlossen werden.",
-    safeToRetry: true,
-    backoffSeconds: calculateBackoff(job.attemptCount),
-    providerRequestId: null,
+    failureMode: providerError.failureMode,
+    errorClass: providerError.code,
+    safeMessage: providerError.message,
+    safeToRetry: providerError.safeToRetry,
+    backoffSeconds:
+      providerError.retryAfterSeconds ?? calculateBackoff(job.attemptCount),
+    providerRequestId: providerError.providerRequestId,
   };
 }
 
@@ -182,6 +175,7 @@ export async function runCreativeAssetWorkerOnce(input: {
 
   const signal = input.signal ?? AbortSignal.timeout(150_000);
   try {
+    assertCreativeAssetJobInputForProvider(job);
     await input.dependencies.markDispatched(job);
     const result = await provider.generate({ job, signal });
     const bytes = await provider.materialize(result, signal);
@@ -315,10 +309,10 @@ async function failInSupabase(
 
 export function createCreativeAssetWorkerDependencies(): CreativeAssetWorkerDependencies {
   const runtime = getCreativeAssetRuntimeConfig();
-  const provider = new HttpCreativeAssetProvider(runtime.provider);
+  const providers = createCreativeAssetProviders(runtime);
 
   return {
-    providers: new Map([[provider.key, provider]]),
+    providers,
     claim: claimFromSupabase,
     markDispatched: markDispatchedInSupabase,
     store: (input) =>
