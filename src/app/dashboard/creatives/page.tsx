@@ -19,6 +19,8 @@ type MediaLibraryAssetRow = {
   width: number | null;
   height: number | null;
   source_type: string | null;
+  asset_role: string | null;
+  training_status: string | null;
   status: string | null;
   meta_image_hash: string | null;
   created_at: string;
@@ -118,6 +120,8 @@ export default async function CreativesPage() {
             height: typeof asset.height === "number" ? asset.height : null,
             sourceType: String(asset.source_type ?? "UPLOADED"),
             status: String(asset.status ?? "READY"),
+            assetRole: String(asset.asset_role ?? "UPLOAD_EDITABLE"),
+            trainingStatus: String(asset.training_status ?? "none"),
             metaImageHashPresent: Boolean(asset.meta_image_hash),
             createdAt: String(asset.created_at),
             label: formatLabelForDimensions(

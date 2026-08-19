@@ -179,3 +179,7 @@ Phase 2 verdrahtet den OpenRouter Image API-Client, die Provider-Registry, den W
 ## Phase 3 (Locked-Photo Compose)
 
 Phase 3 schaltet **mode=`locked_photo`** frei: KI-Hintergrund + 1:1-Embed eines `LOCKED_PHOTO` mit Pixel-Guard (PNG). Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE3.md`.
+
+## Phase 4 (Media Library UI)
+
+Phase 4: Generate + Markieren in `/dashboard/creatives`, Config-API ohne Secrets, RPC `set_brand_asset_locked_photo_role`. Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE4.md`.
