@@ -191,3 +191,7 @@ Phase 5 verdrahtet `reference_asset_ids` an OpenRouter `input_references` (max. 
 ## Phase 6 (Credits & Audit)
 
 Phase 6 reserviert/committed `creative.generate_image_master` (20 Credits) für Free und Locked-Photo. Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE6.md`.
+
+## Phase 7 (Format-Slots nach Generate)
+
+Nach erfolgreichem Master erzeugt der Worker best-effort Meta-Cover-Crops (`meta_feed_1x1` / `4x5` / `9x16`) als `GENERATED`-Kinder mit `source_kind=generated_meta_crop`. Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE7.md`.

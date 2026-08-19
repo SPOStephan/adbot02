@@ -27,9 +27,14 @@ import {
 } from "../billing/credits";
 import { createAdminClient } from "../supabase/admin";
 import {
+  formatSlotsMetadataSummary,
+  registerGeneratedMetaFormatSlots,
+} from "./generated-meta-crops";
+import {
   storeCreativeAssetInSupabase,
   type StoredCreativeAsset,
 } from "./storage";
+import { presetsNeedingCrop, formatLabelForDimensions } from "../media-library/meta-formats";
 
 const CREATIVE_ASSET_LEASE_SECONDS = 180;
 const DEFAULT_BACKOFF_SECONDS = 5 * 60;
@@ -284,6 +289,21 @@ export async function runCreativeAssetWorkerOnce(input: {
       jobId: job.jobId,
       mimeType: image.mimeType,
     });
+
+    // Phase 7: plan Meta format-slot crops (actual registration after complete).
+    const cropsPlanned = presetsNeedingCrop(image.width, image.height);
+    metadata = {
+      ...metadata,
+      format_slots: {
+        version: 1,
+        master_format_label: formatLabelForDimensions(
+          image.width,
+          image.height,
+        ),
+        crops_planned: cropsPlanned,
+      },
+    };
+
     const sanitizedMetadata = sanitizeAssetMetadata(metadata);
     const storage = await input.dependencies.store({
       job,
@@ -305,6 +325,32 @@ export async function runCreativeAssetWorkerOnce(input: {
       moderationStatus: result.moderationStatus,
       metadata: sanitizedMetadata,
     });
+
+    // Best-effort Meta cover crops — never fail a successful generation.
+    try {
+      const slots = await registerGeneratedMetaFormatSlots({
+        job,
+        parentAssetId: assetId,
+        bytes: image.bytes,
+        mimeType: image.mimeType,
+        width: image.width,
+        height: image.height,
+        fileName,
+        bucket: storage.bucket,
+        providerAssetId: result.providerAssetId,
+      });
+      if (slots.cropsGenerated > 0) {
+        console.info(
+          "[creative-assets] format slots registered",
+          formatSlotsMetadataSummary(slots),
+        );
+      }
+    } catch (slotError) {
+      console.error(
+        "[creative-assets] format slot registration skipped",
+        slotError,
+      );
+    }
 
     await settleCreativeJobCredits({ job, outcome: "commit" });
 

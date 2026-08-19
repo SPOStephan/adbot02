@@ -133,6 +133,14 @@ try {
         'from "./locked-photo-load-stub.mjs";',
       )
       .replaceAll('from "./providers";', 'from "./providers-stub.mjs";')
+      .replaceAll(
+        'from "./generated-meta-crops";',
+        'from "./generated-meta-crops-stub.mjs";',
+      )
+      .replace(
+        'from "../media-library/meta-formats";',
+        'from "./meta-formats-stub.mjs";',
+      )
       .replace(
         'from "../supabase/admin";',
         'from "./admin-stub.mjs";',
@@ -155,6 +163,14 @@ try {
         .replace(
           /from\s+["'][^"']*billing\/credits[^"']*["']/g,
           'from "./billing-credits-stub.mjs"',
+        )
+        .replace(
+          /from\s+["'][^"']*generated-meta-crops[^"']*["']/g,
+          'from "./generated-meta-crops-stub.mjs"',
+        )
+        .replace(
+          /from\s+["'][^"']*meta-formats[^"']*["']/g,
+          'from "./meta-formats-stub.mjs"',
         )
         .replaceAll(
           'from "./locked-photo-constants"',
@@ -182,6 +198,32 @@ try {
     [
       "export async function commitCreditReservation() { return true; }",
       "export async function releaseCreditReservation() { return true; }",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  await writeFile(
+    join(temporaryDirectory, "generated-meta-crops-stub.mjs"),
+    [
+      "export async function registerGeneratedMetaFormatSlots() {",
+      "  return {",
+      "    cropsGenerated: 0,",
+      "    cropsSkipped: 3,",
+      "    cropAssetIds: [],",
+      "    masterFormatLabel: null,",
+      "    cropsPlanned: [],",
+      "  };",
+      "}",
+      "export function formatSlotsMetadataSummary(result) { return result; }",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  await writeFile(
+    join(temporaryDirectory, "meta-formats-stub.mjs"),
+    [
+      "export function presetsNeedingCrop() { return []; }",
+      "export function formatLabelForDimensions() { return null; }",
       "",
     ].join("\n"),
     "utf8",

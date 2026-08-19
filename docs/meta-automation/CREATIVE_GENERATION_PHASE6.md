@@ -34,5 +34,5 @@ Credits + audit for image generation (`creative.generate_image_master`).
 ## Intentionally deferred
 
 - Separate `locked_compose` price key (both modes use `generate_image_master`)
-- Auto performance_winner Insights job
+- Auto performance_winner Insights job (Phase 8+)
 - Meta Ad Library scraper

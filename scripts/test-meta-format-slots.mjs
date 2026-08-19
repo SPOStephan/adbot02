@@ -139,6 +139,31 @@ try {
     /\bmetadata\b/,
   );
 
+  // Phase 7: generated masters get Meta format-slot crops.
+  const phase7Migration = await readFile(
+    join(
+      root,
+      "supabase/migrations/20260819200000_creative_generation_phase7_format_slots.sql",
+    ),
+    "utf8",
+  );
+  assert.match(phase7Migration, /register_generated_meta_crop_asset/);
+  assert.match(phase7Migration, /generated_meta_crop/);
+
+  const generatedCrops = await readFile(
+    join(root, "src/lib/creative-assets/generated-meta-crops.ts"),
+    "utf8",
+  );
+  assert.match(generatedCrops, /generateMetaCropsFromOriginal/);
+  assert.match(generatedCrops, /register_generated_meta_crop_asset/);
+
+  const workerSource = await readFile(
+    join(root, "src/lib/creative-assets/worker.ts"),
+    "utf8",
+  );
+  assert.match(workerSource, /registerGeneratedMetaFormatSlots/);
+  assert.match(workerSource, /format_slots/);
+
   console.log("Meta creative format slots contract tests passed.");
 } finally {
   await rm(temporaryDirectory, { recursive: true, force: true });
