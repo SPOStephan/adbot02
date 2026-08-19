@@ -10,7 +10,7 @@ import {
   hasCreativeAssetProviderConfig,
   isModelAllowlistedForConfiguredProvider,
 } from "@/lib/creative-assets/env";
-import { assertPhase2ExecutableGenerationInput } from "@/lib/creative-assets/map-generation-input";
+import { assertExecutableGenerationInput } from "@/lib/creative-assets/map-generation-input";
 import { CustomerControlInputError } from "@/lib/meta/customer-control-input";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -40,10 +40,9 @@ function requiredUuid(value: unknown, label: string): string {
 
 /**
  * Parse enqueue body: generation contract fields + brandProfileId.
- * Phase 2: mode=free only (locked_photo rejected here for clear API errors).
+ * Phase 3: mode=free | locked_photo (≤1, PNG). Style references still rejected.
  *
- * Credits: Phase 2 intentionally does not charge creative.generate_image_master
- * so enqueue/testing is not blocked by wallet state. Billing can attach later.
+ * Credits: still not charged for image generation (same as Phase 2).
  */
 export function parseCreativeAssetEnqueueBody(body: unknown): {
   brandProfileId: string;
@@ -78,7 +77,7 @@ export function parseCreativeAssetEnqueueBody(body: unknown): {
   }
 
   try {
-    assertPhase2ExecutableGenerationInput(input, {
+    assertExecutableGenerationInput(input, {
       providerKey: input.provider_key,
       providerModel: input.model_id,
     });
@@ -86,7 +85,7 @@ export function parseCreativeAssetEnqueueBody(body: unknown): {
     const message =
       error instanceof Error
         ? error.message
-        : "Generationseingabe ist für Phase 2 nicht erlaubt.";
+        : "Generationseingabe ist nicht erlaubt.";
     const code =
       error &&
       typeof error === "object" &&

@@ -1,5 +1,5 @@
 /**
- * Phase 2 execution gates for creative generation input.
+ * Generation execution gates (Phase 2 free + Phase 3 locked_photo compose).
  * Maps job.inputPayload through the Phase 1 contract and rejects unsupported modes.
  */
 
@@ -9,6 +9,7 @@ import {
   CREATIVE_GENERATION_CONTRACT_VERSION,
   type CreativeGenerationInput,
 } from "./generation-contract";
+import { PHASE3_MAX_LOCKED_PHOTOS } from "./locked-photo-constants";
 import {
   CreativeAssetProviderError,
   type CreativeAssetJob,
@@ -36,6 +37,19 @@ export class CreativeGenerationPhase2Error extends Error {
   }
 }
 
+/** Alias kept for Phase 3 callers / tests. */
+export class CreativeGenerationExecutionError extends CreativeGenerationPhase2Error {
+  constructor(input: {
+    code: string;
+    message: string;
+    failureMode?: "PRE_DISPATCH" | "POLICY_REJECTED" | "REMOTE_REJECTED";
+    safeToRetry?: boolean;
+  }) {
+    super(input);
+    this.name = "CreativeGenerationExecutionError";
+  }
+}
+
 export function inputHasGenerationContract(value: unknown): boolean {
   return (
     Boolean(value) &&
@@ -47,34 +61,24 @@ export function inputHasGenerationContract(value: unknown): boolean {
 }
 
 /**
- * Validate Phase 2 execution constraints on an already-asserted contract input.
- * locked_photo and style references are not supported until later phases.
+ * Validate execution constraints on an already-asserted contract input.
+ * Phase 3: free + locked_photo (≤1). Style references still deferred.
  */
-export function assertPhase2ExecutableGenerationInput(
+export function assertExecutableGenerationInput(
   input: CreativeGenerationInput,
   job: Pick<CreativeAssetJob, "providerKey" | "providerModel">,
 ): CreativeGenerationInput {
-  if (input.mode === "locked_photo") {
-    throw new CreativeGenerationPhase2Error({
+  if (input.mode !== "free" && input.mode !== "locked_photo") {
+    throw new CreativeGenerationExecutionError({
       code: "POLICY_REJECTED",
-      message:
-        "Phase 2 unterstützt nur mode=free; locked_photo (Compose) folgt später.",
-      failureMode: "POLICY_REJECTED",
-      safeToRetry: false,
-    });
-  }
-
-  if (input.mode !== "free") {
-    throw new CreativeGenerationPhase2Error({
-      code: "POLICY_REJECTED",
-      message: "Phase 2 unterstützt nur mode=free.",
+      message: "Unterstützte Modi: free und locked_photo.",
       failureMode: "POLICY_REJECTED",
       safeToRetry: false,
     });
   }
 
   if (input.provider_key !== job.providerKey) {
-    throw new CreativeGenerationPhase2Error({
+    throw new CreativeGenerationExecutionError({
       code: "provider_key_mismatch",
       message: "provider_key im Input stimmt nicht mit dem Job-Provider überein.",
       failureMode: "PRE_DISPATCH",
@@ -83,7 +87,7 @@ export function assertPhase2ExecutableGenerationInput(
   }
 
   if (input.model_id !== job.providerModel) {
-    throw new CreativeGenerationPhase2Error({
+    throw new CreativeGenerationExecutionError({
       code: "model_id_mismatch",
       message: "model_id im Input stimmt nicht mit dem Job-Modell überein.",
       failureMode: "PRE_DISPATCH",
@@ -92,19 +96,52 @@ export function assertPhase2ExecutableGenerationInput(
   }
 
   if (input.reference_asset_ids.length > 0) {
-    throw new CreativeGenerationPhase2Error({
+    throw new CreativeGenerationExecutionError({
       code: "POLICY_REJECTED",
       message:
-        "Phase 2 akzeptiert noch keine reference_asset_ids (Style-Wiring folgt).",
+        "reference_asset_ids (Style-Wiring) sind noch nicht freigeschaltet.",
       failureMode: "POLICY_REJECTED",
       safeToRetry: false,
     });
   }
 
-  if (input.locked_photo_asset_ids.length > 0) {
-    throw new CreativeGenerationPhase2Error({
-      code: "POLICY_REJECTED",
-      message: "free-Mode darf keine locked_photo_asset_ids enthalten.",
+  if (input.mode === "free") {
+    if (input.locked_photo_asset_ids.length > 0) {
+      throw new CreativeGenerationExecutionError({
+        code: "POLICY_REJECTED",
+        message: "free-Mode darf keine locked_photo_asset_ids enthalten.",
+        failureMode: "POLICY_REJECTED",
+        safeToRetry: false,
+      });
+    }
+    return input;
+  }
+
+  // locked_photo
+  if (input.locked_photo_asset_ids.length < 1) {
+    throw new CreativeGenerationExecutionError({
+      code: "LOCKED_PHOTO_REQUIRED",
+      message: "locked_photo mode requires at least one locked_photo_asset_ids entry.",
+      failureMode: "POLICY_REJECTED",
+      safeToRetry: false,
+    });
+  }
+
+  if (input.locked_photo_asset_ids.length > PHASE3_MAX_LOCKED_PHOTOS) {
+    throw new CreativeGenerationExecutionError({
+      code: "locked_photo_limit",
+      message: `Phase 3 unterstützt höchstens ${PHASE3_MAX_LOCKED_PHOTOS} Locked Photo pro Job.`,
+      failureMode: "POLICY_REJECTED",
+      safeToRetry: false,
+    });
+  }
+
+  // Lossless compose requires PNG output so the pixel guard stays meaningful.
+  if (input.output.mime_type !== "image/png") {
+    throw new CreativeGenerationExecutionError({
+      code: "locked_photo_png_required",
+      message:
+        "locked_photo Compose erfordert output.mime_type=image/png (Pixel-Guard).",
       failureMode: "POLICY_REJECTED",
       safeToRetry: false,
     });
@@ -113,10 +150,18 @@ export function assertPhase2ExecutableGenerationInput(
   return input;
 }
 
+/** @deprecated Use assertExecutableGenerationInput — kept for Phase 2 call sites/tests. */
+export function assertPhase2ExecutableGenerationInput(
+  input: CreativeGenerationInput,
+  job: Pick<CreativeAssetJob, "providerKey" | "providerModel">,
+): CreativeGenerationInput {
+  return assertExecutableGenerationInput(input, job);
+}
+
 /**
- * Map a job payload for Phase 2 OpenRouter / contract-aware execution.
+ * Map a job payload for contract-aware execution (Phase 2/3).
  */
-export function mapCreativeGenerationInputForPhase2Execution(
+export function mapCreativeGenerationInputForExecution(
   job: CreativeAssetJob,
 ): CreativeGenerationInput {
   let asserted: CreativeGenerationInput;
@@ -124,7 +169,7 @@ export function mapCreativeGenerationInputForPhase2Execution(
     asserted = assertCreativeGenerationInput(job.inputPayload);
   } catch (error) {
     if (error instanceof CreativeGenerationContractError) {
-      throw new CreativeGenerationPhase2Error({
+      throw new CreativeGenerationExecutionError({
         code: error.code,
         message: error.message,
         failureMode: "POLICY_REJECTED",
@@ -134,12 +179,19 @@ export function mapCreativeGenerationInputForPhase2Execution(
     throw error;
   }
 
-  return assertPhase2ExecutableGenerationInput(asserted, job);
+  return assertExecutableGenerationInput(asserted, job);
+}
+
+/** @deprecated Use mapCreativeGenerationInputForExecution */
+export function mapCreativeGenerationInputForPhase2Execution(
+  job: CreativeAssetJob,
+): CreativeGenerationInput {
+  return mapCreativeGenerationInputForExecution(job);
 }
 
 /**
  * Worker pre-dispatch gate:
- * - Contract present → Phase 2 execution rules
+ * - Contract present → Phase 2/3 execution rules
  * - Legacy freeform → only for HTTP provider (backward compat)
  * - OpenRouter always requires the generation contract
  */
@@ -159,13 +211,15 @@ export function assertCreativeAssetJobInputForProvider(
       });
     }
     try {
-      mapCreativeGenerationInputForPhase2Execution(job);
+      mapCreativeGenerationInputForExecution(job);
     } catch (error) {
-      if (error instanceof CreativeGenerationPhase2Error) {
+      if (
+        error instanceof CreativeGenerationPhase2Error ||
+        error instanceof CreativeGenerationExecutionError
+      ) {
         throw new CreativeAssetProviderError({
           code: sanitizeErrorClass(error.code),
           message: error.message,
-          // Pre-dispatch worker gate: fail RPC requires PRE_DISPATCH before dispatch.
           failureMode: "PRE_DISPATCH",
           safeToRetry: false,
         });
@@ -177,9 +231,12 @@ export function assertCreativeAssetJobInputForProvider(
 
   if (hasContract) {
     try {
-      mapCreativeGenerationInputForPhase2Execution(job);
+      mapCreativeGenerationInputForExecution(job);
     } catch (error) {
-      if (error instanceof CreativeGenerationPhase2Error) {
+      if (
+        error instanceof CreativeGenerationPhase2Error ||
+        error instanceof CreativeGenerationExecutionError
+      ) {
         throw new CreativeAssetProviderError({
           code: sanitizeErrorClass(error.code),
           message: error.message,
@@ -210,7 +267,10 @@ export function toCreativeAssetProviderError(
   if (error instanceof CreativeAssetProviderError) {
     return error;
   }
-  if (error instanceof CreativeGenerationPhase2Error) {
+  if (
+    error instanceof CreativeGenerationPhase2Error ||
+    error instanceof CreativeGenerationExecutionError
+  ) {
     return new CreativeAssetProviderError({
       code: sanitizeErrorClass(error.code),
       message: error.message,

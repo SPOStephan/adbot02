@@ -128,6 +128,7 @@ try {
     ["types.ts", "types.mjs"],
     ["image.ts", "image.mjs"],
     ["generation-contract.ts", "generation-contract.mjs"],
+    ["locked-photo-constants.ts", "locked-photo-constants.mjs"],
     ["map-generation-input.ts", "map-generation-input.mjs"],
     ["http-provider.ts", "http-provider.mjs"],
     ["providers/openrouter.ts", "openrouter.mjs"],
@@ -151,6 +152,10 @@ try {
       .replaceAll(
         'from "./generation-contract";',
         'from "./generation-contract.mjs";',
+      )
+      .replaceAll(
+        'from "./locked-photo-constants";',
+        'from "./locked-photo-constants.mjs";',
       )
       .replaceAll(
         'from "./map-generation-input";',
@@ -254,15 +259,27 @@ try {
           locked_photo_asset_ids: [
             "10000000-0000-4000-8000-000000000099",
           ],
+          output: { mime_type: "image/jpeg", aspect_hint: "1:1" },
         },
       });
     },
     (error) =>
       error instanceof mapMod.CreativeGenerationPhase2Error &&
-      error.code === "POLICY_REJECTED" &&
-      /locked_photo/i.test(error.message) &&
+      /png/i.test(error.message) &&
       error.safeToRetry === false,
   );
+
+  const lockedMapped = mapMod.mapCreativeGenerationInputForPhase2Execution({
+    ...job,
+    inputPayload: {
+      ...freeInput,
+      mode: "locked_photo",
+      locked_photo_asset_ids: ["10000000-0000-4000-8000-000000000099"],
+      output: { mime_type: "image/png", aspect_hint: "1:1" },
+    },
+  });
+  assert.equal(lockedMapped.mode, "locked_photo");
+  assert.equal(lockedMapped.locked_photo_asset_ids.length, 1);
 
   await assert.rejects(
     async () => {
@@ -391,7 +408,16 @@ try {
     false,
   );
 
-  // Enqueue body parsing rejects locked_photo
+  // Enqueue body parsing accepts locked_photo (PNG) — ownership checked in SQL/worker
+  const lockedEnqueue = enqueueMod.parseCreativeAssetEnqueueBody({
+    brandProfileId: "10000000-0000-4000-8000-000000000004",
+    ...freeInput,
+    mode: "locked_photo",
+    locked_photo_asset_ids: ["10000000-0000-4000-8000-000000000099"],
+    output: { mime_type: "image/png", aspect_hint: "1:1" },
+  });
+  assert.equal(lockedEnqueue.input.mode, "locked_photo");
+
   assert.throws(
     () =>
       enqueueMod.parseCreativeAssetEnqueueBody({
@@ -399,6 +425,7 @@ try {
         ...freeInput,
         mode: "locked_photo",
         locked_photo_asset_ids: ["10000000-0000-4000-8000-000000000099"],
+        output: { mime_type: "image/jpeg", aspect_hint: "1:1" },
       }),
     (error) => error.name === "CustomerControlInputError",
   );

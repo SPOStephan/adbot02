@@ -7,8 +7,12 @@ import {
 } from "./image";
 import {
   assertCreativeAssetJobInputForProvider,
+  inputHasGenerationContract,
+  mapCreativeGenerationInputForExecution,
   toCreativeAssetProviderError,
 } from "./map-generation-input";
+import { composeLockedPhotoCreative } from "./locked-photo-compose";
+import { loadVerifiedLockedPhotoAssets } from "./locked-photo-load";
 import {
   CreativeAssetProviderError,
   type CreativeAssetJob,
@@ -179,20 +183,50 @@ export async function runCreativeAssetWorkerOnce(input: {
     await input.dependencies.markDispatched(job);
     const result = await provider.generate({ job, signal });
     const bytes = await provider.materialize(result, signal);
-    const image = inspectCreativeImage({
+    let image = inspectCreativeImage({
       bytes,
       declaredMimeType: result.declaredMimeType,
     });
+    let metadata: Record<string, unknown> = {
+      ...result.metadata,
+      provider_contract_version: provider.contractVersion,
+      input_hash: job.inputHash,
+    };
+
+    // Phase 3: locked_photo → AI background + 1:1 embed + pixel guard (PNG).
+    if (inputHasGenerationContract(job.inputPayload)) {
+      const generation = mapCreativeGenerationInputForExecution(job);
+      if (generation.mode === "locked_photo") {
+        const locked = await loadVerifiedLockedPhotoAssets({
+          userId: job.userId,
+          platformAccountId: job.platformAccountId,
+          assetIds: generation.locked_photo_asset_ids,
+        });
+        const composed = await composeLockedPhotoCreative({
+          backgroundBytes: image.bytes,
+          locked,
+          aspectHint: generation.output.aspect_hint,
+        });
+        image = inspectCreativeImage({
+          bytes: composed.bytes,
+          declaredMimeType: "image/png",
+        });
+        metadata = {
+          ...metadata,
+          locked_photo_compose: {
+            version: composed.composeVersion,
+            placements: composed.placements,
+          },
+        };
+      }
+    }
+
     const fileName = safeCreativeFileName({
       requestedName: result.fileName,
       jobId: job.jobId,
       mimeType: image.mimeType,
     });
-    const metadata = sanitizeAssetMetadata({
-      ...result.metadata,
-      provider_contract_version: provider.contractVersion,
-      input_hash: job.inputHash,
-    });
+    const sanitizedMetadata = sanitizeAssetMetadata(metadata);
     const storage = await input.dependencies.store({
       job,
       bytes: image.bytes,
@@ -211,7 +245,7 @@ export async function runCreativeAssetWorkerOnce(input: {
       width: image.width,
       height: image.height,
       moderationStatus: result.moderationStatus,
-      metadata,
+      metadata: sanitizedMetadata,
     });
 
     return {
