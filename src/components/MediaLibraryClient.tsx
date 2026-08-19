@@ -1,8 +1,17 @@
 "use client";
 
-import { ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
+import {
+  ImagePlus,
+  Loader2,
+  Lock,
+  Sparkles,
+  Star,
+  Trash2,
+  Unlock,
+  Upload,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { formatLabelForDimensions } from "@/lib/media-library/meta-formats";
 import { parseAssetUploadResponse } from "@/lib/media-library/parse-upload-response";
@@ -14,6 +23,8 @@ export type MediaLibraryAssetView = {
   height: number | null;
   sourceType: string;
   status: string;
+  assetRole: string;
+  trainingStatus: string;
   metaImageHashPresent: boolean;
   createdAt: string;
   label?: string | null;
@@ -22,6 +33,13 @@ export type MediaLibraryAssetView = {
 type BrandProfileOption = {
   id: string;
   brandName: string;
+};
+
+type GenerationConfig = {
+  configured: boolean;
+  providerKey: string | null;
+  defaultModelId: string | null;
+  modelAllowlist: string[];
 };
 
 export function MediaLibraryClient({
@@ -43,13 +61,77 @@ export function MediaLibraryClient({
   );
   const [pending, setPending] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Keep local list in sync when the server re-renders after upload/refresh.
+  const [genConfig, setGenConfig] = useState<GenerationConfig | null>(null);
+  const [genMode, setGenMode] = useState<"free" | "locked_photo">("free");
+  const [genPrompt, setGenPrompt] = useState("");
+  const [genModelId, setGenModelId] = useState("");
+  const [genLockedAssetId, setGenLockedAssetId] = useState("");
+  const [genPending, setGenPending] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [genMessage, setGenMessage] = useState<string | null>(null);
+
   useEffect(() => {
     setAssets(initialAssets);
   }, [initialAssets]);
+
+  useEffect(() => {
+    if (!brandProfileId && brandProfiles[0]?.id) {
+      setBrandProfileId(brandProfiles[0].id);
+    }
+  }, [brandProfileId, brandProfiles]);
+
+  useEffect(() => {
+    if (!metaConnected) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          "/api/meta/automation/creative-assets/config",
+          { credentials: "same-origin" },
+        );
+        const json = (await response.json().catch(() => ({}))) as {
+          ok?: boolean;
+          configured?: boolean;
+          providerKey?: string | null;
+          defaultModelId?: string | null;
+          modelAllowlist?: string[];
+        };
+        if (cancelled || !response.ok || !json.ok) return;
+        const allowlist = Array.isArray(json.modelAllowlist)
+          ? json.modelAllowlist
+          : [];
+        const defaultModelId =
+          typeof json.defaultModelId === "string" ? json.defaultModelId : "";
+        setGenConfig({
+          configured: Boolean(json.configured),
+          providerKey:
+            typeof json.providerKey === "string" ? json.providerKey : null,
+          defaultModelId: defaultModelId || null,
+          modelAllowlist: allowlist,
+        });
+        setGenModelId(defaultModelId || allowlist[0] || "");
+      } catch {
+        // Config is optional for upload/library; generate section shows offline state.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [metaConnected]);
+
+  const lockedPhotoOptions = useMemo(
+    () =>
+      assets.filter(
+        (asset) =>
+          asset.assetRole === "LOCKED_PHOTO" &&
+          asset.status === "READY",
+      ),
+    [assets],
+  );
 
   async function onUpload(file: File | undefined) {
     if (!file) return;
@@ -126,6 +208,168 @@ export function MediaLibraryClient({
     }
   }
 
+  async function onToggleTraining(asset: MediaLibraryAssetView) {
+    if (actionId) return;
+    const next =
+      asset.trainingStatus === "marked_good" ? "none" : "marked_good";
+    setActionId(asset.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/media-library/training-status", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assetId: asset.id, trainingStatus: next }),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Markierung fehlgeschlagen.");
+      }
+      setAssets((previous) =>
+        previous.map((row) =>
+          row.id === asset.id ? { ...row, trainingStatus: next } : row,
+        ),
+      );
+      setMessage(
+        next === "marked_good"
+          ? "Als gutes Beispiel markiert."
+          : "Markierung entfernt.",
+      );
+      router.refresh();
+    } catch (markError) {
+      setError(
+        markError instanceof Error
+          ? markError.message
+          : "Markierung fehlgeschlagen.",
+      );
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function onToggleLocked(asset: MediaLibraryAssetView) {
+    if (actionId) return;
+    const lock = asset.assetRole !== "LOCKED_PHOTO";
+    setActionId(asset.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/media-library/locked-photo", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assetId: asset.id, locked: lock }),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        assetRole?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Locked-Photo-Status fehlgeschlagen.");
+      }
+      const nextRole =
+        typeof result.assetRole === "string"
+          ? result.assetRole
+          : lock
+            ? "LOCKED_PHOTO"
+            : "UPLOAD_EDITABLE";
+      setAssets((previous) =>
+        previous.map((row) =>
+          row.id === asset.id ? { ...row, assetRole: nextRole } : row,
+        ),
+      );
+      setMessage(
+        lock
+          ? "Als Locked Photo markiert (wird unverändert eingebettet)."
+          : "Locked Photo aufgehoben.",
+      );
+      router.refresh();
+    } catch (lockError) {
+      setError(
+        lockError instanceof Error
+          ? lockError.message
+          : "Locked-Photo-Status fehlgeschlagen.",
+      );
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function onGenerate() {
+    if (genPending) return;
+    setGenPending(true);
+    setGenError(null);
+    setGenMessage(null);
+    try {
+      if (!brandProfileId) {
+        throw new Error("Für KI-Generierung brauchst du ein aktives Brand-Profil.");
+      }
+      if (!genConfig?.configured || !genConfig.providerKey || !genModelId) {
+        throw new Error(
+          "KI-Generierung ist noch nicht konfiguriert (Provider/Modell).",
+        );
+      }
+      if (genMode === "locked_photo" && !genLockedAssetId) {
+        throw new Error("Bitte ein Locked Photo auswählen.");
+      }
+
+      const body: Record<string, unknown> = {
+        brandProfileId,
+        contract_version: "adbot-creative-generation-v1",
+        mode: genMode,
+        provider_key: genConfig.providerKey,
+        model_id: genModelId,
+        prompt: genPrompt.trim() || undefined,
+        reference_asset_ids: [],
+        locked_photo_asset_ids:
+          genMode === "locked_photo" ? [genLockedAssetId] : [],
+        output: { mime_type: "image/png", aspect_hint: "1:1" },
+      };
+
+      const response = await fetch(
+        "/api/meta/automation/creative-assets/enqueue",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const result = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        jobId?: string;
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.message ||
+            result.error ||
+            "Generierung konnte nicht gestartet werden.",
+        );
+      }
+      setGenMessage(
+        `Generierung gestartet${result.jobId ? ` (Job ${result.jobId.slice(0, 8)}…)` : ""}. Das Ergebnis erscheint in der Library, sobald der Worker fertig ist.`,
+      );
+      router.refresh();
+    } catch (generateError) {
+      setGenError(
+        generateError instanceof Error
+          ? generateError.message
+          : "Generierung fehlgeschlagen.",
+      );
+    } finally {
+      setGenPending(false);
+    }
+  }
+
+  const busy = pending || Boolean(deletingId) || Boolean(actionId) || genPending;
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -176,7 +420,7 @@ export function MediaLibraryClient({
                   <input
                     accept="image/png,image/jpeg"
                     className="hidden"
-                    disabled={pending || Boolean(deletingId)}
+                    disabled={busy}
                     onChange={(event) => {
                       void onUpload(event.target.files?.[0]);
                       event.target.value = "";
@@ -205,11 +449,179 @@ export function MediaLibraryClient({
         </div>
       </section>
 
+      {metaConnected ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 place-items-center rounded-xl bg-slate-900 text-white">
+              <Sparkles className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-extrabold tracking-tight">
+                KI-Creative erzeugen
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Free: vollständiges KI-Bild. Locked Photo: KI-Hintergrund mit
+                unverändert eingebettetem Foto. Ergebnis erscheint nach dem
+                Worker-Lauf in der Library.
+              </p>
+
+              {!genConfig?.configured ? (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  KI-Provider ist noch nicht konfiguriert. Sobald OpenRouter (oder
+                  HTTP) live ist, kannst du hier generieren.
+                </p>
+              ) : !brandProfiles.length ? (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Aktives Brand-Profil im Control Center nötig.
+                </p>
+              ) : (
+                <div className="mt-4 grid gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                        genMode === "free"
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                      disabled={busy}
+                      onClick={() => setGenMode("free")}
+                      type="button"
+                    >
+                      Free (KI-Bild)
+                    </button>
+                    <button
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                        genMode === "locked_photo"
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                      disabled={busy}
+                      onClick={() => setGenMode("locked_photo")}
+                      type="button"
+                    >
+                      Locked Photo
+                    </button>
+                  </div>
+
+                  <label className="grid gap-1 text-sm font-medium">
+                    Brand-Profil
+                    <select
+                      className="h-10 rounded-lg border border-slate-200 px-3"
+                      disabled={busy}
+                      onChange={(event) => setBrandProfileId(event.target.value)}
+                      value={brandProfileId}
+                    >
+                      {brandProfiles.map((profile) => (
+                        <option key={profile.id} value={profile.id}>
+                          {profile.brandName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {genConfig.modelAllowlist.length > 1 ? (
+                    <label className="grid gap-1 text-sm font-medium">
+                      Modell
+                      <select
+                        className="h-10 rounded-lg border border-slate-200 px-3"
+                        disabled={busy}
+                        onChange={(event) => setGenModelId(event.target.value)}
+                        value={genModelId}
+                      >
+                        {genConfig.modelAllowlist.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {genMode === "locked_photo" ? (
+                    <label className="grid gap-1 text-sm font-medium">
+                      Locked Photo
+                      <select
+                        className="h-10 rounded-lg border border-slate-200 px-3"
+                        disabled={busy}
+                        onChange={(event) =>
+                          setGenLockedAssetId(event.target.value)
+                        }
+                        value={genLockedAssetId}
+                      >
+                        <option value="">Bitte wählen…</option>
+                        {lockedPhotoOptions.map((asset) => (
+                          <option key={asset.id} value={asset.id}>
+                            {asset.originalFilename}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {genMode === "locked_photo" &&
+                  lockedPhotoOptions.length === 0 ? (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      Noch kein Locked Photo — markiere unten ein Upload mit dem
+                      Schloss-Symbol.
+                    </p>
+                  ) : null}
+
+                  <label className="grid gap-1 text-sm font-medium">
+                    Prompt (optional)
+                    <textarea
+                      className="min-h-[88px] rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      disabled={busy}
+                      maxLength={2000}
+                      onChange={(event) => setGenPrompt(event.target.value)}
+                      placeholder={
+                        genMode === "locked_photo"
+                          ? "z. B. weicher Studio-Hintergrund, Mitte freilassen"
+                          : "z. B. Produktfoto, helles Tageslicht"
+                      }
+                      value={genPrompt}
+                    />
+                  </label>
+
+                  <button
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    disabled={
+                      busy ||
+                      (genMode === "locked_photo" &&
+                        lockedPhotoOptions.length === 0)
+                    }
+                    onClick={() => void onGenerate()}
+                    type="button"
+                  >
+                    {genPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-4" />
+                    )}
+                    Generierung starten
+                  </button>
+                </div>
+              )}
+
+              {genError ? (
+                <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                  {genError}
+                </p>
+              ) : null}
+              {genMessage ? (
+                <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  {genMessage}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-extrabold tracking-tight">Deine Creatives</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Vorschau direkt in der Karte — bereit für Meta-Launch, sobald Autonomie
-          und Brand-Profil im Control Center stehen.
+          Stern = gutes Beispiel für späteres Lernen. Schloss = Locked Photo
+          (unverändert einbetten).
         </p>
         {loadError ? (
           <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
@@ -227,6 +639,13 @@ export function MediaLibraryClient({
                 ? `${asset.width}×${asset.height}`
                 : "Größe unbekannt";
             const deleting = deletingId === asset.id;
+            const acting = actionId === asset.id;
+            const isLocked = asset.assetRole === "LOCKED_PHOTO";
+            const isMarked = asset.trainingStatus === "marked_good";
+            const canLock =
+              asset.status === "READY" &&
+              (asset.assetRole === "UPLOAD_EDITABLE" ||
+                asset.assetRole === "LOCKED_PHOTO");
 
             return (
               <article
@@ -241,19 +660,79 @@ export function MediaLibraryClient({
                     loading="lazy"
                     src={`/api/media-library/preview?assetId=${asset.id}`}
                   />
-                  <button
-                    aria-label="Creative löschen"
-                    className="absolute right-2 top-2 inline-flex size-9 items-center justify-center rounded-lg bg-white/95 text-rose-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-rose-50 disabled:opacity-50"
-                    disabled={pending || Boolean(deletingId)}
-                    onClick={() => void onDelete(asset.id)}
-                    type="button"
-                  >
-                    {deleting ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-4" />
-                    )}
-                  </button>
+                  <div className="absolute left-2 top-2 flex flex-wrap gap-1">
+                    {isLocked ? (
+                      <span className="rounded bg-slate-900/90 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        Locked
+                      </span>
+                    ) : null}
+                    {asset.assetRole === "GENERATED" ? (
+                      <span className="rounded bg-blue-700/90 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        KI
+                      </span>
+                    ) : null}
+                    {isMarked ? (
+                      <span className="rounded bg-amber-500/95 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        Gut
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="absolute right-2 top-2 flex gap-1">
+                    <button
+                      aria-label={
+                        isMarked
+                          ? "Gute-Beispiel-Markierung entfernen"
+                          : "Als gutes Beispiel markieren"
+                      }
+                      className="inline-flex size-9 items-center justify-center rounded-lg bg-white/95 text-amber-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-amber-50 disabled:opacity-50"
+                      disabled={busy}
+                      onClick={() => void onToggleTraining(asset)}
+                      type="button"
+                    >
+                      {acting ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Star
+                          className="size-4"
+                          fill={isMarked ? "currentColor" : "none"}
+                        />
+                      )}
+                    </button>
+                    {canLock ? (
+                      <button
+                        aria-label={
+                          isLocked
+                            ? "Locked Photo aufheben"
+                            : "Als Locked Photo markieren"
+                        }
+                        className="inline-flex size-9 items-center justify-center rounded-lg bg-white/95 text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 disabled:opacity-50"
+                        disabled={busy}
+                        onClick={() => void onToggleLocked(asset)}
+                        type="button"
+                      >
+                        {acting ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : isLocked ? (
+                          <Lock className="size-4" />
+                        ) : (
+                          <Unlock className="size-4" />
+                        )}
+                      </button>
+                    ) : null}
+                    <button
+                      aria-label="Creative löschen"
+                      className="inline-flex size-9 items-center justify-center rounded-lg bg-white/95 text-rose-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-rose-50 disabled:opacity-50"
+                      disabled={busy}
+                      onClick={() => void onDelete(asset.id)}
+                      type="button"
+                    >
+                      {deleting ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-1 p-3">
                   <p className="truncate text-sm font-extrabold text-slate-950">
