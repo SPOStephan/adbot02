@@ -124,11 +124,26 @@ const temporaryDirectory = await mkdtemp(
 const originalFetch = globalThis.fetch;
 
 try {
+  await writeFile(
+    join(temporaryDirectory, "style-reference-load-stub.mjs"),
+    [
+      "export async function loadVerifiedStyleReferenceAssets() {",
+      "  return [];",
+      "}",
+      "export function styleReferenceToDataUrl() {",
+      "  return 'data:image/png;base64,AA==';",
+      "}",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
   const files = [
     ["types.ts", "types.mjs"],
     ["image.ts", "image.mjs"],
     ["generation-contract.ts", "generation-contract.mjs"],
     ["locked-photo-constants.ts", "locked-photo-constants.mjs"],
+    ["style-reference-constants.ts", "style-reference-constants.mjs"],
     ["map-generation-input.ts", "map-generation-input.mjs"],
     ["http-provider.ts", "http-provider.mjs"],
     ["providers/openrouter.ts", "openrouter.mjs"],
@@ -147,6 +162,10 @@ try {
         'from "../map-generation-input";',
         'from "./map-generation-input.mjs";',
       )
+      .replaceAll(
+        'from "../style-reference-load";',
+        'from "./style-reference-load-stub.mjs";',
+      )
       .replaceAll('from "./image";', 'from "./image.mjs";')
       .replaceAll('from "./types";', 'from "./types.mjs";')
       .replaceAll(
@@ -156,6 +175,10 @@ try {
       .replaceAll(
         'from "./locked-photo-constants";',
         'from "./locked-photo-constants.mjs";',
+      )
+      .replaceAll(
+        'from "./style-reference-constants";',
+        'from "./style-reference-constants.mjs";',
       )
       .replaceAll(
         'from "./map-generation-input";',
@@ -178,7 +201,32 @@ try {
       .replaceAll("@/lib/supabase/admin", "./admin-stub.mjs");
     await writeFile(
       join(temporaryDirectory, outName),
-      transpile(source),
+      transpile(source)
+        .replaceAll(
+          'from "./style-reference-constants"',
+          'from "./style-reference-constants.mjs"',
+        )
+        .replaceAll(
+          'from "./locked-photo-constants"',
+          'from "./locked-photo-constants.mjs"',
+        )
+        .replaceAll(
+          'from "./generation-contract"',
+          'from "./generation-contract.mjs"',
+        )
+        .replaceAll('from "./types"', 'from "./types.mjs"')
+        .replaceAll('from "./image"', 'from "./image.mjs"')
+        .replaceAll('from "./env"', 'from "./env.mjs"')
+        .replaceAll(
+          'from "./map-generation-input"',
+          'from "./map-generation-input.mjs"',
+        )
+        .replaceAll('from "./http-provider"', 'from "./http-provider.mjs"')
+        .replaceAll('from "./openrouter"', 'from "./openrouter.mjs"')
+        .replace(
+          /from\s+["'][^"']*style-reference-load[^"']*["']/g,
+          'from "./style-reference-load-stub.mjs"',
+        ),
       "utf8",
     );
   }
@@ -289,14 +337,27 @@ try {
           ...freeInput,
           reference_asset_ids: [
             "10000000-0000-4000-8000-000000000088",
+            "10000000-0000-4000-8000-000000000081",
+            "10000000-0000-4000-8000-000000000082",
+            "10000000-0000-4000-8000-000000000083",
+            "10000000-0000-4000-8000-000000000084",
           ],
         },
       });
     },
     (error) =>
       error instanceof mapMod.CreativeGenerationPhase2Error &&
-      error.code === "POLICY_REJECTED",
+      /Style-Referenzen|style_reference_limit/i.test(error.message),
   );
+
+  const withStyle = mapMod.mapCreativeGenerationInputForPhase2Execution({
+    ...job,
+    inputPayload: {
+      ...freeInput,
+      reference_asset_ids: ["10000000-0000-4000-8000-000000000088"],
+    },
+  });
+  assert.equal(withStyle.reference_asset_ids.length, 1);
 
   const png = createPng();
   const provider = new openrouterMod.OpenRouterCreativeAssetProvider({
