@@ -5,6 +5,11 @@ import {
   type OrganicBoostExecuteDrainResult,
 } from "@/lib/meta/organic-boost-execute";
 import { runOrganicBoostPlannerForAccount } from "@/lib/meta/organic-boost-runner";
+import {
+  drainHardCapStatusExecutionsForAccount,
+  forceReactivatePausedOrganicBoostCampaigns,
+} from "@/lib/meta/hard-cap-status-execute";
+import { refreshOrganicBoostCampaignStatusesFromMeta } from "@/lib/meta/organic-boost-status-refresh";
 import type { MetaOrganicBoostPlannerResult } from "@/lib/meta/planner";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -261,6 +266,97 @@ export async function ensureOrganicAutoWritesAllow(input: {
 }
 
 /**
+ * Beitrag-Push creates PAUSED then activates. If activate was soft-skipped
+ * (e.g. FREEZE), campaigns stay "deaktiviert" at Meta — recover them.
+ */
+async function recoverPausedOrganicBoostCampaigns(input: {
+  userId: string;
+  platformAccountId: string;
+}): Promise<{
+  marketingSyncId: string | null;
+  pausedIds: string[];
+  reactivated: number;
+  activateRuns: number;
+  error: string | null;
+}> {
+  const admin = createAdminClient();
+  const { data: account } = await admin
+    .from("platform_accounts")
+    .select("marketing_sync_id")
+    .eq("id", input.platformAccountId)
+    .eq("user_id", input.userId)
+    .maybeSingle();
+
+  const marketingSyncId =
+    typeof account?.marketing_sync_id === "string"
+      ? account.marketing_sync_id
+      : null;
+  if (!marketingSyncId) {
+    return {
+      marketingSyncId: null,
+      pausedIds: [],
+      reactivated: 0,
+      activateRuns: 0,
+      error: "marketing_sync_required",
+    };
+  }
+
+  let pausedIds: string[] = [];
+  try {
+    const refresh = await refreshOrganicBoostCampaignStatusesFromMeta({
+      userId: input.userId,
+      platformAccountId: input.platformAccountId,
+    });
+    pausedIds = refresh.pausedPlatformIds ?? [];
+  } catch {
+    // Fall through to local scan.
+  }
+
+  if (pausedIds.length === 0) {
+    const { data: localPaused } = await admin
+      .from("meta_campaigns")
+      .select("platform_campaign_id,status,effective_status,name")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .ilike("name", "Organic Boost [%")
+      .limit(50);
+    pausedIds = (localPaused ?? [])
+      .filter((row) => {
+        const status = String(row.status ?? "").toUpperCase();
+        const effective = String(row.effective_status ?? "").toUpperCase();
+        return (
+          status === "PAUSED" ||
+          effective === "PAUSED" ||
+          effective === "CAMPAIGN_PAUSED"
+        );
+      })
+      .map((row) => String(row.platform_campaign_id ?? ""))
+      .filter((id) => id.length > 0);
+  }
+
+  const force = await forceReactivatePausedOrganicBoostCampaigns({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+    marketingSyncId,
+    pausedPlatformCampaignIds: pausedIds,
+  });
+
+  const activateDrain = await drainHardCapStatusExecutionsForAccount({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+    maxRuns: 20,
+  });
+
+  return {
+    marketingSyncId,
+    pausedIds,
+    reactivated: force.created + force.existing,
+    activateRuns: activateDrain.runs,
+    error: force.error || activateDrain.lastError,
+  };
+}
+
+/**
  * Plan Beitrag-Push for is_new candidates and immediately drain Meta writes
  * for this account. Used on detect (Abruf), dashboard load, and Autonomie
  * changes so campaigns are created without waiting on the minutely cron or a
@@ -283,6 +379,7 @@ export async function planAndDrainOrganicBoostForAccount(input: {
   drain: OrganicBoostExecuteDrainResult | null;
   skippedRecent: boolean;
   allowHealed?: boolean;
+  pausedRecovered?: number;
 }> {
   let drainOnly = input.drainOnly === true;
   if (input.skipIfRecentMs && input.skipIfRecentMs > 0) {
@@ -303,11 +400,27 @@ export async function planAndDrainOrganicBoostForAccount(input: {
           userId: input.userId,
           platformAccountId: input.platformAccountId,
         }).catch(() => ({ healed: false }));
+        const recovered = await recoverPausedOrganicBoostCampaigns({
+          userId: input.userId,
+          platformAccountId: input.platformAccountId,
+        }).catch(() => null);
+        if (
+          recovered &&
+          (recovered.reactivated > 0 ||
+            recovered.activateRuns > 0 ||
+            recovered.error)
+        ) {
+          console.error("organic_boost_paused_recover", {
+            platformAccountId: input.platformAccountId,
+            ...recovered,
+          });
+        }
         return {
           planner: null,
           drain: null,
           skippedRecent: true,
           allowHealed: allowHeal.healed,
+          pausedRecovered: recovered?.reactivated ?? 0,
         };
       }
       drainOnly = true;
@@ -387,8 +500,28 @@ export async function planAndDrainOrganicBoostForAccount(input: {
     };
   }
 
+  const recovered = await recoverPausedOrganicBoostCampaigns({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+  }).catch(() => null);
+  if (
+    recovered &&
+    (recovered.reactivated > 0 ||
+      recovered.activateRuns > 0 ||
+      recovered.error)
+  ) {
+    console.error("organic_boost_paused_recover", {
+      platformAccountId: input.platformAccountId,
+      ...recovered,
+    });
+  }
+
   const ensureSucceeded =
-    planned > 0 || (drain?.succeeded ?? 0) > 0 || (drain?.runs ?? 0) > 0;
+    planned > 0 ||
+    (drain?.succeeded ?? 0) > 0 ||
+    (drain?.runs ?? 0) > 0 ||
+    (recovered?.reactivated ?? 0) > 0 ||
+    (recovered?.activateRuns ?? 0) > 0;
   if (ensureSucceeded) {
     await markEnsureTimestamp({
       userId: input.userId,
@@ -401,5 +534,6 @@ export async function planAndDrainOrganicBoostForAccount(input: {
     drain,
     skippedRecent: false,
     allowHealed: allowHeal.healed,
+    pausedRecovered: recovered?.reactivated ?? 0,
   };
 }

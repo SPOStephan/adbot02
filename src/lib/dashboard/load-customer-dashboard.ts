@@ -390,12 +390,13 @@ async function loadCustomerDashboardImpl(
         if (
           !ensured.skippedRecent &&
           (ensured.planner?.lastError ||
-            (ensured.planner?.plansCreated ?? 0) > 0 ||
+        (ensured.planner?.plansCreated ?? 0) > 0 ||
             drain?.lastError ||
             (drain?.runs ?? 0) > 0 ||
             (drain?.duePlans ?? 0) > 0 ||
-            ensured.allowHealed)
-        ) {
+            ensured.allowHealed ||
+            (ensured.pausedRecovered ?? 0) > 0)
+      ) {
           console.error("organic_boost_dashboard_ensure", {
             platformAccountId: metaAccount.id,
             plannerStatus: ensured.planner?.status ?? null,
@@ -413,6 +414,7 @@ async function loadCustomerDashboardImpl(
             killSwitchMode: drain?.killSwitchMode ?? null,
             divertedToOtherAccount: drain?.divertedToOtherAccount ?? false,
             allowHealed: ensured.allowHealed ?? false,
+            pausedRecovered: ensured.pausedRecovered ?? 0,
           });
         }
       } catch (error) {

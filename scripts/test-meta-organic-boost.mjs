@@ -341,6 +341,14 @@ assert.match(
   /FREEZE darf AUTO nicht dauerhaft blockieren/,
 );
 assert.match(
+  read("src/lib/meta/organic-boost-ensure.ts"),
+  /recoverPausedOrganicBoostCampaigns/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-ensure.ts"),
+  /forceReactivatePausedOrganicBoostCampaigns/,
+);
+assert.match(
   read("src/app/dashboard/beitraege/page.tsx"),
   /organicBoostEnsure:\s*true/,
 );
