@@ -974,7 +974,8 @@ const pixelBindingSource = await readFile(
   "utf8",
 );
 assert.match(pixelBindingSource, /Funnel und Freebie übernehmen die ID/);
-assert.match(pixelBindingSource, /CAPI-Token setzt du/);
+assert.match(pixelBindingSource, /melden sie danach selbst an Meta/);
+assert.match(pixelBindingSource, /Funnel absendet oder/);
 assert.match(pixelBindingSource, /Meta Pixel global verbinden/);
 assert.match(blueprintRouteSource, /parseBlueprintCommand/);
 assert.match(blueprintRouteSource, /applyCustomerBlueprintCommand/);

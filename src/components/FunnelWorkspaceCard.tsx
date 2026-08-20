@@ -59,11 +59,11 @@ export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
               — Funnel übernimmt die ID soft, wenn das Feld dort leer ist.
             </li>
             <li>
-              Funnel öffnen → Funnel →{" "}
+              Optional Funnel öffnen →{" "}
               <span className="font-semibold text-slate-800">Einstellungen</span>
-              : CAPI-Token und{" "}
+              :{" "}
               <span className="font-semibold text-slate-800">Custom Domain</span>{" "}
-              / DNS.
+              / DNS für die veröffentlichte Landing-URL.
             </li>
           </ol>
         </div>

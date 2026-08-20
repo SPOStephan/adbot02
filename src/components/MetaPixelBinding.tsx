@@ -61,7 +61,7 @@ export function MetaPixelBinding({ pixels, standalone = false }: Props) {
       setNotice({
         tone: "success",
         message:
-          "Pixel bestätigt. Funnel und Freebie übernehmen die ID automatisch (wenn dort noch keine andere steht). CAPI-Token weiterhin im Funnel setzen.",
+          "Pixel bestätigt. Funnel und Freebie übernehmen die ID automatisch (wenn dort noch keine andere steht). Lead-Events melden sie danach selbst an Meta — ohne weiteren Token.",
       });
       router.refresh();
     } catch (error) {
@@ -126,9 +126,9 @@ export function MetaPixelBinding({ pixels, standalone = false }: Props) {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Einmal für Adbot hinterlegen. Funnel und Freebie übernehmen die ID
             automatisch soft (leere Felder werden befüllt; abweichende manuelle
-            Einträge bleiben unangetastet). Lead-Kampagnen nutzen dasselbe Pixel
-            — später auch Traffic-/PageView-Messung. CAPI-Token setzt du in den
-            Funnel- bzw. Freebie-Einstellungen.
+            Einträge bleiben unangetastet). Wenn jemand den Funnel absendet oder
+            ein Freebie bestätigt, meldet Adbot das als Lead an Meta. Lead-Kampagnen
+            optimieren auf dasselbe Pixel — später auch Traffic-/PageView-Messung.
           </p>
         </div>
       </div>

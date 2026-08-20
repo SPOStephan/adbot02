@@ -60,12 +60,12 @@ async function TrackingBody() {
             <span className="font-semibold text-slate-800">Funnel</span> und{" "}
             <span className="font-semibold text-slate-800">Freebie</span> übernehmen
             die bestätigte Pixel-ID automatisch (wenn dort noch keine andere
-            manuell steht). CAPI-Token setzt du weiterhin in den jeweiligen
-            Einstellungen.
+            manuell steht) und melden Absenden bzw. Anmeldung als Lead an Meta.
           </li>
           <li>
             <span className="font-semibold text-slate-800">Lead-Kampagnen</span>{" "}
-            optimieren auf dieses Pixel (Traffic-Launch).
+            optimieren auf dieses Pixel und Event (Traffic-Launch) — ohne
+            zusätzlichen Token.
           </li>
           <li>
             Später auch{" "}

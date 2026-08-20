@@ -771,15 +771,14 @@ export function LeadLaunchCanary({
             <span className="font-semibold">OUTCOME_LEADS</span>, Optimierung{" "}
             <span className="font-semibold">OFFSITE_CONVERSIONS</span> auf dein
             bestätigtes Pixel-Event. Destination = veröffentlichter Funnel.
-            CAPI im Funnel sollte aktiv sein (Token dort setzen; Pixel-ID kommt
-            automatisch aus der globalen Verbindung unter{" "}
+            Pixel-ID und Lead-Event kommen aus der globalen Verbindung unter{" "}
             <a
               className="font-semibold text-blue-700 underline-offset-2 hover:underline"
               href="/dashboard/tracking"
             >
               Tracking
             </a>
-            ).
+            — Funnel meldet Absenden selbst als Lead an Meta.
           </p>
         </div>
       </div>
