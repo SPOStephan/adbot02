@@ -772,8 +772,14 @@ export function LeadLaunchCanary({
             <span className="font-semibold">OFFSITE_CONVERSIONS</span> auf dein
             bestätigtes Pixel-Event. Destination = veröffentlichter Funnel.
             CAPI im Funnel sollte aktiv sein (Token dort setzen; Pixel-ID kommt
-            automatisch aus der Pixel-Bestätigung unter „Meta Pixel“ auf dieser
-            Seite bzw. unter Autonomie).
+            automatisch aus der globalen Verbindung unter{" "}
+            <a
+              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              href="/dashboard/tracking"
+            >
+              Tracking
+            </a>
+            ).
           </p>
         </div>
       </div>
@@ -892,7 +898,7 @@ export function LeadLaunchCanary({
             value={selectedPixel?.id ?? ""}
           >
             {data.pixels.length === 0 ? (
-              <option value="">Zuerst Pixel auf dieser Seite bestätigen</option>
+              <option value="">Zuerst unter Tracking verbinden</option>
             ) : (
               data.pixels.map((pixel) => (
                 <option key={pixel.id} value={pixel.id}>

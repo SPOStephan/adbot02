@@ -2,8 +2,9 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { LeadLaunchCanary } from "@/components/LeadLaunchCanary";
-import { MetaPixelBinding } from "@/components/MetaPixelBinding";
-import { TrafficLaunchCanary } from "@/components/TrafficLaunchCanary";
+import {
+  TrafficLaunchCanary,
+} from "@/components/TrafficLaunchCanary";
 import {
   DashboardContentSkeleton,
   DashboardPageHeader,
@@ -69,7 +70,6 @@ async function TrafficLaunchBody({
 
   return (
     <div className="mt-8 space-y-8">
-      <MetaPixelBinding pixels={onboardingData.pixels} standalone />
       <TrafficLaunchCanary
         brandProfileId={brandProfileView?.id ?? null}
         currency={marketingCurrency}

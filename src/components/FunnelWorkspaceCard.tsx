@@ -52,19 +52,18 @@ export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
             <li>
               <Link
                 className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                href="/dashboard/traffic-launch#meta-pixel"
+                href="/dashboard/tracking"
               >
-                Meta Pixel im Portal bestätigen
+                Meta Pixel global unter Tracking verbinden
               </Link>{" "}
-              (Traffic-Launch) — die ID wandert soft in den Funnel, wenn dort
-              noch keine andere steht.
+              — Funnel übernimmt die ID soft, wenn das Feld dort leer ist.
             </li>
             <li>
-              Funnel öffnen → gewünschten Funnel →{" "}
+              Funnel öffnen → Funnel →{" "}
               <span className="font-semibold text-slate-800">Einstellungen</span>
-              : CAPI-Token setzen und{" "}
+              : CAPI-Token und{" "}
               <span className="font-semibold text-slate-800">Custom Domain</span>{" "}
-              registrieren / DNS prüfen.
+              / DNS.
             </li>
           </ol>
         </div>

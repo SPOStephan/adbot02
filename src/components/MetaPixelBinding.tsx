@@ -121,15 +121,14 @@ export function MetaPixelBinding({ pixels, standalone = false }: Props) {
             Meta Pixel
           </p>
           <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">
-            Pixel für Lead-Kampagnen bestätigen
+            Meta Pixel global verbinden
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Hier hinterlegst du die Meta Pixel-ID, auf die Lead-Kampagnen
-            optimieren. Der Traffic-Canary nutzt dieses Pixel nicht. Nach der
-            Bestätigung wird dieselbe ID automatisch soft in Funnel und Freebie
-            übernommen (leere Felder werden befüllt und Tracking aktiviert;
-            abweichende manuelle Pixel bleiben unangetastet). CAPI-Token bleiben
-            in den Funnel-Einstellungen.
+            Einmal für Adbot hinterlegen. Funnel und Freebie übernehmen die ID
+            automatisch soft (leere Felder werden befüllt; abweichende manuelle
+            Einträge bleiben unangetastet). Lead-Kampagnen nutzen dasselbe Pixel
+            — später auch Traffic-/PageView-Messung. CAPI-Token setzt du in den
+            Funnel- bzw. Freebie-Einstellungen.
           </p>
         </div>
       </div>

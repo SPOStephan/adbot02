@@ -28,7 +28,6 @@ import {
   type AutomationOnboardingData,
 } from "@/components/AutomationOnboardingControls";
 import { LeadLaunchCanary } from "@/components/LeadLaunchCanary";
-import { MetaPixelBinding } from "@/components/MetaPixelBinding";
 import {
   TrafficLaunchCanary,
   type LaunchAdActorOption,
@@ -946,8 +945,6 @@ export function AutomationControlCenter({
           )}
           writeScopeGranted={readiness.writeScopeGranted}
         />
-
-        <MetaPixelBinding pixels={onboarding.pixels} />
 
         <LeadLaunchCanary
           brandProfileId={brandProfile?.id ?? null}

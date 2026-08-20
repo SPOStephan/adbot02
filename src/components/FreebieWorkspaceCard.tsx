@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ExternalLink, Gift } from "lucide-react";
 
 import { FREEBIE_SITE_URL, createFreebieSsoEntryPath } from "@/lib/site-urls";
@@ -36,8 +37,8 @@ export function FreebieWorkspaceCard({ userEmail }: FreebieWorkspaceCardProps) {
             <span className="font-semibold text-slate-800">
               {FREEBIE_SITE_URL.replace(/^https?:\/\//, "")}
             </span>
-            . Du wirst automatisch mit deinem Adbot-Konto angemeldet und siehst nur deine eigenen
-            Freebies
+            . Du wirst automatisch mit deinem Adbot-Konto angemeldet und siehst
+            nur deine eigenen Freebies
             {userEmail ? (
               <>
                 {" "}
@@ -46,9 +47,20 @@ export function FreebieWorkspaceCard({ userEmail }: FreebieWorkspaceCardProps) {
             ) : null}
             . Dateien liegen auf Bunny CDN.
           </p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Meta Pixel zuerst{" "}
+            <Link
+              className="font-semibold text-emerald-800 underline-offset-2 hover:underline"
+              href="/dashboard/tracking"
+            >
+              global unter Tracking
+            </Link>{" "}
+            verbinden — Freebie übernimmt die ID soft, wenn das Tracking-Feld
+            leer ist.
+          </p>
         </div>
         <a
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
           href={ssoUrl}
           rel="noopener noreferrer"
           target="_blank"

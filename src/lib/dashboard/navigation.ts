@@ -1,5 +1,6 @@
 import {
   Camera,
+  Crosshair,
   EyeOff,
   Filter,
   Gift,
@@ -66,6 +67,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       icon: Gift,
       href: createFreebieSsoEntryPath(),
       external: true,
+    },
+    {
+      label: "Tracking",
+      icon: Crosshair,
+      href: "/dashboard/tracking",
+      match: "/dashboard/tracking",
     },
     {
       label: "Creatives",

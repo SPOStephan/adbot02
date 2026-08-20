@@ -961,7 +961,10 @@ assert.match(serviceSource, /applyCustomerPixelCommand/);
 assert.match(serviceSource, /pushSoftMetaPixelToFunnel/);
 assert.match(serviceSource, /pushSoftMetaPixelToFreebie/);
 assert.match(serviceSource, /syncConfirmedPixelsToWorkspaces/);
-assert.match(componentSource, /MetaPixelBinding/);
+assert.match(
+  await readFile(path.join(root, "src/app/dashboard/tracking/page.tsx"), "utf8"),
+  /MetaPixelBinding/,
+);
 assert.match(componentSource, /LeadLaunchCanary/);
 assert.match(componentSource, /TrafficLaunchCanary/);
 assert.match(pageSource, /meta_confirmed_pixels/);
@@ -970,8 +973,9 @@ const pixelBindingSource = await readFile(
   path.join(root, "src/components/MetaPixelBinding.tsx"),
   "utf8",
 );
-assert.match(pixelBindingSource, /automatisch soft in Funnel und Freebie/);
-assert.match(pixelBindingSource, /CAPI-Token bleiben/);
+assert.match(pixelBindingSource, /Funnel und Freebie übernehmen die ID/);
+assert.match(pixelBindingSource, /CAPI-Token setzt du/);
+assert.match(pixelBindingSource, /Meta Pixel global verbinden/);
 assert.match(blueprintRouteSource, /parseBlueprintCommand/);
 assert.match(blueprintRouteSource, /applyCustomerBlueprintCommand/);
 assert.match(assetImportRouteSource, /parseAssetImportCommand/);

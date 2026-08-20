@@ -27,13 +27,19 @@ export const DASHBOARD_PAGE_COPY = {
     eyebrow: "Steuerung",
     title: "Autonomie",
     description:
-      "Policy, Kill-Switch, Boost und Onboarding. Pixel für Lead-Kampagnen kannst du auch unter Traffic-Launch bestätigen.",
+      "Policy, Kill-Switch, Boost und Onboarding. Das Meta Pixel liegt global unter Tracking.",
   },
   trafficLaunch: {
     eyebrow: "Launch",
     title: "Traffic-Launch",
     description:
-      "Pixel bestätigen, dann Traffic- und Lead-Canaries starten. Custom Domain und CAPI liegen in den Funnel-Einstellungen.",
+      "Traffic- und Lead-Canaries starten. Das Meta Pixel verbindest du global unter Tracking.",
+  },
+  tracking: {
+    eyebrow: "Global",
+    title: "Tracking",
+    description:
+      "Meta Pixel einmal für Adbot verbinden — Funnel, Freebie und Kampagnen nutzen dieselbe ID.",
   },
   creatives: {
     eyebrow: "Creatives",
