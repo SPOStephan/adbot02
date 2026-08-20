@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Funnel from "./pages/Funnel";
 import FunnelImprint from "./pages/FunnelImprint";
+import RootImprint from "./pages/RootImprint";
 
 const DashboardLayout = lazy(() => import("./components/DashboardLayout"));
 const FunnelLibrary = lazy(() => import("./pages/admin/FunnelLibrary"));
@@ -51,6 +52,7 @@ function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
+      <Route path={"/impressum"} component={RootImprint} />
       <Route path={"/f/:slug/impressum"} component={FunnelImprint} />
       <Route path={"/f/:slug"} component={Funnel} />
       <Route path={"/admin/funnels/:id/editor"} component={EditorRoute} />

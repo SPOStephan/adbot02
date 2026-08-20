@@ -49,6 +49,8 @@ assert.match(funnelTypes, /ownerUserId: string \| null/);
 assert.match(settings, /Conversion-Zeitpunkt/);
 assert.match(settings, /conversionTrigger: "doi"/);
 assert.match(settings, /automatisch aus dem Adbot-Portal/);
+assert.match(settings, /DNS prüfen/);
+assert.match(settings, /Custom Domain URL/);
 assert.match(metaConversions, /awaiting_doi/);
 
 const portalMetaSync = readFileSync(
@@ -60,11 +62,28 @@ const pixelService = readFileSync(
   join(root, "src/lib/meta/customer-control-service.ts"),
   "utf8",
 );
+const funnelRouter = readFileSync(
+  join(root, "apps/adbot-funnel/server/routers/funnel.ts"),
+  "utf8",
+);
+const funnelHosts = readFileSync(
+  join(root, "apps/adbot-funnel/shared/funnelHosts.ts"),
+  "utf8",
+);
+const homePage = readFileSync(
+  join(root, "apps/adbot-funnel/client/src/pages/Home.tsx"),
+  "utf8",
+);
 assert.match(portalMetaSync, /\/api\/internal\/portal-meta-sync/);
 assert.match(portalMetaSync, /softApplyPixelToOwnerFunnels/);
 assert.match(funnelMetaSync, /pushSoftMetaPixelToFunnel/);
 assert.match(funnelMetaSync, /funnel_meta_pixel_sync/);
 assert.match(pixelService, /pushSoftMetaPixelToFunnel/);
 assert.match(pixelService, /syncConfirmedPixelsToWorkspaces/);
+assert.match(funnelRouter, /publicConfigByHost/);
+assert.match(funnelRouter, /verifyCustomDomainDns/);
+assert.match(funnelHosts, /funnel\.adbot\.one/);
+assert.match(funnelHosts, /isSharedFunnelHost/);
+assert.match(homePage, /HostBoundFunnel/);
 
 console.log("Funnel-Workspace-Regressionstests erfolgreich.");

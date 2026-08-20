@@ -43,9 +43,13 @@ import { resolveApplicationAnswers } from "@shared/applicationAnswers";
 import {
   listCustomDomainsForFunnel,
   markCustomDomainReady,
+  getCustomDomainForFunnel,
+  getFunnelIdByCustomHostname,
   registerCustomDomain,
   revokeCustomDomain,
 } from "../funnelCustomDomains";
+import { checkCustomDomainCname } from "../customDomainDns";
+import { isSharedFunnelHost, normalizeHostname } from "../../shared/funnelHosts";
 
 function validateSubmission(config: FunnelConfig, submission: z.infer<typeof applicationSubmissionSchema>) {
   if (config.status !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "Dieser Funnel ist derzeit nicht veröffentlicht." });
@@ -152,6 +156,39 @@ export const funnelRouter = router({
     if (!result || result.status !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
     return { ...result, notificationEmail: "", allowedEmbedOrigins: [] };
   }),
+
+  /** Resolve published funnel by READY custom hostname (not shared hosts). */
+  publicConfigByHost: publicProcedure
+    .input(z.object({ hostname: z.string().min(1).max(253) }))
+    .query(async ({ input }) => {
+      const hostname = normalizeHostname(input.hostname);
+      if (!hostname || isSharedFunnelHost(hostname, process.env.FUNNEL_SHARED_HOSTS)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Kein Funnel für diesen Host hinterlegt.",
+        });
+      }
+      const funnelId = await getFunnelIdByCustomHostname(hostname);
+      if (!funnelId) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Diese Domain ist noch nicht mit einem veröffentlichten Funnel verbunden.",
+        });
+      }
+      const config = await getFunnelById(funnelId);
+      if (!config || config.status !== "published") {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Der gebundene Funnel ist nicht veröffentlicht.",
+        });
+      }
+      return {
+        ...config,
+        notificationEmail: "",
+        allowedEmbedOrigins: [],
+        boundHostname: hostname,
+      };
+    }),
 
   submit: publicProcedure.input(applicationSubmissionSchema).mutation(async ({ input, ctx }) => {
     const config = (await getFunnel(input.funnelSlug)) ?? (input.funnelSlug === "karriere" ? await getOrCreateDefaultFunnel() : null);
@@ -307,12 +344,45 @@ export const funnelRouter = router({
     }),
 
   markCustomDomainReady: adminProcedure
-    .input(z.object({ funnelId: funnelIdSchema, domainId: z.string().uuid() }))
+    .input(
+      z.object({
+        funnelId: funnelIdSchema,
+        domainId: z.string().uuid(),
+        /** Skip DNS check — platform admin only (ops override). */
+        force: z.boolean().optional(),
+      })
+    )
     .mutation(async ({ input, ctx }) => {
       await requireOwnedFunnel(input.funnelId, ctx.user);
       try {
-        return await markCustomDomainReady(input);
+        if (input.force) {
+          if (!isPlatformAdmin(ctx.user)) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "DNS-Override nur für Plattform-Admins.",
+            });
+          }
+          return await markCustomDomainReady(input);
+        }
+
+        const domain = await getCustomDomainForFunnel(input);
+        if (!domain) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Custom Domain nicht gefunden.",
+          });
+        }
+        const dns = await checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+        if (!dns.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: dns.message,
+          });
+        }
+        const ready = await markCustomDomainReady(input);
+        return { ...ready, dns };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:
@@ -321,6 +391,20 @@ export const funnelRouter = router({
               : "Custom Domain konnte nicht als bereit markiert werden.",
         });
       }
+    }),
+
+  verifyCustomDomainDns: adminProcedure
+    .input(z.object({ funnelId: funnelIdSchema, domainId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      await requireOwnedFunnel(input.funnelId, ctx.user);
+      const domain = await getCustomDomainForFunnel(input);
+      if (!domain) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Custom Domain nicht gefunden.",
+        });
+      }
+      return checkCustomDomainCname(domain.hostname, domain.dnsTarget);
     }),
 
   revokeCustomDomain: adminProcedure
