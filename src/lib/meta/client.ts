@@ -2259,6 +2259,66 @@ export function getMetaAdsByIds(input: {
   });
 }
 
+function campaignChildCollectionUrl(
+  campaignId: string,
+  edge: "adsets" | "ads",
+  fields: string,
+): URL {
+  const id = metaObjectId(campaignId);
+  if (!id) {
+    throw new TypeError("campaign id is required");
+  }
+  const url = new URL(
+    `/${META_GRAPH_VERSION}/${encodeURIComponent(id)}/${edge}`,
+    META_GRAPH_ORIGIN,
+  );
+  url.searchParams.set("fields", fields);
+  url.searchParams.set("limit", String(META_MARKETING_PAGE_SIZE));
+  return url;
+}
+
+/** Ads under a campaign — works even when remote_object_bindings are missing. */
+export function getMetaAdsByCampaignId(input: {
+  campaignId: string;
+  accessToken: string;
+  appSecret: string;
+}): Promise<MetaMarketingCollection<MetaAd>> {
+  return fetchMetaCollection({
+    initialUrl: campaignChildCollectionUrl(
+      input.campaignId,
+      "ads",
+      META_AD_FIELDS,
+    ),
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseAd,
+    maxPages: 5,
+    maxItems: 500,
+    requireComplete: true,
+  });
+}
+
+/** Ad sets under a campaign — works even when remote_object_bindings are missing. */
+export function getMetaAdSetsByCampaignId(input: {
+  campaignId: string;
+  accessToken: string;
+  appSecret: string;
+}): Promise<MetaMarketingCollection<MetaAdSet>> {
+  return fetchMetaCollection({
+    initialUrl: campaignChildCollectionUrl(
+      input.campaignId,
+      "adsets",
+      META_AD_SET_FIELDS,
+    ),
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem: parseAdSet,
+    maxPages: 5,
+    maxItems: 500,
+    requireComplete: true,
+  });
+}
+
 export function getMetaAdCreatives(input: {
   creativeIds: string[];
   accessToken: string;

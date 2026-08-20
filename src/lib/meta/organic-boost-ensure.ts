@@ -294,15 +294,41 @@ async function recoverPausedOrganicBoostCampaigns(input: {
     typeof account?.marketing_sync_id === "string"
       ? account.marketing_sync_id
       : null;
+
+  // Delivery heal must NOT depend on marketing_sync — paused ads are a Meta
+  // write problem, not a snapshot problem.
+  const deliveryHealFirst = await healOrganicBoostDeliveryTree({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+  }).catch((error) => ({
+    adSetsActivated: 0,
+    adsActivated: 0,
+    error:
+      error instanceof Error
+        ? error.message
+        : "organic_boost_delivery_heal_failed",
+  }));
+
   if (!marketingSyncId) {
+    if (
+      (deliveryHealFirst.adSetsActivated ?? 0) > 0 ||
+      (deliveryHealFirst.adsActivated ?? 0) > 0
+    ) {
+      await refreshOrganicBoostCampaignStatusesFromMeta({
+        userId: input.userId,
+        platformAccountId: input.platformAccountId,
+      }).catch(() => undefined);
+    }
     return {
       marketingSyncId: null,
       pausedIds: [],
       reactivated: 0,
       activateRuns: 0,
-      adSetsActivated: 0,
-      adsActivated: 0,
-      error: "marketing_sync_required",
+      adSetsActivated: deliveryHealFirst.adSetsActivated ?? 0,
+      adsActivated: deliveryHealFirst.adsActivated ?? 0,
+      error:
+        ("error" in deliveryHealFirst ? deliveryHealFirst.error : null) ||
+        "marketing_sync_required",
     };
   }
 
@@ -319,12 +345,13 @@ async function recoverPausedOrganicBoostCampaigns(input: {
 
   if (pausedIds.length === 0) {
     const { data: localPaused } = await admin
-      .from("meta_campaigns")
+      .from("campaigns")
       .select("platform_campaign_id,status,effective_status,name")
       .eq("user_id", input.userId)
       .eq("platform_account_id", input.platformAccountId)
-      .ilike("name", "Organic Boost [%")
-      .limit(50);
+      .eq("is_current", true)
+      .ilike("name", "Organic Boost%")
+      .limit(200);
     pausedIds = (localPaused ?? [])
       .filter((row) => {
         const status = String(row.status ?? "").toUpperCase();
@@ -334,7 +361,8 @@ async function recoverPausedOrganicBoostCampaigns(input: {
           effective === "PAUSED" ||
           effective === "CAMPAIGN_PAUSED" ||
           effective === "ADSET_PAUSED" ||
-          effective === "AD_PAUSED"
+          effective === "AD_PAUSED" ||
+          effective === "DELIVERY_UNVERIFIED"
         );
       })
       .map((row) => String(row.platform_campaign_id ?? ""))
@@ -354,7 +382,7 @@ async function recoverPausedOrganicBoostCampaigns(input: {
     maxRuns: 20,
   });
 
-  // Campaign ACTIVATE alone is not enough — Meta often leaves ads/ad sets PAUSED.
+  // Force path also heals; run again after campaign ACTIVATE drain.
   const deliveryHeal = await healOrganicBoostDeliveryTree({
     userId: input.userId,
     platformAccountId: input.platformAccountId,
@@ -367,11 +395,13 @@ async function recoverPausedOrganicBoostCampaigns(input: {
         : "organic_boost_delivery_heal_failed",
   }));
 
-  if (
-    (deliveryHeal.adSetsActivated ?? 0) > 0 ||
-    (deliveryHeal.adsActivated ?? 0) > 0
-  ) {
-    // Re-read Meta so local effective_status drops AD_PAUSED / ADSET_PAUSED.
+  const adSetsActivated =
+    (deliveryHealFirst.adSetsActivated ?? 0) +
+    (deliveryHeal.adSetsActivated ?? 0);
+  const adsActivated =
+    (deliveryHealFirst.adsActivated ?? 0) + (deliveryHeal.adsActivated ?? 0);
+
+  if (adSetsActivated > 0 || adsActivated > 0) {
     await refreshOrganicBoostCampaignStatusesFromMeta({
       userId: input.userId,
       platformAccountId: input.platformAccountId,
@@ -383,12 +413,13 @@ async function recoverPausedOrganicBoostCampaigns(input: {
     pausedIds,
     reactivated: force.created + force.existing,
     activateRuns: activateDrain.runs,
-    adSetsActivated: deliveryHeal.adSetsActivated ?? 0,
-    adsActivated: deliveryHeal.adsActivated ?? 0,
+    adSetsActivated,
+    adsActivated,
     error:
       force.error ||
       activateDrain.lastError ||
-      ("error" in deliveryHeal ? deliveryHeal.error : null),
+      ("error" in deliveryHeal ? deliveryHeal.error : null) ||
+      ("error" in deliveryHealFirst ? deliveryHealFirst.error : null),
   };
 }
 

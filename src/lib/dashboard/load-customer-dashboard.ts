@@ -1738,13 +1738,22 @@ async function loadCustomerDashboardImpl(
         campaign.name.startsWith("Organic Boost"),
     )
     .map((campaign) => {
-      // Live marketing rows are Meta-synced objects — treat as bound.
+      // Live marketing rows are campaign-only Meta sync — never treat raw
+      // campaign ACTIVE as delivery. Prefer RPC/list rows that carry the
+      // delivery overlay; this fallback stays honest.
+      const rawEffective = campaign.effectiveStatus
+        ? String(campaign.effectiveStatus)
+        : campaign.status
+          ? String(campaign.status)
+          : null;
+      const effectiveStatus =
+        (rawEffective ?? "").toUpperCase() === "ACTIVE"
+          ? "DELIVERY_UNVERIFIED"
+          : rawEffective;
       const delivery = deriveOrganicBoostDelivery({
         planStatus: "SUCCEEDED",
         status: campaign.status ? String(campaign.status) : null,
-        effectiveStatus: campaign.effectiveStatus
-          ? String(campaign.effectiveStatus)
-          : null,
+        effectiveStatus,
         endTime: campaign.stopTime,
         hasRemoteCampaignBinding: true,
         anyStepRemoteApplied: true,
@@ -1756,9 +1765,7 @@ async function loadCustomerDashboardImpl(
         campaignId: String(campaign.id),
         campaignName: String(campaign.name),
         status: campaign.status ? String(campaign.status) : null,
-        effectiveStatus: campaign.effectiveStatus
-          ? String(campaign.effectiveStatus)
-          : null,
+        effectiveStatus,
         deliveryState: delivery.deliveryState,
         deliveryLabel: delivery.deliveryLabel,
         failureDetail: null,
