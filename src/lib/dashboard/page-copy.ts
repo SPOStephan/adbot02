@@ -41,6 +41,12 @@ export const DASHBOARD_PAGE_COPY = {
     description:
       "Meta Pixel einmal für Adbot verbinden — Funnel, Freebie und Kampagnen nutzen dieselbe ID.",
   },
+  domains: {
+    eyebrow: "Global",
+    title: "Domains",
+    description:
+      "Custom Domains einmal verbinden — für Funnel, Freebie und Kampagnen-Ziel-URLs.",
+  },
   creatives: {
     eyebrow: "Creatives",
     title: "Creatives",
