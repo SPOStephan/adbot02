@@ -43,7 +43,10 @@ async function BeitraegeBody() {
     organicPlannerStatus,
     organicPlannerLastError,
     policyView,
-  } = await loadCustomerDashboard(user, {}, { sideEffects: false });
+  } = await loadCustomerDashboard(user, {}, {
+    sideEffects: false,
+    organicBoostEnsure: true,
+  });
 
   if (!metaConnected || !metaAccount || !contentSyncSnapshot) {
     return (

@@ -271,6 +271,11 @@ export type LoadCustomerDashboardOptions = {
    * is not blocked by background Meta work.
    */
   sideEffects?: boolean;
+  /**
+   * Run Beitrag-Push plan+drain (+ Freigabe-Heal) even when sideEffects is
+   * false. Beiträge must pass true so Vollautomatik nicht an FREEZE hängt.
+   */
+  organicBoostEnsure?: boolean;
 };
 
 async function loadCustomerDashboardImpl(
@@ -279,6 +284,8 @@ async function loadCustomerDashboardImpl(
   options: LoadCustomerDashboardOptions = {},
 ) {
   const runSideEffects = options.sideEffects !== false;
+  const runOrganicBoostEnsure =
+    options.organicBoostEnsure ?? runSideEffects;
   const renderedAt = new Date();
   const supabase = await createClient();
   const isAdmin = await isSiteAdmin(user.id);
@@ -368,177 +375,186 @@ async function loadCustomerDashboardImpl(
   // Dashboard load: plan+drain once, then cooldown so LiveRefresh polls do not
   // re-enter Meta WRITE every 15s (lease fights + endless "Aktualisiert…").
   // Subpages pass sideEffects: false so nav is not blocked by Meta ensure work.
-  if (runSideEffects && metaConnected && metaAccount && writeScopeGranted) {
-    // Clear sticky lease banners from a prior parallel Abruf/Drain.
-    const stickyLease =
-      metaAccount.marketing_sync_error_code === "marketing_operation_locked" ||
-      metaAccount.marketing_sync_error_code === "marketing_operation_lease_failed";
-    if (stickyLease && metaAccount.marketing_sync_status === "success") {
+  // Beiträge passes organicBoostEnsure: true so Vollautomatik trotzdem läuft.
+  if (metaConnected && metaAccount && writeScopeGranted) {
+    if (runOrganicBoostEnsure) {
       try {
-        await createAdminClient()
-          .from("platform_accounts")
-          .update({
-            marketing_sync_error_code: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", metaAccount.id)
-          .eq("user_id", user.id);
-        metaAccount.marketing_sync_error_code = null;
-      } catch {
-        // Non-fatal display cleanup.
+        const ensured = await planAndDrainOrganicBoostForAccount({
+          userId: user.id,
+          platformAccountId: metaAccount.id,
+          ownerPrefix: "organic-boost-dashboard",
+          maxRuns: 4,
+          skipIfRecentMs: 60_000,
+        });
+        const drain = ensured.drain;
+        if (
+          !ensured.skippedRecent &&
+          (ensured.planner?.lastError ||
+            (ensured.planner?.plansCreated ?? 0) > 0 ||
+            drain?.lastError ||
+            (drain?.runs ?? 0) > 0 ||
+            (drain?.duePlans ?? 0) > 0 ||
+            ensured.allowHealed)
+        ) {
+          console.error("organic_boost_dashboard_ensure", {
+            platformAccountId: metaAccount.id,
+            plannerStatus: ensured.planner?.status ?? null,
+            plansCreated: ensured.planner?.plansCreated ?? 0,
+            plansExisting: ensured.planner?.plansExisting ?? 0,
+            plannerError: ensured.planner?.lastError ?? null,
+            duePlans: drain?.duePlans ?? 0,
+            runs: drain?.runs ?? 0,
+            succeeded: drain?.succeeded ?? 0,
+            failed: drain?.failed ?? 0,
+            lastOutcome: drain?.lastOutcome ?? null,
+            lastError: drain?.lastError ?? null,
+            prepareDetail: drain?.prepareDetail ?? null,
+            preflightOkCount: drain?.preflightOkCount ?? null,
+            killSwitchMode: drain?.killSwitchMode ?? null,
+            divertedToOtherAccount: drain?.divertedToOtherAccount ?? false,
+            allowHealed: ensured.allowHealed ?? false,
+          });
+        }
+      } catch (error) {
+        console.error("organic_boost_dashboard_ensure_exception", {
+          platformAccountId: metaAccount.id,
+          message: error instanceof Error ? error.message : "unknown",
+        });
       }
     }
 
-    // After Werbekonto-Auswahl (or sole-account connect): Kampagnenabruf is
-    // independent of Beitragsabruf. Bootstrap once when selection exists but
-    // no successful marketing snapshot yet.
-    const selectedAdForBootstrap =
-      typeof metaAccount.marketing_meta_ad_account_id === "string"
-        ? metaAccount.marketing_meta_ad_account_id.trim()
-        : "";
-    const marketingBootstrapNeeded =
-      selectedAdForBootstrap.length > 0 &&
-      !metaAccount.marketing_last_success_at &&
-      metaAccount.marketing_sync_status !== "syncing" &&
-      (metaAccount.marketing_sync_status === "idle" ||
-        metaAccount.marketing_sync_error_code === "ad_account_selection_required" ||
-        (metaAccount.marketing_sync_status === "error" &&
-          !metaAccount.marketing_sync_error_code));
-    if (marketingBootstrapNeeded) {
-      try {
-        await createAdminClient()
-          .from("platform_accounts")
-          .update({
-            marketing_sync_status: "syncing",
-            marketing_sync_error_code: null,
-            marketing_last_sync_started_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", metaAccount.id)
-          .eq("user_id", user.id);
-        const marketingSync = await refreshMarketingSnapshotForAccount({
-          userId: user.id,
-          platformAccountId: metaAccount.id,
-          ownerPrefix: "dashboard-marketing-bootstrap",
-        });
-        if (marketingSync.ok) {
-          metaAccount.marketing_sync_status = "success";
-          metaAccount.marketing_sync_error_code = null;
-          metaAccount.marketing_sync_id = marketingSync.syncId;
-          metaAccount.marketing_last_success_at = new Date().toISOString();
-        } else {
-          metaAccount.marketing_sync_status = "error";
-          metaAccount.marketing_sync_error_code = marketingSync.error;
+    if (runSideEffects) {
+      // Clear sticky lease banners from a prior parallel Abruf/Drain.
+      const stickyLease =
+        metaAccount.marketing_sync_error_code === "marketing_operation_locked" ||
+        metaAccount.marketing_sync_error_code ===
+          "marketing_operation_lease_failed";
+      if (stickyLease && metaAccount.marketing_sync_status === "success") {
+        try {
           await createAdminClient()
             .from("platform_accounts")
             .update({
-              marketing_sync_status: "error",
-              marketing_sync_error_code: marketingSync.error,
+              marketing_sync_error_code: null,
               updated_at: new Date().toISOString(),
             })
             .eq("id", metaAccount.id)
             .eq("user_id", user.id);
+          metaAccount.marketing_sync_error_code = null;
+        } catch {
+          // Non-fatal display cleanup.
         }
-      } catch (error) {
-        console.error("dashboard_marketing_bootstrap_failed", {
-          platformAccountId: metaAccount.id,
-          name: error instanceof Error ? error.name : "unknown",
-        });
       }
-    }
 
-    try {
-      const ensured = await planAndDrainOrganicBoostForAccount({
-        userId: user.id,
-        platformAccountId: metaAccount.id,
-        ownerPrefix: "organic-boost-dashboard",
-        maxRuns: 4,
-        skipIfRecentMs: 60_000,
-      });
-      const drain = ensured.drain;
-      if (
-        !ensured.skippedRecent &&
-        (ensured.planner?.lastError ||
-          (ensured.planner?.plansCreated ?? 0) > 0 ||
-          drain?.lastError ||
-          (drain?.runs ?? 0) > 0 ||
-          (drain?.duePlans ?? 0) > 0)
-      ) {
-        console.error("organic_boost_dashboard_ensure", {
-          platformAccountId: metaAccount.id,
-          plannerStatus: ensured.planner?.status ?? null,
-          plansCreated: ensured.planner?.plansCreated ?? 0,
-          plansExisting: ensured.planner?.plansExisting ?? 0,
-          plannerError: ensured.planner?.lastError ?? null,
-          duePlans: drain?.duePlans ?? 0,
-          runs: drain?.runs ?? 0,
-          succeeded: drain?.succeeded ?? 0,
-          failed: drain?.failed ?? 0,
-          lastOutcome: drain?.lastOutcome ?? null,
-          lastError: drain?.lastError ?? null,
-          prepareDetail: drain?.prepareDetail ?? null,
-          preflightOkCount: drain?.preflightOkCount ?? null,
-          killSwitchMode: drain?.killSwitchMode ?? null,
-          divertedToOtherAccount: drain?.divertedToOtherAccount ?? false,
-        });
-      }
-    } catch (error) {
-      console.error("organic_boost_dashboard_ensure_exception", {
-        platformAccountId: metaAccount.id,
-        message: error instanceof Error ? error.message : "unknown",
-      });
-    }
-
-    try {
-      const marketingSyncId =
-        typeof metaAccount.marketing_sync_id === "string"
-          ? metaAccount.marketing_sync_id
-          : null;
-      if (marketingSyncId) {
-        const forceResume = await forceReactivatePausedOrganicBoostCampaigns({
-          userId: user.id,
-          platformAccountId: metaAccount.id,
-          marketingSyncId,
-        });
-        if (
-          forceResume.error ||
-          forceResume.created > 0 ||
-          forceResume.existing > 0 ||
-          forceResume.candidates > 0
-        ) {
-          console.error("organic_boost_dashboard_force_reactivate", {
+      // After Werbekonto-Auswahl (or sole-account connect): Kampagnenabruf is
+      // independent of Beitragsabruf. Bootstrap once when selection exists but
+      // no successful marketing snapshot yet.
+      const selectedAdForBootstrap =
+        typeof metaAccount.marketing_meta_ad_account_id === "string"
+          ? metaAccount.marketing_meta_ad_account_id.trim()
+          : "";
+      const marketingBootstrapNeeded =
+        selectedAdForBootstrap.length > 0 &&
+        !metaAccount.marketing_last_success_at &&
+        metaAccount.marketing_sync_status !== "syncing" &&
+        (metaAccount.marketing_sync_status === "idle" ||
+          metaAccount.marketing_sync_error_code ===
+            "ad_account_selection_required" ||
+          (metaAccount.marketing_sync_status === "error" &&
+            !metaAccount.marketing_sync_error_code));
+      if (marketingBootstrapNeeded) {
+        try {
+          await createAdminClient()
+            .from("platform_accounts")
+            .update({
+              marketing_sync_status: "syncing",
+              marketing_sync_error_code: null,
+              marketing_last_sync_started_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", metaAccount.id)
+            .eq("user_id", user.id);
+          const marketingSync = await refreshMarketingSnapshotForAccount({
+            userId: user.id,
             platformAccountId: metaAccount.id,
-            ...forceResume,
+            ownerPrefix: "dashboard-marketing-bootstrap",
+          });
+          if (marketingSync.ok) {
+            metaAccount.marketing_sync_status = "success";
+            metaAccount.marketing_sync_error_code = null;
+            metaAccount.marketing_sync_id = marketingSync.syncId;
+            metaAccount.marketing_last_success_at = new Date().toISOString();
+          } else {
+            metaAccount.marketing_sync_status = "error";
+            metaAccount.marketing_sync_error_code = marketingSync.error;
+            await createAdminClient()
+              .from("platform_accounts")
+              .update({
+                marketing_sync_status: "error",
+                marketing_sync_error_code: marketingSync.error,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", metaAccount.id)
+              .eq("user_id", user.id);
+          }
+        } catch (error) {
+          console.error("dashboard_marketing_bootstrap_failed", {
+            platformAccountId: metaAccount.id,
+            name: error instanceof Error ? error.name : "unknown",
           });
         }
       }
 
-      const hardCapDrain = await drainHardCapStatusExecutionsForAccount({
-        userId: user.id,
-        platformAccountId: metaAccount.id,
-        maxRuns: 20,
-      });
-      if (
-        hardCapDrain.lastError ||
-        hardCapDrain.runs > 0 ||
-        hardCapDrain.duePlans > 0
-      ) {
-        console.error("hard_cap_status_dashboard_drain", {
+      try {
+        const marketingSyncId =
+          typeof metaAccount.marketing_sync_id === "string"
+            ? metaAccount.marketing_sync_id
+            : null;
+        if (marketingSyncId) {
+          const forceResume = await forceReactivatePausedOrganicBoostCampaigns({
+            userId: user.id,
+            platformAccountId: metaAccount.id,
+            marketingSyncId,
+          });
+          if (
+            forceResume.error ||
+            forceResume.created > 0 ||
+            forceResume.existing > 0 ||
+            forceResume.candidates > 0
+          ) {
+            console.error("organic_boost_dashboard_force_reactivate", {
+              platformAccountId: metaAccount.id,
+              ...forceResume,
+            });
+          }
+        }
+
+        const hardCapDrain = await drainHardCapStatusExecutionsForAccount({
+          userId: user.id,
           platformAccountId: metaAccount.id,
-          duePlans: hardCapDrain.duePlans,
-          runs: hardCapDrain.runs,
-          succeeded: hardCapDrain.succeeded,
-          failed: hardCapDrain.failed,
-          lastOutcome: hardCapDrain.lastOutcome,
-          lastError: hardCapDrain.lastError,
-          divertedToOtherAccount: hardCapDrain.divertedToOtherAccount,
+          maxRuns: 20,
+        });
+        if (
+          hardCapDrain.lastError ||
+          hardCapDrain.runs > 0 ||
+          hardCapDrain.duePlans > 0
+        ) {
+          console.error("hard_cap_status_dashboard_drain", {
+            platformAccountId: metaAccount.id,
+            duePlans: hardCapDrain.duePlans,
+            runs: hardCapDrain.runs,
+            succeeded: hardCapDrain.succeeded,
+            failed: hardCapDrain.failed,
+            lastOutcome: hardCapDrain.lastOutcome,
+            lastError: hardCapDrain.lastError,
+            divertedToOtherAccount: hardCapDrain.divertedToOtherAccount,
+          });
+        }
+      } catch (error) {
+        console.error("hard_cap_status_dashboard_drain_exception", {
+          platformAccountId: metaAccount.id,
+          message: error instanceof Error ? error.message : "unknown",
         });
       }
-    } catch (error) {
-      console.error("hard_cap_status_dashboard_drain_exception", {
-        platformAccountId: metaAccount.id,
-        message: error instanceof Error ? error.message : "unknown",
-      });
     }
   }
   const [{ data: metaAssets }, contentSyncSnapshot] =
