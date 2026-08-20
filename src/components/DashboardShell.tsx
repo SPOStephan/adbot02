@@ -1,18 +1,11 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Bell, ExternalLink, HelpCircle, Settings } from "lucide-react";
+import { Bell, HelpCircle, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { CreditsSidebarBalance } from "@/components/CreditsSidebarBalance";
+import { DashboardNav } from "@/components/DashboardNav";
 import { SignOutButton } from "@/components/SignOutButton";
 import { SiteBrandMark } from "@/components/SiteBrandMark";
 import { SiteFooter } from "@/components/SiteFooter";
-import {
-  getDashboardNavigation,
-  isDashboardNavActive,
-} from "@/lib/dashboard/navigation";
 
 type CreditProps = {
   balance: number | null;
@@ -33,9 +26,6 @@ export function DashboardShell({
   creditBalance,
   children,
 }: DashboardShellProps) {
-  const pathname = usePathname() || "/dashboard";
-  const navigation = getDashboardNavigation(isAdmin);
-
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-slate-200 bg-white px-4 py-6 lg:flex lg:flex-col">
@@ -43,59 +33,7 @@ export function DashboardShell({
           <SiteBrandMark href="/dashboard" tone="light" />
         </div>
 
-        <nav className="mt-10 space-y-1">
-          {navigation.map((item) => {
-            const { label, icon: Icon, href, external } = item;
-            const active = isDashboardNavActive(pathname, item);
-            if (!href) {
-              return (
-                <span
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400"
-                  key={label}
-                >
-                  <Icon className="size-5" />
-                  {label}
-                </span>
-              );
-            }
-            if (external) {
-              return (
-                <a
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${
-                    active
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
-                  }`}
-                  href={href}
-                  key={label}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  <Icon className="size-5" />
-                  <span className="flex-1">{label}</span>
-                  <ExternalLink
-                    aria-hidden="true"
-                    className="size-3.5 opacity-60"
-                  />
-                </a>
-              );
-            }
-            return (
-              <Link
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${
-                  active
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
-                }`}
-                href={href}
-                key={label}
-              >
-                <Icon className="size-5" />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        <DashboardNav isAdmin={isAdmin} />
 
         <div className="mt-auto space-y-1 border-t border-slate-100 pt-5">
           <CreditsSidebarBalance
