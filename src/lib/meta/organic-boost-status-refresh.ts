@@ -1,6 +1,11 @@
 import "server-only";
 
-import { getMetaCampaignsByIds, type MetaCampaign } from "@/lib/meta/client";
+import {
+  getMetaAdsByIds,
+  getMetaAdSetsByIds,
+  getMetaCampaignsByIds,
+  type MetaCampaign,
+} from "@/lib/meta/client";
 import { decryptAccessToken } from "@/lib/meta/crypto";
 import { getMetaSyncEnv } from "@/lib/meta/env";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -67,6 +72,52 @@ function normalizeCampaignForLocal(campaign: MetaCampaign): MetaCampaign {
     ...campaign,
     effectiveStatus: "COMPLETED",
   };
+}
+
+function isConfiguredObjectPaused(
+  status: string | null | undefined,
+  effectiveStatus: string | null | undefined,
+): boolean {
+  const configured = (status ?? "").toUpperCase();
+  const effective = (effectiveStatus ?? "").toUpperCase();
+  if (
+    configured === "DELETED" ||
+    configured === "ARCHIVED" ||
+    effective === "DELETED" ||
+    effective === "ARCHIVED"
+  ) {
+    return false;
+  }
+  return configured === "PAUSED" || effective === "PAUSED";
+}
+
+/**
+ * Meta keeps campaign effective_status=ACTIVE when only ads/ad sets are
+ * PAUSED. Overlay child pause so the dashboard cannot claim "Boost aktiv".
+ */
+function applyChildDeliveryOverlay(
+  campaign: MetaCampaign,
+  child: { adPaused: boolean; adSetPaused: boolean } | undefined,
+): MetaCampaign {
+  if (!child) {
+    return campaign;
+  }
+  if (isPausedCampaign(campaign) || isCompletedCampaign(campaign)) {
+    return campaign;
+  }
+  const effective = (campaign.effectiveStatus ?? "").toUpperCase();
+  const status = (campaign.status ?? "").toUpperCase();
+  const looksActive = status === "ACTIVE" || effective === "ACTIVE";
+  if (!looksActive) {
+    return campaign;
+  }
+  if (child.adPaused) {
+    return { ...campaign, effectiveStatus: "AD_PAUSED" };
+  }
+  if (child.adSetPaused) {
+    return { ...campaign, effectiveStatus: "ADSET_PAUSED" };
+  }
+  return campaign;
 }
 
 async function markMissingBoostCampaign(input: {
@@ -288,11 +339,11 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
 
   const { data: bindingRows, error: bindingError } = await admin
     .from("remote_object_bindings")
-    .select("remote_object_id")
+    .select("plan_id,object_type,remote_object_id")
     .eq("user_id", input.userId)
     .eq("platform_account_id", input.platformAccountId)
-    .eq("object_type", "CAMPAIGN")
-    .in("plan_id", planIds);
+    .in("plan_id", planIds)
+    .in("object_type", ["CAMPAIGN", "AD_SET", "AD"]);
 
   if (bindingError) {
     return {
@@ -304,12 +355,68 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
   const campaignIds = [
     ...new Set(
       (bindingRows ?? [])
+        .filter((row) => row.object_type === "CAMPAIGN")
         .map((row) =>
           typeof row.remote_object_id === "string" ? row.remote_object_id : null,
         )
         .filter((id): id is string => Boolean(id)),
     ),
   ];
+
+  const adSetIds = [
+    ...new Set(
+      (bindingRows ?? [])
+        .filter((row) => row.object_type === "AD_SET")
+        .map((row) =>
+          typeof row.remote_object_id === "string" ? row.remote_object_id : null,
+        )
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const adIds = [
+    ...new Set(
+      (bindingRows ?? [])
+        .filter((row) => row.object_type === "AD")
+        .map((row) =>
+          typeof row.remote_object_id === "string" ? row.remote_object_id : null,
+        )
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const campaignIdByPlanId = new Map<string, string>();
+  for (const row of bindingRows ?? []) {
+    if (
+      row.object_type === "CAMPAIGN" &&
+      typeof row.plan_id === "string" &&
+      typeof row.remote_object_id === "string"
+    ) {
+      campaignIdByPlanId.set(row.plan_id, row.remote_object_id);
+    }
+  }
+
+  const adSetIdsByCampaignId = new Map<string, string[]>();
+  const adIdsByCampaignId = new Map<string, string[]>();
+  for (const row of bindingRows ?? []) {
+    if (typeof row.plan_id !== "string" || typeof row.remote_object_id !== "string") {
+      continue;
+    }
+    const campaignId = campaignIdByPlanId.get(row.plan_id);
+    if (!campaignId) {
+      continue;
+    }
+    if (row.object_type === "AD_SET") {
+      const list = adSetIdsByCampaignId.get(campaignId) ?? [];
+      list.push(row.remote_object_id);
+      adSetIdsByCampaignId.set(campaignId, list);
+    }
+    if (row.object_type === "AD") {
+      const list = adIdsByCampaignId.get(campaignId) ?? [];
+      list.push(row.remote_object_id);
+      adIdsByCampaignId.set(campaignId, list);
+    }
+  }
 
   if (campaignIds.length < 1) {
     return empty;
@@ -361,6 +468,50 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
       appSecret: env.appSecret,
     });
 
+    const pausedAdSetIds = new Set<string>();
+    const pausedAdIds = new Set<string>();
+    try {
+      if (adSetIds.length > 0) {
+        const metaAdSets = await getMetaAdSetsByIds({
+          adSetIds,
+          accessToken,
+          appSecret: env.appSecret,
+        });
+        for (const adSet of metaAdSets.items) {
+          if (isConfiguredObjectPaused(adSet.status, adSet.effectiveStatus)) {
+            pausedAdSetIds.add(adSet.id);
+          }
+        }
+      }
+      if (adIds.length > 0) {
+        const metaAds = await getMetaAdsByIds({
+          adIds,
+          accessToken,
+          appSecret: env.appSecret,
+        });
+        for (const ad of metaAds.items) {
+          if (isConfiguredObjectPaused(ad.status, ad.effectiveStatus)) {
+            pausedAdIds.add(ad.id);
+          }
+        }
+      }
+    } catch {
+      // Child status is best-effort; campaign refresh must still proceed.
+    }
+
+    const childPauseByCampaignId = new Map<
+      string,
+      { adPaused: boolean; adSetPaused: boolean }
+    >();
+    for (const campaignId of campaignIds) {
+      const childAdSets = adSetIdsByCampaignId.get(campaignId) ?? [];
+      const childAds = adIdsByCampaignId.get(campaignId) ?? [];
+      childPauseByCampaignId.set(campaignId, {
+        adSetPaused: childAdSets.some((id) => pausedAdSetIds.has(id)),
+        adPaused: childAds.some((id) => pausedAdIds.has(id)),
+      });
+    }
+
     let refreshed = 0;
     let upserted = 0;
     let paused = 0;
@@ -376,13 +527,20 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
         : null;
 
     for (const raw of meta.items) {
-      const campaign = normalizeCampaignForLocal(raw);
+      const normalized = normalizeCampaignForLocal(raw);
+      const campaign = applyChildDeliveryOverlay(
+        normalized,
+        childPauseByCampaignId.get(normalized.id),
+      );
       seen.add(campaign.id);
       const pausedAtMeta = isPausedCampaign(campaign);
+      const childPaused =
+        (campaign.effectiveStatus ?? "").toUpperCase() === "AD_PAUSED" ||
+        (campaign.effectiveStatus ?? "").toUpperCase() === "ADSET_PAUSED";
       const completedAtMeta = isCompletedCampaign(campaign);
       if (completedAtMeta) {
         completed += 1;
-      } else if (pausedAtMeta) {
+      } else if (pausedAtMeta || childPaused) {
         paused += 1;
         pausedPlatformIds.push(campaign.id);
       } else if (
