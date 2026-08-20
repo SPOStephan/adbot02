@@ -109,10 +109,10 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
   return [
     ...items,
     {
-      label: "Logo",
+      label: "Branding",
       icon: Images,
-      href: "/dashboard/logo",
-      match: "/dashboard/logo",
+      href: "/dashboard/branding",
+      match: "/dashboard/branding",
     },
     {
       label: "Rechtliches",

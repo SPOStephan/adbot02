@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { getSiteBranding } from "@/lib/site-branding/branding";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,14 +15,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "AdPilot – Multi-Platform Ad Portal",
-    template: "%s | AdPilot",
-  },
-  description:
-    "Kanalübergreifendes Dashboard für Werbekampagnen, Creatives und kontrollierte Optimierung.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await getSiteBranding();
+  return {
+    title: {
+      default: "Adbot.one",
+      template: "%s | Adbot.one",
+    },
+    description:
+      "Kanalübergreifendes Dashboard für Werbekampagnen, Creatives und kontrollierte Optimierung.",
+    icons: branding.faviconUrl
+      ? {
+          icon: [{ url: branding.faviconUrl }],
+          shortcut: branding.faviconUrl,
+          apple: branding.faviconUrl,
+        }
+      : undefined,
+  };
+}
 
 export default function RootLayout({
   children,
