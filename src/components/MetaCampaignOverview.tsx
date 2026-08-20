@@ -295,12 +295,15 @@ export function deriveOrganicBoostDelivery(input: {
     if (
       effective === "PAUSED" ||
       effective === "CAMPAIGN_PAUSED" ||
-      effective === "ADSET_PAUSED"
+      effective === "ADSET_PAUSED" ||
+      effective === "AD_PAUSED"
     ) {
       return {
         deliveryState: "paused",
         deliveryLabel:
-          "Pausiert (noch nicht aktiviert) — Adbot schaltet auf Aktiv; Meta-Prüfung folgt erst danach",
+          effective === "AD_PAUSED" || effective === "ADSET_PAUSED"
+            ? "Pausiert (Anzeige/AdSet noch aus) — Adbot schaltet auf Aktiv"
+            : "Pausiert (noch nicht aktiviert) — Adbot schaltet auf Aktiv; Meta-Prüfung folgt erst danach",
       };
     }
 

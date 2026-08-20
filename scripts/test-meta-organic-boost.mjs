@@ -811,6 +811,50 @@ assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
   /Boost aktiv/,
 );
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /AD_PAUSED/,
+);
+assert.match(
+  read("src/components/MetaCampaignOverview.tsx"),
+  /Anzeige\/AdSet noch aus/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /healOrganicBoostDeliveryTree/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /updateMetaAdStatus/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /updateMetaAdSetStatus/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-ensure.ts"),
+  /healOrganicBoostDeliveryTree/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-status-refresh.ts"),
+  /AD_PAUSED/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-status-refresh.ts"),
+  /applyChildDeliveryOverlay/,
+);
+assert.match(
+  read(
+    "supabase/migrations/20260820210000_meta_organic_boost_finalize_require_ad_active.sql",
+  ),
+  /activate-ad/,
+);
+assert.match(
+  read(
+    "supabase/migrations/20260820210000_meta_organic_boost_finalize_require_ad_active.sql",
+  ),
+  /REMOTE_APPLIED/,
+);
 
 const writeClient = read("src/lib/meta/write-client.ts");
 assert.match(writeClient, /isInstagramOrganicMediaCreative/);

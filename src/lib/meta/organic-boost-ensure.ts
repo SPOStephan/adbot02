@@ -9,6 +9,7 @@ import {
   drainHardCapStatusExecutionsForAccount,
   forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
+import { healOrganicBoostDeliveryTree } from "@/lib/meta/organic-boost-delivery-heal";
 import { refreshOrganicBoostCampaignStatusesFromMeta } from "@/lib/meta/organic-boost-status-refresh";
 import type { MetaOrganicBoostPlannerResult } from "@/lib/meta/planner";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -277,6 +278,8 @@ async function recoverPausedOrganicBoostCampaigns(input: {
   pausedIds: string[];
   reactivated: number;
   activateRuns: number;
+  adSetsActivated: number;
+  adsActivated: number;
   error: string | null;
 }> {
   const admin = createAdminClient();
@@ -297,6 +300,8 @@ async function recoverPausedOrganicBoostCampaigns(input: {
       pausedIds: [],
       reactivated: 0,
       activateRuns: 0,
+      adSetsActivated: 0,
+      adsActivated: 0,
       error: "marketing_sync_required",
     };
   }
@@ -327,7 +332,9 @@ async function recoverPausedOrganicBoostCampaigns(input: {
         return (
           status === "PAUSED" ||
           effective === "PAUSED" ||
-          effective === "CAMPAIGN_PAUSED"
+          effective === "CAMPAIGN_PAUSED" ||
+          effective === "ADSET_PAUSED" ||
+          effective === "AD_PAUSED"
         );
       })
       .map((row) => String(row.platform_campaign_id ?? ""))
@@ -347,12 +354,41 @@ async function recoverPausedOrganicBoostCampaigns(input: {
     maxRuns: 20,
   });
 
+  // Campaign ACTIVATE alone is not enough — Meta often leaves ads/ad sets PAUSED.
+  const deliveryHeal = await healOrganicBoostDeliveryTree({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+  }).catch((error) => ({
+    adSetsActivated: 0,
+    adsActivated: 0,
+    error:
+      error instanceof Error
+        ? error.message
+        : "organic_boost_delivery_heal_failed",
+  }));
+
+  if (
+    (deliveryHeal.adSetsActivated ?? 0) > 0 ||
+    (deliveryHeal.adsActivated ?? 0) > 0
+  ) {
+    // Re-read Meta so local effective_status drops AD_PAUSED / ADSET_PAUSED.
+    await refreshOrganicBoostCampaignStatusesFromMeta({
+      userId: input.userId,
+      platformAccountId: input.platformAccountId,
+    }).catch(() => undefined);
+  }
+
   return {
     marketingSyncId,
     pausedIds,
     reactivated: force.created + force.existing,
     activateRuns: activateDrain.runs,
-    error: force.error || activateDrain.lastError,
+    adSetsActivated: deliveryHeal.adSetsActivated ?? 0,
+    adsActivated: deliveryHeal.adsActivated ?? 0,
+    error:
+      force.error ||
+      activateDrain.lastError ||
+      ("error" in deliveryHeal ? deliveryHeal.error : null),
   };
 }
 
@@ -408,6 +444,8 @@ export async function planAndDrainOrganicBoostForAccount(input: {
           recovered &&
           (recovered.reactivated > 0 ||
             recovered.activateRuns > 0 ||
+            recovered.adSetsActivated > 0 ||
+            recovered.adsActivated > 0 ||
             recovered.error)
         ) {
           console.error("organic_boost_paused_recover", {
@@ -420,7 +458,10 @@ export async function planAndDrainOrganicBoostForAccount(input: {
           drain: null,
           skippedRecent: true,
           allowHealed: allowHeal.healed,
-          pausedRecovered: recovered?.reactivated ?? 0,
+          pausedRecovered:
+            (recovered?.reactivated ?? 0) +
+            (recovered?.adSetsActivated ?? 0) +
+            (recovered?.adsActivated ?? 0),
         };
       }
       drainOnly = true;
@@ -508,6 +549,8 @@ export async function planAndDrainOrganicBoostForAccount(input: {
     recovered &&
     (recovered.reactivated > 0 ||
       recovered.activateRuns > 0 ||
+      recovered.adSetsActivated > 0 ||
+      recovered.adsActivated > 0 ||
       recovered.error)
   ) {
     console.error("organic_boost_paused_recover", {
@@ -521,7 +564,9 @@ export async function planAndDrainOrganicBoostForAccount(input: {
     (drain?.succeeded ?? 0) > 0 ||
     (drain?.runs ?? 0) > 0 ||
     (recovered?.reactivated ?? 0) > 0 ||
-    (recovered?.activateRuns ?? 0) > 0;
+    (recovered?.activateRuns ?? 0) > 0 ||
+    (recovered?.adSetsActivated ?? 0) > 0 ||
+    (recovered?.adsActivated ?? 0) > 0;
   if (ensureSucceeded) {
     await markEnsureTimestamp({
       userId: input.userId,
@@ -534,6 +579,9 @@ export async function planAndDrainOrganicBoostForAccount(input: {
     drain,
     skippedRecent: false,
     allowHealed: allowHeal.healed,
-    pausedRecovered: recovered?.reactivated ?? 0,
+    pausedRecovered:
+      (recovered?.reactivated ?? 0) +
+      (recovered?.adSetsActivated ?? 0) +
+      (recovered?.adsActivated ?? 0),
   };
 }

@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { processNextMetaMutation } from "@/lib/meta/executor";
+import { healOrganicBoostDeliveryTree } from "@/lib/meta/organic-boost-delivery-heal";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type HardCapStatusDrainResult = {
@@ -107,6 +108,7 @@ function parseForceResumeRow(
 /**
  * Aggressive recovery: ACTIVATE every current PAUSED Beitrag-Push campaign
  * with remaining schedule — no prior SAFETY_PAUSE required.
+ * Also heals PAUSED ads/ad sets (campaign ACTIVE alone is not delivery).
  */
 export async function forceReactivatePausedOrganicBoostCampaigns(input: {
   platformAccountId: string;
@@ -114,6 +116,46 @@ export async function forceReactivatePausedOrganicBoostCampaigns(input: {
   marketingSyncId: string;
   plannedAt?: string;
   /** When Meta already reported these as PAUSED, reactivate by id (hard path). */
+  pausedPlatformCampaignIds?: string[];
+}): Promise<OrganicBoostHardCapForceResumeResult> {
+  const result = await forceReactivatePausedOrganicBoostCampaignsInner(input);
+
+  const heal = await healOrganicBoostDeliveryTree({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+  }).catch((error) => ({
+    adSetsActivated: 0,
+    adsActivated: 0,
+    error:
+      error instanceof Error
+        ? error.message
+        : "organic_boost_delivery_heal_failed",
+  }));
+
+  if (
+    (heal.adSetsActivated ?? 0) > 0 ||
+    (heal.adsActivated ?? 0) > 0 ||
+    ("error" in heal && heal.error)
+  ) {
+    console.error("organic_boost_delivery_heal", {
+      platformAccountId: input.platformAccountId,
+      adSetsActivated: heal.adSetsActivated ?? 0,
+      adsActivated: heal.adsActivated ?? 0,
+      error: "error" in heal ? heal.error : null,
+    });
+  }
+
+  if (("error" in heal && heal.error) && !result.error) {
+    return { ...result, error: heal.error };
+  }
+  return result;
+}
+
+async function forceReactivatePausedOrganicBoostCampaignsInner(input: {
+  platformAccountId: string;
+  userId: string;
+  marketingSyncId: string;
+  plannedAt?: string;
   pausedPlatformCampaignIds?: string[];
 }): Promise<OrganicBoostHardCapForceResumeResult> {
   const admin = createAdminClient();
