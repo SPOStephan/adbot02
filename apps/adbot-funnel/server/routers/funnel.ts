@@ -51,6 +51,11 @@ import {
 import { checkCustomDomainCname } from "../customDomainDns";
 import { isSharedFunnelHost, normalizeHostname } from "../../shared/funnelHosts";
 import {
+  listPortalDomainsForFunnel,
+  pushFunnelDomainRevokeToPortal,
+  pushFunnelDomainUpsertToPortal,
+} from "../portalDomainSync";
+import {
   attachDomainToVercelProject,
   removeDomainFromVercelProject,
   verifyDomainOnVercelProject,
@@ -330,7 +335,7 @@ export const funnelRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      await requireOwnedFunnel(input.funnelId, ctx.user);
+      const funnel = await requireOwnedFunnel(input.funnelId, ctx.user);
       try {
         const domain = await registerCustomDomain({
           funnelId: input.funnelId,
@@ -344,6 +349,15 @@ export const funnelRouter = router({
             message: vercel.message,
           });
         }
+        void pushFunnelDomainUpsertToPortal({
+          ownerUserId: getTenantOwnerUserId(ctx.user),
+          hostname: domain.hostname,
+          status: domain.status === "READY" ? "READY" : "PENDING_DNS",
+          dnsTarget: domain.dnsTarget,
+          funnelId: input.funnelId,
+          funnelTitle: funnel.title,
+          toolDomainId: domain.id,
+        });
         return { ...domain, vercel };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -353,6 +367,98 @@ export const funnelRouter = router({
             error instanceof Error
               ? error.message
               : "Custom Domain konnte nicht registriert werden.",
+        });
+      }
+    }),
+
+  portalDomains: adminProcedure.query(async ({ ctx }) => {
+    return listPortalDomainsForFunnel({
+      ownerUserId: getTenantOwnerUserId(ctx.user),
+    });
+  }),
+
+  bindPortalDomain: adminProcedure
+    .input(
+      z.object({
+        funnelId: funnelIdSchema,
+        hostname: z.string().min(3).max(253),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const funnel = await requireOwnedFunnel(input.funnelId, ctx.user);
+      const portalDomains = await listPortalDomainsForFunnel({
+        ownerUserId: getTenantOwnerUserId(ctx.user),
+      });
+      const match = portalDomains.find(
+        domain =>
+          domain.hostname === normalizeHostname(input.hostname) &&
+          (domain.bindingKind === "none" ||
+            (domain.bindingKind === "funnel" &&
+              domain.bindingRef === input.funnelId)),
+      );
+      if (!match) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Domain nicht in Adbot gefunden oder bereits an Freebie/anderen Funnel gebunden.",
+        });
+      }
+      if (match.bindingKind === "freebie") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Diese Domain ist bereits an ein Freebie gebunden.",
+        });
+      }
+      try {
+        const domain = await registerCustomDomain({
+          funnelId: input.funnelId,
+          hostname: match.hostname,
+        });
+        const vercel = await attachDomainToVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
+        let result = domain;
+        if (match.status === "READY") {
+          const dns = await checkCustomDomainCname(
+            domain.hostname,
+            domain.dnsTarget,
+          );
+          if (dns.ok) {
+            const verified = await verifyDomainOnVercelProject(domain.hostname);
+            if (!verified.ok) {
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message: verified.message,
+              });
+            }
+            result = await markCustomDomainReady({
+              funnelId: input.funnelId,
+              domainId: domain.id,
+            });
+          }
+        }
+        void pushFunnelDomainUpsertToPortal({
+          ownerUserId: getTenantOwnerUserId(ctx.user),
+          hostname: result.hostname,
+          status: result.status === "READY" ? "READY" : "PENDING_DNS",
+          dnsTarget: result.dnsTarget,
+          funnelId: input.funnelId,
+          funnelTitle: funnel.title,
+          toolDomainId: result.id,
+        });
+        return { ...result, vercel };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Portal-Domain konnte nicht gebunden werden.",
         });
       }
     }),
@@ -367,7 +473,7 @@ export const funnelRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      await requireOwnedFunnel(input.funnelId, ctx.user);
+      const funnel = await requireOwnedFunnel(input.funnelId, ctx.user);
       try {
         if (input.force) {
           if (!isPlatformAdmin(ctx.user)) {
@@ -376,7 +482,17 @@ export const funnelRouter = router({
               message: "DNS-Override nur für Plattform-Admins.",
             });
           }
-          return await markCustomDomainReady(input);
+          const ready = await markCustomDomainReady(input);
+          void pushFunnelDomainUpsertToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: ready.hostname,
+            status: "READY",
+            dnsTarget: ready.dnsTarget,
+            funnelId: input.funnelId,
+            funnelTitle: funnel.title,
+            toolDomainId: ready.id,
+          });
+          return ready;
         }
 
         const domain = await getCustomDomainForFunnel(input);
@@ -401,6 +517,15 @@ export const funnelRouter = router({
           });
         }
         const ready = await markCustomDomainReady(input);
+        void pushFunnelDomainUpsertToPortal({
+          ownerUserId: getTenantOwnerUserId(ctx.user),
+          hostname: ready.hostname,
+          status: "READY",
+          dnsTarget: ready.dnsTarget,
+          funnelId: input.funnelId,
+          funnelTitle: funnel.title,
+          toolDomainId: ready.id,
+        });
         return { ...ready, dns, vercel };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -438,6 +563,11 @@ export const funnelRouter = router({
       await requireOwnedFunnel(input.funnelId, ctx.user);
       try {
         const revoked = await revokeCustomDomain(input);
+        void pushFunnelDomainRevokeToPortal({
+          ownerUserId: getTenantOwnerUserId(ctx.user),
+          hostname: revoked.hostname,
+          toolDomainId: revoked.id,
+        });
         void removeDomainFromVercelProject(revoked.hostname);
         return revoked;
       } catch (error) {

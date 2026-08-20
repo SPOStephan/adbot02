@@ -41,6 +41,11 @@ import {
 } from "./freebieCustomDomains";
 import { resolvePublicAppBaseUrl } from "./publicAppUrl";
 import {
+  listPortalDomainsForFreebie,
+  pushFreebieDomainRevokeToPortal,
+  pushFreebieDomainUpsertToPortal,
+} from "./portalDomainSync";
+import {
   attachDomainToVercelProject,
   removeDomainFromVercelProject,
   verifyDomainOnVercelProject,
@@ -213,7 +218,7 @@ export const appRouter = router({
         }),
       )
       .mutation(async ({ ctx, input }) => {
-        await assertOfferAccess(input.offerId, ctx.user);
+        const offer = await assertOfferAccess(input.offerId, ctx.user);
         try {
           const domain = await registerCustomDomain({
             offerId: input.offerId,
@@ -227,6 +232,15 @@ export const appRouter = router({
               message: vercel.message,
             });
           }
+          void pushFreebieDomainUpsertToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: domain.hostname,
+            status: domain.status === "READY" ? "READY" : "PENDING_DNS",
+            dnsTarget: domain.dnsTarget,
+            offerId: offer.id,
+            offerTitle: offer.title,
+            toolDomainId: domain.id,
+          });
           return { ...domain, vercel };
         } catch (error) {
           if (error instanceof TRPCError) throw error;
@@ -239,6 +253,96 @@ export const appRouter = router({
           });
         }
       }),
+    portalDomains: adminProcedure.query(async ({ ctx }) => {
+      return listPortalDomainsForFreebie({
+        ownerUserId: getTenantOwnerUserId(ctx.user),
+      });
+    }),
+    bindPortalDomain: adminProcedure
+      .input(
+        z.object({
+          offerId: z.string().uuid(),
+          hostname: z.string().trim().min(3).max(253),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const offer = await assertOfferAccess(input.offerId, ctx.user);
+        const portalDomains = await listPortalDomainsForFreebie({
+          ownerUserId: getTenantOwnerUserId(ctx.user),
+        });
+        const match = portalDomains.find(
+          domain =>
+            domain.hostname === normalizeHostname(input.hostname) &&
+            (domain.bindingKind === "none" ||
+              (domain.bindingKind === "freebie" &&
+                domain.bindingRef === input.offerId)),
+        );
+        if (!match) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Domain nicht in Adbot gefunden oder bereits an Funnel/anderes Freebie gebunden.",
+          });
+        }
+        if (match.bindingKind === "funnel") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Diese Domain ist bereits an einen Funnel gebunden.",
+          });
+        }
+        try {
+          const domain = await registerCustomDomain({
+            offerId: input.offerId,
+            hostname: match.hostname,
+          });
+          const vercel = await attachDomainToVercelProject(domain.hostname);
+          if (!vercel.ok) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: vercel.message,
+            });
+          }
+          let result = domain;
+          if (match.status === "READY") {
+            const dns = await checkCustomDomainCname(
+              domain.hostname,
+              domain.dnsTarget,
+            );
+            if (dns.ok) {
+              const verified = await verifyDomainOnVercelProject(domain.hostname);
+              if (!verified.ok) {
+                throw new TRPCError({
+                  code: "PRECONDITION_FAILED",
+                  message: verified.message,
+                });
+              }
+              result = await markCustomDomainReady({
+                offerId: input.offerId,
+                domainId: domain.id,
+              });
+            }
+          }
+          void pushFreebieDomainUpsertToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: result.hostname,
+            status: result.status === "READY" ? "READY" : "PENDING_DNS",
+            dnsTarget: result.dnsTarget,
+            offerId: offer.id,
+            offerTitle: offer.title,
+            toolDomainId: result.id,
+          });
+          return { ...result, vercel };
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Portal-Domain konnte nicht gebunden werden.",
+          });
+        }
+      }),
     markCustomDomainReady: adminProcedure
       .input(
         z.object({
@@ -247,7 +351,7 @@ export const appRouter = router({
         }),
       )
       .mutation(async ({ ctx, input }) => {
-        await assertOfferAccess(input.offerId, ctx.user);
+        const offer = await assertOfferAccess(input.offerId, ctx.user);
         const domain = await getCustomDomainForOffer(input);
         if (!domain) {
           throw new TRPCError({
@@ -274,6 +378,15 @@ export const appRouter = router({
         }
         try {
           const ready = await markCustomDomainReady(input);
+          void pushFreebieDomainUpsertToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: ready.hostname,
+            status: "READY",
+            dnsTarget: ready.dnsTarget,
+            offerId: offer.id,
+            offerTitle: offer.title,
+            toolDomainId: ready.id,
+          });
           return { ...ready, dns, vercel };
         } catch (error) {
           throw new TRPCError({
@@ -321,6 +434,11 @@ export const appRouter = router({
         await assertOfferAccess(input.offerId, ctx.user);
         try {
           const revoked = await revokeCustomDomain(input);
+          void pushFreebieDomainRevokeToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: revoked.hostname,
+            toolDomainId: revoked.id,
+          });
           void removeDomainFromVercelProject(revoked.hostname);
           return revoked;
         } catch (error) {

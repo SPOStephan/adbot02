@@ -58,17 +58,32 @@ export default function Settings() {
     { funnelId: funnelId! },
     { enabled: Boolean(funnelId) }
   );
+  const portalDomainsQuery = trpc.funnel.portalDomains.useQuery(undefined, {
+    enabled: Boolean(funnelId),
+  });
   const registerCustomDomain = trpc.funnel.registerCustomDomain.useMutation({
     onSuccess: async () => {
       setCustomHostname("");
       await customDomainsQuery.refetch();
-      toast.success("Custom Domain registriert — bitte nur noch CNAME setzen");
+      await portalDomainsQuery.refetch();
+      toast.success(
+        "Domain registriert (Hosting automatisch) — erscheint unter Adbot → Domains",
+      );
+    },
+    onError: error => toast.error(error.message),
+  });
+  const bindPortalDomain = trpc.funnel.bindPortalDomain.useMutation({
+    onSuccess: async () => {
+      await customDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
+      toast.success("Portal-Domain an diesen Funnel gebunden");
     },
     onError: error => toast.error(error.message),
   });
   const markCustomDomainReady = trpc.funnel.markCustomDomainReady.useMutation({
     onSuccess: async () => {
       await customDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
       toast.success("Domain aktiv — Funnel unter https://Hostname/ erreichbar");
     },
     onError: error => toast.error(error.message),
@@ -83,11 +98,23 @@ export default function Settings() {
   const revokeCustomDomain = trpc.funnel.revokeCustomDomain.useMutation({
     onSuccess: async () => {
       await customDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
       toast.success("Custom Domain zurückgezogen");
     },
     onError: error => toast.error(error.message),
   });
   const readyCustomHost = (customDomainsQuery.data ?? []).find(domain => domain.status === "READY");
+  const bindablePortalDomains = useMemo(() => {
+    const localHosts = new Set(
+      (customDomainsQuery.data ?? []).map(domain => domain.hostname),
+    );
+    return (portalDomainsQuery.data ?? []).filter(
+      domain =>
+        !localHosts.has(domain.hostname) &&
+        (domain.bindingKind === "none" ||
+          (domain.bindingKind === "funnel" && domain.bindingRef === funnelId)),
+    );
+  }, [customDomainsQuery.data, portalDomainsQuery.data, funnelId]);
   const directUrl = useMemo(() => `${window.location.origin}/f/${draft?.slug ?? "karriere"}`, [draft?.slug]);
   const customPublicUrl = readyCustomHost ? `https://${readyCustomHost.hostname}/` : null;
   const dirty = Boolean(draft && savedConfig && JSON.stringify(draft) !== JSON.stringify(savedConfig));
@@ -213,7 +240,36 @@ export default function Settings() {
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Subdomain deines Unternehmens per CNAME auf Adbot zeigen. Beim Registrieren hinterlegen wir die Domain automatisch am Funnel-Hosting (SSL). Danach DNS prüfen — Root-URL zeigt diesen Funnel. Shared-Host `/f/…` bleibt parallel.</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Hier anlegen (wird unter Adbot → Domains sichtbar) oder eine Portal-Domain übernehmen. Beim Registrieren hinterlegen wir SSL/Hosting automatisch. Danach DNS prüfen — Root-URL zeigt diesen Funnel. Shared-Host `/f/…` bleibt parallel. Nicht parallel am Freebie binden.</p></div></div>
+        {bindablePortalDomains.length > 0 ? (
+          <div className="mt-5 rounded-xl border border-dashed border-slate-200 p-4">
+            <p className="text-sm font-semibold">Aus Adbot-Domains übernehmen</p>
+            <ul className="mt-3 space-y-2">
+              {bindablePortalDomains.map(domain => (
+                <li className="flex flex-wrap items-center justify-between gap-2 text-sm" key={domain.id}>
+                  <span>
+                    <code>{domain.hostname}</code>
+                    <span className="ml-2 text-xs text-muted-foreground">{domain.status}</span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!funnelId || bindPortalDomain.isPending}
+                    onClick={() =>
+                      funnelId &&
+                      bindPortalDomain.mutate({
+                        funnelId,
+                        hostname: domain.hostname,
+                      })
+                    }
+                  >
+                    Binden
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <Input
             aria-label="Custom Hostname"
