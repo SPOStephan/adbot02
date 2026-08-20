@@ -1016,6 +1016,7 @@ const launchMarketingEnsureSource = await readFile(
   path.join(root, "src/lib/meta/launch-marketing-ensure.ts"),
   "utf8",
 );
+assert.match(launchMarketingEnsureSource, /refreshMarketingSnapshotForAccount/);
 assert.match(launchMarketingEnsureSource, /resolveMarketingAdAccountId/);
 assert.match(launchMarketingEnsureSource, /ad_account_selection_required/);
 assert.match(

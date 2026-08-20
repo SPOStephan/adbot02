@@ -87,6 +87,7 @@ import {
   forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
 import { planAndDrainOrganicBoostForAccount } from "@/lib/meta/organic-boost-ensure";
+import { refreshMarketingSnapshotForAccount } from "@/lib/meta/launch-marketing-ensure";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -503,6 +504,64 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         metaAccount.marketing_sync_error_code = null;
       } catch {
         // Non-fatal display cleanup.
+      }
+    }
+
+    // After Werbekonto-Auswahl (or sole-account connect): Kampagnenabruf is
+    // independent of Beitragsabruf. Bootstrap once when selection exists but
+    // no successful marketing snapshot yet.
+    const selectedAdForBootstrap =
+      typeof metaAccount.marketing_meta_ad_account_id === "string"
+        ? metaAccount.marketing_meta_ad_account_id.trim()
+        : "";
+    const marketingBootstrapNeeded =
+      selectedAdForBootstrap.length > 0 &&
+      !metaAccount.marketing_last_success_at &&
+      metaAccount.marketing_sync_status !== "syncing" &&
+      (metaAccount.marketing_sync_status === "idle" ||
+        metaAccount.marketing_sync_error_code === "ad_account_selection_required" ||
+        (metaAccount.marketing_sync_status === "error" &&
+          !metaAccount.marketing_sync_error_code));
+    if (marketingBootstrapNeeded) {
+      try {
+        await createAdminClient()
+          .from("platform_accounts")
+          .update({
+            marketing_sync_status: "syncing",
+            marketing_sync_error_code: null,
+            marketing_last_sync_started_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", metaAccount.id)
+          .eq("user_id", user.id);
+        const marketingSync = await refreshMarketingSnapshotForAccount({
+          userId: user.id,
+          platformAccountId: metaAccount.id,
+          ownerPrefix: "dashboard-marketing-bootstrap",
+        });
+        if (marketingSync.ok) {
+          metaAccount.marketing_sync_status = "success";
+          metaAccount.marketing_sync_error_code = null;
+          metaAccount.marketing_sync_id = marketingSync.syncId;
+          metaAccount.marketing_last_success_at = new Date().toISOString();
+        } else {
+          metaAccount.marketing_sync_status = "error";
+          metaAccount.marketing_sync_error_code = marketingSync.error;
+          await createAdminClient()
+            .from("platform_accounts")
+            .update({
+              marketing_sync_status: "error",
+              marketing_sync_error_code: marketingSync.error,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", metaAccount.id)
+            .eq("user_id", user.id);
+        }
+      } catch (error) {
+        console.error("dashboard_marketing_bootstrap_failed", {
+          platformAccountId: metaAccount.id,
+          name: error instanceof Error ? error.name : "unknown",
+        });
       }
     }
 

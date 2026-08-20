@@ -23,6 +23,7 @@ import {
   verifyOAuthState,
 } from "@/lib/meta/crypto";
 import { getMetaCallbackEnv } from "@/lib/meta/env";
+import { refreshMarketingSnapshotForAccount } from "@/lib/meta/launch-marketing-ensure";
 import { classifyMetaGrantedScopes } from "@/lib/meta/scope-policy.mjs";
 import { createPortalUrl } from "@/lib/site-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -30,6 +31,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 const META_CALLBACK_PATH = "/api/connectors/meta/callback";
 const DAY_IN_SECONDS = 24 * 60 * 60;
@@ -445,7 +447,7 @@ export async function GET(request: Request) {
       p_instagram_account_ids: instagramAccountIds,
       p_assets: assetRows,
     };
-    const { error } = isExtend
+    const { data: platformAccountId, error } = isExtend
       ? await admin.rpc("extend_meta_connection", connectionPayload)
       : await admin.rpc("replace_meta_connection", connectionPayload);
 
@@ -458,6 +460,46 @@ export async function GET(request: Request) {
         "error",
         isExtend ? "extend_storage" : "storage",
       );
+    }
+
+    // Exactly one Werbekonto → set active and kick off Kampagnenabruf (not Beitragsabruf).
+    if (
+      typeof platformAccountId === "string" &&
+      adAccountIds.length === 1 &&
+      adAccountIds[0]
+    ) {
+      const soleAdAccountId = String(adAccountIds[0]).replace(/^act_/i, "");
+      await admin
+        .from("platform_accounts")
+        .update({
+          marketing_meta_ad_account_id: soleAdAccountId,
+          marketing_sync_status: "syncing",
+          marketing_sync_error_code: null,
+          marketing_last_sync_started_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", platformAccountId)
+        .eq("user_id", user.id);
+
+      const marketingSync = await refreshMarketingSnapshotForAccount({
+        userId: user.id,
+        platformAccountId,
+        ownerPrefix: "meta-connect",
+      });
+      if (!marketingSync.ok) {
+        console.error("[meta-oauth] initial marketing sync failed", {
+          error: marketingSync.error,
+        });
+        await admin
+          .from("platform_accounts")
+          .update({
+            marketing_sync_status: "error",
+            marketing_sync_error_code: marketingSync.error,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", platformAccountId)
+          .eq("user_id", user.id);
+      }
     }
 
     stage = "revalidation";
