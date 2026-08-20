@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { LeadLaunchCanary } from "@/components/LeadLaunchCanary";
-import { TrafficLaunchCanary } from "@/components/TrafficLaunchCanary";
+import {
+  TrafficLaunchCanary,
+} from "@/components/TrafficLaunchCanary";
 import {
   DashboardContentSkeleton,
   DashboardPageHeader,

@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Megaphone,
   Camera,
+  Crosshair,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -98,6 +99,12 @@ async function OverviewBody({
       label: "Beiträge",
       description: "Abruf, Assets und Beitrag-Push-Kandidaten",
       icon: Camera,
+    },
+    {
+      href: "/dashboard/tracking",
+      label: "Tracking",
+      description: "Meta Pixel global für Funnel, Freebie und Kampagnen",
+      icon: Crosshair,
     },
     {
       href: "/dashboard/autonomie",

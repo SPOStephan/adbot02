@@ -27,13 +27,19 @@ export const DASHBOARD_PAGE_COPY = {
     eyebrow: "Steuerung",
     title: "Autonomie",
     description:
-      "Kunden-Policy, Kill-Switch, Boost und Onboarding — getrennt von der Kampagnenübersicht.",
+      "Policy, Kill-Switch, Boost und Onboarding. Das Meta Pixel liegt global unter Tracking.",
   },
   trafficLaunch: {
     eyebrow: "Launch",
     title: "Traffic-Launch",
     description:
-      "Traffic- und Lead-Canaries vorbereiten und starten — ohne den Rest der Autonomie-Oberfläche.",
+      "Traffic- und Lead-Canaries starten. Das Meta Pixel verbindest du global unter Tracking.",
+  },
+  tracking: {
+    eyebrow: "Global",
+    title: "Tracking",
+    description:
+      "Meta Pixel einmal für Adbot verbinden — Funnel, Freebie und Kampagnen nutzen dieselbe ID.",
   },
   creatives: {
     eyebrow: "Creatives",

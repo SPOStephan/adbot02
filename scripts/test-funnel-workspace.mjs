@@ -41,6 +41,9 @@ assert.match(dashboard, /external: true/);
 assert.match(card, /id="funnel"/);
 assert.match(card, /FUNNEL_SITE_URL/);
 assert.match(card, /createFunnelSsoEntryPath/);
+assert.match(card, /Meta Pixel global unter Tracking/);
+assert.match(card, /Custom Domain/);
+assert.match(card, /\/dashboard\/tracking/);
 
 assert.match(migration, /owner_user_id uuid/);
 assert.match(migration, /owner_email text/);
