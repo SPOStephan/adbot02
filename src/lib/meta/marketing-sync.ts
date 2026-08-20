@@ -912,6 +912,46 @@ export async function syncMetaMarketingSnapshot(input: {
       // RPC absent until migration applied; snapshot still usable.
     }
 
+    // Phase 8: persist creative media fields + auto-label performance winners.
+    try {
+      const creativesPayload = serializeCreatives(creativesResult.items);
+      const { error: mediaError } = await admin.rpc(
+        "merge_meta_creative_media_fields",
+        {
+          p_user_id: input.userId,
+          p_platform_account_id: input.platformAccountId,
+          p_creatives: creativesPayload,
+        },
+      );
+      if (mediaError) {
+        console.error(
+          "Meta creative media field merge failed",
+          persistenceDiagnostic(mediaError),
+        );
+      } else {
+        const { error: winnersError } = await admin.rpc(
+          "apply_brand_asset_performance_winners",
+          {
+            p_user_id: input.userId,
+            p_platform_account_id: input.platformAccountId,
+            p_top_n: 5,
+            p_window_days: 7,
+          },
+        );
+        if (winnersError) {
+          console.error(
+            "Brand asset performance winners apply failed",
+            persistenceDiagnostic(winnersError),
+          );
+        }
+      }
+    } catch (phase8Error) {
+      console.error(
+        "Phase 8 performance winner post-sync skipped",
+        phase8Error,
+      );
+    }
+
     const persisted = Array.isArray(data) ? data[0] : data;
 
     const adSpendTotal = sumInsightSpend(insights);

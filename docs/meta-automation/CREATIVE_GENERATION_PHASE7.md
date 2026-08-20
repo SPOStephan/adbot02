@@ -31,6 +31,6 @@ Meta format-slot crops after successful image generation.
 
 ## Intentionally deferred
 
-- Auto `performance_winner` Insights job
 - Meta Ad Library scraper
 - Separate credit price for crop registration (crops are free side-effect of master)
+- Auto `performance_winner` → moved to Phase 8
