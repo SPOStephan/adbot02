@@ -1,12 +1,15 @@
 import "server-only";
 
 import {
+  getMetaAdsByCampaignId,
   getMetaAdsByIds,
+  getMetaAdSetsByCampaignId,
   getMetaAdSetsByIds,
   getMetaCampaignsByIds,
   type MetaCampaign,
 } from "@/lib/meta/client";
 import { decryptAccessToken } from "@/lib/meta/crypto";
+import { overlayCampaignEffectiveForDelivery } from "@/lib/meta/organic-boost-delivery";
 import { getMetaSyncEnv } from "@/lib/meta/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -74,50 +77,28 @@ function normalizeCampaignForLocal(campaign: MetaCampaign): MetaCampaign {
   };
 }
 
-function isConfiguredObjectPaused(
-  status: string | null | undefined,
-  effectiveStatus: string | null | undefined,
-): boolean {
-  const configured = (status ?? "").toUpperCase();
-  const effective = (effectiveStatus ?? "").toUpperCase();
-  if (
-    configured === "DELETED" ||
-    configured === "ARCHIVED" ||
-    effective === "DELETED" ||
-    effective === "ARCHIVED"
-  ) {
-    return false;
-  }
-  return configured === "PAUSED" || effective === "PAUSED";
-}
-
-/**
- * Meta keeps campaign effective_status=ACTIVE when only ads/ad sets are
- * PAUSED. Overlay child pause so the dashboard cannot claim "Boost aktiv".
- */
-function applyChildDeliveryOverlay(
+function applyDeliveryOverlay(
   campaign: MetaCampaign,
-  child: { adPaused: boolean; adSetPaused: boolean } | undefined,
+  child: {
+    adSetStatuses: Array<{ status: string | null; effectiveStatus: string | null }>;
+    adStatuses: Array<{ status: string | null; effectiveStatus: string | null }>;
+    childrenFetched: boolean;
+  },
 ): MetaCampaign {
-  if (!child) {
+  if (isCompletedCampaign(campaign)) {
     return campaign;
   }
-  if (isPausedCampaign(campaign) || isCompletedCampaign(campaign)) {
+  const nextEffective = overlayCampaignEffectiveForDelivery({
+    campaignStatus: campaign.status,
+    campaignEffectiveStatus: campaign.effectiveStatus,
+    adSetStatuses: child.adSetStatuses,
+    adStatuses: child.adStatuses,
+    childrenFetched: child.childrenFetched,
+  });
+  if (nextEffective === (campaign.effectiveStatus ?? "").toUpperCase()) {
     return campaign;
   }
-  const effective = (campaign.effectiveStatus ?? "").toUpperCase();
-  const status = (campaign.status ?? "").toUpperCase();
-  const looksActive = status === "ACTIVE" || effective === "ACTIVE";
-  if (!looksActive) {
-    return campaign;
-  }
-  if (child.adPaused) {
-    return { ...campaign, effectiveStatus: "AD_PAUSED" };
-  }
-  if (child.adSetPaused) {
-    return { ...campaign, effectiveStatus: "ADSET_PAUSED" };
-  }
-  return campaign;
+  return { ...campaign, effectiveStatus: nextEffective };
 }
 
 async function markMissingBoostCampaign(input: {
@@ -319,7 +300,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
     .select("plan_id")
     .eq("user_id", input.userId)
     .eq("platform_account_id", input.platformAccountId)
-    .limit(100);
+    .limit(500);
 
   if (linkError) {
     return { ...empty, error: linkError.message || "boost_link_lookup_failed" };
@@ -468,8 +449,22 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
       appSecret: env.appSecret,
     });
 
-    const pausedAdSetIds = new Set<string>();
-    const pausedAdIds = new Set<string>();
+    type ChildTree = {
+      adSetStatuses: Array<{ status: string | null; effectiveStatus: string | null }>;
+      adStatuses: Array<{ status: string | null; effectiveStatus: string | null }>;
+      childrenFetched: boolean;
+    };
+    const childTreeByCampaignId = new Map<string, ChildTree>();
+
+    const adSetById = new Map<
+      string,
+      { status: string | null; effectiveStatus: string | null }
+    >();
+    const adById = new Map<
+      string,
+      { status: string | null; effectiveStatus: string | null }
+    >();
+
     try {
       if (adSetIds.length > 0) {
         const metaAdSets = await getMetaAdSetsByIds({
@@ -478,9 +473,10 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
           appSecret: env.appSecret,
         });
         for (const adSet of metaAdSets.items) {
-          if (isConfiguredObjectPaused(adSet.status, adSet.effectiveStatus)) {
-            pausedAdSetIds.add(adSet.id);
-          }
+          adSetById.set(adSet.id, {
+            status: adSet.status,
+            effectiveStatus: adSet.effectiveStatus,
+          });
         }
       }
       if (adIds.length > 0) {
@@ -490,26 +486,70 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
           appSecret: env.appSecret,
         });
         for (const ad of metaAds.items) {
-          if (isConfiguredObjectPaused(ad.status, ad.effectiveStatus)) {
-            pausedAdIds.add(ad.id);
-          }
+          adById.set(ad.id, {
+            status: ad.status,
+            effectiveStatus: ad.effectiveStatus,
+          });
         }
       }
     } catch {
-      // Child status is best-effort; campaign refresh must still proceed.
+      // Fall through to per-campaign edges.
     }
 
-    const childPauseByCampaignId = new Map<
-      string,
-      { adPaused: boolean; adSetPaused: boolean }
-    >();
     for (const campaignId of campaignIds) {
-      const childAdSets = adSetIdsByCampaignId.get(campaignId) ?? [];
-      const childAds = adIdsByCampaignId.get(campaignId) ?? [];
-      childPauseByCampaignId.set(campaignId, {
-        adSetPaused: childAdSets.some((id) => pausedAdSetIds.has(id)),
-        adPaused: childAds.some((id) => pausedAdIds.has(id)),
-      });
+      const fromBindingsAdSets = (adSetIdsByCampaignId.get(campaignId) ?? [])
+        .map((id) => adSetById.get(id))
+        .filter(
+          (row): row is { status: string | null; effectiveStatus: string | null } =>
+            Boolean(row),
+        );
+      const fromBindingsAds = (adIdsByCampaignId.get(campaignId) ?? [])
+        .map((id) => adById.get(id))
+        .filter(
+          (row): row is { status: string | null; effectiveStatus: string | null } =>
+            Boolean(row),
+        );
+
+      if (fromBindingsAdSets.length > 0 && fromBindingsAds.length > 0) {
+        childTreeByCampaignId.set(campaignId, {
+          adSetStatuses: fromBindingsAdSets,
+          adStatuses: fromBindingsAds,
+          childrenFetched: true,
+        });
+        continue;
+      }
+
+      try {
+        const [edgeAdSets, edgeAds] = await Promise.all([
+          getMetaAdSetsByCampaignId({
+            campaignId,
+            accessToken,
+            appSecret: env.appSecret,
+          }),
+          getMetaAdsByCampaignId({
+            campaignId,
+            accessToken,
+            appSecret: env.appSecret,
+          }),
+        ]);
+        childTreeByCampaignId.set(campaignId, {
+          adSetStatuses: edgeAdSets.items.map((row) => ({
+            status: row.status,
+            effectiveStatus: row.effectiveStatus,
+          })),
+          adStatuses: edgeAds.items.map((row) => ({
+            status: row.status,
+            effectiveStatus: row.effectiveStatus,
+          })),
+          childrenFetched: true,
+        });
+      } catch {
+        childTreeByCampaignId.set(campaignId, {
+          adSetStatuses: fromBindingsAdSets,
+          adStatuses: fromBindingsAds,
+          childrenFetched: false,
+        });
+      }
     }
 
     let refreshed = 0;
@@ -528,25 +568,24 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
 
     for (const raw of meta.items) {
       const normalized = normalizeCampaignForLocal(raw);
-      const campaign = applyChildDeliveryOverlay(
-        normalized,
-        childPauseByCampaignId.get(normalized.id),
-      );
+      const tree = childTreeByCampaignId.get(normalized.id) ?? {
+        adSetStatuses: [],
+        adStatuses: [],
+        childrenFetched: false,
+      };
+      const campaign = applyDeliveryOverlay(normalized, tree);
       seen.add(campaign.id);
       const pausedAtMeta = isPausedCampaign(campaign);
-      const childPaused =
-        (campaign.effectiveStatus ?? "").toUpperCase() === "AD_PAUSED" ||
-        (campaign.effectiveStatus ?? "").toUpperCase() === "ADSET_PAUSED";
+      const deliveryBlocked = ["AD_PAUSED", "ADSET_PAUSED", "DELIVERY_UNVERIFIED"].includes(
+        (campaign.effectiveStatus ?? "").toUpperCase(),
+      );
       const completedAtMeta = isCompletedCampaign(campaign);
       if (completedAtMeta) {
         completed += 1;
-      } else if (pausedAtMeta || childPaused) {
+      } else if (pausedAtMeta || deliveryBlocked) {
         paused += 1;
         pausedPlatformIds.push(campaign.id);
-      } else if (
-        (campaign.status ?? "").toUpperCase() === "ACTIVE" ||
-        (campaign.effectiveStatus ?? "").toUpperCase() === "ACTIVE"
-      ) {
+      } else if ((campaign.effectiveStatus ?? "").toUpperCase() === "ACTIVE") {
         active += 1;
       }
 

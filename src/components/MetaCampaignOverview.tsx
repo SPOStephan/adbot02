@@ -14,6 +14,7 @@ import {
   MetaAdAccountPicker,
   type MetaAdAccountOption,
 } from "@/components/MetaAdAccountPicker";
+import { deliveryLabelForEffectiveStatus } from "@/lib/meta/organic-boost-delivery";
 
 type CampaignPerformance = {
   id: string;
@@ -262,51 +263,6 @@ export function deriveOrganicBoostDelivery(input: {
 
   // Meta-facing campaign states require a verified remote campaign binding.
   if (hasBinding) {
-    if (
-      effective === "COMPLETED" ||
-      effective === "CAMPAIGN_COMPLETED" ||
-      effective === "ARCHIVED"
-    ) {
-      return {
-        deliveryState: "completed",
-        deliveryLabel: "Laufzeit beendet",
-      };
-    }
-
-    if (effective === "DELETED") {
-      return {
-        deliveryState: "completed",
-        deliveryLabel: "Bei Meta nicht mehr verfügbar — lokal behalten",
-      };
-    }
-
-    if (
-      effective === "PENDING_REVIEW" ||
-      effective === "IN_PROCESS" ||
-      effective === "PREAPPROVED" ||
-      effective === "PENDING"
-    ) {
-      return {
-        deliveryState: "waiting_meta",
-        deliveryLabel: "Wartet auf Freigabe durch Meta",
-      };
-    }
-
-    if (
-      effective === "PAUSED" ||
-      effective === "CAMPAIGN_PAUSED" ||
-      effective === "ADSET_PAUSED" ||
-      effective === "AD_PAUSED"
-    ) {
-      return {
-        deliveryState: "paused",
-        deliveryLabel:
-          effective === "AD_PAUSED" || effective === "ADSET_PAUSED"
-            ? "Pausiert (Anzeige/AdSet noch aus) — Adbot schaltet auf Aktiv"
-            : "Pausiert (noch nicht aktiviert) — Adbot schaltet auf Aktiv; Meta-Prüfung folgt erst danach",
-      };
-    }
-
     // Meta can still report configured status ACTIVE after stop_time.
     if (scheduleEnded && (effective === "ACTIVE" || !effective)) {
       return {
@@ -315,11 +271,11 @@ export function deriveOrganicBoostDelivery(input: {
       };
     }
 
-    if (effective === "ACTIVE") {
-      return {
-        deliveryState: "active",
-        deliveryLabel: "Boost aktiv",
-      };
+    const fromEffective = deliveryLabelForEffectiveStatus(effective);
+    if (fromEffective) {
+      // Campaign ACTIVE alone is never enough — refresh overlays AD_PAUSED /
+      // ADSET_PAUSED / DELIVERY_UNVERIFIED until the full tree is ACTIVE.
+      return fromEffective;
     }
   }
 

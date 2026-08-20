@@ -813,15 +813,35 @@ assert.match(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /AD_PAUSED/,
+  /deliveryLabelForEffectiveStatus/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery.ts"),
+  /overlayCampaignEffectiveForDelivery/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery.ts"),
+  /DELIVERY_UNVERIFIED/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery.ts"),
+  /isOrganicBoostDeliveryActive/,
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
+  /AD_PAUSED/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery.ts"),
   /Anzeige\/AdSet noch aus/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-delivery-heal.ts"),
   /healOrganicBoostDeliveryTree/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /getMetaAdsByCampaignId/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-delivery-heal.ts"),
@@ -836,12 +856,28 @@ assert.match(
   /healOrganicBoostDeliveryTree/,
 );
 assert.match(
+  read("src/lib/meta/organic-boost-ensure.ts"),
+  /Delivery heal must NOT depend on marketing_sync/,
+);
+assert.match(
   read("src/lib/meta/organic-boost-status-refresh.ts"),
   /AD_PAUSED/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-status-refresh.ts"),
-  /applyChildDeliveryOverlay/,
+  /DELIVERY_UNVERIFIED/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-status-refresh.ts"),
+  /overlayCampaignEffectiveForDelivery/,
+);
+assert.match(
+  read("src/lib/meta/client.ts"),
+  /getMetaAdsByCampaignId/,
+);
+assert.match(
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
+  /DELIVERY_UNVERIFIED/,
 );
 assert.match(
   read(
@@ -852,6 +888,18 @@ assert.match(
 assert.match(
   read(
     "supabase/migrations/20260820210000_meta_organic_boost_finalize_require_ad_active.sql",
+  ),
+  /REMOTE_APPLIED/,
+);
+assert.match(
+  read(
+    "supabase/migrations/20260820220000_meta_organic_boost_delivery_invariant.sql",
+  ),
+  /activate-ad-set/,
+);
+assert.match(
+  read(
+    "supabase/migrations/20260820220000_meta_organic_boost_delivery_invariant.sql",
   ),
   /REMOTE_APPLIED/,
 );
