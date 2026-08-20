@@ -177,9 +177,10 @@ export function deliveryLabelForEffectiveStatus(
   }
   if (value === "DELIVERY_UNVERIFIED") {
     return {
-      deliveryState: "starting",
+      // Must NOT be "starting" — that triggers LiveRefresh and endless spinners.
+      deliveryState: "waiting_meta",
       deliveryLabel:
-        "Kampagne sichtbar — Anzeigen-Status wird geprüft/aktiviert",
+        "Kampagne sichtbar — Anzeigen-Status noch nicht vollständig bestätigt",
     };
   }
   if (

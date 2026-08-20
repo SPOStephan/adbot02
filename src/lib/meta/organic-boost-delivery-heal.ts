@@ -418,26 +418,29 @@ export async function healOrganicBoostDeliveryTree(input: {
       ads.push(...metaAds.items);
     }
 
-    // Campaign-edge fallback: always walk every organic campaign so missing
-    // bindings cannot leave Meta ads PAUSED forever.
-    for (const campaignId of resolved.campaignIds) {
-      try {
-        const [edgeAdSets, edgeAds] = await Promise.all([
-          getMetaAdSetsByCampaignId({
-            campaignId,
-            accessToken,
-            appSecret: env.appSecret,
-          }),
-          getMetaAdsByCampaignId({
-            campaignId,
-            accessToken,
-            appSecret: env.appSecret,
-          }),
-        ]);
-        adSets.push(...edgeAdSets.items);
-        ads.push(...edgeAds.items);
-      } catch {
-        // Continue other campaigns; surface aggregate error only if nothing ran.
+    // Campaign-edge fallback only when bindings did not yield a full tree.
+    // Always walking every campaign edge made "Manuell erneut prüfen" hang.
+    if (adSets.length < 1 || ads.length < 1) {
+      const missingCampaignIds = resolved.campaignIds.slice(0, 20);
+      for (const campaignId of missingCampaignIds) {
+        try {
+          const [edgeAdSets, edgeAds] = await Promise.all([
+            getMetaAdSetsByCampaignId({
+              campaignId,
+              accessToken,
+              appSecret: env.appSecret,
+            }),
+            getMetaAdsByCampaignId({
+              campaignId,
+              accessToken,
+              appSecret: env.appSecret,
+            }),
+          ]);
+          adSets.push(...edgeAdSets.items);
+          ads.push(...edgeAds.items);
+        } catch {
+          // Continue other campaigns.
+        }
       }
     }
 

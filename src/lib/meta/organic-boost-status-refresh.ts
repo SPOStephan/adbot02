@@ -519,6 +519,16 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
         continue;
       }
 
+      // Cap edge lookups — full walks made Abruf / Manuell prüfen hang.
+      if (childTreeByCampaignId.size >= 15) {
+        childTreeByCampaignId.set(campaignId, {
+          adSetStatuses: fromBindingsAdSets,
+          adStatuses: fromBindingsAds,
+          childrenFetched: false,
+        });
+        continue;
+      }
+
       try {
         const [edgeAdSets, edgeAds] = await Promise.all([
           getMetaAdSetsByCampaignId({

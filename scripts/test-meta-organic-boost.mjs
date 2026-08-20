@@ -825,6 +825,14 @@ assert.match(
 );
 assert.match(
   read("src/lib/meta/organic-boost-delivery.ts"),
+  /waiting_meta/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /Cap edge|only when bindings|Manuell erneut prüfen|missingCampaignIds/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery.ts"),
   /isOrganicBoostDeliveryActive/,
 );
 assert.match(

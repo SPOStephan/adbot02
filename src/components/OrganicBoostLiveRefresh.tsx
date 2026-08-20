@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
@@ -19,10 +19,12 @@ const MAX_DURATION_MS = 3 * 60_000;
 export function OrganicBoostLiveRefresh({ active }: Props) {
   const router = useRouter();
   const startedAtRef = useRef<number | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     if (!active) {
       startedAtRef.current = null;
+      setTimedOut(false);
       return;
     }
 
@@ -33,6 +35,7 @@ export function OrganicBoostLiveRefresh({ active }: Props) {
     const tick = () => {
       const startedAt = startedAtRef.current;
       if (startedAt !== null && Date.now() - startedAt > MAX_DURATION_MS) {
+        setTimedOut(true);
         return;
       }
       router.refresh();
@@ -42,7 +45,7 @@ export function OrganicBoostLiveRefresh({ active }: Props) {
     return () => window.clearInterval(interval);
   }, [active, router]);
 
-  if (!active) {
+  if (!active || timedOut) {
     return null;
   }
 
