@@ -245,7 +245,7 @@ export async function refreshMarketingSnapshotForAccount(input: {
     return { ok: false, error: "token_missing" };
   }
 
-  let leaseToken: string;
+  let leaseToken: string | null = null;
   try {
     leaseToken = await claimMetaReadOperation({
       platformAccountId: input.platformAccountId,
@@ -296,11 +296,13 @@ export async function refreshMarketingSnapshotForAccount(input: {
           : "marketing_sync_failed";
     return { ok: false, error: detail };
   } finally {
-    await releaseMetaAccountOperation({
-      platformAccountId: input.platformAccountId,
-      userId: input.userId,
-      leaseToken,
-    });
+    if (leaseToken) {
+      await releaseMetaAccountOperation({
+        platformAccountId: input.platformAccountId,
+        userId: input.userId,
+        leaseToken,
+      });
+    }
   }
 }
 
