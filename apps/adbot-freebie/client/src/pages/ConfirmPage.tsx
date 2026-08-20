@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { loadMetaPixel, trackMetaConversion } from "@/lib/metaPixel";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 function readToken() {
@@ -10,12 +11,26 @@ export function ConfirmPage() {
   const [token] = useState(readToken);
   const confirmMutation = trpc.public.confirmDoi.useMutation();
   const started = useRef(false);
+  const tracked = useRef(false);
 
   useEffect(() => {
     if (!token || started.current) return;
     started.current = true;
     void confirmMutation.mutateAsync({ token });
   }, [token, confirmMutation]);
+
+  useEffect(() => {
+    const data = confirmMutation.data;
+    if (!data || tracked.current) return;
+    if (data.metaTracking?.enabled && data.metaTracking.pixelId) {
+      loadMetaPixel(data.metaTracking.pixelId);
+      trackMetaConversion(
+        data.metaTracking.pixelId,
+        data.metaTracking.eventName || "Lead",
+      );
+      tracked.current = true;
+    }
+  }, [confirmMutation.data]);
 
   if (!token) {
     return <PublicShell>Bestätigungslink unvollständig.</PublicShell>;

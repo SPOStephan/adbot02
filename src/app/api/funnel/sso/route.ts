@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createFunnelSsoToken } from "@/lib/funnel-sso";
+import { syncConfirmedPixelsToWorkspaces } from "@/lib/meta/customer-control-service";
 import { createFunnelUrl, createPortalUrl } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,6 +26,14 @@ export async function GET() {
   }
 
   try {
+    // Best-effort: push confirmed pixels into Funnel before admin open (for live tests).
+    await Promise.race([
+      syncConfirmedPixelsToWorkspaces(user.id),
+      new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+    ]).catch((error) => {
+      console.warn("[funnel-sso] Pixel-Sync übersprungen", error);
+    });
+
     const token = createFunnelSsoToken({
       userId: user.id,
       email: user.email,

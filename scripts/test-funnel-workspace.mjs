@@ -48,6 +48,23 @@ assert.match(funnelTypes, /conversionTrigger: MetaConversionTrigger/);
 assert.match(funnelTypes, /ownerUserId: string \| null/);
 assert.match(settings, /Conversion-Zeitpunkt/);
 assert.match(settings, /conversionTrigger: "doi"/);
+assert.match(settings, /automatisch aus dem Adbot-Portal/);
 assert.match(metaConversions, /awaiting_doi/);
+
+const portalMetaSync = readFileSync(
+  join(root, "apps/adbot-funnel/server/_core/portalMetaSyncRoute.ts"),
+  "utf8",
+);
+const funnelMetaSync = readFileSync(join(root, "src/lib/funnel-meta-sync.ts"), "utf8");
+const pixelService = readFileSync(
+  join(root, "src/lib/meta/customer-control-service.ts"),
+  "utf8",
+);
+assert.match(portalMetaSync, /\/api\/internal\/portal-meta-sync/);
+assert.match(portalMetaSync, /softApplyPixelToOwnerFunnels/);
+assert.match(funnelMetaSync, /pushSoftMetaPixelToFunnel/);
+assert.match(funnelMetaSync, /funnel_meta_pixel_sync/);
+assert.match(pixelService, /pushSoftMetaPixelToFunnel/);
+assert.match(pixelService, /syncConfirmedPixelsToWorkspaces/);
 
 console.log("Funnel-Workspace-Regressionstests erfolgreich.");

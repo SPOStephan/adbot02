@@ -43,6 +43,8 @@ import {
   enrichCustomerLaunchRpcData,
 } from "@/lib/meta/launch-prepare-result";
 import { ensureLaunchMarketingReady } from "@/lib/meta/launch-marketing-ensure";
+import { pushSoftMetaPixelToFunnel } from "@/lib/funnel-meta-sync";
+import { pushSoftMetaPixelToFreebie } from "@/lib/freebie-meta-sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -776,6 +778,21 @@ export async function applyCustomerPixelCommand(
     if (error || typeof data !== "string") {
       rpcFailure("Die Pixel-Bestätigung");
     }
+
+    // Soft-apply into Funnel/Freebie workspaces (never fail the Adbot confirm).
+    await Promise.allSettled([
+      pushSoftMetaPixelToFunnel({
+        userId: customer.userId,
+        pixelId: command.pixelId,
+        customEventType: command.customEventType,
+      }),
+      pushSoftMetaPixelToFreebie({
+        userId: customer.userId,
+        pixelId: command.pixelId,
+        customEventType: command.customEventType,
+      }),
+    ]);
+
     return {
       pixelRowId: data,
       status: "CONFIRMED",
@@ -793,6 +810,49 @@ export async function applyCustomerPixelCommand(
     rpcFailure("Das Zurückziehen der Pixel-Bindung");
   }
   return { pixelRowId: data, status: "REVOKED" };
+}
+
+/**
+ * Re-push all CONFIRMED pixels for a user into Funnel/Freebie (e.g. on SSO open).
+ * Soft-apply: empty → set; same → enable; different → skip.
+ */
+export async function syncConfirmedPixelsToWorkspaces(userId: string): Promise<void> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("meta_confirmed_pixels")
+    .select("pixel_id, custom_event_type, customer_confirmed_at")
+    .eq("user_id", userId)
+    .eq("status", "CONFIRMED")
+    .is("revoked_at", null)
+    .order("customer_confirmed_at", { ascending: false });
+
+  if (error) {
+    console.warn("[pixel-workspace-sync] Konnte bestätigte Pixel nicht lesen", error);
+    return;
+  }
+
+  const rows = (data ?? []) as Array<{
+    pixel_id: string;
+    custom_event_type: string | null;
+  }>;
+
+  // Newest first so empty workspaces receive the latest confirmed pixel.
+  for (const row of rows) {
+    const pixelId = String(row.pixel_id ?? "").trim();
+    if (!/^\d{5,25}$/.test(pixelId)) continue;
+    await Promise.allSettled([
+      pushSoftMetaPixelToFunnel({
+        userId,
+        pixelId,
+        customEventType: row.custom_event_type,
+      }),
+      pushSoftMetaPixelToFreebie({
+        userId,
+        pixelId,
+        customEventType: row.custom_event_type,
+      }),
+    ]);
+  }
 }
 
 export async function applyCustomerBlueprintCommand(

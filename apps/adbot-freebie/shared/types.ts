@@ -1,5 +1,11 @@
 export type ConfirmationMode = "doi" | "otp";
 
+export type FreebieMetaTracking = {
+  enabled: boolean;
+  pixelId: string;
+  eventName: string;
+};
+
 export type MediaAsset = {
   id: string;
   ownerUserId: string | null;
@@ -22,8 +28,15 @@ export type FreebieOffer = {
   confirmationMode: ConfirmationMode;
   mediaAssetId: string | null;
   isPublished: boolean;
+  metaTracking: FreebieMetaTracking;
   createdAt: string;
   updatedAt: string;
+};
+
+export const defaultFreebieMetaTracking: FreebieMetaTracking = {
+  enabled: false,
+  pixelId: "",
+  eventName: "Lead",
 };
 
 export type FreebieLeadStatus =

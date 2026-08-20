@@ -17,6 +17,9 @@ type Draft = {
   description: string;
   confirmationMode: "doi" | "otp";
   isPublished: boolean;
+  metaEnabled: boolean;
+  metaPixelId: string;
+  metaEventName: string;
 };
 
 const emptyDraft: Draft = {
@@ -24,6 +27,9 @@ const emptyDraft: Draft = {
   description: "",
   confirmationMode: "doi",
   isPublished: false,
+  metaEnabled: false,
+  metaPixelId: "",
+  metaEventName: "Lead",
 };
 
 export function AdminPage() {
@@ -72,6 +78,9 @@ export function AdminPage() {
       description: offer.description,
       confirmationMode: offer.confirmationMode,
       isPublished: offer.isPublished,
+      metaEnabled: offer.metaTracking.enabled,
+      metaPixelId: offer.metaTracking.pixelId,
+      metaEventName: offer.metaTracking.eventName || "Lead",
     });
     setCreateOpen(true);
   };
@@ -276,7 +285,15 @@ export function AdminPage() {
                 event.preventDefault();
                 await upsertMutation.mutateAsync({
                   id: editingId ?? undefined,
-                  ...draft,
+                  title: draft.title,
+                  description: draft.description,
+                  confirmationMode: draft.confirmationMode,
+                  isPublished: draft.isPublished,
+                  metaTracking: {
+                    enabled: draft.metaEnabled,
+                    pixelId: draft.metaPixelId,
+                    eventName: draft.metaEventName || "Lead",
+                  },
                 });
               }}
             >
@@ -284,7 +301,8 @@ export function AdminPage() {
                 {editingId ? "Freebie bearbeiten" : "Neues Freebie"}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Titel, Beschreibung und Bestätigungsmodus festlegen.
+                Titel, Beschreibung und Bestätigungsmodus festlegen. Pixel-ID kommt
+                automatisch aus dem Adbot-Portal, wenn das Feld leer ist.
               </p>
               <div className="mt-5 grid gap-4">
                 <div className="grid gap-2">
@@ -349,6 +367,43 @@ export function AdminPage() {
                   />
                   Veröffentlicht
                 </label>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-[#10253f]">Meta Pixel</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Soft-Übernahme aus Adbot; abweichende manuelle IDs bleiben erhalten.
+                  </p>
+                  <label className="mt-3 flex items-center gap-2 text-sm">
+                    <input
+                      checked={draft.metaEnabled}
+                      onChange={event =>
+                        setDraft(current => ({
+                          ...current,
+                          metaEnabled: event.target.checked,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    Meta-Tracking aktiv
+                  </label>
+                  <div className="mt-3 grid gap-2">
+                    <label className="text-sm font-medium" htmlFor="freebie-pixel">
+                      Pixel-ID
+                    </label>
+                    <input
+                      className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      id="freebie-pixel"
+                      inputMode="numeric"
+                      onChange={event =>
+                        setDraft(current => ({
+                          ...current,
+                          metaPixelId: event.target.value.replace(/\D/g, "").slice(0, 25),
+                        }))
+                      }
+                      placeholder="123456789012345"
+                      value={draft.metaPixelId}
+                    />
+                  </div>
+                </div>
                 {upsertMutation.error ? (
                   <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {upsertMutation.error.message}

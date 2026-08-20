@@ -98,6 +98,20 @@ export const appRouter = router({
           slug: z.string().trim().max(64).optional(),
           mediaAssetId: z.string().uuid().nullable().optional(),
           isPublished: z.boolean().optional(),
+          metaTracking: z
+            .object({
+              enabled: z.boolean(),
+              pixelId: z.union([
+                z.literal(""),
+                z.string().regex(/^\d{5,25}$/),
+              ]),
+              eventName: z
+                .string()
+                .regex(/^[A-Za-z][A-Za-z0-9_]*$/)
+                .max(64)
+                .default("Lead"),
+            })
+            .optional(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -112,6 +126,7 @@ export const appRouter = router({
           slug: input.slug,
           mediaAssetId: input.mediaAssetId,
           isPublished: input.isPublished,
+          metaTracking: input.metaTracking,
         });
       }),
     uploadAsset: adminProcedure
@@ -165,6 +180,11 @@ export const appRouter = router({
           description: offer.description,
           confirmationMode: offer.confirmationMode,
           hasFile: Boolean(offer.mediaAssetId),
+          metaTracking: {
+            enabled: offer.metaTracking.enabled,
+            pixelId: offer.metaTracking.pixelId,
+            eventName: offer.metaTracking.eventName,
+          },
         };
       }),
     capture: publicProcedure
@@ -233,7 +253,15 @@ export const appRouter = router({
         await markLeadDelivered(lead.id);
         const mail = buildDeliveryMail({ offerTitle: offer.title, downloadUrl });
         await sendTransactionalMail({ to: lead.email, ...mail });
-        return { downloadUrl, title: offer.title };
+        return {
+          downloadUrl,
+          title: offer.title,
+          metaTracking: {
+            enabled: offer.metaTracking.enabled,
+            pixelId: offer.metaTracking.pixelId,
+            eventName: offer.metaTracking.eventName,
+          },
+        };
       }),
     confirmOtp: publicProcedure
       .input(
@@ -264,7 +292,15 @@ export const appRouter = router({
         await markLeadDelivered(lead.id);
         const mail = buildDeliveryMail({ offerTitle: offer.title, downloadUrl });
         await sendTransactionalMail({ to: lead.email, ...mail });
-        return { downloadUrl, title: offer.title };
+        return {
+          downloadUrl,
+          title: offer.title,
+          metaTracking: {
+            enabled: offer.metaTracking.enabled,
+            pixelId: offer.metaTracking.pixelId,
+            eventName: offer.metaTracking.eventName,
+          },
+        };
       }),
   }),
 });

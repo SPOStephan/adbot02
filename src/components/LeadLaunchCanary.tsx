@@ -771,7 +771,8 @@ export function LeadLaunchCanary({
             <span className="font-semibold">OUTCOME_LEADS</span>, Optimierung{" "}
             <span className="font-semibold">OFFSITE_CONVERSIONS</span> auf dein
             bestätigtes Pixel-Event. Destination = veröffentlichter Funnel
-            (oder Custom Domain). CAPI im Funnel sollte aktiv sein.
+              CAPI im Funnel sollte aktiv sein (Token dort setzen; Pixel-ID kommt
+              automatisch aus der Pixel-Bestätigung oben).
           </p>
         </div>
       </div>

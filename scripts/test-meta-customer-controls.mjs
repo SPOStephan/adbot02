@@ -949,10 +949,20 @@ assert.match(domainRouteSource, /applyCustomerDomainCommand/);
 assert.match(pixelRouteSource, /parsePixelCommand/);
 assert.match(pixelRouteSource, /applyCustomerPixelCommand/);
 assert.match(serviceSource, /applyCustomerPixelCommand/);
+assert.match(serviceSource, /pushSoftMetaPixelToFunnel/);
+assert.match(serviceSource, /pushSoftMetaPixelToFreebie/);
+assert.match(serviceSource, /syncConfirmedPixelsToWorkspaces/);
 assert.match(componentSource, /MetaPixelBinding/);
 assert.match(componentSource, /LeadLaunchCanary/);
 assert.match(componentSource, /TrafficLaunchCanary/);
 assert.match(pageSource, /meta_confirmed_pixels/);
+
+const pixelBindingSource = await readFile(
+  path.join(root, "src/components/MetaPixelBinding.tsx"),
+  "utf8",
+);
+assert.match(pixelBindingSource, /automatisch soft in Funnel und Freebie/);
+assert.match(pixelBindingSource, /CAPI-Token bleiben/);
 assert.match(blueprintRouteSource, /parseBlueprintCommand/);
 assert.match(blueprintRouteSource, /applyCustomerBlueprintCommand/);
 assert.match(assetImportRouteSource, /parseAssetImportCommand/);
