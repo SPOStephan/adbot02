@@ -29,7 +29,7 @@ assert.match(
   /site_admins/,
 );
 assert.match(read("src/lib/dashboard/navigation.ts"), /\/dashboard\/rechtliches/);
-assert.match(read("src/app/dashboard/layout.tsx"), /isSiteAdmin/);
+assert.match(read("src/components/DashboardAsideChrome.tsx"), /isSiteAdmin/);
 assert.match(read("content/legal/impressum.md"), /Anbieter/);
 assert.match(read("content/legal/datenschutz.md"), /Verantwortlicher/);
 assert.match(read("content/legal/agb.md"), /Geschäftsbedingungen/);

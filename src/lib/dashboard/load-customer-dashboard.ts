@@ -264,10 +264,21 @@ export type CustomerDashboardSearchParams = {
   assetId?: string | string[];
 };
 
+export type LoadCustomerDashboardOptions = {
+  /**
+   * Run Meta bootstrap / Beitrag-Push ensure / hard-cap drain on load.
+   * Keep true on the overview; subpages should pass false so navigation
+   * is not blocked by background Meta work.
+   */
+  sideEffects?: boolean;
+};
+
 async function loadCustomerDashboardImpl(
   user: User,
   searchParams: CustomerDashboardSearchParams = {},
+  options: LoadCustomerDashboardOptions = {},
 ) {
+  const runSideEffects = options.sideEffects !== false;
   const renderedAt = new Date();
   const supabase = await createClient();
   const isAdmin = await isSiteAdmin(user.id);
@@ -356,7 +367,8 @@ async function loadCustomerDashboardImpl(
     metaAccount.meta_scopes.includes("ads_management");
   // Dashboard load: plan+drain once, then cooldown so LiveRefresh polls do not
   // re-enter Meta WRITE every 15s (lease fights + endless "Aktualisiert…").
-  if (metaConnected && metaAccount && writeScopeGranted) {
+  // Subpages pass sideEffects: false so nav is not blocked by Meta ensure work.
+  if (runSideEffects && metaConnected && metaAccount && writeScopeGranted) {
     // Clear sticky lease banners from a prior parallel Abruf/Drain.
     const stickyLease =
       metaAccount.marketing_sync_error_code === "marketing_operation_locked" ||
@@ -2029,6 +2041,7 @@ export type CustomerDashboardData = Awaited<
 export async function loadCustomerDashboard(
   user: User,
   searchParams: CustomerDashboardSearchParams = {},
+  options: LoadCustomerDashboardOptions = {},
 ): Promise<CustomerDashboardData> {
-  return loadCustomerDashboardImpl(user, searchParams);
+  return loadCustomerDashboardImpl(user, searchParams, options);
 }

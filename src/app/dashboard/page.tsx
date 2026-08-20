@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -13,9 +14,14 @@ import {
 
 import { FreebieWorkspaceCard } from "@/components/FreebieWorkspaceCard";
 import { FunnelWorkspaceCard } from "@/components/FunnelWorkspaceCard";
+import {
+  DashboardContentSkeleton,
+  DashboardPageHeader,
+} from "@/components/DashboardPageHeader";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
+import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -52,8 +58,11 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const query = await searchParams;
+async function OverviewBody({
+  query,
+}: {
+  query: Awaited<DashboardPageProps["searchParams"]>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -106,46 +115,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <>
-      <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-        <div>
-          <div className="mb-3 flex items-center gap-2">
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${
-                metaAccount?.marketing_sync_status === "success"
-                  ? "bg-emerald-100 text-emerald-800"
-                  : platformAccountReadFailed
-                    ? "bg-amber-100 text-amber-900"
-                    : "bg-blue-100 text-blue-800"
-              }`}
-            >
-              {metaAccount?.marketing_sync_status === "success"
-                ? "Meta Live"
+      <div className="mt-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-bold ${
+              metaAccount?.marketing_sync_status === "success"
+                ? "bg-emerald-100 text-emerald-800"
                 : platformAccountReadFailed
-                  ? "Live-Daten konnten nicht geladen werden"
-                  : "Live-Daten noch nicht verfügbar"}
-            </span>
-            <span className="text-xs text-slate-400">
-              {platformAccountReadFailed
-                ? "Bestehende Verbindung bleibt unverändert"
-                : hasConnectedPlatform
-                  ? `Datenstand ${formatDateTime(metaAccount?.marketing_last_success_at)}`
-                  : "Noch keine Werbekonten verbunden"}
-            </span>
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Marketing-Übersicht
-          </h1>
-          <p className="mt-2 max-w-2xl text-slate-500">
-            Status der Werbeplattformen, Kennzahlen und die nächsten Schritte —
-            Details liegen auf den Unterseiten.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <span className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm">
-            <CalendarDays className="size-4" />
-            Letzte 30 Insight-Tage
+                  ? "bg-amber-100 text-amber-900"
+                  : "bg-blue-100 text-blue-800"
+            }`}
+          >
+            {metaAccount?.marketing_sync_status === "success"
+              ? "Meta Live"
+              : platformAccountReadFailed
+                ? "Live-Daten konnten nicht geladen werden"
+                : "Live-Daten noch nicht verfügbar"}
+          </span>
+          <span className="text-xs text-slate-400">
+            {platformAccountReadFailed
+              ? "Bestehende Verbindung bleibt unverändert"
+              : hasConnectedPlatform
+                ? `Datenstand ${formatDateTime(metaAccount?.marketing_last_success_at)}`
+                : "Noch keine Werbekonten verbunden"}
           </span>
         </div>
+        <span className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm">
+          <CalendarDays className="size-4" />
+          Letzte 30 Insight-Tage
+        </span>
       </div>
 
       {metaNotice ? (
@@ -280,6 +278,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <FunnelWorkspaceCard userEmail={user.email} />
         <FreebieWorkspaceCard userEmail={user.email} />
       </div>
+    </>
+  );
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const query = await searchParams;
+  const copy = DASHBOARD_PAGE_COPY.overview;
+  return (
+    <>
+      <DashboardPageHeader
+        description={copy.description}
+        eyebrow={copy.eyebrow}
+        title={copy.title}
+      />
+      <Suspense fallback={<DashboardContentSkeleton />}>
+        <OverviewBody query={query} />
+      </Suspense>
     </>
   );
 }

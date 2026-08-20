@@ -44,6 +44,8 @@ const creditsUi = readFileSync(
 const dashboardChrome = [
   readFileSync(join(root, "src/app/dashboard/layout.tsx"), "utf8"),
   readFileSync(join(root, "src/components/DashboardShell.tsx"), "utf8"),
+  readFileSync(join(root, "src/components/DashboardAsideChrome.tsx"), "utf8"),
+  readFileSync(join(root, "src/components/DashboardHeaderChrome.tsx"), "utf8"),
 ].join("\n");
 assert.match(creditsUi, /CreditsSidebarBalance/);
 assert.match(creditsUi, /Noch kein Guthaben/);
