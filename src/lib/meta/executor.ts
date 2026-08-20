@@ -10,6 +10,10 @@ import { MetaGraphError, type MetaUsageSnapshot } from "./client";
 import { decryptAccessToken } from "./crypto";
 import { getMetaSyncEnv } from "./env";
 import {
+  isAutomatedPauseAction,
+  isOrganicBoostRemoteObject,
+} from "@/lib/meta/organic-boost-pause-guard";
+import {
   createMetaAd,
   createMetaAdCreative,
   createMetaAdSet,
@@ -222,7 +226,8 @@ export class MetaMutationExecutorError extends Error {
     | "binding_missing"
     | "asset_invalid"
     | "database_failed"
-    | "step_limit_reached";
+    | "step_limit_reached"
+    | "organic_boost_auto_pause_forbidden";
 
   constructor(code: MetaMutationExecutorError["code"]) {
     super(`Meta mutation executor failed: ${code}`);
@@ -557,6 +562,43 @@ async function dispatchRemoteMutation(input: {
     ) {
       throw new TypeError("Status update object type is invalid");
     }
+
+    // Hard stop: automated PAUSE must never hit Beitrag-Push after it was live.
+    if (status === "PAUSED") {
+      const admin = createAdminClient();
+      const { data: planRow } = await admin
+        .from("mutation_plans")
+        .select("source_rule_key,action_type")
+        .eq("id", claim.planId)
+        .maybeSingle();
+      const sourceRuleKey =
+        typeof planRow?.source_rule_key === "string"
+          ? planRow.source_rule_key
+          : null;
+      const actionType =
+        typeof planRow?.action_type === "string"
+          ? planRow.action_type
+          : claim.actionType;
+      if (
+        isAutomatedPauseAction({
+          actionType,
+          sourceRuleKey,
+        })
+      ) {
+        const organic = await isOrganicBoostRemoteObject({
+          userId: claim.userId,
+          platformAccountId: claim.platformAccountId,
+          remoteObjectId: objectId,
+          objectType: step.objectType,
+        });
+        if (organic) {
+          throw new MetaMutationExecutorError(
+            "organic_boost_auto_pause_forbidden",
+          );
+        }
+      }
+    }
+
     await input.beforeRemote();
     const result = step.objectType === "CAMPAIGN"
       ? await updateMetaCampaignStatus({ ...auth, objectId, status, mode })
@@ -704,6 +746,16 @@ function classifyFailure(
   }
 
   if (error instanceof MetaMutationExecutorError) {
+    if (error.code === "organic_boost_auto_pause_forbidden") {
+      return {
+        errorClass: "PREFLIGHT",
+        errorCode: error.code,
+        errorDetail:
+          "Beitrag-Push darf nicht durch Hard-Cap/Sibling automatisch pausiert werden",
+        remoteOutcome: "PERMANENT",
+        retryAfterSeconds: 0,
+      };
+    }
     const databaseFailure = error.code === "database_failed";
     return {
       errorClass: databaseFailure ? "TRANSPORT" : "PREFLIGHT",
