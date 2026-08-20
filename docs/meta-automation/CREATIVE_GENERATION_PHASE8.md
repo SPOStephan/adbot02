@@ -35,7 +35,7 @@ Auto-label `brand_assets.training_status = performance_winner` from Meta Insight
 
 ## Intentionally deferred
 
-- Meta Ad Library scraper
+- Meta Ad Library Collector → siehe `docs/meta-automation/AD_LIBRARY_COLLECTOR_PLAN.md`
 - ROAS-first ranking
 - Auto-import of winning Meta creatives into Media Library
 - Customer UI to set `performance_winner`
