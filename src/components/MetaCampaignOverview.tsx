@@ -299,7 +299,8 @@ export function deriveOrganicBoostDelivery(input: {
     ) {
       return {
         deliveryState: "paused",
-        deliveryLabel: "Pausiert",
+        deliveryLabel:
+          "Pausiert (noch nicht aktiviert) — Adbot schaltet auf Aktiv; Meta-Prüfung folgt erst danach",
       };
     }
 
