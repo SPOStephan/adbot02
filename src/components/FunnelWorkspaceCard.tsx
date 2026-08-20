@@ -59,11 +59,13 @@ export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
               — Funnel übernimmt die ID soft, wenn das Feld dort leer ist.
             </li>
             <li>
-              Optional Funnel öffnen →{" "}
-              <span className="font-semibold text-slate-800">Einstellungen</span>
-              :{" "}
-              <span className="font-semibold text-slate-800">Custom Domain</span>{" "}
-              / DNS für die veröffentlichte Landing-URL.
+              <Link
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                href="/dashboard/domains"
+              >
+                Custom Domain global unter Domains verbinden
+              </Link>{" "}
+              — dann beim Lead-Launch als Ziel-URL wählbar.
             </li>
           </ol>
         </div>

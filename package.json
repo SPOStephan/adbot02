@@ -28,6 +28,7 @@
     "test:campaign-assistant-brief": "node scripts/test-campaign-assistant-brief.mjs",
     "test:ad-copy-pricing": "node scripts/test-ad-copy-pricing.mjs",
     "test:funnel-workspace": "node scripts/test-funnel-workspace.mjs",
+    "test:custom-domains": "node scripts/test-custom-domains.mjs",
     "test:meta-organic-boost": "node scripts/test-meta-organic-boost.mjs",
     "test:content-candidate-lifecycle": "node scripts/test-content-candidate-lifecycle.mjs",
     "test:launch-prepare-result": "node scripts/test-launch-prepare-result.mjs",

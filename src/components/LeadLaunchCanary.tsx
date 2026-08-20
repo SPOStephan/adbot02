@@ -25,6 +25,10 @@ import {
 import type { LaunchAdActorOption } from "@/components/TrafficLaunchCanary";
 import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
+import {
+  destinationUrlForHostname,
+  type CustomerCustomDomainView,
+} from "@/lib/custom-domains/types";
 import { FUNNEL_SITE_URL } from "@/lib/site-urls";
 
 type Notice = { tone: "success" | "error"; message: string } | null;
@@ -78,6 +82,8 @@ type Props = {
   policyLaunchReady: boolean;
   writeScopeGranted: boolean;
   data: AutomationOnboardingData;
+  /** Globale READY Custom Domains für Ziel-URL-Auswahl. */
+  readyCustomDomains?: CustomerCustomDomainView[];
   facebookPages?: LaunchAdActorOption[];
   instagramAccounts?: LaunchAdActorOption[];
   initialFacebookPageId?: string | null;
@@ -253,6 +259,7 @@ export function LeadLaunchCanary({
   policyLaunchReady,
   writeScopeGranted,
   data,
+  readyCustomDomains = [],
   facebookPages = [],
   instagramAccounts = [],
   initialFacebookPageId = null,
@@ -265,7 +272,15 @@ export function LeadLaunchCanary({
   const [notice, setNotice] = useState<Notice>(null);
   const [prepareElapsedSec, setPrepareElapsedSec] = useState(0);
   const defaultFunnelHint = `${FUNNEL_SITE_URL}/f/`;
-  const [destinationUrl, setDestinationUrl] = useState(defaultFunnelHint);
+  const [destinationUrl, setDestinationUrl] = useState(() => {
+    const firstReady = readyCustomDomains[0];
+    return firstReady
+      ? destinationUrlForHostname(firstReady.hostname)
+      : defaultFunnelHint;
+  });
+  const [destinationMode, setDestinationMode] = useState<string>(() =>
+    readyCustomDomains[0] ? readyCustomDomains[0].id : "manual",
+  );
   const [dailyBudget, setDailyBudget] = useState("20.00");
   const [facebookPageId, setFacebookPageId] = useState(
     initialFacebookPageId &&
@@ -957,19 +972,73 @@ export function LeadLaunchCanary({
           </button>
         </div>
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">
-          Funnel-URL (HTTPS)
+          Ziel-Domain
+          <select
+            className={inputClass}
+            disabled={pending || suggestPending}
+            onChange={(event) => {
+              const value = event.target.value;
+              setDestinationMode(value);
+              if (value === "manual") {
+                setDestinationUrl(defaultFunnelHint);
+                return;
+              }
+              const selected = readyCustomDomains.find(
+                (domain) => domain.id === value,
+              );
+              if (selected) {
+                setDestinationUrl(destinationUrlForHostname(selected.hostname));
+              }
+            }}
+            value={destinationMode}
+          >
+            {readyCustomDomains.map((domain) => (
+              <option key={domain.id} value={domain.id}>
+                {domain.hostname}
+                {domain.label ? ` (${domain.label})` : ""}
+              </option>
+            ))}
+            <option value="manual">
+              {readyCustomDomains.length > 0
+                ? "Andere URL eingeben…"
+                : `Shared Funnel (${FUNNEL_SITE_URL.replace(/^https?:\/\//, "")}/f/…)`}
+            </option>
+          </select>
+          {readyCustomDomains.length === 0 ? (
+            <span className="mt-1 block text-xs font-medium text-slate-500">
+              Noch keine verbundene Custom Domain —{" "}
+              <a
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                href="/dashboard/domains"
+              >
+                unter Domains verbinden
+              </a>
+              .
+            </span>
+          ) : (
+            <span className="mt-1 block text-xs font-medium text-slate-500">
+              Verbundene Domains aus der globalen Domains-Seite. Pfad in der URL
+              unten bei Bedarf anpassen.
+            </span>
+          )}
+        </label>
+        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Ziel-URL (HTTPS)
           <input
             className={inputClass}
             disabled={pending || suggestPending}
-            onChange={(event) => setDestinationUrl(event.target.value)}
+            onChange={(event) => {
+              setDestinationMode("manual");
+              setDestinationUrl(event.target.value);
+            }}
             placeholder={`${FUNNEL_SITE_URL}/f/dein-slug`}
             required
             type="url"
             value={destinationUrl}
           />
           <span className="mt-1 block text-xs font-medium text-slate-500">
-            Veröffentlichten Funnel oder später Custom Domain. Domain muss in
-            Meta für Conversion-Tracking passen.
+            Veröffentlichter Funnel oder Custom Domain. Domain muss in Meta für
+            Conversion-Tracking passen (wird beim Launch geprüft).
           </span>
         </label>
         <div className="lg:col-span-2">

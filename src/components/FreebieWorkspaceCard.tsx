@@ -54,9 +54,15 @@ export function FreebieWorkspaceCard({ userEmail }: FreebieWorkspaceCardProps) {
               href="/dashboard/tracking"
             >
               global unter Tracking
+            </Link>
+            , Custom Domains unter{" "}
+            <Link
+              className="font-semibold text-emerald-800 underline-offset-2 hover:underline"
+              href="/dashboard/domains"
+            >
+              Domains
             </Link>{" "}
-            verbinden — Freebie übernimmt die ID soft, wenn das Tracking-Feld
-            leer ist.
+            — Freebie übernimmt das Pixel soft, wenn das Tracking-Feld leer ist.
           </p>
         </div>
         <a

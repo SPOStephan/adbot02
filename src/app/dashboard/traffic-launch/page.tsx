@@ -9,6 +9,7 @@ import {
   DashboardContentSkeleton,
   DashboardPageHeader,
 } from "@/components/DashboardPageHeader";
+import { listReadyCustomerCustomDomains } from "@/lib/custom-domains/service";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
 import { createClient } from "@/lib/supabase/server";
@@ -50,6 +51,15 @@ async function TrafficLaunchBody({
     onboardingData,
     marketingCurrency,
   } = await loadCustomerDashboard(user, query, { sideEffects: false });
+
+  let readyCustomDomains: Awaited<
+    ReturnType<typeof listReadyCustomerCustomDomains>
+  > = [];
+  try {
+    readyCustomDomains = await listReadyCustomerCustomDomains(user.id);
+  } catch {
+    readyCustomDomains = [];
+  }
 
   const policyLaunchReady = Boolean(
     policyView?.status === "ACTIVE" &&
@@ -98,6 +108,7 @@ async function TrafficLaunchBody({
         initialInstagramActorId={brandProfileView?.instagramActorId}
         killSwitchMode={killSwitchView?.mode ?? "FREEZE_WRITES"}
         policyLaunchReady={policyLaunchReady}
+        readyCustomDomains={readyCustomDomains}
         writeScopeGranted={writeScopeGranted}
       />
     </div>

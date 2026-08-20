@@ -4,6 +4,7 @@ import {
   EyeOff,
   Filter,
   Gift,
+  Globe2,
   ImageIcon,
   Images,
   LayoutDashboard,
@@ -73,6 +74,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       icon: Crosshair,
       href: "/dashboard/tracking",
       match: "/dashboard/tracking",
+    },
+    {
+      label: "Domains",
+      icon: Globe2,
+      href: "/dashboard/domains",
+      match: "/dashboard/domains",
     },
     {
       label: "Creatives",
