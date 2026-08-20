@@ -41,6 +41,11 @@ import {
 } from "./freebieCustomDomains";
 import { resolvePublicAppBaseUrl } from "./publicAppUrl";
 import {
+  listPortalDomainsForFreebie,
+  pushFreebieDomainRevokeToPortal,
+  pushFreebieDomainUpsertToPortal,
+} from "./portalDomainSync";
+import {
   isSharedFreebieHost,
   normalizeHostname,
 } from "../shared/freebieHosts";
@@ -208,13 +213,23 @@ export const appRouter = router({
         }),
       )
       .mutation(async ({ ctx, input }) => {
-        await assertOfferAccess(input.offerId, ctx.user);
+        const offer = await assertOfferAccess(input.offerId, ctx.user);
         try {
-          return await registerCustomDomain({
+          const domain = await registerCustomDomain({
             offerId: input.offerId,
             hostname: input.hostname,
             notes: input.notes,
           });
+          void pushFreebieDomainUpsertToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: domain.hostname,
+            status: domain.status === "READY" ? "READY" : "PENDING_DNS",
+            dnsTarget: domain.dnsTarget,
+            offerId: offer.id,
+            offerTitle: offer.title,
+            toolDomainId: domain.id,
+          });
+          return domain;
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -222,6 +237,81 @@ export const appRouter = router({
               error instanceof Error
                 ? error.message
                 : "Domain konnte nicht registriert werden.",
+          });
+        }
+      }),
+    portalDomains: adminProcedure.query(async ({ ctx }) => {
+      return listPortalDomainsForFreebie({
+        ownerUserId: getTenantOwnerUserId(ctx.user),
+      });
+    }),
+    bindPortalDomain: adminProcedure
+      .input(
+        z.object({
+          offerId: z.string().uuid(),
+          hostname: z.string().trim().min(3).max(253),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const offer = await assertOfferAccess(input.offerId, ctx.user);
+        const portalDomains = await listPortalDomainsForFreebie({
+          ownerUserId: getTenantOwnerUserId(ctx.user),
+        });
+        const match = portalDomains.find(
+          domain =>
+            domain.hostname === normalizeHostname(input.hostname) &&
+            (domain.bindingKind === "none" ||
+              (domain.bindingKind === "freebie" &&
+                domain.bindingRef === input.offerId)),
+        );
+        if (!match) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Domain nicht in Adbot gefunden oder bereits an Funnel/anderes Freebie gebunden.",
+          });
+        }
+        if (match.bindingKind === "funnel") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Diese Domain ist bereits an einen Funnel gebunden.",
+          });
+        }
+        try {
+          const domain = await registerCustomDomain({
+            offerId: input.offerId,
+            hostname: match.hostname,
+          });
+          let result = domain;
+          if (match.status === "READY") {
+            const dns = await checkCustomDomainCname(
+              domain.hostname,
+              domain.dnsTarget,
+            );
+            if (dns.ok) {
+              result = await markCustomDomainReady({
+                offerId: input.offerId,
+                domainId: domain.id,
+              });
+            }
+          }
+          void pushFreebieDomainUpsertToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: result.hostname,
+            status: result.status === "READY" ? "READY" : "PENDING_DNS",
+            dnsTarget: result.dnsTarget,
+            offerId: offer.id,
+            offerTitle: offer.title,
+            toolDomainId: result.id,
+          });
+          return result;
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Portal-Domain konnte nicht gebunden werden.",
           });
         }
       }),
@@ -233,7 +323,7 @@ export const appRouter = router({
         }),
       )
       .mutation(async ({ ctx, input }) => {
-        await assertOfferAccess(input.offerId, ctx.user);
+        const offer = await assertOfferAccess(input.offerId, ctx.user);
         const domain = await getCustomDomainForOffer(input);
         if (!domain) {
           throw new TRPCError({
@@ -252,7 +342,17 @@ export const appRouter = router({
           });
         }
         try {
-          return await markCustomDomainReady(input);
+          const ready = await markCustomDomainReady(input);
+          void pushFreebieDomainUpsertToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: ready.hostname,
+            status: "READY",
+            dnsTarget: ready.dnsTarget,
+            offerId: offer.id,
+            offerTitle: offer.title,
+            toolDomainId: ready.id,
+          });
+          return ready;
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -291,7 +391,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await assertOfferAccess(input.offerId, ctx.user);
         try {
-          return await revokeCustomDomain(input);
+          const revoked = await revokeCustomDomain(input);
+          void pushFreebieDomainRevokeToPortal({
+            ownerUserId: getTenantOwnerUserId(ctx.user),
+            hostname: revoked.hostname,
+            toolDomainId: revoked.id,
+          });
+          return revoked;
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",

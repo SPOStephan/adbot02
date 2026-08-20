@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { Globe2, LoaderCircle, Trash2 } from "lucide-react";
 
 import type { CustomerCustomDomainView } from "@/lib/custom-domains/types";
-import { DEFAULT_CUSTOM_DOMAIN_DNS_TARGET } from "@/lib/custom-domains/types";
+import {
+  bindingLabelText,
+  DEFAULT_CUSTOM_DOMAIN_DNS_TARGET,
+  originLabel,
+} from "@/lib/custom-domains/types";
 
 type Notice = { tone: "success" | "error"; message: string } | null;
 
@@ -143,9 +147,10 @@ export function CustomDomainBinding({ domains }: Props) {
             Domains global verbinden
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Einmal für Adbot hinterlegen — nutzbar für Funnel, Freebie und
-            spätere Tools. Mehrere Domains sind möglich. Verbundene Domains
-            erscheinen beim Anlegen von Kampagnen als Auswahl.
+            Optional hier einmal hinterlegen — oder direkt im Funnel- bzw.
+            Freebie-Admin anlegen. Alles erscheint in dieser Liste. Verbundene
+            Domains sind beim Anlegen von Kampagnen wählbar. Hosting/Routing
+            bleibt im jeweiligen Tool (eigene Subdomain + eigene Datenbank).
           </p>
         </div>
       </div>
@@ -211,8 +216,8 @@ export function CustomDomainBinding({ domains }: Props) {
         </h3>
         {domains.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-500">
-            Noch keine Domain. Füge die erste hinzu — danach steht sie für
-            Funnel- und Freebie-Kampagnen bereit.
+            Noch keine Domain. Optional hier hinzufügen — oder im Funnel-/Freebie-Admin
+            anlegen; sie erscheint dann hier.
           </p>
         ) : (
           <ul className="space-y-3">
@@ -232,6 +237,11 @@ export function CustomDomainBinding({ domains }: Props) {
                   </p>
                   <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     {domain.status === "READY" ? "Verbunden" : "DNS ausstehend"}
+                    {" · "}
+                    Angelegt in {originLabel(domain.origin)}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {bindingLabelText(domain.bindingKind, domain.bindingLabel)}
                   </p>
                   {domain.lastDnsMessage ? (
                     <p className="mt-1 text-xs leading-5 text-slate-500">

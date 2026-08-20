@@ -63,11 +63,25 @@ export function AdminPage() {
     { offerId: domainOfferId ?? "00000000-0000-0000-0000-000000000000" },
     { enabled: Boolean(domainOfferId) },
   );
+  const portalDomainsQuery = trpc.freebies.portalDomains.useQuery(undefined, {
+    enabled: Boolean(domainOfferId),
+  });
   const registerCustomDomain = trpc.freebies.registerCustomDomain.useMutation({
     onSuccess: async () => {
       setCustomHostname("");
-      setDomainNotice("Domain registriert — bitte CNAME setzen und DNS prüfen.");
+      setDomainNotice(
+        "Domain registriert — erscheint auch unter Adbot → Domains. Bitte CNAME setzen und DNS prüfen.",
+      );
       await customDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
+    },
+    onError: error => setDomainNotice(error.message),
+  });
+  const bindPortalDomain = trpc.freebies.bindPortalDomain.useMutation({
+    onSuccess: async () => {
+      setDomainNotice("Portal-Domain an dieses Freebie gebunden.");
+      await customDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
     },
     onError: error => setDomainNotice(error.message),
   });
@@ -75,6 +89,7 @@ export function AdminPage() {
     onSuccess: async () => {
       setDomainNotice("Domain aktiviert. Root-URL zeigt auf dieses Freebie.");
       await customDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
     },
     onError: error => setDomainNotice(error.message),
   });
@@ -86,9 +101,23 @@ export function AdminPage() {
     onSuccess: async () => {
       setDomainNotice("Domain zurückgezogen.");
       await customDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
     },
     onError: error => setDomainNotice(error.message),
   });
+
+  const bindablePortalDomains = useMemo(() => {
+    const localHosts = new Set(
+      (customDomainsQuery.data ?? []).map(domain => domain.hostname),
+    );
+    return (portalDomainsQuery.data ?? []).filter(
+      domain =>
+        !localHosts.has(domain.hostname) &&
+        (domain.bindingKind === "none" ||
+          (domain.bindingKind === "freebie" &&
+            domain.bindingRef === domainOfferId)),
+    );
+  }, [customDomainsQuery.data, portalDomainsQuery.data, domainOfferId]);
 
   const domainOfferTitle = useMemo(() => {
     if (!domainOfferId) return null;
@@ -354,11 +383,47 @@ export function AdminPage() {
               </button>
             </div>
             <p className="mt-4 text-xs leading-5 text-muted-foreground">
-              CNAME auf <code>cname.vercel-dns.com</code> setzen und die Domain im{" "}
-              <strong>Freebie</strong>-Vercel-Projekt hinterlegen (SSL). Shared-Host{" "}
-              <code>/o/…</code> bleibt parallel nutzbar. Dieselbe Domain nicht parallel
-              am Funnel binden.
+              Domain hier anlegen (wird global unter Adbot → Domains sichtbar) oder
+              eine bereits im Portal hinterlegte Domain übernehmen. CNAME auf{" "}
+              <code>cname.vercel-dns.com</code> und Domain im{" "}
+              <strong>Freebie</strong>-Vercel-Projekt. Shared-Host{" "}
+              <code>/o/…</code> bleibt parallel. Nicht parallel am Funnel binden.
             </p>
+            {bindablePortalDomains.length > 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-slate-200 p-4">
+                <p className="text-sm font-semibold text-[#10253f]">
+                  Aus Adbot-Domains übernehmen
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {bindablePortalDomains.map(domain => (
+                    <li
+                      className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                      key={domain.id}
+                    >
+                      <span>
+                        <code>{domain.hostname}</code>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {domain.status}
+                        </span>
+                      </span>
+                      <button
+                        className="inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium disabled:opacity-60"
+                        disabled={bindPortalDomain.isPending}
+                        onClick={() =>
+                          bindPortalDomain.mutate({
+                            offerId: domainOfferId,
+                            hostname: domain.hostname,
+                          })
+                        }
+                        type="button"
+                      >
+                        Binden
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <input
                 aria-label="Custom Hostname"

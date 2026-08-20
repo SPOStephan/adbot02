@@ -60,16 +60,11 @@ async function DomainsBody() {
             Ziel-URL.
           </li>
           <li>
-            <span className="font-semibold text-slate-800">Freebie</span>: Domain
-            im Freebie-Admin an ein Angebot binden (Button „Domain“). CNAME + Domain
-            im Freebie-Vercel-Projekt; danach ist die Root-URL das Freebie. Shared{" "}
-            <code className="text-xs">/o/…</code> bleibt parallel.
-          </li>
-          <li>
-            <span className="font-semibold text-slate-800">Funnel</span>: Hosting
-            weiterhin im Funnel-Admin (Custom Domain pro Funnel). Anbindung an diese
-            globale Liste folgt später. Dieselbe Domain nicht parallel an Funnel und
-            Freebie binden.
+            <span className="font-semibold text-slate-800">Funnel / Freebie</span>
+            : Domain dort oder hier anlegen. Nach Sync siehst du Herkunft und
+            Bindung in dieser Liste. Routing läuft nur im jeweiligen Tool
+            (getrennte Subdomain + getrennte Datenbank). Eine Domain nicht an
+            Funnel und Freebie gleichzeitig binden.
           </li>
         </ul>
         <div className="mt-5 flex flex-wrap gap-3">

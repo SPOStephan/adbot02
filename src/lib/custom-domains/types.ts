@@ -3,6 +3,9 @@ export type CustomerCustomDomainStatus =
   | "READY"
   | "REVOKED";
 
+export type CustomerCustomDomainOrigin = "portal" | "funnel" | "freebie";
+export type CustomerCustomDomainBindingKind = "none" | "funnel" | "freebie";
+
 export type CustomerCustomDomainView = {
   id: string;
   hostname: string;
@@ -13,6 +16,11 @@ export type CustomerCustomDomainView = {
   lastDnsCheckAt: string | null;
   lastDnsMessage: string;
   createdAt: string;
+  origin: CustomerCustomDomainOrigin;
+  bindingKind: CustomerCustomDomainBindingKind;
+  bindingRef: string | null;
+  bindingLabel: string;
+  toolDomainId: string | null;
 };
 
 export const DEFAULT_CUSTOM_DOMAIN_DNS_TARGET = "cname.vercel-dns.com";
@@ -46,4 +54,19 @@ export function assertValidCustomHostname(hostname: string) {
 
 export function destinationUrlForHostname(hostname: string): string {
   return `https://${normalizeCustomHostname(hostname)}/`;
+}
+
+export function originLabel(origin: CustomerCustomDomainOrigin): string {
+  if (origin === "funnel") return "Funnel";
+  if (origin === "freebie") return "Freebie";
+  return "Portal";
+}
+
+export function bindingLabelText(
+  kind: CustomerCustomDomainBindingKind,
+  label: string,
+): string {
+  if (kind === "none") return "Nicht an Funnel/Freebie gebunden";
+  const tool = kind === "funnel" ? "Funnel" : "Freebie";
+  return label.trim() ? `${tool}: ${label.trim()}` : `Gebunden an ${tool}`;
 }

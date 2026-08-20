@@ -75,6 +75,8 @@ test("portal wiring for global domains", () => {
   assert.match(nav, /\/dashboard\/domains/);
   assert.match(page, /CustomDomainBinding/);
   assert.match(binding, /Domains global verbinden/);
+  assert.match(binding, /Optional hier/);
+  assert.match(binding, /Angelegt in/);
   assert.match(lead, /readyCustomDomains/);
   assert.match(lead, /Ziel-Domain/);
   assert.match(migration, /customer_custom_domains/);
@@ -82,8 +84,46 @@ test("portal wiring for global domains", () => {
   assert.match(api, /action === "verify"/);
   assert.match(dns, /cnameMatchesExpected/);
   assert.match(freebieCard, /\/dashboard\/domains/);
-  assert.match(page, /Freebie-Admin/);
-  assert.match(page, /Freebie-Vercel/);
+  assert.match(page, /Funnel \/ Freebie/);
+
+  const bindingMigration = readFileSync(
+    join(
+      root,
+      "supabase/migrations/20260820180000_customer_custom_domains_binding.sql",
+    ),
+    "utf8",
+  );
+  const toolDomainApi = readFileSync(
+    join(root, "src/app/api/internal/tool-domains/route.ts"),
+    "utf8",
+  );
+  const funnelSync = readFileSync(
+    join(root, "apps/adbot-funnel/server/portalDomainSync.ts"),
+    "utf8",
+  );
+  const freebieSync = readFileSync(
+    join(root, "apps/adbot-freebie/server/portalDomainSync.ts"),
+    "utf8",
+  );
+  const funnelRouter = readFileSync(
+    join(root, "apps/adbot-funnel/server/routers/funnel.ts"),
+    "utf8",
+  );
+  const freebieRouters = readFileSync(
+    join(root, "apps/adbot-freebie/server/routers.ts"),
+    "utf8",
+  );
+
+  assert.match(bindingMigration, /binding_kind/);
+  assert.match(bindingMigration, /origin/);
+  assert.match(toolDomainApi, /verifyToolDomainSyncToken/);
+  assert.match(toolDomainApi, /upsertCustomerCustomDomainFromTool/);
+  assert.match(funnelSync, /pushFunnelDomainUpsertToPortal/);
+  assert.match(freebieSync, /pushFreebieDomainUpsertToPortal/);
+  assert.match(funnelRouter, /bindPortalDomain/);
+  assert.match(funnelRouter, /pushFunnelDomainUpsertToPortal/);
+  assert.match(freebieRouters, /bindPortalDomain/);
+  assert.match(freebieRouters, /pushFreebieDomainUpsertToPortal/);
 
   const freebieMigration = readFileSync(
     join(
@@ -94,10 +134,6 @@ test("portal wiring for global domains", () => {
   );
   const freebieHosts = readFileSync(
     join(root, "apps/adbot-freebie/shared/freebieHosts.ts"),
-    "utf8",
-  );
-  const freebieRouters = readFileSync(
-    join(root, "apps/adbot-freebie/server/routers.ts"),
     "utf8",
   );
   const freebieAdmin = readFileSync(
@@ -114,5 +150,6 @@ test("portal wiring for global domains", () => {
   assert.match(freebieRouters, /offerByHost/);
   assert.match(freebieRouters, /registerCustomDomain/);
   assert.match(freebieAdmin, /Custom Domain/);
+  assert.match(freebieAdmin, /Aus Adbot-Domains übernehmen/);
   assert.match(freebieOffer, /HostBoundOffer/);
 });
