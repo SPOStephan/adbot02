@@ -71,6 +71,7 @@ import {
 import {
   type MetaConnectedAssetView,
 } from "@/components/MetaConnectedAssets";
+import { MetaAdAccountPicker } from "@/components/MetaAdAccountPicker";
 import { MetaContentSyncPanel } from "@/components/MetaContentSyncPanel";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { PlatformStatusCard } from "@/components/PlatformStatusCard";
@@ -741,6 +742,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     || instagramAssets.length > 1
     || adAccountAssets.length > 1;
   const needsContentAssetSetup = !contentAssetsReady;
+  const adAccountPickerOptions = connectedAssetViews
+    .filter((asset) => asset.assetType === "ad_account")
+    .map((asset) => ({
+      id: asset.id,
+      label: asset.label,
+      selectedForAds: Boolean(asset.selectedForAds),
+    }));
   const metaNotice = getMetaNotice(
     firstQueryValue(query.meta),
     firstQueryValue(query.meta_error),
@@ -2313,8 +2321,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             />
           ) : null}
 
+          {metaConnected && metaAccount && adAccountPickerOptions.length > 0 ? (
+            <div className="mt-10">
+              <MetaAdAccountPicker accounts={adAccountPickerOptions} />
+            </div>
+          ) : null}
+
           {metaConnected && metaAccount ? (
             <MetaCampaignOverview
+              adAccounts={adAccountPickerOptions}
               campaigns={campaignRows}
               organicBoostCampaigns={organicBoostCampaignViewsResolved}
               organicBoostConfigured={Boolean(
