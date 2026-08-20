@@ -10,6 +10,8 @@ type Notice = { tone: "success" | "error"; message: string } | null;
 
 type Props = {
   pixels: ConfirmedPixelView[];
+  /** Standalone card (z. B. Traffic-Launch) statt Abschnitt in Autonomie. */
+  standalone?: boolean;
 };
 
 async function apiJson(
@@ -34,7 +36,7 @@ async function apiJson(
   return result;
 }
 
-export function MetaPixelBinding({ pixels }: Props) {
+export function MetaPixelBinding({ pixels, standalone = false }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -103,7 +105,11 @@ export function MetaPixelBinding({ pixels }: Props) {
 
   return (
     <section
-      className="border-t border-slate-200 bg-white px-5 py-7 sm:px-7"
+      className={
+        standalone
+          ? "scroll-mt-24 rounded-2xl border border-slate-200 bg-white px-5 py-7 shadow-sm sm:px-7"
+          : "scroll-mt-24 border-t border-slate-200 bg-white px-5 py-7 sm:px-7"
+      }
       id="meta-pixel"
     >
       <div className="flex items-start gap-3">

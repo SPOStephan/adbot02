@@ -27,13 +27,13 @@ export const DASHBOARD_PAGE_COPY = {
     eyebrow: "Steuerung",
     title: "Autonomie",
     description:
-      "Kunden-Policy, Kill-Switch, Boost und Onboarding — getrennt von der Kampagnenübersicht.",
+      "Policy, Kill-Switch, Boost und Onboarding. Pixel für Lead-Kampagnen kannst du auch unter Traffic-Launch bestätigen.",
   },
   trafficLaunch: {
     eyebrow: "Launch",
     title: "Traffic-Launch",
     description:
-      "Traffic- und Lead-Canaries vorbereiten und starten — ohne den Rest der Autonomie-Oberfläche.",
+      "Pixel bestätigen, dann Traffic- und Lead-Canaries starten. Custom Domain und CAPI liegen in den Funnel-Einstellungen.",
   },
   creatives: {
     eyebrow: "Creatives",

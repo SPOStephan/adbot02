@@ -770,9 +770,10 @@ export function LeadLaunchCanary({
             Separater Pfad vom Traffic-Canary: Objective{" "}
             <span className="font-semibold">OUTCOME_LEADS</span>, Optimierung{" "}
             <span className="font-semibold">OFFSITE_CONVERSIONS</span> auf dein
-            bestätigtes Pixel-Event. Destination = veröffentlichter Funnel
-              CAPI im Funnel sollte aktiv sein (Token dort setzen; Pixel-ID kommt
-              automatisch aus der Pixel-Bestätigung oben).
+            bestätigtes Pixel-Event. Destination = veröffentlichter Funnel.
+            CAPI im Funnel sollte aktiv sein (Token dort setzen; Pixel-ID kommt
+            automatisch aus der Pixel-Bestätigung unter „Meta Pixel“ auf dieser
+            Seite bzw. unter Autonomie).
           </p>
         </div>
       </div>
@@ -891,7 +892,7 @@ export function LeadLaunchCanary({
             value={selectedPixel?.id ?? ""}
           >
             {data.pixels.length === 0 ? (
-              <option value="">Zuerst Pixel oben bestätigen</option>
+              <option value="">Zuerst Pixel auf dieser Seite bestätigen</option>
             ) : (
               data.pixels.map((pixel) => (
                 <option key={pixel.id} value={pixel.id}>

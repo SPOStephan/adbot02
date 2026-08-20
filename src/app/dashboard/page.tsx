@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Megaphone,
   Camera,
+  Rocket,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -98,6 +99,12 @@ async function OverviewBody({
       label: "Beiträge",
       description: "Abruf, Assets und Beitrag-Push-Kandidaten",
       icon: Camera,
+    },
+    {
+      href: "/dashboard/traffic-launch#meta-pixel",
+      label: "Pixel & Launch",
+      description: "Meta Pixel bestätigen, dann Lead-/Traffic-Canary",
+      icon: Rocket,
     },
     {
       href: "/dashboard/autonomie",

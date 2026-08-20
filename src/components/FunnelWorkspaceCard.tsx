@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ExternalLink, Filter } from "lucide-react";
 
 import { FUNNEL_SITE_URL, createFunnelSsoEntryPath } from "@/lib/site-urls";
@@ -33,8 +34,11 @@ export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Der Funnel-Builder läuft unter{" "}
-            <span className="font-semibold text-slate-800">{FUNNEL_SITE_URL.replace(/^https?:\/\//, "")}</span>
-            . Du wirst automatisch mit deinem Adbot-Konto angemeldet und siehst nur deine eigenen Funnel
+            <span className="font-semibold text-slate-800">
+              {FUNNEL_SITE_URL.replace(/^https?:\/\//, "")}
+            </span>
+            . Du wirst automatisch mit deinem Adbot-Konto angemeldet und siehst
+            nur deine eigenen Funnel
             {userEmail ? (
               <>
                 {" "}
@@ -43,9 +47,29 @@ export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
             ) : null}
             .
           </p>
+
+          <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-6 text-slate-600">
+            <li>
+              <Link
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                href="/dashboard/traffic-launch#meta-pixel"
+              >
+                Meta Pixel im Portal bestätigen
+              </Link>{" "}
+              (Traffic-Launch) — die ID wandert soft in den Funnel, wenn dort
+              noch keine andere steht.
+            </li>
+            <li>
+              Funnel öffnen → gewünschten Funnel →{" "}
+              <span className="font-semibold text-slate-800">Einstellungen</span>
+              : CAPI-Token setzen und{" "}
+              <span className="font-semibold text-slate-800">Custom Domain</span>{" "}
+              registrieren / DNS prüfen.
+            </li>
+          </ol>
         </div>
         <a
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
           href={ssoUrl}
           rel="noopener noreferrer"
           target="_blank"
