@@ -21,3 +21,18 @@ export const SITE_LOGO_RECOMMENDATIONS = {
     tip: "Negativ-Logo mit weißer oder sehr heller Schrift — gut lesbar auf Dunkelgrau/Schwarz.",
   },
 } as const;
+
+export const SITE_FAVICON_RECOMMENDATIONS = {
+  formatsLabel: "PNG, WebP, JPEG oder ICO",
+  allowedMimeTypes: [
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/x-icon",
+    "image/vnd.microsoft.icon",
+  ] as const,
+  maxBytes: 512 * 1024,
+  maxBytesLabel: "max. 512 KB",
+  sizeLabel: "ideal 32×32 oder 48×48 px (quadratisch)",
+  tip: "Einfaches Markenzeichen ohne Text — erscheint im Browser-Tab.",
+} as const;

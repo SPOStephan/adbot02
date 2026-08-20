@@ -26,7 +26,7 @@ export function SiteFooter({ tone = "dark" }: Props) {
               : "text-xs font-semibold text-slate-500"
           }
         >
-          © {new Date().getFullYear()} Adbot / AdPilot
+          © {new Date().getFullYear()} Adbot.one
         </p>
         <nav
           aria-label="Rechtliches"

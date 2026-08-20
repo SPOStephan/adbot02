@@ -5,6 +5,7 @@ export type LogoVariant = (typeof LOGO_VARIANTS)[number];
 export type SiteBranding = {
   logoOnLightUrl: string | null;
   logoOnDarkUrl: string | null;
+  faviconUrl: string | null;
   updatedAt: string | null;
 };
 

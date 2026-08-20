@@ -48,7 +48,7 @@ export async function SiteBrandMark({
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- public Supabase URL; avoid remotePatterns coupling */}
         <img
-          alt="AdPilot"
+          alt="Adbot.one"
           className={`${metrics.imgHeight} ${metrics.maxWidth} w-auto object-contain`}
           decoding="async"
           height={size === "sm" ? 32 : 40}
@@ -67,7 +67,7 @@ export async function SiteBrandMark({
       <span className={`grid ${metrics.iconBox} place-items-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/20`}>
         <BarChart3 className={metrics.icon} />
       </span>
-      <span>AdPilot</span>
+      <span>Adbot.one</span>
     </Link>
   );
 }
