@@ -61,7 +61,7 @@ export function MetaPixelBinding({ pixels, standalone = false }: Props) {
       setNotice({
         tone: "success",
         message:
-          "Pixel bestätigt. Funnel und Freebie übernehmen die ID automatisch (wenn dort noch keine andere steht). CAPI-Token weiterhin im Funnel setzen.",
+          "Pixel bestätigt. Funnel und Freebie übernehmen die ID automatisch (wenn dort noch keine andere steht). Für zuverlässige Lead-Messung zusätzlich im Funnel unter Einstellungen den Meta-Zugangsschlüssel (Conversions API) hinterlegen.",
       });
       router.refresh();
     } catch (error) {
@@ -127,7 +127,8 @@ export function MetaPixelBinding({ pixels, standalone = false }: Props) {
             Einmal für Adbot hinterlegen. Funnel und Freebie übernehmen die ID
             automatisch soft (leere Felder werden befüllt; abweichende manuelle
             Einträge bleiben unangetastet). Lead-Kampagnen nutzen dasselbe Pixel
-            — später auch Traffic-/PageView-Messung. CAPI-Token setzt du in den
+            — später auch Traffic-/PageView-Messung. Den geheimen Meta-Zugangsschlüssel
+            (Conversions API) für zuverlässige Lead-Messung setzt du weiterhin in den
             Funnel- bzw. Freebie-Einstellungen.
           </p>
         </div>
