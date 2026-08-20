@@ -350,7 +350,27 @@ assert.match(
 );
 assert.match(
   read("src/app/dashboard/beitraege/page.tsx"),
+  /organicBoostEnsure:\s*false/,
+);
+assert.match(
+  read("src/app/dashboard/beitraege/page.tsx"),
   /organicBoostEnsure:\s*true/,
+);
+assert.match(
+  read("src/app/dashboard/beitraege/page.tsx"),
+  /from "next\/server"/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /sideEffects:\s*false/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /from "next\/server"/,
+);
+assert.match(
+  read("src/app/dashboard/page.tsx"),
+  /after\(/,
 );
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import { MetaContentSyncPanel } from "@/components/MetaContentSyncPanel";
 import {
@@ -45,7 +46,18 @@ async function BeitraegeBody() {
     policyView,
   } = await loadCustomerDashboard(user, {}, {
     sideEffects: false,
-    organicBoostEnsure: true,
+    organicBoostEnsure: false,
+  });
+
+  after(() => {
+    void loadCustomerDashboard(user, {}, {
+      sideEffects: false,
+      organicBoostEnsure: true,
+    }).catch((error) => {
+      console.error("dashboard_beitraege_background_ensure_failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
   });
 
   if (!metaConnected || !metaAccount || !contentSyncSnapshot) {

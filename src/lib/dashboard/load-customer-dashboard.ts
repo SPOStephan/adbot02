@@ -267,13 +267,13 @@ export type CustomerDashboardSearchParams = {
 export type LoadCustomerDashboardOptions = {
   /**
    * Run Meta bootstrap / Beitrag-Push ensure / hard-cap drain on load.
-   * Keep true on the overview; subpages should pass false so navigation
-   * is not blocked by background Meta work.
+   * Prefer false for UI paint; schedule true via next/server `after()` so
+   * Suspense never hangs on Meta Graph work.
    */
   sideEffects?: boolean;
   /**
-   * Run Beitrag-Push plan+drain (+ Freigabe-Heal) even when sideEffects is
-   * false. Beiträge must pass true so Vollautomatik nicht an FREEZE hängt.
+   * Run Beitrag-Push plan+drain (+ Freigabe-Heal). Prefer scheduling via
+   * `after()` on Beiträge/Übersicht so the page body stays responsive.
    */
   organicBoostEnsure?: boolean;
 };
