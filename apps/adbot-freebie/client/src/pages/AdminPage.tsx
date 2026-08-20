@@ -5,6 +5,7 @@ import {
   ExternalLink,
   FileUp,
   Gift,
+  Globe,
   Loader2,
   Plus,
   Sparkles,
@@ -51,10 +52,51 @@ export function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [domainOfferId, setDomainOfferId] = useState<string | null>(null);
+  const [customHostname, setCustomHostname] = useState("");
+  const [domainNotice, setDomainNotice] = useState<string | null>(null);
   const leadsQuery = trpc.freebies.leads.useQuery(
     { offerId: selectedOfferId ?? "00000000-0000-0000-0000-000000000000" },
     { enabled: Boolean(selectedOfferId) },
   );
+  const customDomainsQuery = trpc.freebies.customDomains.useQuery(
+    { offerId: domainOfferId ?? "00000000-0000-0000-0000-000000000000" },
+    { enabled: Boolean(domainOfferId) },
+  );
+  const registerCustomDomain = trpc.freebies.registerCustomDomain.useMutation({
+    onSuccess: async () => {
+      setCustomHostname("");
+      setDomainNotice("Domain registriert — bitte CNAME setzen und DNS prüfen.");
+      await customDomainsQuery.refetch();
+    },
+    onError: error => setDomainNotice(error.message),
+  });
+  const markCustomDomainReady = trpc.freebies.markCustomDomainReady.useMutation({
+    onSuccess: async () => {
+      setDomainNotice("Domain aktiviert. Root-URL zeigt auf dieses Freebie.");
+      await customDomainsQuery.refetch();
+    },
+    onError: error => setDomainNotice(error.message),
+  });
+  const verifyCustomDomainDns = trpc.freebies.verifyCustomDomainDns.useMutation({
+    onSuccess: result => setDomainNotice(result.message),
+    onError: error => setDomainNotice(error.message),
+  });
+  const revokeCustomDomain = trpc.freebies.revokeCustomDomain.useMutation({
+    onSuccess: async () => {
+      setDomainNotice("Domain zurückgezogen.");
+      await customDomainsQuery.refetch();
+    },
+    onError: error => setDomainNotice(error.message),
+  });
+
+  const domainOfferTitle = useMemo(() => {
+    if (!domainOfferId) return null;
+    return (
+      (offersQuery.data ?? []).find(offer => offer.id === domainOfferId)?.title ??
+      null
+    );
+  }, [domainOfferId, offersQuery.data]);
 
   const totals = useMemo(() => {
     const offers = offersQuery.data ?? [];
@@ -213,6 +255,11 @@ export function AdminPage() {
                   }
                   onEdit={() => openEdit(offer)}
                   onLeads={() => setSelectedOfferId(offer.id)}
+                  onDomains={() => {
+                    setDomainOfferId(offer.id);
+                    setDomainNotice(null);
+                    setCustomHostname("");
+                  }}
                   onUpload={async file => {
                     const buffer = await file.arrayBuffer();
                     const dataBase64 = btoa(
@@ -272,6 +319,161 @@ export function AdminPage() {
               ))}
               {!leadsQuery.data?.length ? (
                 <li className="py-6 text-sm text-muted-foreground">Noch keine Leads.</li>
+              ) : null}
+            </ul>
+          </section>
+        ) : null}
+
+        {domainOfferId ? (
+          <section className="overflow-hidden rounded-3xl border bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]">
+                  <Globe className="size-5" />
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold tracking-tight text-[#10253f]">
+                    Custom Domain
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {domainOfferTitle
+                      ? `Für „${domainOfferTitle}“ · Root-URL zeigt das Freebie`
+                      : "Domain an dieses Freebie binden"}
+                  </p>
+                </div>
+              </div>
+              <button
+                className="text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setDomainOfferId(null);
+                  setDomainNotice(null);
+                }}
+                type="button"
+              >
+                Schließen
+              </button>
+            </div>
+            <p className="mt-4 text-xs leading-5 text-muted-foreground">
+              CNAME auf <code>cname.vercel-dns.com</code> setzen und die Domain im{" "}
+              <strong>Freebie</strong>-Vercel-Projekt hinterlegen (SSL). Shared-Host{" "}
+              <code>/o/…</code> bleibt parallel nutzbar. Dieselbe Domain nicht parallel
+              am Funnel binden.
+            </p>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <input
+                aria-label="Custom Hostname"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                onChange={event =>
+                  setCustomHostname(event.target.value.toLowerCase())
+                }
+                placeholder="download.dein-unternehmen.de"
+                value={customHostname}
+              />
+              <button
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-[#0165c3] px-4 text-sm font-medium text-white hover:bg-[#0154a3] disabled:opacity-60"
+                disabled={
+                  !customHostname.trim() || registerCustomDomain.isPending
+                }
+                onClick={() =>
+                  registerCustomDomain.mutate({
+                    offerId: domainOfferId,
+                    hostname: customHostname.trim(),
+                  })
+                }
+                type="button"
+              >
+                {registerCustomDomain.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Globe className="size-4" />
+                )}
+                Domain registrieren
+              </button>
+            </div>
+            {domainNotice ? (
+              <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-[#10253f]">
+                {domainNotice}
+              </p>
+            ) : null}
+            <ul className="mt-5 space-y-3">
+              {(customDomainsQuery.data ?? []).map(domain => (
+                <li className="rounded-xl border p-4" key={domain.id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold">{domain.hostname}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Status {domain.status} · CNAME →{" "}
+                        <code>{domain.dnsTarget}</code>
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                        Öffentliche URL nach Aktivierung:{" "}
+                        <code>https://{domain.hostname}/</code>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {domain.status === "PENDING_DNS" ? (
+                        <>
+                          <button
+                            className="inline-flex h-9 items-center rounded-md border px-3 text-sm disabled:opacity-60"
+                            disabled={verifyCustomDomainDns.isPending}
+                            onClick={() =>
+                              verifyCustomDomainDns.mutate({
+                                offerId: domainOfferId,
+                                domainId: domain.id,
+                              })
+                            }
+                            type="button"
+                          >
+                            Nur DNS prüfen
+                          </button>
+                          <button
+                            className="inline-flex h-9 items-center rounded-md bg-[#0165c3] px-3 text-sm font-medium text-white hover:bg-[#0154a3] disabled:opacity-60"
+                            disabled={markCustomDomainReady.isPending}
+                            onClick={() =>
+                              markCustomDomainReady.mutate({
+                                offerId: domainOfferId,
+                                domainId: domain.id,
+                              })
+                            }
+                            type="button"
+                          >
+                            DNS prüfen &amp; aktivieren
+                          </button>
+                        </>
+                      ) : null}
+                      {domain.status === "READY" ? (
+                        <a
+                          className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm"
+                          href={`https://${domain.hostname}/`}
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          <ExternalLink className="size-4" />
+                          Öffnen
+                        </a>
+                      ) : null}
+                      <button
+                        className="inline-flex h-9 items-center rounded-md px-3 text-sm text-muted-foreground hover:text-foreground disabled:opacity-60"
+                        disabled={revokeCustomDomain.isPending}
+                        onClick={() =>
+                          revokeCustomDomain.mutate({
+                            offerId: domainOfferId,
+                            domainId: domain.id,
+                          })
+                        }
+                        type="button"
+                      >
+                        Zurückziehen
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+              {(customDomainsQuery.data?.length ?? 0) === 0 ? (
+                <li className="text-sm text-muted-foreground">
+                  Noch keine Custom Domain. Shared-Host <code>/o/…</code> bleibt
+                  nutzbar.
+                </li>
               ) : null}
             </ul>
           </section>
@@ -483,6 +685,7 @@ function OfferCard({
   offer,
   onEdit,
   onLeads,
+  onDomains,
   onUpload,
   uploadPending,
   uploadError,
@@ -490,6 +693,7 @@ function OfferCard({
   offer: FreebieOffer;
   onEdit: () => void;
   onLeads: () => void;
+  onDomains: () => void;
   onUpload: (file: File) => Promise<void>;
   uploadPending: boolean;
   uploadError: string | null;
@@ -545,6 +749,14 @@ function OfferCard({
         >
           <Users className="size-4" />
           Leads
+        </button>
+        <button
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm"
+          onClick={onDomains}
+          type="button"
+        >
+          <Globe className="size-4" />
+          Domain
         </button>
       </div>
 

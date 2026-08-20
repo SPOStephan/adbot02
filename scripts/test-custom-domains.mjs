@@ -82,4 +82,37 @@ test("portal wiring for global domains", () => {
   assert.match(api, /action === "verify"/);
   assert.match(dns, /cnameMatchesExpected/);
   assert.match(freebieCard, /\/dashboard\/domains/);
+  assert.match(page, /Freebie-Admin/);
+  assert.match(page, /Freebie-Vercel/);
+
+  const freebieMigration = readFileSync(
+    join(
+      root,
+      "apps/adbot-freebie/supabase/migrations/20260820170000_freebie_custom_domains.sql",
+    ),
+    "utf8",
+  );
+  const freebieHosts = readFileSync(
+    join(root, "apps/adbot-freebie/shared/freebieHosts.ts"),
+    "utf8",
+  );
+  const freebieRouters = readFileSync(
+    join(root, "apps/adbot-freebie/server/routers.ts"),
+    "utf8",
+  );
+  const freebieAdmin = readFileSync(
+    join(root, "apps/adbot-freebie/client/src/pages/AdminPage.tsx"),
+    "utf8",
+  );
+  const freebieOffer = readFileSync(
+    join(root, "apps/adbot-freebie/client/src/pages/OfferPage.tsx"),
+    "utf8",
+  );
+
+  assert.match(freebieMigration, /freebie_custom_domains/);
+  assert.match(freebieHosts, /isSharedFreebieHost/);
+  assert.match(freebieRouters, /offerByHost/);
+  assert.match(freebieRouters, /registerCustomDomain/);
+  assert.match(freebieAdmin, /Custom Domain/);
+  assert.match(freebieOffer, /HostBoundOffer/);
 });
