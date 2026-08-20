@@ -903,6 +903,42 @@ assert.match(
   ),
   /REMOTE_APPLIED/,
 );
+assert.match(
+  read("src/lib/meta/organic-boost-pause-guard.ts"),
+  /isAutomatedPauseAction/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-pause-guard.ts"),
+  /isOrganicBoostRemoteObject/,
+);
+assert.match(
+  read("src/lib/meta/executor.ts"),
+  /organic_boost_auto_pause_forbidden/,
+);
+assert.match(
+  read(
+    "supabase/migrations/20260820230000_meta_organic_boost_forbid_auto_pause.sql",
+  ),
+  /diagnose_meta_organic_boost_delivery_stops/,
+);
+assert.match(
+  read(
+    "supabase/migrations/20260820230000_meta_organic_boost_forbid_auto_pause.sql",
+  ),
+  /organic_boost_name_exempt/,
+);
+assert.match(
+  read(
+    "supabase/migrations/20260820231000_meta_organic_boost_activate_ad_before_campaign.sql",
+  ),
+  /activate-ad/,
+);
+assert.match(
+  read(
+    "src/app/api/meta/automation/organic-boost/execute/route.ts",
+  ),
+  /deliveryStops/,
+);
 
 const writeClient = read("src/lib/meta/write-client.ts");
 assert.match(writeClient, /isInstagramOrganicMediaCreative/);

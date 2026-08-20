@@ -291,6 +291,19 @@ export async function POST(request: NextRequest) {
       diagnose = diagnoseData;
     }
 
+    let deliveryStops: unknown = null;
+    let deliveryStopsError: string | null = null;
+    const { data: deliveryStopsData, error: deliveryStopsRpcError } =
+      await admin.rpc("diagnose_meta_organic_boost_delivery_stops", {
+        p_user_id: customer.userId,
+        p_platform_account_id: customer.platformAccountId,
+      });
+    if (deliveryStopsRpcError) {
+      deliveryStopsError = deliveryStopsRpcError.message;
+    } else {
+      deliveryStops = deliveryStopsData;
+    }
+
     // claim_idle is not a hard failure when Meta objects are already live and
     // we refreshed insights.
     const drainLastError =
@@ -304,6 +317,8 @@ export async function POST(request: NextRequest) {
       ok: true,
       diagnose,
       diagnoseError,
+      deliveryStops,
+      deliveryStopsError,
       marketingSync,
       marketingSyncError,
       hardCapForceResume,
