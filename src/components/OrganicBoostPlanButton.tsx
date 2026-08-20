@@ -102,6 +102,8 @@ export function OrganicBoostPlanButton({
   async function onClick() {
     setPending(true);
     setNotice(null);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 90_000);
     try {
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v1");
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v2");
@@ -116,6 +118,7 @@ export function OrganicBoostPlanButton({
             "Content-Type": "application/json",
           },
           body: "{}",
+          signal: controller.signal,
         },
       );
       const planBody = (await planResponse.json().catch(() => ({}))) as {
@@ -166,6 +169,7 @@ export function OrganicBoostPlanButton({
             "Content-Type": "application/json",
           },
           body: "{}",
+          signal: controller.signal,
         },
       );
       const executeBody = (await executeResponse.json().catch(() => ({}))) as {
@@ -315,12 +319,18 @@ export function OrganicBoostPlanButton({
       );
       router.refresh();
     } catch (error) {
+      const aborted =
+        (error instanceof DOMException && error.name === "AbortError") ||
+        (error instanceof Error && error.name === "AbortError");
       setNotice(
-        error instanceof Error
-          ? error.message
-          : "Beitrag-Push konnte nicht gestartet werden.",
+        aborted
+          ? "Prüfung abgebrochen (Zeitlimit). Bitte erneut versuchen — der Server hat zu lange gebraucht."
+          : error instanceof Error
+            ? error.message
+            : "Beitrag-Push konnte nicht gestartet werden.",
       );
     } finally {
+      window.clearTimeout(timeoutId);
       setPending(false);
     }
   }
