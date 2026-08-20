@@ -70,7 +70,7 @@ export function AdminPage() {
     onSuccess: async () => {
       setCustomHostname("");
       setDomainNotice(
-        "Domain registriert — erscheint auch unter Adbot → Domains. Bitte CNAME setzen und DNS prüfen.",
+        "Domain registriert (Hosting automatisch) — erscheint auch unter Adbot → Domains. Bitte CNAME setzen und DNS prüfen.",
       );
       await customDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
@@ -384,10 +384,10 @@ export function AdminPage() {
             </div>
             <p className="mt-4 text-xs leading-5 text-muted-foreground">
               Domain hier anlegen (wird global unter Adbot → Domains sichtbar) oder
-              eine bereits im Portal hinterlegte Domain übernehmen. CNAME auf{" "}
-              <code>cname.vercel-dns.com</code> und Domain im{" "}
-              <strong>Freebie</strong>-Vercel-Projekt. Shared-Host{" "}
-              <code>/o/…</code> bleibt parallel. Nicht parallel am Funnel binden.
+              eine Portal-Domain übernehmen. CNAME auf{" "}
+              <code>cname.vercel-dns.com</code> — SSL/Hosting wird automatisch
+              gesetzt. Shared-Host <code>/o/…</code> bleibt parallel. Nicht parallel
+              am Funnel binden.
             </p>
             {bindablePortalDomains.length > 0 ? (
               <div className="mt-4 rounded-xl border border-dashed border-slate-200 p-4">

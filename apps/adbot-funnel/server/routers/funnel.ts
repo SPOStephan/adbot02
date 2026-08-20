@@ -55,6 +55,11 @@ import {
   pushFunnelDomainRevokeToPortal,
   pushFunnelDomainUpsertToPortal,
 } from "../portalDomainSync";
+import {
+  attachDomainToVercelProject,
+  removeDomainFromVercelProject,
+  verifyDomainOnVercelProject,
+} from "../vercelDomains";
 
 function validateSubmission(config: FunnelConfig, submission: z.infer<typeof applicationSubmissionSchema>) {
   if (config.status !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "Dieser Funnel ist derzeit nicht veröffentlicht." });
@@ -337,6 +342,13 @@ export const funnelRouter = router({
           hostname: input.hostname,
           notes: input.notes,
         });
+        const vercel = await attachDomainToVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
         void pushFunnelDomainUpsertToPortal({
           ownerUserId: getTenantOwnerUserId(ctx.user),
           hostname: domain.hostname,
@@ -346,8 +358,9 @@ export const funnelRouter = router({
           funnelTitle: funnel.title,
           toolDomainId: domain.id,
         });
-        return domain;
+        return { ...domain, vercel };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:
@@ -401,6 +414,13 @@ export const funnelRouter = router({
           funnelId: input.funnelId,
           hostname: match.hostname,
         });
+        const vercel = await attachDomainToVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
         let result = domain;
         if (match.status === "READY") {
           const dns = await checkCustomDomainCname(
@@ -408,6 +428,13 @@ export const funnelRouter = router({
             domain.dnsTarget,
           );
           if (dns.ok) {
+            const verified = await verifyDomainOnVercelProject(domain.hostname);
+            if (!verified.ok) {
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message: verified.message,
+              });
+            }
             result = await markCustomDomainReady({
               funnelId: input.funnelId,
               domainId: domain.id,
@@ -423,8 +450,9 @@ export const funnelRouter = router({
           funnelTitle: funnel.title,
           toolDomainId: result.id,
         });
-        return result;
+        return { ...result, vercel };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:
@@ -481,6 +509,13 @@ export const funnelRouter = router({
             message: dns.message,
           });
         }
+        const vercel = await verifyDomainOnVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
         const ready = await markCustomDomainReady(input);
         void pushFunnelDomainUpsertToPortal({
           ownerUserId: getTenantOwnerUserId(ctx.user),
@@ -491,7 +526,7 @@ export const funnelRouter = router({
           funnelTitle: funnel.title,
           toolDomainId: ready.id,
         });
-        return { ...ready, dns };
+        return { ...ready, dns, vercel };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -515,7 +550,11 @@ export const funnelRouter = router({
           message: "Custom Domain nicht gefunden.",
         });
       }
-      return checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+      const dns = await checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+      if (dns.ok) {
+        void verifyDomainOnVercelProject(domain.hostname);
+      }
+      return dns;
     }),
 
   revokeCustomDomain: adminProcedure
@@ -529,6 +568,7 @@ export const funnelRouter = router({
           hostname: revoked.hostname,
           toolDomainId: revoked.id,
         });
+        void removeDomainFromVercelProject(revoked.hostname);
         return revoked;
       } catch (error) {
         throw new TRPCError({

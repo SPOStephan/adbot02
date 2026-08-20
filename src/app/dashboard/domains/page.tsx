@@ -61,10 +61,10 @@ async function DomainsBody() {
           </li>
           <li>
             <span className="font-semibold text-slate-800">Funnel / Freebie</span>
-            : Domain dort oder hier anlegen. Nach Sync siehst du Herkunft und
-            Bindung in dieser Liste. Routing läuft nur im jeweiligen Tool
-            (getrennte Subdomain + getrennte Datenbank). Eine Domain nicht an
-            Funnel und Freebie gleichzeitig binden.
+            : Domain dort oder hier anlegen. Sync zeigt Herkunft und Bindung in
+            dieser Liste. Kunde setzt nur CNAME — SSL/Hosting wird automatisch
+            gesetzt. Routing bleibt im jeweiligen Tool (eigene Subdomain + DB).
+            Eine Domain nicht an Funnel und Freebie gleichzeitig binden.
           </li>
         </ul>
         <div className="mt-5 flex flex-wrap gap-3">

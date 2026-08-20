@@ -46,6 +46,11 @@ import {
   pushFreebieDomainUpsertToPortal,
 } from "./portalDomainSync";
 import {
+  attachDomainToVercelProject,
+  removeDomainFromVercelProject,
+  verifyDomainOnVercelProject,
+} from "./vercelDomains";
+import {
   isSharedFreebieHost,
   normalizeHostname,
 } from "../shared/freebieHosts";
@@ -220,6 +225,13 @@ export const appRouter = router({
             hostname: input.hostname,
             notes: input.notes,
           });
+          const vercel = await attachDomainToVercelProject(domain.hostname);
+          if (!vercel.ok) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: vercel.message,
+            });
+          }
           void pushFreebieDomainUpsertToPortal({
             ownerUserId: getTenantOwnerUserId(ctx.user),
             hostname: domain.hostname,
@@ -229,8 +241,9 @@ export const appRouter = router({
             offerTitle: offer.title,
             toolDomainId: domain.id,
           });
-          return domain;
+          return { ...domain, vercel };
         } catch (error) {
+          if (error instanceof TRPCError) throw error;
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
@@ -282,6 +295,13 @@ export const appRouter = router({
             offerId: input.offerId,
             hostname: match.hostname,
           });
+          const vercel = await attachDomainToVercelProject(domain.hostname);
+          if (!vercel.ok) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: vercel.message,
+            });
+          }
           let result = domain;
           if (match.status === "READY") {
             const dns = await checkCustomDomainCname(
@@ -289,6 +309,13 @@ export const appRouter = router({
               domain.dnsTarget,
             );
             if (dns.ok) {
+              const verified = await verifyDomainOnVercelProject(domain.hostname);
+              if (!verified.ok) {
+                throw new TRPCError({
+                  code: "PRECONDITION_FAILED",
+                  message: verified.message,
+                });
+              }
               result = await markCustomDomainReady({
                 offerId: input.offerId,
                 domainId: domain.id,
@@ -304,8 +331,9 @@ export const appRouter = router({
             offerTitle: offer.title,
             toolDomainId: result.id,
           });
-          return result;
+          return { ...result, vercel };
         } catch (error) {
+          if (error instanceof TRPCError) throw error;
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
@@ -341,6 +369,13 @@ export const appRouter = router({
             message: dns.message,
           });
         }
+        const vercel = await verifyDomainOnVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
         try {
           const ready = await markCustomDomainReady(input);
           void pushFreebieDomainUpsertToPortal({
@@ -352,7 +387,7 @@ export const appRouter = router({
             offerTitle: offer.title,
             toolDomainId: ready.id,
           });
-          return ready;
+          return { ...ready, dns, vercel };
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -379,7 +414,14 @@ export const appRouter = router({
             message: "Custom Domain nicht gefunden.",
           });
         }
-        return checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+        const dns = await checkCustomDomainCname(
+          domain.hostname,
+          domain.dnsTarget,
+        );
+        if (dns.ok) {
+          void verifyDomainOnVercelProject(domain.hostname);
+        }
+        return dns;
       }),
     revokeCustomDomain: adminProcedure
       .input(
@@ -397,6 +439,7 @@ export const appRouter = router({
             hostname: revoked.hostname,
             toolDomainId: revoked.id,
           });
+          void removeDomainFromVercelProject(revoked.hostname);
           return revoked;
         } catch (error) {
           throw new TRPCError({

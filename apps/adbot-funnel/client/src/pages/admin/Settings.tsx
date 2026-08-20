@@ -66,7 +66,9 @@ export default function Settings() {
       setCustomHostname("");
       await customDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
-      toast.success("Domain registriert — erscheint auch unter Adbot → Domains");
+      toast.success(
+        "Domain registriert (Hosting automatisch) — erscheint unter Adbot → Domains",
+      );
     },
     onError: error => toast.error(error.message),
   });
@@ -238,7 +240,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Hier anlegen (wird unter Adbot → Domains sichtbar) oder eine Portal-Domain übernehmen. Danach DNS prüfen — Root-URL zeigt diesen Funnel. Shared-Host `/f/…` bleibt parallel. SSL: Domain im Funnel-Vercel-Projekt. Nicht parallel am Freebie binden.</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Hier anlegen (wird unter Adbot → Domains sichtbar) oder eine Portal-Domain übernehmen. Beim Registrieren hinterlegen wir SSL/Hosting automatisch. Danach DNS prüfen — Root-URL zeigt diesen Funnel. Shared-Host `/f/…` bleibt parallel. Nicht parallel am Freebie binden.</p></div></div>
         {bindablePortalDomains.length > 0 ? (
           <div className="mt-5 rounded-xl border border-dashed border-slate-200 p-4">
             <p className="text-sm font-semibold">Aus Adbot-Domains übernehmen</p>
@@ -301,8 +303,7 @@ export default function Settings() {
                   </p>
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">
                     1) CNAME <code>{domain.hostname}</code> → <code>{domain.dnsTarget}</code>{" "}
-                    2) Domain im Funnel-Vercel-Projekt adden (SSL){" "}
-                    3) „DNS prüfen & aktivieren“. Öffentliche URL danach:{" "}
+                    2) „DNS prüfen & aktivieren“. Öffentliche URL danach:{" "}
                     <code>https://{domain.hostname}/</code>
                   </p>
                 </div>

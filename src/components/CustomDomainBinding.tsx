@@ -196,8 +196,9 @@ export function CustomDomainBinding({ domains }: Props) {
             <span className="font-semibold text-slate-700">
               {DEFAULT_CUSTOM_DOMAIN_DNS_TARGET}
             </span>
-            . Domain zusätzlich im Vercel-Projekt freigeben (SSL). Danach „DNS
-            prüfen & aktivieren“.
+            . Für Funnel/Freebie-Hosting die Domain dort registrieren — Vercel/SSL
+            wird automatisch gesetzt. Hier reicht „DNS prüfen & aktivieren“ für
+            Kampagnen-Ziel-URLs.
           </p>
           <button
             className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
