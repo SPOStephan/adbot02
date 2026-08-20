@@ -62,7 +62,7 @@ export default function Settings() {
     onSuccess: async () => {
       setCustomHostname("");
       await customDomainsQuery.refetch();
-      toast.success("Custom Domain registriert — DNS-Eintrag setzen");
+      toast.success("Custom Domain registriert — bitte nur noch CNAME setzen");
     },
     onError: error => toast.error(error.message),
   });
@@ -213,7 +213,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Subdomain deines Unternehmens per CNAME auf Adbot zeigen. Danach DNS prüfen — der Funnel ist unter der Root-URL der Domain erreichbar. Shared-Host `/f/…` bleibt parallel nutzbar. SSL: Domain muss im Funnel-Hosting (Vercel) hinterlegt sein.</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Subdomain deines Unternehmens per CNAME auf Adbot zeigen. Beim Registrieren hinterlegen wir die Domain automatisch am Funnel-Hosting (SSL). Danach DNS prüfen — Root-URL zeigt diesen Funnel. Shared-Host `/f/…` bleibt parallel.</p></div></div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <Input
             aria-label="Custom Hostname"
@@ -247,8 +247,7 @@ export default function Settings() {
                   </p>
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">
                     1) CNAME <code>{domain.hostname}</code> → <code>{domain.dnsTarget}</code>{" "}
-                    2) Domain im Funnel-Vercel-Projekt adden (SSL){" "}
-                    3) „DNS prüfen & aktivieren“. Öffentliche URL danach:{" "}
+                    2) „DNS prüfen & aktivieren“. Öffentliche URL danach:{" "}
                     <code>https://{domain.hostname}/</code>
                   </p>
                 </div>

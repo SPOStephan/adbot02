@@ -66,7 +66,9 @@ export function AdminPage() {
   const registerCustomDomain = trpc.freebies.registerCustomDomain.useMutation({
     onSuccess: async () => {
       setCustomHostname("");
-      setDomainNotice("Domain registriert — bitte CNAME setzen und DNS prüfen.");
+      setDomainNotice(
+        "Domain registriert (Hosting automatisch) — bitte CNAME setzen und DNS prüfen.",
+      );
       await customDomainsQuery.refetch();
     },
     onError: error => setDomainNotice(error.message),
@@ -354,10 +356,10 @@ export function AdminPage() {
               </button>
             </div>
             <p className="mt-4 text-xs leading-5 text-muted-foreground">
-              CNAME auf <code>cname.vercel-dns.com</code> setzen und die Domain im{" "}
-              <strong>Freebie</strong>-Vercel-Projekt hinterlegen (SSL). Shared-Host{" "}
-              <code>/o/…</code> bleibt parallel nutzbar. Dieselbe Domain nicht parallel
-              am Funnel binden.
+              CNAME auf <code>cname.vercel-dns.com</code> setzen. Die Domain wird
+              beim Registrieren automatisch am Freebie-Hosting (SSL) hinterlegt.
+              Shared-Host <code>/o/…</code> bleibt parallel nutzbar. Dieselbe Domain
+              nicht parallel am Funnel binden.
             </p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <input
