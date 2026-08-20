@@ -148,7 +148,27 @@ async function readLaunchMarketingState(
 async function runLaunchMarketingSync(
   customer: LaunchMarketingCustomer,
 ): Promise<void> {
+  const result = await refreshMarketingSnapshotForAccount({
+    userId: customer.userId,
+    platformAccountId: customer.platformAccountId,
+    ownerPrefix: "launch-marketing",
+  });
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+}
+
+/**
+ * Full marketing snapshot for the resolved active Werbekonto.
+ * Independent of Beitragsabruf — used after connect/select and launch prep.
+ */
+export async function refreshMarketingSnapshotForAccount(input: {
+  userId: string;
+  platformAccountId: string;
+  ownerPrefix?: string;
+}): Promise<{ ok: true; syncId: string } | { ok: false; error: string }> {
   const admin = createAdminClient();
+  const ownerPrefix = input.ownerPrefix ?? "marketing-refresh";
   const [
     { data: account, error: accountError },
     { data: adAccounts, error: adError },
@@ -158,25 +178,25 @@ async function runLaunchMarketingSync(
       .select(
         "access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,marketing_meta_ad_account_id",
       )
-      .eq("id", customer.platformAccountId)
-      .eq("user_id", customer.userId)
+      .eq("id", input.platformAccountId)
+      .eq("user_id", input.userId)
       .eq("platform", "meta")
       .is("revoked_at", null)
       .maybeSingle(),
     admin
       .from("meta_assets")
       .select("meta_asset_id")
-      .eq("platform_account_id", customer.platformAccountId)
-      .eq("user_id", customer.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("user_id", input.userId)
       .eq("asset_type", "ad_account")
       .order("created_at", { ascending: true }),
   ]);
 
   if (accountError || !account) {
-    throw new Error("meta_account_unavailable");
+    return { ok: false, error: "meta_account_unavailable" };
   }
   if (adError) {
-    throw new Error("ad_account_missing");
+    return { ok: false, error: "ad_account_missing" };
   }
 
   const adAccountAssetIds = (adAccounts ?? [])
@@ -193,46 +213,59 @@ async function runLaunchMarketingSync(
   });
 
   if (!marketingAdAccountId) {
-    throw new Error(
-      adAccountAssetIds.length > 1
-        ? "ad_account_selection_required"
-        : "ad_account_missing",
-    );
+    return {
+      ok: false,
+      error:
+        adAccountAssetIds.length > 1
+          ? "ad_account_selection_required"
+          : "ad_account_missing",
+    };
   }
   if (
     !account.access_token_encrypted ||
     !account.token_iv ||
     !account.token_auth_tag
   ) {
-    throw new Error("token_missing");
+    return { ok: false, error: "token_missing" };
   }
 
-  const env = getMetaSyncEnv();
-  const accessToken = decryptAccessToken(
-    {
-      ciphertext: account.access_token_encrypted,
-      iv: account.token_iv,
-      authTag: account.token_auth_tag,
-    },
-    env.tokenEncryptionKey,
-  );
+  let env;
+  let accessToken: string;
+  try {
+    env = getMetaSyncEnv();
+    accessToken = decryptAccessToken(
+      {
+        ciphertext: account.access_token_encrypted,
+        iv: account.token_iv,
+        authTag: account.token_auth_tag,
+      },
+      env.tokenEncryptionKey,
+    );
+  } catch {
+    return { ok: false, error: "token_missing" };
+  }
 
-  const leaseToken = await claimMetaReadOperation({
-    platformAccountId: customer.platformAccountId,
-    userId: customer.userId,
-    ownerId: `launch-marketing:${customer.platformAccountId}:${randomUUID()}`,
-    retries: 8,
-    retryDelayMs: 2_000,
-    leaseSeconds: 180,
-  });
+  let leaseToken: string;
+  try {
+    leaseToken = await claimMetaReadOperation({
+      platformAccountId: input.platformAccountId,
+      userId: input.userId,
+      ownerId: `${ownerPrefix}:${input.platformAccountId}:${randomUUID()}`,
+      retries: 8,
+      retryDelayMs: 2_000,
+      leaseSeconds: 180,
+    });
+  } catch {
+    return { ok: false, error: "read_lease_busy" };
+  }
   if (!leaseToken) {
-    throw new Error("read_lease_busy");
+    return { ok: false, error: "read_lease_busy" };
   }
 
   try {
     const marketingResult = await syncMetaMarketingSnapshot({
-      platformAccountId: customer.platformAccountId,
-      userId: customer.userId,
+      platformAccountId: input.platformAccountId,
+      userId: input.userId,
       adAccountId: marketingAdAccountId,
       accessToken,
       appSecret: env.appSecret,
@@ -241,8 +274,8 @@ async function runLaunchMarketingSync(
     try {
       const plannedAt = new Date().toISOString();
       await runMetaBudgetPlannerAfterSnapshot({
-        platformAccountId: customer.platformAccountId,
-        userId: customer.userId,
+        platformAccountId: input.platformAccountId,
+        userId: input.userId,
         marketingSyncId: marketingResult.syncId,
         readLeaseToken: leaseToken,
         campaignBudgetSharingSnapshot:
@@ -252,10 +285,20 @@ async function runLaunchMarketingSync(
     } catch {
       // Exposure snapshot can still be bootstrapped later in prepare.
     }
+
+    return { ok: true, syncId: marketingResult.syncId };
+  } catch (error) {
+    const detail =
+      error instanceof MetaMarketingDataError
+        ? error.code
+        : error instanceof Error
+          ? error.message
+          : "marketing_sync_failed";
+    return { ok: false, error: detail };
   } finally {
     await releaseMetaAccountOperation({
-      platformAccountId: customer.platformAccountId,
-      userId: customer.userId,
+      platformAccountId: input.platformAccountId,
+      userId: input.userId,
       leaseToken,
     });
   }

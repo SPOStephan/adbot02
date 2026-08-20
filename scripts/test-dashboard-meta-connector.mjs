@@ -260,6 +260,9 @@ const selectAdAccountRouteSource = await readFile(
 );
 assert.match(selectAdAccountRouteSource, /select_meta_ad_account/);
 assert.match(selectAdAccountRouteSource, /marketing_meta_ad_account_id/);
+assert.match(selectAdAccountRouteSource, /refreshMarketingSnapshotForAccount/);
+assert.match(selectAdAccountRouteSource, /marketing_sync_status: "syncing"/);
+assert.match(callbackSource, /refreshMarketingSnapshotForAccount/);
 assert.match(syncButtonSource, /"use client"/);
 assert.match(syncButtonSource, /method: "POST"/);
 assert.match(syncButtonSource, /\/api\/connectors\/meta\/sync/);

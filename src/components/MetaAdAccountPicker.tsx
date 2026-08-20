@@ -44,7 +44,10 @@ export function MetaAdAccountPicker({ accounts, compact = false }: Props) {
   const canSwitch = accounts.length > 1;
 
   async function selectAdAccount(account: MetaAdAccountOption) {
-    if (!canSwitch || account.selectedForAds || pendingId) {
+    if (!canSwitch && accounts.length !== 1) {
+      return;
+    }
+    if (pendingId) {
       return;
     }
 
@@ -67,6 +70,11 @@ export function MetaAdAccountPicker({ accounts, compact = false }: Props) {
         ok?: boolean;
         error?: string;
         label?: string;
+        marketingSync?: {
+          status?: string;
+          error?: string;
+          syncId?: string;
+        };
       } | null;
 
       if (!response.ok || !result?.ok) {
@@ -76,9 +84,15 @@ export function MetaAdAccountPicker({ accounts, compact = false }: Props) {
         );
       }
 
+      const marketingOk = result.marketingSync?.status === "success";
+      const marketingFailed = result.marketingSync?.status === "error";
       setNotice({
-        tone: "success",
-        message: `„${result.label ?? account.label}“ ist jetzt das aktive Werbekonto für Ads.`,
+        tone: marketingFailed ? "error" : "success",
+        message: marketingOk
+          ? `„${result.label ?? account.label}“ aktiv — Kampagnendaten wurden abgerufen.`
+          : marketingFailed
+            ? `Werbekonto gespeichert, aber Kampagnenabruf fehlgeschlagen (${result.marketingSync?.error ?? "unbekannt"}). Bitte erneut tippen.`
+            : `„${result.label ?? account.label}“ ist jetzt das aktive Werbekonto für Ads.`,
       });
       router.refresh();
     } catch (error) {
@@ -110,7 +124,7 @@ export function MetaAdAccountPicker({ accounts, compact = false }: Props) {
                     ? "border-slate-200 bg-white text-slate-900 hover:border-blue-300 hover:bg-blue-50"
                     : "border-slate-200 bg-slate-50 text-slate-800"
               }`}
-              disabled={!canSwitch || selected || Boolean(pendingId)}
+              disabled={Boolean(pendingId) || (!canSwitch && !selected)}
               onClick={() => {
                 void selectAdAccount(account);
               }}
@@ -135,11 +149,13 @@ export function MetaAdAccountPicker({ accounts, compact = false }: Props) {
                   {account.label.replace(/^Werbekonto:\s*/i, "")}
                 </span>
                 <span className="mt-0.5 block text-xs font-semibold text-slate-500">
-                  {selected
-                    ? "Aktiv für Ads und Kampagnenabruf"
-                    : canSwitch
-                      ? "Tippen zum Aktivieren für Ads"
-                      : "Einziges verbundenes Werbekonto"}
+                  {busy
+                    ? "Kampagnendaten werden abgerufen…"
+                    : selected
+                      ? "Aktiv — erneut tippen lädt Kampagnendaten neu"
+                      : canSwitch
+                        ? "Tippen: aktivieren und Kampagnen abrufen"
+                        : "Einziges verbundenes Werbekonto"}
                 </span>
               </span>
               {selected ? (
@@ -192,7 +208,8 @@ export function MetaAdAccountPicker({ accounts, compact = false }: Props) {
       </h2>
       <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
         Meta liefert oft mehrere Werbekonten mit. Der Beitragsabruf läuft
-        unabhängig — für Kampagnen und Schaltungen wählst du hier das Konto.
+        unabhängig. Bei Auswahl startet Adbot sofort den Kampagnenabruf für
+        dieses Konto.
       </p>
       {needsPick ? (
         <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950">

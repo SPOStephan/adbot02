@@ -1,10 +1,13 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { refreshMarketingSnapshotForAccount } from "@/lib/meta/launch-marketing-ensure";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 type SelectRequest = {
   confirmation?: string;
@@ -89,9 +92,11 @@ export async function POST(request: Request) {
       return json({ error: "invalid_asset" }, 400);
     }
 
+    const selectedNorm = normalizeAdAccountId(metaAssetId);
+
     const { data: account, error: accountError } = await admin
       .from("platform_accounts")
-      .select("id, marketing_sync_error_code")
+      .select("id, marketing_meta_ad_account_id, marketing_sync_error_code")
       .eq("id", asset.platform_account_id)
       .eq("user_id", user.id)
       .eq("platform", "meta")
@@ -102,16 +107,44 @@ export async function POST(request: Request) {
       return json({ error: "not_found" }, 404);
     }
 
-    const clearSelectionError =
-      account.marketing_sync_error_code === "ad_account_selection_required";
+    const previousNorm = normalizeAdAccountId(
+      typeof account.marketing_meta_ad_account_id === "string"
+        ? account.marketing_meta_ad_account_id
+        : "",
+    );
+    const switchedAccount =
+      previousNorm.length > 0 && previousNorm !== selectedNorm;
+
+    if (switchedAccount) {
+      const now = new Date().toISOString();
+      await Promise.all([
+        admin
+          .from("campaigns")
+          .update({ is_current: false, updated_at: now })
+          .eq("platform_account_id", account.id),
+        admin
+          .from("ad_groups")
+          .update({ is_current: false, updated_at: now })
+          .eq("platform_account_id", account.id),
+        admin
+          .from("ads")
+          .update({ is_current: false, updated_at: now })
+          .eq("platform_account_id", account.id),
+        admin
+          .from("creatives")
+          .update({ is_current: false, updated_at: now })
+          .eq("platform_account_id", account.id)
+          .eq("source", "meta"),
+      ]);
+    }
 
     const { error: updateError } = await admin
       .from("platform_accounts")
       .update({
-        marketing_meta_ad_account_id: normalizeAdAccountId(metaAssetId),
-        ...(clearSelectionError
-          ? { marketing_sync_error_code: null }
-          : {}),
+        marketing_meta_ad_account_id: selectedNorm,
+        marketing_sync_status: "syncing",
+        marketing_sync_error_code: null,
+        marketing_last_sync_started_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq("id", account.id)
@@ -124,11 +157,32 @@ export async function POST(request: Request) {
       return json({ error: "select_failed" }, 500);
     }
 
+    const marketingSync = await refreshMarketingSnapshotForAccount({
+      userId: user.id,
+      platformAccountId: account.id,
+      ownerPrefix: "ad-account-select",
+    });
+
+    if (!marketingSync.ok) {
+      await admin
+        .from("platform_accounts")
+        .update({
+          marketing_sync_status: "error",
+          marketing_sync_error_code: marketingSync.error,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", account.id)
+        .eq("user_id", user.id);
+    }
+
     revalidatePath("/dashboard", "page");
     return json({
       ok: true,
       metaAssetId,
       label: asset.name?.trim() || metaAssetId,
+      marketingSync: marketingSync.ok
+        ? { status: "success", syncId: marketingSync.syncId }
+        : { status: "error", error: marketingSync.error },
     });
   } catch (error) {
     console.error("[meta-assets] select-ad-account crashed", {
