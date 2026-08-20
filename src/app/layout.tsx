@@ -17,6 +17,12 @@ const geistMono = Geist_Mono({
 
 export async function generateMetadata(): Promise<Metadata> {
   const branding = await getSiteBranding();
+  // Same-origin /icon (and rewrite /favicon.ico → /icon) so the uploaded
+  // branding favicon wins over any leftover static Vercel favicon.ico.
+  const version = branding.updatedAt
+    ? encodeURIComponent(branding.updatedAt)
+    : "default";
+  const iconUrl = `/icon?v=${version}`;
   return {
     title: {
       default: "Adbot.one",
@@ -24,13 +30,11 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description:
       "Kanalübergreifendes Dashboard für Werbekampagnen, Creatives und kontrollierte Optimierung.",
-    icons: branding.faviconUrl
-      ? {
-          icon: [{ url: branding.faviconUrl }],
-          shortcut: branding.faviconUrl,
-          apple: branding.faviconUrl,
-        }
-      : undefined,
+    icons: {
+      icon: [{ url: iconUrl }],
+      shortcut: iconUrl,
+      apple: iconUrl,
+    },
   };
 }
 
