@@ -125,7 +125,10 @@ function statusCopy(input: {
       return {
         tone: "amber" as const,
         title: "Automatischer Boost wartet",
-        body: "Vollautomatik ist an. Noch blockiert: oben Sicherheitsschranke auf „Freigeben“ stellen und speichern.",
+        body:
+          input.killSwitchMode === "PAUSE_MANAGED"
+            ? "Vollautomatik ist an, aber die Sicherheitsschranke steht auf Pause. Unter Autonomie wieder auf „Freigeben“ stellen und speichern."
+            : "Vollautomatik ist an. Adbot stellt Freigeben beim nächsten Beiträge-Laden automatisch wieder her, falls Traffic/Lead die Schranke eingefroren hat. Sonst unter Autonomie „Freigeben“ speichern.",
       };
     }
 

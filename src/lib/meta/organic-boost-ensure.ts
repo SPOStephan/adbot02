@@ -168,6 +168,99 @@ async function markEnsureTimestamp(input: {
 }
 
 /**
+ * Vollautomatik darf nicht dauerhaft auf FREEZE_WRITES hängen (Traffic/Lead
+ * Prepare friert kurz ein; Restore kann fehlen). PAUSE_MANAGED bleibt Stopp.
+ */
+export async function ensureOrganicAutoWritesAllow(input: {
+  userId: string;
+  platformAccountId: string;
+}): Promise<{ healed: boolean; mode: string | null }> {
+  const admin = createAdminClient();
+
+  const [{ data: settings }, { data: killRow }, { data: account }] =
+    await Promise.all([
+      admin
+        .from("meta_boost_settings")
+        .select(
+          "enabled,boost_mode,auto_boost_new_candidates,require_manual_approval",
+        )
+        .eq("user_id", input.userId)
+        .eq("platform_account_id", input.platformAccountId)
+        .eq("is_current", true)
+        .maybeSingle(),
+      admin
+        .from("kill_switch_state")
+        .select("mode,reason,created_at")
+        .eq("user_id", input.userId)
+        .eq("platform_account_id", input.platformAccountId)
+        .eq("scope_type", "ACCOUNT")
+        .order("sequence", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from("platform_accounts")
+        .select("meta_scopes")
+        .eq("id", input.platformAccountId)
+        .eq("user_id", input.userId)
+        .eq("platform", "meta")
+        .is("revoked_at", null)
+        .maybeSingle(),
+    ]);
+
+  const mode =
+    typeof killRow?.mode === "string" ? killRow.mode : "FREEZE_WRITES";
+  if (mode === "ALLOW" || mode === "PAUSE_MANAGED") {
+    return { healed: false, mode };
+  }
+
+  const autoEnabled =
+    settings?.enabled === true &&
+    settings?.boost_mode === "AUTO" &&
+    settings?.auto_boost_new_candidates === true &&
+    settings?.require_manual_approval === false;
+  if (!autoEnabled) {
+    return { healed: false, mode };
+  }
+
+  const scopes = Array.isArray(account?.meta_scopes)
+    ? account.meta_scopes
+    : [];
+  if (!scopes.includes("ads_management")) {
+    return { healed: false, mode };
+  }
+
+  // Avoid racing an in-flight Traffic/Lead prepare freeze window.
+  const reason = String(killRow?.reason ?? "");
+  const createdAt = Date.parse(String(killRow?.created_at ?? ""));
+  const isPrepareFreeze = /Freeze-Phase für Kampagnen-Vorbereitung/i.test(
+    reason,
+  );
+  if (
+    isPrepareFreeze &&
+    Number.isFinite(createdAt) &&
+    Date.now() - createdAt < 120_000
+  ) {
+    return { healed: false, mode };
+  }
+
+  const { error } = await admin.rpc("set_meta_customer_kill_switch", {
+    p_user_id: input.userId,
+    p_platform_account_id: input.platformAccountId,
+    p_mode: "ALLOW",
+    p_reason:
+      "Heal: Freigeben für Beitrag-Push Vollautomatik wiederhergestellt — FREEZE darf AUTO nicht dauerhaft blockieren",
+  });
+  if (error) {
+    console.error("organic_boost_auto_allow_heal_failed", {
+      platformAccountId: input.platformAccountId,
+      message: error.message,
+    });
+    return { healed: false, mode };
+  }
+  return { healed: true, mode: "ALLOW" };
+}
+
+/**
  * Plan Beitrag-Push for is_new candidates and immediately drain Meta writes
  * for this account. Used on detect (Abruf), dashboard load, and Autonomie
  * changes so campaigns are created without waiting on the minutely cron or a
@@ -189,6 +282,7 @@ export async function planAndDrainOrganicBoostForAccount(input: {
   planner: MetaOrganicBoostPlannerResult | null;
   drain: OrganicBoostExecuteDrainResult | null;
   skippedRecent: boolean;
+  allowHealed?: boolean;
 }> {
   let drainOnly = input.drainOnly === true;
   if (input.skipIfRecentMs && input.skipIfRecentMs > 0) {
@@ -204,11 +298,26 @@ export async function planAndDrainOrganicBoostForAccount(input: {
         platformAccountId: input.platformAccountId,
       });
       if (queued < 1) {
-        return { planner: null, drain: null, skippedRecent: true };
+        // Still heal stranded FREEZE even when skipping heavy ensure.
+        const allowHeal = await ensureOrganicAutoWritesAllow({
+          userId: input.userId,
+          platformAccountId: input.platformAccountId,
+        }).catch(() => ({ healed: false }));
+        return {
+          planner: null,
+          drain: null,
+          skippedRecent: true,
+          allowHealed: allowHeal.healed,
+        };
       }
       drainOnly = true;
     }
   }
+
+  const allowHeal = await ensureOrganicAutoWritesAllow({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+  }).catch(() => ({ healed: false }));
 
   await repairOrphanInstagramPageLinks({
     userId: input.userId,
@@ -287,5 +396,10 @@ export async function planAndDrainOrganicBoostForAccount(input: {
     }).catch(() => undefined);
   }
 
-  return { planner, drain, skippedRecent: false };
+  return {
+    planner,
+    drain,
+    skippedRecent: false,
+    allowHealed: allowHeal.healed,
+  };
 }

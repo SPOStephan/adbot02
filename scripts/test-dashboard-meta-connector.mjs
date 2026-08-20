@@ -392,6 +392,7 @@ assert.match(dashboardLayoutSource, /DashboardShell/);
 assert.match(dashboardSource, /id="plattformen"/);
 assert.match(dashboardSource, /PlatformStatusCard/);
 assert.match(beitraegeSource, /MetaContentSyncPanel/);
+assert.match(beitraegeSource, /organicBoostEnsure:\s*true/);
 assert.match(kampagnenSource, /MetaCampaignOverview/);
 
 console.log("Dashboard Meta connector checks passed");

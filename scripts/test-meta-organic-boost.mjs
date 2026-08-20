@@ -333,6 +333,26 @@ assert.match(
   /repairOrphanInstagramPageLinks/,
 );
 assert.match(
+  read("src/lib/meta/organic-boost-ensure.ts"),
+  /ensureOrganicAutoWritesAllow/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-ensure.ts"),
+  /FREEZE darf AUTO nicht dauerhaft blockieren/,
+);
+assert.match(
+  read("src/app/dashboard/beitraege/page.tsx"),
+  /organicBoostEnsure:\s*true/,
+);
+assert.match(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /unter Autonomie/,
+);
+assert.match(
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
+  /organicBoostEnsure/,
+);
+assert.match(
   read("src/lib/dashboard/load-customer-dashboard.ts"),
   /organic_boost_planner_status/,
 );
