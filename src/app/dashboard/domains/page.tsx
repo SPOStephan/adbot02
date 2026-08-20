@@ -60,10 +60,16 @@ async function DomainsBody() {
             Ziel-URL.
           </li>
           <li>
-            <span className="font-semibold text-slate-800">Funnel</span> und{" "}
-            <span className="font-semibold text-slate-800">Freebie</span>: Hosting
-            auf der Domain folgt als nächster Schritt; DNS-Ziel ist bereits
-            vorbereitet.
+            <span className="font-semibold text-slate-800">Freebie</span>: Domain
+            im Freebie-Admin an ein Angebot binden (Button „Domain“). CNAME + Domain
+            im Freebie-Vercel-Projekt; danach ist die Root-URL das Freebie. Shared{" "}
+            <code className="text-xs">/o/…</code> bleibt parallel.
+          </li>
+          <li>
+            <span className="font-semibold text-slate-800">Funnel</span>: Hosting
+            weiterhin im Funnel-Admin (Custom Domain pro Funnel). Anbindung an diese
+            globale Liste folgt später. Dieselbe Domain nicht parallel an Funnel und
+            Freebie binden.
           </li>
         </ul>
         <div className="mt-5 flex flex-wrap gap-3">

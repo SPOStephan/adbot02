@@ -1,12 +1,106 @@
 import { trpc } from "@/lib/trpc";
 import { loadMetaPixel, trackMetaConversion } from "@/lib/metaPixel";
+import { getBrowserHostname, isSharedFreebieHost } from "@/lib/freebieHost";
 import { useEffect, useState, type ReactNode } from "react";
 import { useRoute } from "wouter";
+
+type PublicOffer = {
+  slug: string;
+  title: string;
+  description: string;
+  confirmationMode: "doi" | "otp";
+  hasFile: boolean;
+  metaTracking: {
+    enabled: boolean;
+    pixelId: string;
+    eventName: string;
+  };
+};
 
 export function OfferPage() {
   const [, params] = useRoute("/o/:slug");
   const slug = params?.slug ?? "";
-  const offerQuery = trpc.public.offer.useQuery({ slug }, { enabled: Boolean(slug) });
+  return <OfferView slug={slug} enabled={Boolean(slug)} />;
+}
+
+/** Custom-domain root: Host → READY published Freebie. */
+export function HostBoundOffer() {
+  const hostname = getBrowserHostname();
+  const shared = isSharedFreebieHost(hostname);
+  const query = trpc.public.offerByHost.useQuery(
+    { hostname },
+    { enabled: Boolean(hostname) && !shared },
+  );
+
+  if (shared || !hostname) {
+    return <HomeFallback />;
+  }
+
+  if (query.isLoading) {
+    return <PublicShell>Lade Freebie…</PublicShell>;
+  }
+
+  if (query.error || !query.data) {
+    return (
+      <PublicShell>
+        <p className="funnel-eyebrow">Custom Domain</p>
+        <h1>Kein Freebie verbunden</h1>
+        <p className="funnel-description">
+          Diese Domain ist noch nicht mit einem veröffentlichten Freebie verknüpft,
+          oder DNS/SSL ist noch nicht fertig.
+        </p>
+      </PublicShell>
+    );
+  }
+
+  return <OfferView slug={query.data.slug} enabled offer={query.data} />;
+}
+
+function HomeFallback() {
+  return (
+    <div className="funnel-canvas">
+      <header className="funnel-header">
+        <div className="funnel-wordmark">
+          <span className="funnel-wordmark-mark" aria-hidden="true">
+            AF
+          </span>
+          Adbot Freebie
+        </div>
+      </header>
+      <main className="funnel-main">
+        <section className="funnel-step funnel-start-step">
+          <div className="funnel-copy">
+            <p className="funnel-eyebrow">Adbot Freebie</p>
+            <h1>Lead-Magnete mit DOI oder OTP.</h1>
+            <p className="funnel-description">
+              Lade dein Freebie hoch, wähle Bestätigung per Link oder Code und liefere
+              nach E-Mail-Bestätigung über Bunny CDN aus.
+            </p>
+            <div className="mt-8">
+              <a className="funnel-primary-button" href="/admin">
+                Admin öffnen
+              </a>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function OfferView({
+  slug,
+  enabled,
+  offer: prefetched,
+}: {
+  slug: string;
+  enabled: boolean;
+  offer?: PublicOffer;
+}) {
+  const offerQuery = trpc.public.offer.useQuery(
+    { slug },
+    { enabled: enabled && !prefetched && Boolean(slug) },
+  );
   const captureMutation = trpc.public.capture.useMutation();
   const confirmOtpMutation = trpc.public.confirmOtp.useMutation();
   const [email, setEmail] = useState("");
@@ -14,18 +108,18 @@ export function OfferPage() {
   const [leadId, setLeadId] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
-  const offer = offerQuery.data;
+  const offer = prefetched ?? offerQuery.data;
   useEffect(() => {
     if (offer?.metaTracking?.enabled && offer.metaTracking.pixelId) {
       loadMetaPixel(offer.metaTracking.pixelId);
     }
   }, [offer?.metaTracking?.enabled, offer?.metaTracking?.pixelId]);
 
-  if (offerQuery.isLoading) {
+  if (!prefetched && offerQuery.isLoading) {
     return <PublicShell>Lade Freebie…</PublicShell>;
   }
 
-  if (offerQuery.error || !offer) {
+  if ((!prefetched && offerQuery.error) || !offer) {
     return <PublicShell>Dieses Freebie ist nicht verfügbar.</PublicShell>;
   }
 
@@ -126,7 +220,7 @@ export function OfferPage() {
         className="funnel-contact-form"
         onSubmit={async event => {
           event.preventDefault();
-          const result = await captureMutation.mutateAsync({ slug, email });
+          const result = await captureMutation.mutateAsync({ slug: offer.slug, email });
           setLeadId(result.leadId);
         }}
       >

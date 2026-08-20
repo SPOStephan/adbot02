@@ -2,7 +2,6 @@ import { z } from "zod";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { ENV } from "./_core/env";
 import { systemRouter } from "./_core/systemRouter";
 import {
   buildAdminUser,
@@ -31,8 +30,37 @@ import {
   resolveDownloadUrl,
   upsertOffer,
 } from "./freebieStore";
+import { checkCustomDomainCname } from "./customDomainDns";
+import {
+  getCustomDomainForOffer,
+  getOfferIdByCustomHostname,
+  listCustomDomainsForOffer,
+  markCustomDomainReady,
+  registerCustomDomain,
+  revokeCustomDomain,
+} from "./freebieCustomDomains";
+import { resolvePublicAppBaseUrl } from "./publicAppUrl";
+import {
+  isSharedFreebieHost,
+  normalizeHostname,
+} from "../shared/freebieHosts";
 
 const confirmationModeSchema = z.enum(["doi", "otp"]);
+
+function publicOfferPayload(offer: NonNullable<Awaited<ReturnType<typeof getOfferById>>>) {
+  return {
+    slug: offer.slug,
+    title: offer.title,
+    description: offer.description,
+    confirmationMode: offer.confirmationMode,
+    hasFile: Boolean(offer.mediaAssetId),
+    metaTracking: {
+      enabled: offer.metaTracking.enabled,
+      pixelId: offer.metaTracking.pixelId,
+      eventName: offer.metaTracking.eventName,
+    },
+  };
+}
 
 async function assertOfferAccess(offerId: string, user: NonNullable<Parameters<typeof getTenantOwnerUserId>[0]>) {
   const offer = await getOfferById(offerId);
@@ -165,6 +193,115 @@ export const appRouter = router({
         await assertOfferAccess(input.offerId, ctx.user);
         return listLeadsForOffer(input.offerId);
       }),
+    customDomains: adminProcedure
+      .input(z.object({ offerId: z.string().uuid() }))
+      .query(async ({ ctx, input }) => {
+        await assertOfferAccess(input.offerId, ctx.user);
+        return listCustomDomainsForOffer(input.offerId);
+      }),
+    registerCustomDomain: adminProcedure
+      .input(
+        z.object({
+          offerId: z.string().uuid(),
+          hostname: z.string().trim().min(3).max(253),
+          notes: z.string().trim().max(500).optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        await assertOfferAccess(input.offerId, ctx.user);
+        try {
+          return await registerCustomDomain({
+            offerId: input.offerId,
+            hostname: input.hostname,
+            notes: input.notes,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Domain konnte nicht registriert werden.",
+          });
+        }
+      }),
+    markCustomDomainReady: adminProcedure
+      .input(
+        z.object({
+          offerId: z.string().uuid(),
+          domainId: z.string().uuid(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        await assertOfferAccess(input.offerId, ctx.user);
+        const domain = await getCustomDomainForOffer(input);
+        if (!domain) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Custom Domain nicht gefunden.",
+          });
+        }
+        const dns = await checkCustomDomainCname(
+          domain.hostname,
+          domain.dnsTarget,
+        );
+        if (!dns.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: dns.message,
+          });
+        }
+        try {
+          return await markCustomDomainReady(input);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Domain konnte nicht aktiviert werden.",
+          });
+        }
+      }),
+    verifyCustomDomainDns: adminProcedure
+      .input(
+        z.object({
+          offerId: z.string().uuid(),
+          domainId: z.string().uuid(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        await assertOfferAccess(input.offerId, ctx.user);
+        const domain = await getCustomDomainForOffer(input);
+        if (!domain) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Custom Domain nicht gefunden.",
+          });
+        }
+        return checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+      }),
+    revokeCustomDomain: adminProcedure
+      .input(
+        z.object({
+          offerId: z.string().uuid(),
+          domainId: z.string().uuid(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        await assertOfferAccess(input.offerId, ctx.user);
+        try {
+          return await revokeCustomDomain(input);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Domain konnte nicht zurückgezogen werden.",
+          });
+        }
+      }),
   }),
   public: router({
     offer: publicProcedure
@@ -174,17 +311,40 @@ export const appRouter = router({
         if (!offer) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Freebie nicht gefunden." });
         }
+        return publicOfferPayload(offer);
+      }),
+    /** Resolve published Freebie by READY custom hostname (not shared hosts). */
+    offerByHost: publicProcedure
+      .input(z.object({ hostname: z.string().min(1).max(253) }))
+      .query(async ({ input }) => {
+        const hostname = normalizeHostname(input.hostname);
+        if (
+          !hostname ||
+          isSharedFreebieHost(hostname, process.env.FREEBIE_SHARED_HOSTS)
+        ) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Kein Freebie für diesen Host hinterlegt.",
+          });
+        }
+        const offerId = await getOfferIdByCustomHostname(hostname);
+        if (!offerId) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message:
+              "Diese Domain ist noch nicht mit einem veröffentlichten Freebie verbunden.",
+          });
+        }
+        const offer = await getOfferById(offerId);
+        if (!offer || !offer.isPublished) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Das gebundene Freebie ist nicht veröffentlicht.",
+          });
+        }
         return {
-          slug: offer.slug,
-          title: offer.title,
-          description: offer.description,
-          confirmationMode: offer.confirmationMode,
-          hasFile: Boolean(offer.mediaAssetId),
-          metaTracking: {
-            enabled: offer.metaTracking.enabled,
-            pixelId: offer.metaTracking.pixelId,
-            eventName: offer.metaTracking.eventName,
-          },
+          ...publicOfferPayload(offer),
+          boundHostname: hostname,
         };
       }),
     capture: publicProcedure
@@ -194,7 +354,7 @@ export const appRouter = router({
           email: z.string().trim().email().max(320),
         }),
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const offer = await getPublishedOfferBySlug(input.slug);
         if (!offer) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Freebie nicht gefunden." });
@@ -212,7 +372,7 @@ export const appRouter = router({
         });
 
         if (offer.confirmationMode === "doi" && doiToken) {
-          const confirmUrl = `${ENV.publicAppUrl}/confirm?token=${encodeURIComponent(doiToken)}`;
+          const confirmUrl = `${resolvePublicAppBaseUrl(ctx.req)}/confirm?token=${encodeURIComponent(doiToken)}`;
           const mail = buildDoiMail({ offerTitle: offer.title, confirmUrl });
           await sendTransactionalMail({ to: lead.email, ...mail });
           return { mode: "doi" as const, leadId: lead.id };
