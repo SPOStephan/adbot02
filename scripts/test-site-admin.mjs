@@ -26,11 +26,15 @@ const editorPage = read("src/app/dashboard/rechtliches/page.tsx");
 assert.match(editorPage, /isSiteAdmin/);
 assert.match(editorPage, /redirect\("\/dashboard"\)/);
 
-const dashboardLayout = read("src/app/dashboard/layout.tsx");
+const dashboardChrome = [
+  read("src/app/dashboard/layout.tsx"),
+  read("src/components/DashboardAsideChrome.tsx"),
+  read("src/components/DashboardShell.tsx"),
+].join("\n");
 const dashboardNav = read("src/lib/dashboard/navigation.ts");
-assert.match(dashboardLayout, /isSiteAdmin/);
+assert.match(dashboardChrome, /isSiteAdmin/);
 assert.match(dashboardNav, /getDashboardNavigation/);
-assert.match(dashboardLayout, /isAdmin/);
+assert.match(dashboardChrome, /isAdmin/);
 assert.match(dashboardNav, /\/dashboard\/logo/);
 assert.match(dashboardNav, /\/dashboard\/rechtliches/);
 
