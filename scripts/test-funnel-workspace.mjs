@@ -7,7 +7,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const siteUrls = readFileSync(join(root, "src/lib/site-urls.ts"), "utf8");
 const envExample = readFileSync(join(root, ".env.example"), "utf8");
-const dashboard = readFileSync(join(root, "src/app/dashboard/page.tsx"), "utf8");
+const dashboard = [
+  readFileSync(join(root, "src/app/dashboard/page.tsx"), "utf8"),
+  readFileSync(join(root, "src/lib/dashboard/navigation.ts"), "utf8"),
+].join("\n");
 const card = readFileSync(join(root, "src/components/FunnelWorkspaceCard.tsx"), "utf8");
 const migration = readFileSync(
   join(root, "apps/adbot-funnel/supabase/migrations/20260808210000_funnel_owner_binding.sql"),

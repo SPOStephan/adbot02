@@ -26,12 +26,13 @@ const editorPage = read("src/app/dashboard/rechtliches/page.tsx");
 assert.match(editorPage, /isSiteAdmin/);
 assert.match(editorPage, /redirect\("\/dashboard"\)/);
 
-const dashboard = read("src/app/dashboard/page.tsx");
-assert.match(dashboard, /isSiteAdmin/);
-assert.match(dashboard, /adminNavigationItems/);
-assert.match(dashboard, /userIsSiteAdmin/);
-assert.match(dashboard, /\/dashboard\/logo/);
-assert.match(dashboard, /\/dashboard\/rechtliches/);
+const dashboardLayout = read("src/app/dashboard/layout.tsx");
+const dashboardNav = read("src/lib/dashboard/navigation.ts");
+assert.match(dashboardLayout, /isSiteAdmin/);
+assert.match(dashboardNav, /getDashboardNavigation/);
+assert.match(dashboardLayout, /isAdmin/);
+assert.match(dashboardNav, /\/dashboard\/logo/);
+assert.match(dashboardNav, /\/dashboard\/rechtliches/);
 
 // Public legal pages stay readable without admin.
 assert.match(read("src/app/impressum/page.tsx"), /getLegalPage\("impressum"\)/);

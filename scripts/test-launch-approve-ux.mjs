@@ -94,7 +94,7 @@ assert.match(onboarding, /primaryText: string \| null/);
 assert.match(onboarding, /headline: string \| null/);
 
 const dashboard = await readFile(
-  join(root, "src/app/dashboard/page.tsx"),
+  join(root, "src/lib/dashboard/load-customer-dashboard.ts"),
   "utf8",
 );
 assert.match(dashboard, /copyField\("message"\)/);

@@ -1,10 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, ImageIcon } from "lucide-react";
 
 import { MediaLibraryClient } from "@/components/MediaLibraryClient";
-import { SignOutButton } from "@/components/SignOutButton";
-import { SiteFooter } from "@/components/SiteFooter";
 import { MEDIA_LIBRARY_ASSET_LIST_SELECT } from "@/lib/media-library/customer-asset-columns";
 import { formatLabelForDimensions } from "@/lib/media-library/meta-formats";
 import { createClient } from "@/lib/supabase/server";
@@ -50,7 +46,6 @@ export default async function CreativesPage() {
     metaAccount
       ? supabase
           .from("brand_assets")
-          // Dynamic select string loses Supabase row typing — cast after fetch.
           .select(MEDIA_LIBRARY_ASSET_LIST_SELECT)
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
@@ -84,34 +79,18 @@ export default async function CreativesPage() {
     : ((assetsResult.data ?? []) as MediaLibraryAssetRow[]);
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-950">
-      <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-blue-600 text-white">
-              <ImageIcon className="size-5" />
-            </span>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-                Dashboard · Media Library
-              </p>
-              <h1 className="text-lg font-extrabold">Creatives</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-950"
-              href="/dashboard"
-            >
-              <ArrowLeft className="size-3.5" />
-              Übersicht
-            </Link>
-            <SignOutButton />
-          </div>
-        </div>
+    <>
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+          Media Library
+        </p>
+        <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Creatives</h1>
+        <p className="mt-2 max-w-2xl text-slate-500">
+          Hochgeladene und generierte Assets für Meta-Launches und Beitrag-Push.
+        </p>
       </div>
 
-      <div className="mx-auto max-w-5xl px-6 py-8">
+      <div className="mt-8">
         <MediaLibraryClient
           assets={assets.map((asset) => ({
             id: String(asset.id),
@@ -137,7 +116,6 @@ export default async function CreativesPage() {
           metaConnected={Boolean(metaAccount)}
         />
       </div>
-      <SiteFooter />
-    </main>
+    </>
   );
 }

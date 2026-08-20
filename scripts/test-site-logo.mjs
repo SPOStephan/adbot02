@@ -42,8 +42,8 @@ assert.match(mark, /logoOnLightUrl/);
 assert.match(mark, /tone === "dark"/);
 
 assert.match(read("src/app/page.tsx"), /SiteBrandMark[\s\S]*tone="dark"/);
-assert.match(read("src/app/dashboard/page.tsx"), /tone="light"/);
-assert.match(read("src/app/dashboard/page.tsx"), /\/dashboard\/logo/);
+assert.match(read("src/components/DashboardShell.tsx"), /tone="light"/);
+assert.match(read("src/lib/dashboard/navigation.ts"), /\/dashboard\/logo/);
 assert.match(read("src/components/LegalDocument.tsx"), /tone="light"/);
 assert.match(read("src/app/login/page.tsx"), /tone="dark"/);
 

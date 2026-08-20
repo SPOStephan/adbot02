@@ -29,8 +29,12 @@ const uiSource = readFileSync(
   join(root, "src/components/CampaignAssistantBrief.tsx"),
   "utf8",
 );
-const dashboardSource = readFileSync(
-  join(root, "src/app/dashboard/page.tsx"),
+const assistentPageSource = readFileSync(
+  join(root, "src/app/dashboard/assistent/page.tsx"),
+  "utf8",
+);
+const loaderSource = readFileSync(
+  join(root, "src/lib/dashboard/load-customer-dashboard.ts"),
   "utf8",
 );
 
@@ -60,9 +64,8 @@ assert.match(archiveRoute, /archiveCustomerCampaignBrief/);
 assert.match(uiSource, /kampagnen-assistent/);
 assert.match(uiSource, /\/api\/meta\/automation\/campaign-brief/);
 assert.match(uiSource, /OUTCOME_TRAFFIC/);
-assert.match(dashboardSource, /CampaignAssistantBrief/);
-assert.match(dashboardSource, /#kampagnen-assistent/);
-assert.match(dashboardSource, /from\("campaign_briefs"\)/);
+assert.match(assistentPageSource, /CampaignAssistantBrief/);
+assert.match(loaderSource, /from\("campaign_briefs"\)/);
 
 const transpiledInput = ts.transpileModule(inputSource, {
   compilerOptions: {

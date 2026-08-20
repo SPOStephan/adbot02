@@ -10,6 +10,30 @@ const dashboardSource = await readFile(
   join(projectRoot, "src/app/dashboard/page.tsx"),
   "utf8",
 );
+const loaderSource = await readFile(
+  join(projectRoot, "src/lib/dashboard/load-customer-dashboard.ts"),
+  "utf8",
+);
+const navigationSource = await readFile(
+  join(projectRoot, "src/lib/dashboard/navigation.ts"),
+  "utf8",
+);
+const kampagnenSource = await readFile(
+  join(projectRoot, "src/app/dashboard/kampagnen/page.tsx"),
+  "utf8",
+);
+const beitraegeSource = await readFile(
+  join(projectRoot, "src/app/dashboard/beitraege/page.tsx"),
+  "utf8",
+);
+const shellSource = await readFile(
+  join(projectRoot, "src/components/DashboardShell.tsx"),
+  "utf8",
+);
+const dashboardLayoutSource = await readFile(
+  join(projectRoot, "src/app/dashboard/layout.tsx"),
+  "utf8",
+);
 const contentSyncPanelSource = await readFile(
   join(projectRoot, "src/components/MetaContentSyncPanel.tsx"),
   "utf8",
@@ -67,50 +91,50 @@ const manualSyncRouteSource = await readFile(
   "utf8",
 );
 
-assert.match(dashboardSource, /actionHref:[\s\S]*"\/api\/connectors\/meta\/start"/);
-assert.match(dashboardSource, /actionLabel:[\s\S]*"Meta verbinden"/);
-assert.match(dashboardSource, /"Minimaler Schreibscope bestätigt"/);
-assert.match(dashboardSource, /"Reconnect für Autonomie"/);
+assert.match(loaderSource, /actionHref:[\s\S]*"\/api\/connectors\/meta\/start"/);
+assert.match(loaderSource, /actionLabel:[\s\S]*"Meta verbinden"/);
+assert.match(loaderSource, /"Minimaler Schreibscope bestätigt"/);
+assert.match(loaderSource, /"Reconnect für Autonomie"/);
 assert.match(
-  dashboardSource,
+  loaderSource,
   /Keine Messaging- oder Beitrags-Publishing-Rechte\./,
 );
 assert.match(dashboardSource, /export const dynamic = "force-dynamic"/);
 assert.match(dashboardSource, /export const revalidate = 0/);
-assert.match(dashboardSource, /meta === "connected"/);
-assert.match(dashboardSource, /Meta wurde erfolgreich verbunden\./);
+assert.match(loaderSource, /meta === "connected"/);
+assert.match(loaderSource, /Meta wurde erfolgreich verbunden\./);
 assert.match(
-  dashboardSource,
+  loaderSource,
   /Die verbundenen Kontodaten werden gerade aktualisiert\./,
 );
-assert.doesNotMatch(dashboardSource, /Meta-Verbindung noch nicht bestätigt\./);
-assert.doesNotMatch(dashboardSource, /kein aktiver Connector gefunden/);
-assert.match(dashboardSource, /Meta konnte nicht verbunden werden\./);
-assert.match(dashboardSource, /invalid_state/);
-assert.match(dashboardSource, /scope_validation/);
-assert.match(dashboardSource, /token_validation/);
-assert.match(dashboardSource, /no_assets/);
-assert.match(dashboardSource, /missing_page_targets/);
-assert.match(dashboardSource, /missing_instagram_targets/);
-assert.match(dashboardSource, /authorization_reset/);
+assert.doesNotMatch(loaderSource, /Meta-Verbindung noch nicht bestätigt\./);
+assert.doesNotMatch(loaderSource, /kein aktiver Connector gefunden/);
+assert.match(loaderSource, /Meta konnte nicht verbunden werden\./);
+assert.match(loaderSource, /invalid_state/);
+assert.match(loaderSource, /scope_validation/);
+assert.match(loaderSource, /token_validation/);
+assert.match(loaderSource, /no_assets/);
+assert.match(loaderSource, /missing_page_targets/);
+assert.match(loaderSource, /missing_instagram_targets/);
+assert.match(loaderSource, /authorization_reset/);
 assert.match(
   contentSyncPanelSource,
   /<form action="\/api\/connectors\/meta\/start" method="post">/,
 );
-assert.doesNotMatch(dashboardSource, /InstagramAssetConfirm|instagramConfirmRequired/);
+assert.doesNotMatch(loaderSource, /InstagramAssetConfirm|instagramConfirmRequired/);
 assert.match(
-  dashboardSource,
+  loaderSource,
   /selectedInstagramIds\.has\(asset\.meta_asset_id\)/,
 );
-assert.match(dashboardSource, /storage/);
-assert.match(dashboardSource, /meta_scopes\.includes\("ads_management"\)/);
-assert.doesNotMatch(dashboardSource, /business_management/);
+assert.match(loaderSource, /storage/);
+assert.match(loaderSource, /meta_scopes\.includes\("ads_management"\)/);
+assert.doesNotMatch(loaderSource, /business_management/);
 assert.match(
-  dashboardSource,
+  loaderSource,
   /das Instagram-Konto jeweils ausdrücklich aus/,
 );
 assert.doesNotMatch(
-  dashboardSource,
+  loaderSource,
   /access_token_encrypted|token_iv|token_auth_tag|sync_backoff_until/,
 );
 
@@ -120,7 +144,7 @@ assert.match(contentSyncPanelSource, /Nächster Abruf/);
 assert.match(contentSyncPanelSource, /Sicherer Ausgangsbestand/);
 assert.match(contentSyncPanelSource, /Wieder verbunden/);
 assert.match(contentSyncPanelSource, /Der gespeicherte Ausgangsbestand bleibt erhalten/);
-assert.match(dashboardSource, /loadContentSyncSnapshot/);
+assert.match(loaderSource, /loadContentSyncSnapshot/);
 assert.match(contentSyncPanelSource, /Verbindung erneuern/);
 assert.match(contentSyncPanelSource, /Meta neu verbinden/);
 assert.match(contentSyncPanelSource, /Beitragskandidaten/);
@@ -137,25 +161,25 @@ assert.match(contentSyncSnapshotSource, /CANDIDATE_DISPLAY_LIMIT = 8/);
 assert.match(contentSyncSnapshotSource, /shouldListAsContentCandidate/);
 assert.match(contentSyncPanelSource, /<MetaSyncButton/);
 assert.match(contentSyncPanelSource, /shouldListAsContentCandidate/);
-assert.match(dashboardSource, /meta_account_performance_daily/);
-assert.match(dashboardSource, /meta_campaign_performance_30d/);
-assert.match(dashboardSource, /campaign_recommendations/);
-assert.match(dashboardSource, /\.eq\("status", "active"\)/);
-assert.match(dashboardSource, /\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
-assert.match(dashboardSource, /recommendations=\{recommendationRows\}/);
-assert.match(dashboardSource, /Ausführung nur mit aktiver Kunden-Policy/);
-assert.match(dashboardSource, /writeScopeGranted/);
+assert.match(loaderSource, /meta_account_performance_daily/);
+assert.match(loaderSource, /meta_campaign_performance_30d/);
+assert.match(loaderSource, /campaign_recommendations/);
+assert.match(loaderSource, /\.eq\("status", "active"\)/);
+assert.match(loaderSource, /\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
+assert.match(kampagnenSource, /recommendations=\{recommendationRows\}/);
+assert.match(dashboardSource, /Als Nächstes/);
+assert.match(beitraegeSource, /writeScopeGranted/);
 assert.match(contentSyncPanelSource, /minimale Schreibscope muss bestätigt werden/);
-assert.match(dashboardSource, /error: connectedAccountsError/);
-assert.match(dashboardSource, /platformAccountReadFailed/);
+assert.match(loaderSource, /error: connectedAccountsError/);
+assert.match(loaderSource, /platformAccountReadFailed/);
 assert.match(dashboardSource, /Verbindungsdaten konnten nicht geladen werden\./);
 assert.match(dashboardSource, /Bestehende Verbindung bleibt unverändert/);
 assert.match(
-  dashboardSource,
+  loaderSource,
   /platform\.configured && !account && !platformAccountReadFailed/,
 );
 assert.doesNotMatch(
-  dashboardSource,
+  loaderSource,
   /connectedAccountsError[\s\S]{0,500}Noch keine Werbekonten verbunden/,
 );
 
@@ -212,8 +236,8 @@ assert.match(candidatePreviewSource, /Keine Vorschau verfügbar/);
 assert.match(candidatePreviewSource, /aspect-\[16\/9\]/);
 assert.doesNotMatch(candidatePreviewSource, /dangerouslySetInnerHTML/);
 
-assert.match(dashboardSource, /MetaAdAccountPicker/);
-assert.match(dashboardSource, /id=\"werbekonto\"|#werbekonto|adAccountPickerOptions/);
+assert.match(kampagnenSource, /MetaAdAccountPicker/);
+assert.match(kampagnenSource, /MetaAdAccountPicker|adAccountPickerOptions/);
 assert.match(campaignOverviewSource, /MetaAdAccountPicker/);
 assert.match(campaignOverviewSource, /adAccounts/);
 assert.match(campaignOverviewSource, /Erfolgskontrolle/);
@@ -250,9 +274,9 @@ assert.doesNotMatch(marketingMigrationSource, /ads_management|POST\s+https?:\/\/
 assert.match(contentSyncPanelSource, /needsContentAssetSetup/);
 assert.match(contentSyncPanelSource, /Facebook-Seite und ein verknüpftes/);
 assert.doesNotMatch(contentSyncPanelSource, /genau ein Werbekonto/);
-assert.match(dashboardSource, /select-ad-account|marketing_meta_ad_account_id/);
-assert.match(dashboardSource, /needsContentAssetSetup/);
-assert.match(dashboardSource, /selectableForAds/);
+assert.match(loaderSource, /marketing_meta_ad_account_id/);
+assert.match(beitraegeSource, /needsContentAssetSetup/);
+assert.match(loaderSource, /selectableForAds/);
 
 const selectAdAccountRouteSource = await readFile(
   join(projectRoot, "src/app/api/connectors/meta/assets/select-ad-account/route.ts"),
@@ -343,11 +367,11 @@ assert.match(callbackSource, /dashboardRedirect\("error", "no_assets"\)/);
 assert.match(callbackSource, /classifyMetaGrantedScopes\(/);
 assert.match(callbackSource, /compatibleSystemUserScopes/);
 
-assert.match(dashboardSource, /const pageAssets = \(metaAssets \?\? \[\]\)\.filter/);
-assert.match(dashboardSource, /const adAccountAssets = \(metaAssets \?\? \[\]\)\.filter/);
-assert.match(dashboardSource, /pageAssets\.map\(\(asset\) =>/);
-assert.match(dashboardSource, /adAccountAssets\.map\(\(asset\) =>/);
-assert.match(dashboardSource, /instagramAssets\.map\(\(asset\) =>/);
+assert.match(loaderSource, /const pageAssets = \(metaAssets \?\? \[\]\)\.filter/);
+assert.match(loaderSource, /const adAccountAssets = \(metaAssets \?\? \[\]\)\.filter/);
+assert.match(loaderSource, /pageAssets\.map\(\(asset\) =>/);
+assert.match(loaderSource, /adAccountAssets\.map\(\(asset\) =>/);
+assert.match(loaderSource, /instagramAssets\.map\(\(asset\) =>/);
 assert.doesNotMatch(
   dashboardSource,
   /const pageAsset = metaAssets\?\.find/,
@@ -356,5 +380,18 @@ assert.doesNotMatch(
   dashboardSource,
   /Instagram \(Meta-Auswahl\)/,
 );
+
+assert.match(navigationSource, /href: "\/dashboard\/kampagnen"/);
+assert.match(navigationSource, /href: "\/dashboard\/beitraege"/);
+assert.match(navigationSource, /href: "\/dashboard\/autonomie"/);
+assert.match(navigationSource, /href: "\/dashboard\/traffic-launch"/);
+assert.match(navigationSource, /href: "\/dashboard\/assistent"/);
+assert.doesNotMatch(navigationSource, /href: "#kampagnen"/);
+assert.match(shellSource, /DashboardShell/);
+assert.match(dashboardLayoutSource, /DashboardShell/);
+assert.match(dashboardSource, /id="plattformen"/);
+assert.match(dashboardSource, /PlatformStatusCard/);
+assert.match(beitraegeSource, /MetaContentSyncPanel/);
+assert.match(kampagnenSource, /MetaCampaignOverview/);
 
 console.log("Dashboard Meta connector checks passed");
