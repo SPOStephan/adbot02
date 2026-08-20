@@ -4,6 +4,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { attachSpaFallback } from "./spaFallback";
 import { registerAdbotSsoRoute } from "./adbotSsoRoute";
+import { registerPortalMetaSyncRoute } from "./portalMetaSyncRoute";
 
 export type CreateAppOptions = {
   serveFrontend?: boolean;
@@ -23,6 +24,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
     next();
   });
   registerAdbotSsoRoute(app);
+  registerPortalMetaSyncRoute(app);
   app.use(
     "/api/trpc",
     createExpressMiddleware({

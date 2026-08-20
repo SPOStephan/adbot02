@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createFreebieSsoToken } from "@/lib/freebie-sso";
+import { syncConfirmedPixelsToWorkspaces } from "@/lib/meta/customer-control-service";
 import { createFreebieUrl, createPortalUrl } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,6 +26,13 @@ export async function GET() {
   }
 
   try {
+    await Promise.race([
+      syncConfirmedPixelsToWorkspaces(user.id),
+      new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+    ]).catch((error) => {
+      console.warn("[freebie-sso] Pixel-Sync übersprungen", error);
+    });
+
     const token = createFreebieSsoToken({
       userId: user.id,
       email: user.email,

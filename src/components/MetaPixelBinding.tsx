@@ -59,7 +59,7 @@ export function MetaPixelBinding({ pixels }: Props) {
       setNotice({
         tone: "success",
         message:
-          "Pixel bestätigt. Es steht für Lead-Kampagnen bereit — Traffic-Launches bleiben unverändert.",
+          "Pixel bestätigt. Funnel und Freebie übernehmen die ID automatisch (wenn dort noch keine andere steht). CAPI-Token weiterhin im Funnel setzen.",
       });
       router.refresh();
     } catch (error) {
@@ -119,8 +119,11 @@ export function MetaPixelBinding({ pixels }: Props) {
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Hier hinterlegst du die Meta Pixel-ID, auf die Lead-Kampagnen
-            optimieren. Der Traffic-Canary nutzt dieses Pixel nicht. Dieselbe
-            ID sollte im Funnel unter Meta-Tracking hinterlegt sein (inkl. CAPI).
+            optimieren. Der Traffic-Canary nutzt dieses Pixel nicht. Nach der
+            Bestätigung wird dieselbe ID automatisch soft in Funnel und Freebie
+            übernommen (leere Felder werden befüllt und Tracking aktiviert;
+            abweichende manuelle Pixel bleiben unangetastet). CAPI-Token bleiben
+            in den Funnel-Einstellungen.
           </p>
         </div>
       </div>

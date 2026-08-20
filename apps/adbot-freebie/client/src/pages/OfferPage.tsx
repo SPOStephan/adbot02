@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
-import { useState, type ReactNode } from "react";
+import { loadMetaPixel, trackMetaConversion } from "@/lib/metaPixel";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRoute } from "wouter";
 
 export function OfferPage() {
@@ -13,15 +14,29 @@ export function OfferPage() {
   const [leadId, setLeadId] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
+  const offer = offerQuery.data;
+  useEffect(() => {
+    if (offer?.metaTracking?.enabled && offer.metaTracking.pixelId) {
+      loadMetaPixel(offer.metaTracking.pixelId);
+    }
+  }, [offer?.metaTracking?.enabled, offer?.metaTracking?.pixelId]);
+
   if (offerQuery.isLoading) {
     return <PublicShell>Lade Freebie…</PublicShell>;
   }
 
-  if (offerQuery.error || !offerQuery.data) {
+  if (offerQuery.error || !offer) {
     return <PublicShell>Dieses Freebie ist nicht verfügbar.</PublicShell>;
   }
 
-  const offer = offerQuery.data;
+  const trackLead = () => {
+    if (offer.metaTracking?.enabled && offer.metaTracking.pixelId) {
+      trackMetaConversion(
+        offer.metaTracking.pixelId,
+        offer.metaTracking.eventName || "Lead",
+      );
+    }
+  };
 
   if (downloadUrl) {
     return (
@@ -56,6 +71,7 @@ export function OfferPage() {
           onSubmit={async event => {
             event.preventDefault();
             const result = await confirmOtpMutation.mutateAsync({ leadId, otp });
+            trackLead();
             setDownloadUrl(result.downloadUrl);
           }}
         >

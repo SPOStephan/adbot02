@@ -4,9 +4,11 @@ import type {
   ConfirmationMode,
   FreebieLead,
   FreebieLeadStatus,
+  FreebieMetaTracking,
   FreebieOffer,
   MediaAsset,
 } from "../shared/types";
+import { defaultFreebieMetaTracking } from "../shared/types";
 import { ENV } from "./_core/env";
 import { buildCdnUrl, uploadToBunny } from "./bunny";
 
@@ -45,6 +47,16 @@ function slugify(value: string) {
     .slice(0, 64) || `offer-${randomUUID().slice(0, 8)}`;
 }
 
+function mapMetaTracking(row: Record<string, unknown>): FreebieMetaTracking {
+  const pixelId = String(row.meta_pixel_id ?? "").trim();
+  const eventName = String(row.meta_event_name ?? "").trim() || "Lead";
+  return {
+    enabled: Boolean(row.meta_tracking_enabled),
+    pixelId: /^\d{5,25}$/.test(pixelId) ? pixelId : "",
+    eventName: /^[A-Za-z][A-Za-z0-9_]*$/.test(eventName) ? eventName : "Lead",
+  };
+}
+
 function mapOffer(row: Record<string, unknown>): FreebieOffer {
   return {
     id: String(row.id),
@@ -56,6 +68,7 @@ function mapOffer(row: Record<string, unknown>): FreebieOffer {
     confirmationMode: (row.confirmation_mode as ConfirmationMode) ?? "doi",
     mediaAssetId: (row.media_asset_id as string | null) ?? null,
     isPublished: Boolean(row.is_published),
+    metaTracking: mapMetaTracking(row),
     createdAt: String(row.created_at ?? nowIso()),
     updatedAt: String(row.updated_at ?? nowIso()),
   };
@@ -146,11 +159,17 @@ export async function upsertOffer(input: {
   slug?: string;
   mediaAssetId?: string | null;
   isPublished?: boolean;
+  metaTracking?: FreebieMetaTracking;
 }): Promise<FreebieOffer> {
   const id = input.id ?? randomUUID();
   const stamp = nowIso();
   const existing = input.id ? await getOfferById(input.id) : null;
   const slug = slugify(input.slug?.trim() || existing?.slug || input.title);
+  const metaTracking = {
+    ...defaultFreebieMetaTracking,
+    ...(existing?.metaTracking ?? {}),
+    ...(input.metaTracking ?? {}),
+  };
 
   const offer: FreebieOffer = {
     id,
@@ -165,6 +184,7 @@ export async function upsertOffer(input: {
         ? input.mediaAssetId
         : (existing?.mediaAssetId ?? null),
     isPublished: input.isPublished ?? existing?.isPublished ?? false,
+    metaTracking,
     createdAt: existing?.createdAt ?? stamp,
     updatedAt: stamp,
   };
@@ -188,6 +208,9 @@ export async function upsertOffer(input: {
         confirmation_mode: offer.confirmationMode,
         media_asset_id: offer.mediaAssetId,
         is_published: offer.isPublished,
+        meta_tracking_enabled: offer.metaTracking.enabled,
+        meta_pixel_id: offer.metaTracking.pixelId,
+        meta_event_name: offer.metaTracking.eventName,
         created_at: offer.createdAt,
         updated_at: offer.updatedAt,
       },

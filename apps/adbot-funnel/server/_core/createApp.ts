@@ -6,6 +6,7 @@ import { createContext } from "./context";
 import { registerStorageProxy } from "./storageProxy";
 import { attachSpaFallback } from "./spaFallback";
 import { registerAdbotSsoRoute } from "./adbotSsoRoute";
+import { registerPortalMetaSyncRoute } from "./portalMetaSyncRoute";
 
 export type CreateAppOptions = {
   /** When false, skip static/SPA fallback (dev uses Vite middleware instead). */
@@ -21,6 +22,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
   });
   app.use(funnelSecurityHeaders);
   registerAdbotSsoRoute(app);
+  registerPortalMetaSyncRoute(app);
   registerStorageProxy(app);
   app.use(
     "/api/trpc",
