@@ -356,13 +356,11 @@ async function recoverPausedOrganicBoostCampaigns(input: {
       .filter((row) => {
         const status = String(row.status ?? "").toUpperCase();
         const effective = String(row.effective_status ?? "").toUpperCase();
+        // Campaign ACTIVATE queue only — child AD_PAUSED is heal, not this path.
         return (
           status === "PAUSED" ||
           effective === "PAUSED" ||
-          effective === "CAMPAIGN_PAUSED" ||
-          effective === "ADSET_PAUSED" ||
-          effective === "AD_PAUSED" ||
-          effective === "DELIVERY_UNVERIFIED"
+          effective === "CAMPAIGN_PAUSED"
         );
       })
       .map((row) => String(row.platform_campaign_id ?? ""))
