@@ -72,6 +72,26 @@ assert.match(read("src/lib/site-branding/storage.ts"), /uploadSiteFavicon/);
 assert.match(read("src/lib/site-branding/branding.ts"), /faviconUrl/);
 assert.match(read("src/components/SiteFooter.tsx"), /Adbot\.one/);
 assert.match(read("src/app/layout.tsx"), /generateMetadata/);
-assert.match(read("src/app/layout.tsx"), /faviconUrl/);
+assert.match(read("src/app/layout.tsx"), /\/icon\?v=/);
+assert.match(read("src/app/icon/route.ts"), /serveSiteFaviconResponse/);
+assert.match(
+  read("src/lib/site-branding/serve-favicon.ts"),
+  /faviconUrl/,
+);
+assert.match(
+  read("next.config.ts"),
+  /source:\s*"\/favicon\.ico"/,
+);
+assert.match(
+  read("next.config.ts"),
+  /destination:\s*"\/icon"/,
+);
+
+import { existsSync } from "node:fs";
+assert.equal(
+  existsSync(new URL("../src/app/favicon.ico", import.meta.url)),
+  false,
+  "static src/app/favicon.ico must be removed so branding icon is served",
+);
 
 console.log("test-site-logo: ok");
