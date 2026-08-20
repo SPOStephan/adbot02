@@ -1016,7 +1016,12 @@ const launchMarketingEnsureSource = await readFile(
   path.join(root, "src/lib/meta/launch-marketing-ensure.ts"),
   "utf8",
 );
-assert.match(launchMarketingEnsureSource, /syncMetaMarketingSnapshot/);
+assert.match(launchMarketingEnsureSource, /resolveMarketingAdAccountId/);
+assert.match(launchMarketingEnsureSource, /ad_account_selection_required/);
+assert.match(
+  launchMarketingEnsureSource,
+  /marketing_meta_ad_account_id/,
+);
 assert.match(launchMarketingEnsureSource, /marketing_timezone_name/);
 assert.match(launchMarketingEnsureSource, /ensureLaunchMarketingReady/);
 assert.match(launchMarketingEnsureSource, /normalizeLaunchTimezoneIfNeeded/);

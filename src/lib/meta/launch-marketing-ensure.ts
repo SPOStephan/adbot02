@@ -13,6 +13,7 @@ import {
   releaseMetaAccountOperation,
   runMetaBudgetPlannerAfterSnapshot,
 } from "@/lib/meta/planner";
+import { resolveMarketingAdAccountId } from "@/lib/meta/ad-account";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /** Matches SQL launch freshness window (marketing_last_success_at >= now() - 2h). */
@@ -150,12 +151,12 @@ async function runLaunchMarketingSync(
   const admin = createAdminClient();
   const [
     { data: account, error: accountError },
-    { data: adAccount, error: adError },
+    { data: adAccounts, error: adError },
   ] = await Promise.all([
     admin
       .from("platform_accounts")
       .select(
-        "access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at",
+        "access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,marketing_meta_ad_account_id",
       )
       .eq("id", customer.platformAccountId)
       .eq("user_id", customer.userId)
@@ -168,16 +169,35 @@ async function runLaunchMarketingSync(
       .eq("platform_account_id", customer.platformAccountId)
       .eq("user_id", customer.userId)
       .eq("asset_type", "ad_account")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
+      .order("created_at", { ascending: true }),
   ]);
 
   if (accountError || !account) {
     throw new Error("meta_account_unavailable");
   }
-  if (adError || !adAccount?.meta_asset_id) {
+  if (adError) {
     throw new Error("ad_account_missing");
+  }
+
+  const adAccountAssetIds = (adAccounts ?? [])
+    .map((row) =>
+      typeof row.meta_asset_id === "string" ? row.meta_asset_id : "",
+    )
+    .filter(Boolean);
+  const marketingAdAccountId = resolveMarketingAdAccountId({
+    selectedAdAccountId:
+      typeof account.marketing_meta_ad_account_id === "string"
+        ? account.marketing_meta_ad_account_id
+        : null,
+    adAccountAssetIds,
+  });
+
+  if (!marketingAdAccountId) {
+    throw new Error(
+      adAccountAssetIds.length > 1
+        ? "ad_account_selection_required"
+        : "ad_account_missing",
+    );
   }
   if (
     !account.access_token_encrypted ||
@@ -213,7 +233,7 @@ async function runLaunchMarketingSync(
     const marketingResult = await syncMetaMarketingSnapshot({
       platformAccountId: customer.platformAccountId,
       userId: customer.userId,
-      adAccountId: adAccount.meta_asset_id,
+      adAccountId: marketingAdAccountId,
       accessToken,
       appSecret: env.appSecret,
     });
@@ -363,6 +383,13 @@ export async function ensureLaunchMarketingReady(
       ok: false,
       message:
         "Meta ist nicht vollständig verbunden. Bitte Meta erneut verbinden und dann die Kampagne vorbereiten.",
+    };
+  }
+  if (lastDetail === "ad_account_selection_required") {
+    return {
+      ok: false,
+      message:
+        "Mehrere Werbekonten sind verbunden. Bitte im Dashboard unter den Meta-Assets das aktive Werbekonto für Ads wählen und die Vorbereitung erneut starten.",
     };
   }
   if (lastDetail === "currency_not_eur") {

@@ -33,6 +33,7 @@ type OrganicBoostResponse = {
 type SyncResponse = {
   ok?: boolean;
   error?: string;
+  errorCode?: string;
   status?: string;
   newCount?: number;
   retryAt?: string | null;
@@ -259,6 +260,8 @@ export function MetaSyncButton({
                 ? "Meta bittet um eine kurze Pause. Der nächste Abruf ist bereits geplant."
                 : body.status === "reconnect_required"
                   ? "Die Meta-Verbindung muss erneuert werden."
+                  : body.status === "error" && body.errorCode === "assets_missing"
+                    ? "Meta ist verbunden, aber für den Abruf fehlen noch eine Facebook-Seite oder ein Instagram-Konto."
                   : body.status === "rate_limited"
                     ? `Meta-Nutzungslimit erreicht.${boostHint ? ` ${boostHint}` : ""}`
                     : response.status >= 500

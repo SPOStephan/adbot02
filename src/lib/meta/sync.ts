@@ -30,6 +30,7 @@ import { decryptAccessToken } from "./crypto";
 import { getMetaSyncEnv } from "./env";
 import { createAdminClient } from "../supabase/admin";
 import { nextHourlyRun } from "./schedule";
+import { resolveMarketingAdAccountId } from "./ad-account";
 
 const SYNC_LOCK_SECONDS = 5 * 60;
 const MANUAL_SYNC_COOLDOWN_SECONDS = 60;
@@ -61,6 +62,7 @@ type ConnectorRow = {
   last_sync_started_at: string | null;
   sync_consecutive_failures: number | null;
   instagram_account_ids: unknown;
+  marketing_meta_ad_account_id: string | null;
   marketing_sync_id: string | null;
   marketing_sync_status: string | null;
   marketing_sync_error_code: string | null;
@@ -92,6 +94,7 @@ export type MetaSyncResult = {
     | "reconnect_required"
     | "blocked";
   blockedReason: MetaSyncBlockedReason | null;
+  errorCode: string | null;
   seenCount: number;
   newCount: number;
   syncedAssetCount: number;
@@ -390,7 +393,7 @@ async function fetchConnector(
   let query = admin
     .from("platform_accounts")
     .select(
-      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids,marketing_sync_id,marketing_sync_status,marketing_sync_error_code,marketing_currency,marketing_last_success_at",
+      "id,user_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at,sync_lock_until,sync_backoff_until,last_sync_started_at,sync_consecutive_failures,instagram_account_ids,marketing_meta_ad_account_id,marketing_sync_id,marketing_sync_status,marketing_sync_error_code,marketing_currency,marketing_last_success_at",
     )
     .eq("id", platformAccountId)
     .eq("platform", "meta")
@@ -470,6 +473,7 @@ function blockedResult(
     outcome: "blocked",
     status: "blocked",
     blockedReason: reason,
+    errorCode: null,
     seenCount: 0,
     newCount: 0,
     syncedAssetCount: 0,
@@ -546,6 +550,7 @@ async function markReconnectRequired(
     outcome: "completed",
     status: "reconnect_required",
     blockedReason: null,
+    errorCode,
     seenCount: 0,
     newCount: 0,
     syncedAssetCount: 0,
@@ -597,6 +602,7 @@ async function markFailed(input: {
     outcome: "completed",
     status: input.status,
     blockedReason: null,
+    errorCode: input.errorCode,
     seenCount: 0,
     newCount: 0,
     syncedAssetCount: 0,
@@ -726,15 +732,21 @@ export async function syncMetaConnector(
       (asset) => asset.asset_type === "ad_account",
     );
 
-    if (
-      !pageAssets.length ||
-      !instagramAssets.length ||
-      adAccountAssets.length !== 1
-    ) {
-      return markReconnectRequired(connector, "assets_missing");
+    if (!pageAssets.length || !instagramAssets.length) {
+      // Page/IG missing is a setup issue — never an OAuth reconnect.
+      return markFailed({
+        connector,
+        status: "error",
+        errorCode: "assets_missing",
+        usage,
+        requestedBackoffSeconds: 15 * 60,
+      });
     }
 
-    const adAccountAsset = adAccountAssets[0];
+    const marketingAdAccountId = resolveMarketingAdAccountId({
+      selectedAdAccountId: connector.marketing_meta_ad_account_id,
+      adAccountAssetIds: adAccountAssets.map((asset) => asset.meta_asset_id),
+    });
 
     const refreshedPages = await getMetaPageAssets({
       accessToken,
@@ -848,7 +860,15 @@ export async function syncMetaConnector(
         marketingErrorCode = "marketing_operation_locked";
       }
 
-      if (readLeaseToken) {
+      if (readLeaseToken && !marketingAdAccountId) {
+        // Content sync already succeeded. Ads need a Werbekonto (pick if several).
+        marketingErrorCode =
+          adAccountAssets.length > 1
+            ? "ad_account_selection_required"
+            : "ad_account_missing";
+      }
+
+      if (readLeaseToken && marketingAdAccountId) {
         // Beitrag-Push planning is DB-only: run even near Meta usage limits.
         // Meta writes (executor) stay gated on usage below.
         // Last-known marketing_sync_id is enough — do not wait for status=success.
@@ -903,7 +923,7 @@ export async function syncMetaConnector(
           marketingResult = await syncMetaMarketingSnapshot({
             platformAccountId: connector.id,
             userId: connector.user_id,
-            adAccountId: adAccountAsset.meta_asset_id,
+            adAccountId: marketingAdAccountId,
             accessToken,
             appSecret: env.appSecret,
           });
@@ -1054,21 +1074,29 @@ export async function syncMetaConnector(
     const marketingLeaseBlocked =
       marketingErrorCode === "marketing_operation_locked" ||
       marketingErrorCode === "marketing_operation_lease_failed";
+    const marketingSelectionRequired =
+      marketingErrorCode === "ad_account_selection_required";
+    const marketingAdAccountMissing =
+      marketingErrorCode === "ad_account_missing";
+    const marketingNonBlocking =
+      marketingLeaseBlocked ||
+      marketingSelectionRequired ||
+      marketingAdAccountMissing;
     const status =
       failedAssetCount ||
-      (marketingErrorCode && !marketingLeaseBlocked) ||
+      (marketingErrorCode && !marketingNonBlocking) ||
       plannerErrorCode
         ? "partial"
         : "success";
     const syncErrorCode = plannerErrorCode
-      ? failedAssetCount || (marketingErrorCode && !marketingLeaseBlocked)
+      ? failedAssetCount || (marketingErrorCode && !marketingNonBlocking)
         ? "content_marketing_or_planner_partial"
         : plannerErrorCode
-      : failedAssetCount && marketingErrorCode && !marketingLeaseBlocked
+      : failedAssetCount && marketingErrorCode && !marketingNonBlocking
         ? "content_and_marketing_partial"
         : failedAssetCount
           ? "asset_partial"
-          : marketingLeaseBlocked
+          : marketingNonBlocking
             ? null
             : marketingErrorCode;
     const nextSyncAt = nextHourlyRun().toISOString();
@@ -1108,19 +1136,24 @@ export async function syncMetaConnector(
       sync_usage: usageForStorage(usage, organicBoostForStorage),
       marketing_sync_status: marketingResult
         ? "success"
-        : preserveMarketingSuccess
-          ? "success"
-          : marketingLeaseBlocked
-            ? (connector.marketing_sync_status ?? "error")
-            : "error",
+        : marketingSelectionRequired || marketingAdAccountMissing
+          ? "error"
+          : preserveMarketingSuccess
+            ? "success"
+            : marketingLeaseBlocked
+              ? (connector.marketing_sync_status ?? "error")
+              : "error",
       // Lease contention is transient — do not sticky-banner the dashboard.
       // When last-good marketing data is preserved, clear the sticky code so the
       // overview does not keep showing a failed Abruf over still-valid Live data.
+      // Selection/missing stays sticky on marketing until the user fixes Assets.
       marketing_sync_error_code: marketingResult
         ? null
-        : marketingLeaseBlocked || preserveMarketingSuccess
-          ? null
-          : marketingErrorCode,
+        : marketingSelectionRequired || marketingAdAccountMissing
+          ? marketingErrorCode
+          : marketingLeaseBlocked || preserveMarketingSuccess
+            ? null
+            : marketingErrorCode,
       marketing_last_sync_started_at: marketingStartedAt,
       marketing_next_sync_at: nextSyncAt,
       automation_planner_status: plannerErrorCode
@@ -1142,6 +1175,7 @@ export async function syncMetaConnector(
       outcome: "completed",
       status,
       blockedReason: null,
+      errorCode: syncErrorCode,
       seenCount,
       newCount,
       syncedAssetCount,

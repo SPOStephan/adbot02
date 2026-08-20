@@ -240,6 +240,7 @@ export async function POST() {
   return json({
     ok: result.status === "success" || result.status === "partial",
     status: result.status,
+    errorCode: result.errorCode,
     seenCount: result.seenCount,
     newCount: result.newCount,
     syncedAssetCount: result.syncedAssetCount,

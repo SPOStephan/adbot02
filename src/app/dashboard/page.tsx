@@ -412,7 +412,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const { data: connectedAccounts, error: connectedAccountsError } = await supabase
     .from("platform_accounts")
     .select(
-      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until, marketing_spend_total, marketing_spend_today, marketing_insight_spend_rows, instagram_account_ids",
+      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_meta_ad_account_id, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until, marketing_spend_total, marketing_spend_today, marketing_insight_spend_rows, instagram_account_ids",
     )
     .eq("user_id", user.id)
     .is("revoked_at", null);
@@ -631,8 +631,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         ];
   const contentCandidates = contentSyncSnapshot?.candidates ?? [];
   const syncStatus = metaAccount?.sync_status ?? "idle";
-  const reconnectRequired =
-    syncStatus === "reconnect_required" || !writeScopeGranted;
+  const syncErrorCode =
+    typeof metaAccount?.sync_error_code === "string"
+      ? metaAccount.sync_error_code
+      : null;
+  // assets_missing was historically stored as reconnect_required — never treat
+  // that setup gap as "Meta neu verbinden" when scopes are already granted.
+  const authReconnectRequired =
+    syncStatus === "reconnect_required" &&
+    syncErrorCode !== "assets_missing";
+  const reconnectRequired = authReconnectRequired || !writeScopeGranted;
+
   const pageAssets = (metaAssets ?? []).filter(
     (asset) => asset.asset_type === "facebook_page",
   );
@@ -651,6 +660,49 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const adAccountAssets = (metaAssets ?? []).filter(
     (asset) => asset.asset_type === "ad_account",
   );
+  const contentAssetsReady =
+    pageAssets.length > 0 && instagramAssets.length > 0;
+
+  // Heal sticky false reconnect / assets_missing after OAuth when Page+IG exist.
+  // Multiple ad accounts must never block content sync or force reconnect.
+  if (
+    metaConnected &&
+    metaAccount &&
+    writeScopeGranted &&
+    syncErrorCode === "assets_missing" &&
+    (syncStatus === "reconnect_required" || syncStatus === "error")
+  ) {
+    try {
+      const healedStatus = contentAssetsReady
+        ? metaAccount.baseline_completed_at
+          ? "success"
+          : "idle"
+        : "error";
+      const healedErrorCode = contentAssetsReady ? null : "assets_missing";
+      await createAdminClient()
+        .from("platform_accounts")
+        .update({
+          sync_status: healedStatus,
+          sync_error_code: healedErrorCode,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", metaAccount.id)
+        .eq("user_id", user.id);
+      metaAccount.sync_status = healedStatus;
+      metaAccount.sync_error_code = healedErrorCode;
+    } catch {
+      // Non-fatal display cleanup.
+    }
+  }
+
+  const selectedMarketingAdAccountId = (() => {
+    const raw =
+      typeof metaAccount?.marketing_meta_ad_account_id === "string"
+        ? metaAccount.marketing_meta_ad_account_id.trim()
+        : "";
+    if (!raw) return null;
+    return raw.replace(/^act_/i, "");
+  })();
   const connectedAssetViews: MetaConnectedAssetView[] = [
     ...pageAssets.map((asset) => ({
       id: asset.id,
@@ -668,17 +720,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       }`,
       removable: instagramAssets.length > 1,
     })),
-    ...adAccountAssets.map((asset) => ({
-      id: asset.id,
-      assetType: "ad_account" as const,
-      label: `Werbekonto: ${asset.name?.trim() || asset.meta_asset_id}`,
-      removable: adAccountAssets.length > 1,
-    })),
+    ...adAccountAssets.map((asset) => {
+      const assetNorm = String(asset.meta_asset_id ?? "").replace(/^act_/i, "");
+      const selectedForAds =
+        adAccountAssets.length === 1 ||
+        (selectedMarketingAdAccountId !== null &&
+          assetNorm === selectedMarketingAdAccountId);
+      return {
+        id: asset.id,
+        assetType: "ad_account" as const,
+        label: `Werbekonto: ${asset.name?.trim() || asset.meta_asset_id}`,
+        removable: adAccountAssets.length > 1,
+        selectedForAds,
+        selectableForAds: adAccountAssets.length > 1,
+      };
+    }),
   ];
   const showExtraAssetHint =
     pageAssets.length > 1
     || instagramAssets.length > 1
     || adAccountAssets.length > 1;
+  const needsContentAssetSetup = !contentAssetsReady;
   const metaNotice = getMetaNotice(
     firstQueryValue(query.meta),
     firstQueryValue(query.meta_error),
@@ -2340,6 +2402,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               connectedAssets={connectedAssetViews}
               initial={{
                 status: contentSyncSnapshot.status,
+                errorCode: contentSyncSnapshot.errorCode,
                 lastSyncStartedAt: contentSyncSnapshot.lastSyncStartedAt,
                 lastSyncedAt: contentSyncSnapshot.lastSyncedAt,
                 nextSyncAt: contentSyncSnapshot.nextSyncAt,
@@ -2350,6 +2413,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 storedCandidateCount: contentSyncSnapshot.storedCandidateCount,
                 candidates: contentSyncSnapshot.candidates,
               }}
+              needsContentAssetSetup={needsContentAssetSetup}
               reconnectRequired={reconnectRequired}
               showExtraAssetHint={showExtraAssetHint}
               writeScopeGranted={writeScopeGranted}

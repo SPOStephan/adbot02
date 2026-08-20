@@ -37,6 +37,12 @@ function connector(overrides = {}) {
     last_sync_started_at: null,
     sync_consecutive_failures: 0,
     instagram_account_ids: ["178414000000001"],
+    marketing_meta_ad_account_id: null,
+    marketing_sync_id: "20000000-0000-4000-8000-000000000099",
+    marketing_sync_status: "idle",
+    marketing_sync_error_code: null,
+    marketing_currency: "EUR",
+    marketing_last_success_at: isoOffset(-60),
     ...overrides,
   };
 }
@@ -204,13 +210,17 @@ try {
     .replace('from "./crypto";', 'from "./crypto.mjs";')
     .replace('from "./env";', 'from "./env.mjs";')
     .replace('from "./marketing-sync";', 'from "./marketing-sync.mjs";')
+    .replace('from "./organic-boost-ensure";', 'from "./organic-boost-ensure.mjs";')
     .replace('from "./organic-boost-runner";', 'from "./organic-boost-runner.mjs";')
     .replace('from "./planner";', 'from "./planner.mjs";')
     .replace('from "./executor";', 'from "./executor.mjs";')
     .replace('from "./schedule";', 'from "./schedule.mjs";')
+    .replace('from "./ad-account";', 'from "./ad-account.mjs";')
     .replace('from "../supabase/admin";', 'from "./admin.mjs";');
 
   const scheduleSource = await readFile(scheduleSourcePath, "utf8");
+  const adAccountSourcePath = join(projectRoot, "src/lib/meta/ad-account.ts");
+  const adAccountSource = await readFile(adAccountSourcePath, "utf8");
 
   const clientStub = `
 const emptyUsage = {
@@ -351,6 +361,20 @@ export async function releaseMetaAccountOperation(input) {
 }
 `;
 
+  const organicBoostEnsureStub = `
+export async function planAndDrainOrganicBoostForAccount(input) {
+  globalThis.__metaTest.calls.push({
+    name: "planAndDrainOrganicBoostForAccount",
+    input,
+  });
+  return {
+    skippedRecent: true,
+    planner: null,
+    drain: null,
+  };
+}
+`;
+
   const organicBoostRunnerStub = `
 export async function runOrganicBoostPlannerForAccount(input) {
   globalThis.__metaTest.calls.push({
@@ -411,6 +435,11 @@ export function createAdminClient() {
   );
   await writeFile(join(temporaryDirectory, "planner.mjs"), plannerStub, "utf8");
   await writeFile(
+    join(temporaryDirectory, "organic-boost-ensure.mjs"),
+    organicBoostEnsureStub,
+    "utf8",
+  );
+  await writeFile(
     join(temporaryDirectory, "organic-boost-runner.mjs"),
     organicBoostRunnerStub,
     "utf8",
@@ -421,10 +450,13 @@ export function createAdminClient() {
   await writeFile(join(temporaryDirectory, "admin.mjs"), adminStub, "utf8");
   const scheduleModulePath = join(temporaryDirectory, "schedule.mjs");
   await writeFile(scheduleModulePath, transpile(scheduleSource), "utf8");
+  const adAccountModulePath = join(temporaryDirectory, "ad-account.mjs");
+  await writeFile(adAccountModulePath, transpile(adAccountSource), "utf8");
   const syncModulePath = join(temporaryDirectory, "sync.mjs");
   await writeFile(syncModulePath, transpile(syncSource), "utf8");
 
   const syncModule = await import(pathToFileURL(syncModulePath).href);
+  const adAccountModule = await import(pathToFileURL(adAccountModulePath).href);
   const scheduleModule = await import(pathToFileURL(scheduleModulePath).href);
   const plannerModule = await import(
     pathToFileURL(join(temporaryDirectory, "planner.mjs")).href,
@@ -824,15 +856,107 @@ export function createAdminClient() {
     expiredHarness.state.updates.at(-1).values.sync_error_code,
     "token_expired",
   );
+  assert.equal(expiredResult.errorCode, "token_expired");
+
+  const missingAssetsHarness = makeAdminHarness({
+    assets: defaultAssets().filter((asset) => asset.asset_type !== "instagram_account"),
+  });
+  configureMeta(missingAssetsHarness.admin);
+  const missingAssetsResult = await syncModule.syncMetaConnector({
+    platformAccountId: missingAssetsHarness.state.connector.id,
+    mode: "manual",
+  });
+  assert.equal(missingAssetsResult.status, "error");
+  assert.equal(missingAssetsResult.errorCode, "assets_missing");
   assert.equal(
-    "last_sync_seen_count" in expiredHarness.state.updates.at(-1).values,
-    false,
+    missingAssetsHarness.state.updates.at(-1).values.sync_status,
+    "error",
   );
   assert.equal(
-    "last_sync_new_count" in expiredHarness.state.updates.at(-1).values,
-    false,
+    missingAssetsHarness.state.updates.at(-1).values.sync_error_code,
+    "assets_missing",
   );
-  assert.equal(globalThis.__metaTest.calls.length, 0);
+  assert.notEqual(missingAssetsResult.status, "reconnect_required");
+
+  assert.equal(
+    adAccountModule.resolveMarketingAdAccountId({
+      selectedAdAccountId: null,
+      adAccountAssetIds: ["act_111"],
+    }),
+    "act_111",
+  );
+  assert.equal(
+    adAccountModule.resolveMarketingAdAccountId({
+      selectedAdAccountId: null,
+      adAccountAssetIds: ["act_111", "act_222"],
+    }),
+    null,
+  );
+  assert.equal(
+    adAccountModule.resolveMarketingAdAccountId({
+      selectedAdAccountId: "222",
+      adAccountAssetIds: ["act_111", "act_222"],
+    }),
+    "act_222",
+  );
+
+  const multiAdHarness = makeAdminHarness({
+    assets: [
+      ...defaultAssets("2026-07-27T09:00:00.000Z"),
+      {
+        id: "10000000-0000-4000-8000-000000000005",
+        asset_type: "ad_account",
+        meta_asset_id: "ad-account-2",
+        parent_meta_asset_id: null,
+        baseline_completed_at: null,
+      },
+    ],
+  });
+  configureMeta(multiAdHarness.admin);
+  const multiAdResult = await syncModule.syncMetaConnector({
+    platformAccountId: multiAdHarness.state.connector.id,
+    mode: "manual",
+  });
+  assert.equal(multiAdResult.status, "success");
+  assert.equal(multiAdResult.errorCode, null);
+  assert.equal(
+    multiAdHarness.state.updates.at(-1).values.marketing_sync_error_code,
+    "ad_account_selection_required",
+  );
+  assert.equal(
+    multiAdHarness.state.updates.at(-1).values.sync_status,
+    "success",
+  );
+
+  const multiAdSelectedHarness = makeAdminHarness({
+    connector: connector({
+      marketing_meta_ad_account_id: "ad-account-2",
+    }),
+    assets: [
+      ...defaultAssets("2026-07-27T09:00:00.000Z"),
+      {
+        id: "10000000-0000-4000-8000-000000000005",
+        asset_type: "ad_account",
+        meta_asset_id: "ad-account-2",
+        parent_meta_asset_id: null,
+        baseline_completed_at: null,
+      },
+    ],
+  });
+  configureMeta(multiAdSelectedHarness.admin);
+  const multiAdSelectedResult = await syncModule.syncMetaConnector({
+    platformAccountId: multiAdSelectedHarness.state.connector.id,
+    mode: "manual",
+  });
+  assert.equal(multiAdSelectedResult.status, "success");
+  const selectedMarketingCall = globalThis.__metaTest.calls.find(
+    (call) => call.name === "syncMetaMarketingSnapshot",
+  );
+  assert.equal(selectedMarketingCall.input.adAccountId, "ad-account-2");
+  assert.equal(
+    multiAdSelectedHarness.state.updates.at(-1).values.marketing_sync_error_code,
+    null,
+  );
 
   const partialHarness = makeAdminHarness({
     assets: defaultAssets("2026-07-27T09:00:00.000Z"),

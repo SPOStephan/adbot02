@@ -212,9 +212,10 @@ assert.match(candidatePreviewSource, /Keine Vorschau verfügbar/);
 assert.match(candidatePreviewSource, /aspect-\[16\/9\]/);
 assert.doesNotMatch(candidatePreviewSource, /dangerouslySetInnerHTML/);
 
-assert.match(campaignOverviewSource, /Deterministische Empfehlungen/);
-assert.match(campaignOverviewSource, /Prüfhilfen aus festen Schwellenwerten/);
+assert.match(campaignOverviewSource, /Erfolgskontrolle/);
+assert.match(campaignOverviewSource, /Ranking, Umschichtung und feste Schwellen/);
 assert.match(campaignOverviewSource, /Nur Analyse/);
+assert.match(campaignOverviewSource, /ad_account_selection_required/);
 assert.match(campaignOverviewSource, /ruleKey === "active_without_delivery_3d"/);
 assert.match(campaignOverviewSource, /ruleKey === "cost_per_result_up_30pct"/);
 assert.match(campaignOverviewSource, /ruleKey === "spend_without_results_14d"/);
@@ -242,6 +243,19 @@ assert.match(
 );
 assert.doesNotMatch(marketingMigrationSource, /ads_management|POST\s+https?:\/\//);
 
+assert.match(contentSyncPanelSource, /needsContentAssetSetup/);
+assert.match(contentSyncPanelSource, /Facebook-Seite und ein verknüpftes/);
+assert.doesNotMatch(contentSyncPanelSource, /genau ein Werbekonto/);
+assert.match(dashboardSource, /select-ad-account|marketing_meta_ad_account_id/);
+assert.match(dashboardSource, /needsContentAssetSetup/);
+assert.match(dashboardSource, /selectableForAds/);
+
+const selectAdAccountRouteSource = await readFile(
+  join(projectRoot, "src/app/api/connectors/meta/assets/select-ad-account/route.ts"),
+  "utf8",
+);
+assert.match(selectAdAccountRouteSource, /select_meta_ad_account/);
+assert.match(selectAdAccountRouteSource, /marketing_meta_ad_account_id/);
 assert.match(syncButtonSource, /"use client"/);
 assert.match(syncButtonSource, /method: "POST"/);
 assert.match(syncButtonSource, /\/api\/connectors\/meta\/sync/);

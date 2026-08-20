@@ -84,6 +84,12 @@ const SYNC_STATUS = {
     description:
       "Der automatische Abruf versucht es nach einer sicheren Pause erneut.",
   },
+  assets_setup: {
+    label: "Assets ergänzen",
+    className: "bg-amber-50 text-amber-800 ring-amber-200",
+    description:
+      "Meta ist verbunden. Für den Beitragsabruf fehlen noch eine Facebook-Seite oder ein Instagram-Konto.",
+  },
   rate_limited: {
     label: "Meta-Pause aktiv",
     className: "bg-amber-50 text-amber-800 ring-amber-200",
@@ -99,6 +105,7 @@ const SYNC_STATUS = {
 
 type SyncSnapshotState = {
   status: string | null;
+  errorCode?: string | null;
   lastSyncStartedAt: string | null;
   lastSyncedAt: string | null;
   nextSyncAt: string | null;
@@ -129,6 +136,7 @@ type Props = {
   initial: SyncSnapshotState;
   reconnectRequired: boolean;
   writeScopeGranted: boolean;
+  needsContentAssetSetup: boolean;
   connectedAssets: MetaConnectedAssetView[];
   showExtraAssetHint: boolean;
   boost: BoostContext;
@@ -144,7 +152,15 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
-function resolveSyncInfo(status: string | null, baselineCompleted: boolean) {
+function resolveSyncInfo(
+  status: string | null,
+  baselineCompleted: boolean,
+  _errorCode?: string | null,
+  needsContentAssetSetup = false,
+) {
+  if (needsContentAssetSetup) {
+    return SYNC_STATUS.assets_setup;
+  }
   if (status === "idle" && baselineCompleted) {
     return SYNC_STATUS.reconnected;
   }
@@ -158,6 +174,7 @@ export function MetaContentSyncPanel({
   initial,
   reconnectRequired,
   writeScopeGranted,
+  needsContentAssetSetup,
   connectedAssets,
   showExtraAssetHint,
   boost,
@@ -175,6 +192,8 @@ export function MetaContentSyncPanel({
   const syncInfo = resolveSyncInfo(
     snapshot.status,
     snapshot.baselineCompleted,
+    snapshot.errorCode,
+    needsContentAssetSetup,
   );
 
   const refreshSnapshot = useCallback(async () => {
@@ -192,6 +211,7 @@ export function MetaContentSyncPanel({
         ok?: boolean;
         connected?: boolean;
         status?: string | null;
+        errorCode?: string | null;
         lastSyncStartedAt?: string | null;
         lastSyncedAt?: string | null;
         nextSyncAt?: string | null;
@@ -205,6 +225,7 @@ export function MetaContentSyncPanel({
       if (!body.ok || body.connected === false) return;
       setSnapshot({
         status: body.status ?? null,
+        errorCode: body.errorCode ?? null,
         lastSyncStartedAt: body.lastSyncStartedAt ?? null,
         lastSyncedAt: body.lastSyncedAt ?? null,
         nextSyncAt: body.nextSyncAt ?? null,
@@ -364,6 +385,11 @@ export function MetaContentSyncPanel({
                     ? "Die Meta-Verbindung muss erneuert werden."
                     : "Der minimale Schreibscope muss bestätigt werden."}
                 </p>
+                <p className="mt-2 text-xs leading-5 text-red-800">
+                  {writeScopeGranted
+                    ? "Der Lesezugriff ist abgelaufen oder wurde von Meta widerrufen."
+                    : "Bitte Meta erneut verbinden und ads_management freigeben."}
+                </p>
                 <form action="/api/connectors/meta/start" method="post">
                   <button
                     className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
@@ -373,6 +399,25 @@ export function MetaContentSyncPanel({
                     <ArrowUpRight className="size-4" />
                   </button>
                 </form>
+              </div>
+            ) : needsContentAssetSetup ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-bold text-amber-950">
+                  Meta ist verbunden — für den Beitragsabruf fehlen noch Assets.
+                </p>
+                <p className="mt-2 text-xs leading-5 text-amber-900">
+                  Es braucht mindestens eine Facebook-Seite und ein verknüpftes
+                  Instagram-Konto. Werbekonten steuern nur Ads und blockieren den
+                  Beitragsabruf nicht. Über „Assets erweitern“ nachziehen, dann Abruf
+                  starten. Neu verbinden ist dafür nicht nötig.
+                </p>
+                <MetaSyncButton
+                  lastSyncStartedAt={snapshot.lastSyncStartedAt}
+                  onSyncSettled={() => {
+                    void refreshSnapshot();
+                  }}
+                  refreshOnComplete={false}
+                />
               </div>
             ) : (
               <MetaSyncButton
