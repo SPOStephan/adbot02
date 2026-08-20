@@ -5,7 +5,8 @@ import { trpc } from "@/lib/trpc";
 import { applyFunnelDocumentBranding } from "@/lib/favicon";
 import { applyPostSubmitAction } from "@/lib/postSubmit";
 import { createMetaEventId, loadMetaPixel, readMetaBrowserIdentifiers, trackMetaConversion } from "@/lib/metaPixel";
-import type { ApplicationContact, FunnelAnswers } from "@shared/funnel";
+import { getBrowserHostname } from "@/lib/funnelHost";
+import type { ApplicationContact, FunnelAnswers, FunnelConfig } from "@shared/funnel";
 import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
 import { ChoiceStep } from "@/components/funnel/ChoiceStep";
@@ -23,10 +24,22 @@ function EmbedHeightReporter() {
   return null;
 }
 
-export default function Funnel() {
-  const [, params] = useRoute("/f/:slug");
-  const slug = params?.slug ?? "karriere";
-  const { data: config, isLoading, error: loadError } = trpc.funnel.publicConfig.useQuery({ slug });
+type FunnelPaths = {
+  funnelUrl: string;
+  imprintUrl: string;
+};
+
+function FunnelView({
+  config,
+  isLoading,
+  loadError,
+  paths,
+}: {
+  config: FunnelConfig | undefined;
+  isLoading: boolean;
+  loadError: boolean;
+  paths: FunnelPaths;
+}) {
   const submit = trpc.funnel.submit.useMutation();
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<FunnelAnswers>({});
@@ -106,7 +119,7 @@ export default function Funnel() {
   return (
     <div ref={topRef}>
       <EmbedHeightReporter />
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={`/f/${config.slug}/impressum`} step={step} totalSteps={config.pages.length} showProgress={!submitted}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={paths.imprintUrl} step={step} totalSteps={config.pages.length} showProgress={!submitted}>
         {submitted && contactPage?.type === "contact" ? (
           <section className="funnel-success" aria-live="polite" aria-labelledby="funnel-success-title"><span className="funnel-success-icon" aria-hidden="true"><CircleCheckBig /></span><p className="funnel-eyebrow">Erfolgreich übermittelt</p><h1 id="funnel-success-title" tabIndex={-1}>{contactPage.successTitle}</h1><p>{contactPage.successText}</p></section>
         ) : currentPage?.type === "start" ? (
@@ -118,5 +131,42 @@ export default function Funnel() {
         ) : null}
       </FunnelChrome>
     </div>
+  );
+}
+
+export default function Funnel() {
+  const [, params] = useRoute("/f/:slug");
+  const slug = params?.slug ?? "karriere";
+  const query = trpc.funnel.publicConfig.useQuery({ slug });
+  return (
+    <FunnelView
+      config={query.data}
+      isLoading={query.isLoading}
+      loadError={Boolean(query.error)}
+      paths={{
+        funnelUrl: `/f/${slug}`,
+        imprintUrl: `/f/${slug}/impressum`,
+      }}
+    />
+  );
+}
+
+/** Custom-domain root: Host → READY funnel. */
+export function HostBoundFunnel() {
+  const hostname = getBrowserHostname();
+  const query = trpc.funnel.publicConfigByHost.useQuery(
+    { hostname },
+    { enabled: Boolean(hostname) },
+  );
+  return (
+    <FunnelView
+      config={query.data}
+      isLoading={query.isLoading}
+      loadError={Boolean(query.error)}
+      paths={{
+        funnelUrl: "/",
+        imprintUrl: "/impressum",
+      }}
+    />
   );
 }

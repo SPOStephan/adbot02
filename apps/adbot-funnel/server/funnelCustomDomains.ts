@@ -204,6 +204,36 @@ export async function registerCustomDomain(input: {
   return mapRow(data as Record<string, unknown>);
 }
 
+export async function getCustomDomainForFunnel(input: {
+  funnelId: string;
+  domainId: string;
+}): Promise<FunnelCustomDomain | null> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return (
+      memoryDomains.find(
+        item =>
+          item.id === input.domainId &&
+          item.funnelId === input.funnelId &&
+          item.status !== "REVOKED"
+      ) ?? null
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("funnel_custom_domains")
+    .select(
+      "id,funnel_id,hostname,status,dns_target,notes,created_at,updated_at,revoked_at"
+    )
+    .eq("id", input.domainId)
+    .eq("funnel_id", input.funnelId)
+    .in("status", ["PENDING_DNS", "READY"])
+    .is("revoked_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapRow(data as Record<string, unknown>) : null;
+}
+
 export async function markCustomDomainReady(input: {
   funnelId: string;
   domainId: string;

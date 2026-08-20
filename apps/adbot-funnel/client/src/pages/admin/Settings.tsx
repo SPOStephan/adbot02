@@ -69,7 +69,14 @@ export default function Settings() {
   const markCustomDomainReady = trpc.funnel.markCustomDomainReady.useMutation({
     onSuccess: async () => {
       await customDomainsQuery.refetch();
-      toast.success("Domain als bereit markiert");
+      toast.success("Domain aktiv — Funnel unter https://Hostname/ erreichbar");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const verifyCustomDomainDns = trpc.funnel.verifyCustomDomainDns.useMutation({
+    onSuccess: result => {
+      if (result.ok) toast.success(result.message);
+      else toast.error(result.message);
     },
     onError: error => toast.error(error.message),
   });
@@ -80,7 +87,9 @@ export default function Settings() {
     },
     onError: error => toast.error(error.message),
   });
+  const readyCustomHost = (customDomainsQuery.data ?? []).find(domain => domain.status === "READY");
   const directUrl = useMemo(() => `${window.location.origin}/f/${draft?.slug ?? "karriere"}`, [draft?.slug]);
+  const customPublicUrl = readyCustomHost ? `https://${readyCustomHost.hostname}/` : null;
   const dirty = Boolean(draft && savedConfig && JSON.stringify(draft) !== JSON.stringify(savedConfig));
   const imprintValid = Boolean(draft?.legal.imprintTitle.trim() && draft?.legal.imprintContent.trim());
   const metaServerDirty = Boolean(metaAccessToken.trim() || clearMetaAccessToken || metaTestEventCode !== savedMetaTestEventCode);
@@ -204,7 +213,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Eigene Hostname für diesen Funnel vorbereiten. DNS (CNAME) und SSL-Anbindung am Hosting bleiben ein Ops-Schritt; danach Domain als bereit markieren und in Meta für Conversion-Tracking verifizieren.</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Subdomain deines Unternehmens per CNAME auf Adbot zeigen. Danach DNS prüfen — der Funnel ist unter der Root-URL der Domain erreichbar. Shared-Host `/f/…` bleibt parallel nutzbar. SSL: Domain muss im Funnel-Hosting (Vercel) hinterlegt sein.</p></div></div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <Input
             aria-label="Custom Hostname"
@@ -237,25 +246,55 @@ export default function Settings() {
                     Status {domain.status} · CNAME → <code>{domain.dnsTarget}</code>
                   </p>
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    DNS: CNAME von <code>{domain.hostname}</code> auf <code>{domain.dnsTarget}</code>.
-                    Nach erfolgreicher SSL-/Hosting-Anbindung „Als bereit markieren“.
+                    1) CNAME <code>{domain.hostname}</code> → <code>{domain.dnsTarget}</code>{" "}
+                    2) Domain im Funnel-Vercel-Projekt adden (SSL){" "}
+                    3) „DNS prüfen & aktivieren“. Öffentliche URL danach:{" "}
+                    <code>https://{domain.hostname}/</code>
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {domain.status === "PENDING_DNS" ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={verifyCustomDomainDns.isPending}
+                        onClick={() =>
+                          funnelId &&
+                          verifyCustomDomainDns.mutate({
+                            funnelId,
+                            domainId: domain.id,
+                          })
+                        }
+                      >
+                        {verifyCustomDomainDns.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                        Nur DNS prüfen
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-[#0165c3] hover:bg-[#0154a3]"
+                        disabled={markCustomDomainReady.isPending}
+                        onClick={() =>
+                          funnelId &&
+                          markCustomDomainReady.mutate({
+                            funnelId,
+                            domainId: domain.id,
+                          })
+                        }
+                      >
+                        {markCustomDomainReady.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                        DNS prüfen & aktivieren
+                      </Button>
+                    </>
+                  ) : null}
+                  {domain.status === "READY" ? (
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={markCustomDomainReady.isPending}
-                      onClick={() =>
-                        funnelId &&
-                        markCustomDomainReady.mutate({
-                          funnelId,
-                          domainId: domain.id,
-                        })
-                      }
+                      onClick={() => window.open(`https://${domain.hostname}/`, "_blank", "noopener,noreferrer")}
                     >
-                      Als bereit markieren
+                      <ExternalLink className="size-4" />
+                      Öffnen
                     </Button>
                   ) : null}
                   <Button
@@ -284,7 +323,21 @@ export default function Settings() {
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
         <h2 className="font-bold">Direktlink und optionale WordPress-Einbettung</h2><p className="mt-1 text-sm text-muted-foreground">Der Funnel funktioniert vollständig über die eigenständige URL; die Einbettung ist nur eine zusätzliche Möglichkeit.</p>
-        <div className="mt-5 space-y-2"><Label htmlFor="public-funnel-url">Öffentliche Funnel-URL</Label><div className="flex gap-2"><Input id="public-funnel-url" readOnly value={directUrl} /><Button variant="outline" size="icon" aria-label="URL kopieren" onClick={() => copy(directUrl, "url")}>{copied === "url" ? <Check className="size-4" aria-hidden="true" /> : <Clipboard className="size-4" aria-hidden="true" />}</Button><Button variant="outline" size="icon" aria-label="Funnel öffnen" disabled={draft.status !== "published"} onClick={() => window.open(directUrl, "_blank", "noopener,noreferrer")}><ExternalLink className="size-4" aria-hidden="true" /></Button></div>{draft.status !== "published" && <p className="text-xs text-amber-700">Die URL wird erst nach der Veröffentlichung erreichbar.</p>}</div>
+        <div className="mt-5 space-y-2"><Label htmlFor="public-funnel-url">Öffentliche Funnel-URL (Shared Host)</Label><div className="flex gap-2"><Input id="public-funnel-url" readOnly value={directUrl} /><Button variant="outline" size="icon" aria-label="URL kopieren" onClick={() => copy(directUrl, "url")}>{copied === "url" ? <Check className="size-4" aria-hidden="true" /> : <Clipboard className="size-4" aria-hidden="true" />}</Button><Button variant="outline" size="icon" aria-label="Funnel öffnen" disabled={draft.status !== "published"} onClick={() => window.open(directUrl, "_blank", "noopener,noreferrer")}><ExternalLink className="size-4" aria-hidden="true" /></Button></div>{draft.status !== "published" && <p className="text-xs text-amber-700">Die URL wird erst nach der Veröffentlichung erreichbar.</p>}</div>
+        {customPublicUrl ? (
+          <div className="mt-5 space-y-2">
+            <Label htmlFor="custom-funnel-url">Custom Domain URL</Label>
+            <div className="flex gap-2">
+              <Input id="custom-funnel-url" readOnly value={customPublicUrl} />
+              <Button variant="outline" size="icon" aria-label="Custom-URL kopieren" onClick={() => copy(customPublicUrl, "url")}>
+                {copied === "url" ? <Check className="size-4" aria-hidden="true" /> : <Clipboard className="size-4" aria-hidden="true" />}
+              </Button>
+              <Button variant="outline" size="icon" aria-label="Custom Domain öffnen" disabled={draft.status !== "published"} onClick={() => window.open(customPublicUrl, "_blank", "noopener,noreferrer")}>
+                <ExternalLink className="size-4" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-5 space-y-2"><div className="flex items-center justify-between"><Label>Einbettungscode</Label><Button variant="ghost" size="sm" onClick={() => copy(embedCode, "embed")}>{copied === "embed" ? <Check className="size-4" /> : <Clipboard className="size-4" />}Kopieren</Button></div><pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-950 p-4 text-xs leading-5 text-slate-100"><code>{embedCode}</code></pre><p className="text-xs text-muted-foreground">In WordPress in einen Block „Individuelles HTML“ einfügen. Die Höhe wird automatisch angepasst.</p></div>
       </section>
     </div>
