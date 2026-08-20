@@ -199,3 +199,7 @@ Nach erfolgreichem Master erzeugt der Worker best-effort Meta-Cover-Crops (`meta
 ## Phase 8 (Performance Winner aus Insights)
 
 Nach Marketing-Sync: Creative-`image_hash` in `creatives.content` mergen, Top-5 Assets (7 Tage, Success-Control-Metriken) als `performance_winner` labeln — ohne `marked_good` zu überschreiben. Siehe `docs/meta-automation/CREATIVE_GENERATION_PHASE8.md`.
+
+## Später: Ad Library Collector (intern)
+
+Separater Collector (eigene Meta-App) befüllt Staging; AdBot importiert nur freigegebene Assets in den Inspiration Vault. Plan: `docs/meta-automation/AD_LIBRARY_COLLECTOR_PLAN.md`. Kein Kundenfeature.
