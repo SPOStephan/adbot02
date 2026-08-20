@@ -10,6 +10,10 @@ import {
 
 import { OrganicBoostLiveRefresh } from "@/components/OrganicBoostLiveRefresh";
 import { OrganicBoostPlanButton } from "@/components/OrganicBoostPlanButton";
+import {
+  MetaAdAccountPicker,
+  type MetaAdAccountOption,
+} from "@/components/MetaAdAccountPicker";
 
 type CampaignPerformance = {
   id: string;
@@ -406,6 +410,7 @@ type MetaCampaignOverviewProps = {
   };
   currency: string;
   errorCode: string | null;
+  adAccounts?: MetaAdAccountOption[];
   insightsSince: string | null;
   insightsUntil: string | null;
   lastSuccessAt: string | null;
@@ -754,6 +759,7 @@ export function MetaCampaignOverview({
   counts,
   currency,
   errorCode,
+  adAccounts = [],
   insightsSince,
   insightsUntil,
   lastSuccessAt,
@@ -1040,7 +1046,7 @@ export function MetaCampaignOverview({
           errorCode === "ad_account_missing") ? (
           <div className="mt-5 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950" role="status">
             <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600" />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-bold">
                 {errorCode === "ad_account_missing"
                   ? "Werbekonto für Ads fehlt"
@@ -1049,8 +1055,12 @@ export function MetaCampaignOverview({
               <p className="mt-1 text-sm leading-6 break-words text-amber-900">
                 {errorCode === "ad_account_missing"
                   ? "Der Beitragsabruf läuft unabhängig. Für Kampagnen und Schaltungen fehlt noch ein verbundenes Werbekonto — über „Assets erweitern“ nachziehen."
-                  : "Meta hat mehrere Werbekonten mitgeliefert. Der Beitragsabruf läuft trotzdem. Wähle unter den verbundenen Assets das aktive Werbekonto für Ads — erst dann werden Kampagnendaten und Schaltungen dort ausgeführt."}
+                  : "Meta hat mehrere Werbekonten mitgeliefert. Der Beitragsabruf läuft trotzdem. Wähle unten das aktive Werbekonto — erst dann werden Kampagnendaten und Schaltungen dort ausgeführt."}
               </p>
+              {errorCode === "ad_account_selection_required" &&
+              adAccounts.length > 1 ? (
+                <MetaAdAccountPicker accounts={adAccounts} compact />
+              ) : null}
             </div>
           </div>
         ) : null}

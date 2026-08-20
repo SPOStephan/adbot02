@@ -212,6 +212,10 @@ assert.match(candidatePreviewSource, /Keine Vorschau verfügbar/);
 assert.match(candidatePreviewSource, /aspect-\[16\/9\]/);
 assert.doesNotMatch(candidatePreviewSource, /dangerouslySetInnerHTML/);
 
+assert.match(dashboardSource, /MetaAdAccountPicker/);
+assert.match(dashboardSource, /id=\"werbekonto\"|#werbekonto|adAccountPickerOptions/);
+assert.match(campaignOverviewSource, /MetaAdAccountPicker/);
+assert.match(campaignOverviewSource, /adAccounts/);
 assert.match(campaignOverviewSource, /Erfolgskontrolle/);
 assert.match(campaignOverviewSource, /Ranking, Umschichtung und feste Schwellen/);
 assert.match(campaignOverviewSource, /Nur Analyse/);

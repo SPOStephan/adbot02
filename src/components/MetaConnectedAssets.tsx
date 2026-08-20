@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Check, LoaderCircle, X } from "lucide-react";
+import { ArrowUpRight, LoaderCircle, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
@@ -30,15 +30,6 @@ const PRUNE_ERROR_MESSAGES: Record<string, string> = {
   prune_failed: "Das Asset konnte nicht entfernt werden. Bitte versuche es erneut.",
 };
 
-const SELECT_ERROR_MESSAGES: Record<string, string> = {
-  unauthorized: "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.",
-  confirmation_required: "Die Auswahl wurde nicht bestätigt.",
-  invalid_asset: "Dieses Werbekonto konnte nicht erkannt werden.",
-  not_found: "Das Werbekonto ist nicht mehr mit Adbot verbunden.",
-  select_failed:
-    "Das Werbekonto konnte nicht als aktiv gesetzt werden. Bitte versuche es erneut.",
-};
-
 type MetaConnectedAssetsProps = {
   assets: MetaConnectedAssetView[];
   showExtraHint: boolean;
@@ -60,10 +51,9 @@ export function MetaConnectedAssets({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  const adAccounts = assets.filter((asset) => asset.assetType === "ad_account");
-  const needsAdAccountPick =
-    adAccounts.length > 1 &&
-    !adAccounts.some((asset) => asset.selectedForAds);
+  const hasAdAccounts = assets.some(
+    (asset) => asset.assetType === "ad_account",
+  );
 
   async function pruneAsset(asset: MetaConnectedAssetView) {
     if (!asset.removable || pendingId) {
@@ -122,57 +112,6 @@ export function MetaConnectedAssets({
     }
   }
 
-  async function selectAdAccount(asset: MetaConnectedAssetView) {
-    if (!asset.selectableForAds || asset.selectedForAds || pendingId) {
-      return;
-    }
-
-    setPendingId(asset.id);
-    setNotice(null);
-
-    try {
-      const response = await fetch(
-        "/api/connectors/meta/assets/select-ad-account",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            confirmation: "select_meta_ad_account",
-            assetId: asset.id,
-          }),
-        },
-      );
-      const result = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        error?: string;
-        label?: string;
-      } | null;
-
-      if (!response.ok || !result?.ok) {
-        throw new Error(
-          SELECT_ERROR_MESSAGES[result?.error ?? ""]
-            ?? SELECT_ERROR_MESSAGES.select_failed,
-        );
-      }
-
-      setNotice({
-        tone: "success",
-        message: `„${result.label ?? asset.label}“ ist jetzt das aktive Werbekonto für Ads.`,
-      });
-      router.refresh();
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : SELECT_ERROR_MESSAGES.select_failed,
-      });
-    } finally {
-      setPendingId(null);
-    }
-  }
-
   if (!assets.length) {
     return null;
   }
@@ -182,26 +121,25 @@ export function MetaConnectedAssets({
       {showExtraHint ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 break-words">
           Meta hat möglicherweise zuvor verbundene Assets mitgeliefert. Entferne
-          hier alles, was Adbot nicht nutzen soll — ohne den Connect-Dialog erneut
-          zu öffnen. Mehrere Werbekonten sind für den Beitragsabruf unkritisch;
-          für Ads wählst du unten das aktive Konto.
-        </p>
-      ) : null}
-      {needsAdAccountPick ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 break-words">
-          Mehrere Werbekonten sind verbunden. Wähle eines als aktiv für Ads —
-          der Beitragsabruf läuft unabhängig weiter.
+          hier alles, was Adbot nicht nutzen soll. Das aktive Werbekonto für Ads
+          wählst du im Bereich{" "}
+          <a
+            className="font-bold text-amber-950 underline underline-offset-2"
+            href="#werbekonto"
+          >
+            Aktives Werbekonto
+          </a>
+          .
         </p>
       ) : null}
       <div className="flex min-w-0 flex-wrap gap-2 text-xs font-semibold text-slate-600">
         {assets.map((asset) => {
           const busy = pendingId === asset.id;
-          const isAd = asset.assetType === "ad_account";
           return (
             <span
               className={`inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full py-1.5 pl-3 pr-1.5 ${
                 asset.selectedForAds
-                  ? "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300"
+                  ? "bg-emerald-100 text-emerald-900"
                   : "bg-slate-100"
               }`}
               key={asset.id}
@@ -209,26 +147,8 @@ export function MetaConnectedAssets({
               <span className="min-w-0 truncate">{asset.label}</span>
               {asset.selectedForAds ? (
                 <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  Ads aktiv
+                  Ads
                 </span>
-              ) : null}
-              {isAd && asset.selectableForAds && !asset.selectedForAds ? (
-                <button
-                  aria-label={`${asset.label} als aktives Werbekonto für Ads wählen`}
-                  className="inline-flex min-h-7 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-700 ring-1 ring-slate-200 transition hover:bg-blue-50 hover:text-blue-800 hover:ring-blue-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={Boolean(pendingId)}
-                  onClick={() => {
-                    void selectAdAccount(asset);
-                  }}
-                  type="button"
-                >
-                  {busy ? (
-                    <LoaderCircle className="size-3.5 animate-spin" />
-                  ) : (
-                    <Check className="size-3.5" />
-                  )}
-                  Für Ads
-                </button>
               ) : null}
               {asset.removable ? (
                 <button
@@ -240,7 +160,7 @@ export function MetaConnectedAssets({
                   }}
                   type="button"
                 >
-                  {busy && !asset.selectableForAds ? (
+                  {busy ? (
                     <LoaderCircle className="size-3.5 animate-spin" />
                   ) : (
                     <X className="size-3.5" />
@@ -251,6 +171,17 @@ export function MetaConnectedAssets({
           );
         })}
       </div>
+      {hasAdAccounts ? (
+        <p className="text-xs leading-5 text-slate-500">
+          Ads-Zielkonto wechseln:{" "}
+          <a
+            className="font-bold text-blue-700 underline-offset-2 hover:underline"
+            href="#werbekonto"
+          >
+            Aktives Werbekonto
+          </a>
+        </p>
+      ) : null}
       {notice ? (
         <p
           aria-live="polite"
