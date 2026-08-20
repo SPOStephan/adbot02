@@ -10,7 +10,7 @@ const overview = await readFile(
   "utf8",
 );
 const dashboard = await readFile(
-  join(root, "src/app/dashboard/page.tsx"),
+  join(root, "src/app/dashboard/kampagnen/page.tsx"),
   "utf8",
 );
 

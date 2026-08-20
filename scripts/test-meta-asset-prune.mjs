@@ -31,7 +31,20 @@ const [
     join(projectRoot, "src/components/MetaConnectedAssets.tsx"),
     "utf8",
   ),
-  readFile(join(projectRoot, "src/app/dashboard/page.tsx"), "utf8"),
+  Promise.all([
+    readFile(
+      join(projectRoot, "src/lib/dashboard/load-customer-dashboard.ts"),
+      "utf8",
+    ),
+    readFile(
+      join(projectRoot, "src/components/MetaContentSyncPanel.tsx"),
+      "utf8",
+    ),
+    readFile(
+      join(projectRoot, "src/app/dashboard/beitraege/page.tsx"),
+      "utf8",
+    ),
+  ]).then((parts) => parts.join("\n")),
   readFile(
     join(projectRoot, "src/app/api/connectors/meta/callback/route.ts"),
     "utf8",
@@ -64,7 +77,7 @@ assert.match(assetsComponentSource, /extendHref/);
 
 assert.match(dashboardSource, /MetaConnectedAssets/);
 assert.match(dashboardSource, /showExtraAssetHint/);
-assert.match(dashboardSource, /extendHref="\/api\/connectors\/meta\/start"/);
+assert.match(dashboardSource, /extendHref="\/api\/connectors\/meta\/start\?intent=extend"/);
 assert.match(dashboardSource, /removable: pageAssets\.length > 1/);
 assert.match(dashboardSource, /removable: adAccountAssets\.length > 1/);
 

@@ -28,8 +28,8 @@ assert.match(
   read("supabase/migrations/20260807130000_site_admins.sql"),
   /site_admins/,
 );
-assert.match(read("src/app/dashboard/page.tsx"), /\/dashboard\/rechtliches/);
-assert.match(read("src/app/dashboard/page.tsx"), /userIsSiteAdmin/);
+assert.match(read("src/lib/dashboard/navigation.ts"), /\/dashboard\/rechtliches/);
+assert.match(read("src/app/dashboard/layout.tsx"), /isSiteAdmin/);
 assert.match(read("content/legal/impressum.md"), /Anbieter/);
 assert.match(read("content/legal/datenschutz.md"), /Verantwortlicher/);
 assert.match(read("content/legal/agb.md"), /Geschäftsbedingungen/);

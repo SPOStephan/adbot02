@@ -15,7 +15,10 @@ const [
   reconnectMigrationSource,
   resetMigrationSource,
 ] = await Promise.all([
-  readFile(join(projectRoot, "src/app/dashboard/page.tsx"), "utf8"),
+  readFile(
+    join(projectRoot, "src/lib/dashboard/load-customer-dashboard.ts"),
+    "utf8",
+  ),
   readFile(join(projectRoot, "src/components/PlatformStatusCard.tsx"), "utf8"),
   readFile(join(projectRoot, "src/components/MetaConnectionActions.tsx"), "utf8"),
   readFile(

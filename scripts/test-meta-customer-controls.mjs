@@ -836,7 +836,16 @@ const [
     "utf8",
   ),
   readFile(path.join(root, "src/components/AutomationOnboardingControls.tsx"), "utf8"),
-  readFile(path.join(root, "src/app/dashboard/page.tsx"), "utf8"),
+  Promise.all([
+    readFile(
+      path.join(root, "src/lib/dashboard/load-customer-dashboard.ts"),
+      "utf8",
+    ),
+    readFile(
+      path.join(root, "src/app/dashboard/autonomie/page.tsx"),
+      "utf8",
+    ),
+  ]).then((parts) => parts.join("\n")),
   readFile(path.join(root, "src/lib/meta/customer-control-service.ts"), "utf8"),
   readFile(path.join(root, "src/lib/meta/customer-control-route.ts"), "utf8"),
   readFile(path.join(root, "src/app/api/meta/automation/policy/route.ts"), "utf8"),

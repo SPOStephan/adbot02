@@ -139,21 +139,25 @@ assert.match(
   /organicBoostCampaigns/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /list_meta_organic_boost_campaigns/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /boostEligibleAssets/,
 );
 
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /Bewerbung startet automatisch/,
+  /startet die Bewerbung/,
 );
 assert.match(
   read("src/components/ContentCandidateBoostControls.tsx"),
-  /unabh[^"]*ngig vom Abruf/,
+  /Kampagne wird angelegt/,
+);
+assert.match(
+  read("src/components/ContentCandidateBoostControls.tsx"),
+  /Adbot legt jetzt den Beitrag-Push-Plan an/,
 );
 assert.doesNotMatch(
   read("src/components/ContentCandidateBoostControls.tsx"),
@@ -164,8 +168,8 @@ assert.doesNotMatch(
   /Bitte Abruf erneut auslösen/,
 );
 assert.match(
-  read("src/components/ContentCandidateBoostControls.tsx"),
-  /Beitrag-Push startet automatisch/,
+  read("src/components/AutomationControlCenter.tsx"),
+  /Beitrag-Push.*startet automatisch/,
 );
 assert.match(
   read("src/components/MetaSyncButton.tsx"),
@@ -180,11 +184,11 @@ assert.match(
   /hardCapResumeNotice/,
 );
 assert.match(
-  read("src/components/MetaSyncButton.tsx"),
+  read("src/lib/meta/hard-cap-resume-notice.ts"),
   /scheduleEnded/,
 );
 assert.match(
-  read("src/components/MetaSyncButton.tsx"),
+  read("src/lib/meta/hard-cap-resume-notice.ts"),
   /Laufzeit bereits beendet/,
 );
 const reactivateAllPausedBoostsMigration = read(
@@ -267,7 +271,7 @@ assert.match(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /Kein Extra-Klick nötig/,
+  /ohne Dauer-Aktualisierung der ganzen Seite/,
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
@@ -306,7 +310,7 @@ assert.match(
   /marketing_meta_ad_account_id/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /eligiblePendingBoostCandidates/,
 );
 
@@ -325,15 +329,15 @@ assert.match(
   /drainOrganicBoostExecutionsForAccount/,
 );
 assert.match(
-  read("src/lib/meta/customer-control-service.ts"),
+  read("src/lib/meta/organic-boost-ensure.ts"),
   /repairOrphanInstagramPageLinks/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /organic_boost_planner_status/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /pendingBoostCandidateCount/,
 );
 assert.match(
@@ -464,7 +468,7 @@ assert.match(
   /Wird automatisch neu angestoßen/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/app/dashboard/kampagnen/page.tsx"),
   /killSwitchMode=\{killSwitchView\?\.mode/,
 );
 assert.match(
@@ -533,7 +537,7 @@ assert.match(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /Lokal in Warteschlange — noch kein Meta-Versand/,
+  /Executor arbeitet — noch kein Meta-Versand/,
 );
 assert.doesNotMatch(
   read("src/components/MetaCampaignOverview.tsx"),
@@ -607,12 +611,12 @@ assert.match(
   /formatMetaGraphCodeLabel/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /failed_step_error_detail/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
-  /drainOrganicBoostExecutionsForAccount/,
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
+  /planAndDrainOrganicBoostForAccount/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-execute.ts"),
@@ -646,14 +650,14 @@ assert.doesNotMatch(
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
-  /unabh[^"]*ngig vom Abruf/,
+  /Beitrag-Push läuft unabh[^"]*ngig/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/components/MetaContentSyncPanel.tsx"),
   /OrganicBoostAutoPlanner/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /shouldAutoPlanOrganicBoost/,
 );
 assert.match(
@@ -695,8 +699,12 @@ assert.match(
 
 assert.doesNotMatch(read("src/lib/meta/sync.ts"), /processNextMetaMutation/);
 assert.match(
-  read("src/lib/meta/sync.ts"),
-  /dashboard load \+ LiveRefresh \+ minutely cron drain/,
+  read("src/lib/meta/organic-boost-ensure.ts"),
+  /dashboard load/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-ensure.ts"),
+  /dashboard LiveRefresh/,
 );
 assert.match(
   read("src/app/api/connectors/meta/sync/route.ts"),
@@ -707,15 +715,15 @@ assert.match(
   /SYNC_FETCH_TIMEOUT_MS/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /sync_usage/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /organic_boost/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /organicPlannerStatus/,
 );
 
@@ -740,8 +748,8 @@ assert.match(
   /Details anpassen/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
-  /href: "#kampagnen"/,
+  read("src/lib/dashboard/navigation.ts"),
+  /href: "\/dashboard\/kampagnen"/,
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
@@ -827,7 +835,7 @@ assert.match(
   /Sicherheitsschranke/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /formatOrganicBoostFailureDetail/,
 );
 
@@ -885,8 +893,8 @@ assert.match(
   /executorLastError/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
-  /organic_boost_dashboard_drain/,
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
+  /organic_boost_dashboard_ensure/,
 );
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
@@ -1020,7 +1028,7 @@ assert.match(
 );
 assert.match(
   read("src/components/OrganicBoostPlanButton.tsx"),
-  /\/api\/connectors\/meta\/sync/,
+  /\/api\/meta\/automation\/organic-boost\/execute/,
 );
 assert.match(
   read("src/components/OrganicBoostPlanButton.tsx"),
@@ -1097,7 +1105,7 @@ assert.match(
   /drainHardCapStatusExecutionsForAccount/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /drainHardCapStatusExecutionsForAccount/,
 );
 assert.match(
@@ -1154,7 +1162,7 @@ assert.match(
   /forceReactivatePausedOrganicBoostCampaigns/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /forceReactivatePausedOrganicBoostCampaigns/,
 );
 assert.match(
@@ -1188,11 +1196,11 @@ assert.match(
 );
 assert.match(read("src/lib/meta/marketing-sync.ts"), /sumInsightSpend/);
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /campaignRows\.find\(\(row\) => row\.id === campaign\.campaignId\)/,
 );
 assert.match(
-  read("src/app/dashboard/page.tsx"),
+  read("src/lib/dashboard/load-customer-dashboard.ts"),
   /marketing_spend_total/,
 );
 
