@@ -50,6 +50,11 @@ import {
 } from "../funnelCustomDomains";
 import { checkCustomDomainCname } from "../customDomainDns";
 import { isSharedFunnelHost, normalizeHostname } from "../../shared/funnelHosts";
+import {
+  attachDomainToVercelProject,
+  removeDomainFromVercelProject,
+  verifyDomainOnVercelProject,
+} from "../vercelDomains";
 
 function validateSubmission(config: FunnelConfig, submission: z.infer<typeof applicationSubmissionSchema>) {
   if (config.status !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "Dieser Funnel ist derzeit nicht veröffentlicht." });
@@ -327,12 +332,21 @@ export const funnelRouter = router({
     .mutation(async ({ input, ctx }) => {
       await requireOwnedFunnel(input.funnelId, ctx.user);
       try {
-        return await registerCustomDomain({
+        const domain = await registerCustomDomain({
           funnelId: input.funnelId,
           hostname: input.hostname,
           notes: input.notes,
         });
+        const vercel = await attachDomainToVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
+        return { ...domain, vercel };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:
@@ -379,8 +393,15 @@ export const funnelRouter = router({
             message: dns.message,
           });
         }
+        const vercel = await verifyDomainOnVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
         const ready = await markCustomDomainReady(input);
-        return { ...ready, dns };
+        return { ...ready, dns, vercel };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -404,7 +425,11 @@ export const funnelRouter = router({
           message: "Custom Domain nicht gefunden.",
         });
       }
-      return checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+      const dns = await checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+      if (dns.ok) {
+        void verifyDomainOnVercelProject(domain.hostname);
+      }
+      return dns;
     }),
 
   revokeCustomDomain: adminProcedure
@@ -412,7 +437,9 @@ export const funnelRouter = router({
     .mutation(async ({ input, ctx }) => {
       await requireOwnedFunnel(input.funnelId, ctx.user);
       try {
-        return await revokeCustomDomain(input);
+        const revoked = await revokeCustomDomain(input);
+        void removeDomainFromVercelProject(revoked.hostname);
+        return revoked;
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",

@@ -41,6 +41,11 @@ import {
 } from "./freebieCustomDomains";
 import { resolvePublicAppBaseUrl } from "./publicAppUrl";
 import {
+  attachDomainToVercelProject,
+  removeDomainFromVercelProject,
+  verifyDomainOnVercelProject,
+} from "./vercelDomains";
+import {
   isSharedFreebieHost,
   normalizeHostname,
 } from "../shared/freebieHosts";
@@ -210,12 +215,21 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await assertOfferAccess(input.offerId, ctx.user);
         try {
-          return await registerCustomDomain({
+          const domain = await registerCustomDomain({
             offerId: input.offerId,
             hostname: input.hostname,
             notes: input.notes,
           });
+          const vercel = await attachDomainToVercelProject(domain.hostname);
+          if (!vercel.ok) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: vercel.message,
+            });
+          }
+          return { ...domain, vercel };
         } catch (error) {
+          if (error instanceof TRPCError) throw error;
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
@@ -251,8 +265,16 @@ export const appRouter = router({
             message: dns.message,
           });
         }
+        const vercel = await verifyDomainOnVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
         try {
-          return await markCustomDomainReady(input);
+          const ready = await markCustomDomainReady(input);
+          return { ...ready, dns, vercel };
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -279,7 +301,14 @@ export const appRouter = router({
             message: "Custom Domain nicht gefunden.",
           });
         }
-        return checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+        const dns = await checkCustomDomainCname(
+          domain.hostname,
+          domain.dnsTarget,
+        );
+        if (dns.ok) {
+          void verifyDomainOnVercelProject(domain.hostname);
+        }
+        return dns;
       }),
     revokeCustomDomain: adminProcedure
       .input(
@@ -291,7 +320,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await assertOfferAccess(input.offerId, ctx.user);
         try {
-          return await revokeCustomDomain(input);
+          const revoked = await revokeCustomDomain(input);
+          void removeDomainFromVercelProject(revoked.hostname);
+          return revoked;
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",

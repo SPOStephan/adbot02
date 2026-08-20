@@ -61,8 +61,8 @@ async function DomainsBody() {
           </li>
           <li>
             <span className="font-semibold text-slate-800">Freebie</span>: Domain
-            im Freebie-Admin an ein Angebot binden (Button „Domain“). CNAME + Domain
-            im Freebie-Vercel-Projekt; danach ist die Root-URL das Freebie. Shared{" "}
+            im Freebie-Admin an ein Angebot binden (Button „Domain“). Kunde setzt
+            nur CNAME; SSL/Hosting wird automatisch gesetzt. Shared{" "}
             <code className="text-xs">/o/…</code> bleibt parallel.
           </li>
           <li>
