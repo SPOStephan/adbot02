@@ -392,7 +392,16 @@ assert.match(dashboardLayoutSource, /DashboardShell/);
 assert.match(dashboardSource, /id="plattformen"/);
 assert.match(dashboardSource, /PlatformStatusCard/);
 assert.match(beitraegeSource, /MetaContentSyncPanel/);
+assert.match(beitraegeSource, /organicBoostEnsure:\s*false/);
 assert.match(beitraegeSource, /organicBoostEnsure:\s*true/);
+assert.match(beitraegeSource, /from "next\/server"/);
 assert.match(kampagnenSource, /MetaCampaignOverview/);
+
+const overviewSource = await readFile(
+  join(projectRoot, "src/app/dashboard/page.tsx"),
+  "utf8",
+);
+assert.match(overviewSource, /sideEffects:\s*false/);
+assert.match(overviewSource, /after\(/);
 
 console.log("Dashboard Meta connector checks passed");

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import {
   AlertCircle,
   ArrowRight,
@@ -64,6 +65,31 @@ async function OverviewBody({
 }: {
   query: Awaited<DashboardPageProps["searchParams"]>;
 }) {
+  try {
+    return await OverviewBodyInner({ query });
+  } catch (error) {
+    console.error("dashboard_overview_body_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return (
+      <section
+        className="mt-8 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950"
+        role="alert"
+      >
+        <p className="font-bold">Übersicht konnte gerade nicht geladen werden.</p>
+        <p className="mt-1 text-sm leading-6">
+          Bitte Seite neu laden. Die Meta-Verbindung bleibt unverändert.
+        </p>
+      </section>
+    );
+  }
+}
+
+async function OverviewBodyInner({
+  query,
+}: {
+  query: Awaited<DashboardPageProps["searchParams"]>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -85,7 +111,23 @@ async function OverviewBody({
     chartPoints,
     pendingBoostCandidateCount,
     contentSyncSnapshot,
-  } = await loadCustomerDashboard(user, query);
+  } = await loadCustomerDashboard(user, query, {
+    // Never block the overview paint on Meta Graph / Boost ensure.
+    // Side effects run after the response via `after()` below.
+    sideEffects: false,
+    organicBoostEnsure: false,
+  });
+
+  after(() => {
+    void loadCustomerDashboard(user, query, {
+      sideEffects: true,
+      organicBoostEnsure: true,
+    }).catch((error) => {
+      console.error("dashboard_overview_background_ensure_failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+  });
 
   const nextActions = [
     {
