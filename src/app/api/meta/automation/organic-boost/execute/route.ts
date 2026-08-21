@@ -23,14 +23,34 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+type ExecuteBody = {
+  /** Skip full marketing Abruf (plan already did it / cooldown). Default true. */
+  skipMarketingSync?: boolean;
+  /** Skip heavy diagnose RPCs on the hot path. Default true. */
+  skipDiagnose?: boolean;
+};
+
 export async function POST(request: NextRequest) {
   try {
-    await readControlJson(request);
+    const body = (await readControlJson(request)) as ExecuteBody;
     const customer = await authenticateMetaCustomer();
     const admin = createAdminClient();
 
-    // 1) Marketing-Abruf zuerst: lokaler Kampagnenstatus muss Meta (PAUSED) spiegeln,
-    // bevor Force-Reaktivierung läuft.
+    const skipMarketingSync = body.skipMarketingSync !== false;
+    const skipDiagnose = body.skipDiagnose !== false;
+
+    // 1) Delivery heal FIRST — Meta ad/adset ACTIVATE must not wait on Abruf.
+    const earlyHeal = await healOrganicBoostDeliveryTree({
+      userId: customer.userId,
+      platformAccountId: customer.platformAccountId,
+    }).catch((error) => ({
+      adSetsActivated: 0,
+      adsActivated: 0,
+      campaignsMissingAds: 0,
+      error: formatOrganicBoostHealError(error),
+    }));
+
+    // 2) Optional marketing Abruf — expensive; button/plan usually already ran it.
     let marketingSync: {
       outcome: string;
       status: string;
@@ -43,34 +63,36 @@ export async function POST(request: NextRequest) {
       marketingStatus: string;
     } | null = null;
     let marketingSyncError: string | null = null;
-    try {
-      const syncResult = await syncMetaConnector({
-        platformAccountId: customer.platformAccountId,
-        userId: customer.userId,
-        mode: "manual",
-        // This route drains Beitrag-Push below — avoid nested plan+drain.
-        ensureOrganicBoost: false,
-      });
-      marketingSync = {
-        outcome: syncResult.outcome,
-        status: syncResult.status,
-        blockedReason: syncResult.blockedReason,
-        insightsCount: syncResult.insightsCount,
-        campaignsCount: syncResult.campaignsCount,
-        spendTotal: syncResult.spendTotal,
-        insightsUntil: syncResult.insightsUntil,
-        retryAt: syncResult.retryAt,
-        marketingStatus: syncResult.marketingStatus,
-      };
-    } catch (error) {
-      marketingSyncError =
-        error instanceof Error ? error.message : "marketing_sync_failed";
+    if (!skipMarketingSync) {
+      try {
+        const syncResult = await syncMetaConnector({
+          platformAccountId: customer.platformAccountId,
+          userId: customer.userId,
+          mode: "manual",
+          ensureOrganicBoost: false,
+        });
+        marketingSync = {
+          outcome: syncResult.outcome,
+          status: syncResult.status,
+          blockedReason: syncResult.blockedReason,
+          insightsCount: syncResult.insightsCount,
+          campaignsCount: syncResult.campaignsCount,
+          spendTotal: syncResult.spendTotal,
+          insightsUntil: syncResult.insightsUntil,
+          retryAt: syncResult.retryAt,
+          marketingStatus: syncResult.marketingStatus,
+        };
+      } catch (error) {
+        marketingSyncError =
+          error instanceof Error ? error.message : "marketing_sync_failed";
+      }
     }
 
-    // 2) Beitrag-Push-Status gezielt von Meta nachladen, dann Force-Reaktivierung.
+    // 3) Live Beitrag-Push status only — finished history must not burn Graph time.
     const statusRefresh = await refreshOrganicBoostCampaignStatusesFromMeta({
       platformAccountId: customer.platformAccountId,
       userId: customer.userId,
+      liveOnly: true,
     });
 
     let hardCapForceResume: {
@@ -128,6 +150,22 @@ export async function POST(request: NextRequest) {
       error: statusRefresh.error,
     };
 
+    const mergeHealCounts = (later: {
+      adSetsActivated?: number;
+      adsActivated?: number;
+      campaignsMissingAds?: number;
+      error?: string | null;
+    }) => ({
+      adSetsActivated:
+        (earlyHeal.adSetsActivated ?? 0) + (later.adSetsActivated ?? 0),
+      adsActivated: (earlyHeal.adsActivated ?? 0) + (later.adsActivated ?? 0),
+      campaignsMissingAds: Math.max(
+        earlyHeal.campaignsMissingAds ?? 0,
+        later.campaignsMissingAds ?? 0,
+      ),
+      error: later.error || earlyHeal.error || null,
+    });
+
     try {
       const { data: accountRow } = await admin
         .from("platform_accounts")
@@ -166,6 +204,7 @@ export async function POST(request: NextRequest) {
           marketingSyncId,
           pausedPlatformCampaignIds: statusRefresh.pausedPlatformIds,
         });
+        const heal = mergeHealCounts(forceResume);
         hardCapForceResume = {
           outcome: forceResume.outcome,
           reason: forceResume.reason,
@@ -182,23 +221,15 @@ export async function POST(request: NextRequest) {
           targetsRepaired: forceResume.targetsRepaired,
           remainingUnder24h: forceResume.remainingUnder24h,
           missingCurrent: forceResume.missingCurrent,
-          adSetsActivated: forceResume.adSetsActivated,
-          adsActivated: forceResume.adsActivated,
-          campaignsMissingAds: forceResume.campaignsMissingAds,
-          error: forceResume.error,
+          adSetsActivated: heal.adSetsActivated,
+          adsActivated: heal.adsActivated,
+          campaignsMissingAds: heal.campaignsMissingAds,
+          error: forceResume.error || heal.error,
           statusRefresh: statusRefreshPayload,
         };
       } else if ((statusRefresh.paused ?? 0) === 0) {
-        // No campaign-level ACTIVATE queue — still heal paused ads/ad sets.
-        const heal = await healOrganicBoostDeliveryTree({
-          userId: customer.userId,
-          platformAccountId: customer.platformAccountId,
-        }).catch((error) => ({
-          adSetsActivated: 0,
-          adsActivated: 0,
-          campaignsMissingAds: 0,
-          error: formatOrganicBoostHealError(error),
-        }));
+        // No campaign-level ACTIVATE — early heal already ran.
+        const heal = mergeHealCounts({});
         hardCapForceResume = {
           outcome: "SKIPPED",
           reason:
@@ -218,11 +249,10 @@ export async function POST(request: NextRequest) {
           targetsRepaired: 0,
           remainingUnder24h: 0,
           missingCurrent: 0,
-          adSetsActivated: heal.adSetsActivated ?? 0,
-          adsActivated: heal.adsActivated ?? 0,
-          campaignsMissingAds:
-            "campaignsMissingAds" in heal ? (heal.campaignsMissingAds ?? 0) : 0,
-          error: "error" in heal ? heal.error : null,
+          adSetsActivated: heal.adSetsActivated,
+          adsActivated: heal.adsActivated,
+          campaignsMissingAds: heal.campaignsMissingAds,
+          error: heal.error,
           statusRefresh: statusRefreshPayload,
         };
       } else {
@@ -230,6 +260,7 @@ export async function POST(request: NextRequest) {
           typeof accountRow?.marketing_sync_error_code === "string"
             ? accountRow.marketing_sync_error_code
             : marketingSyncError ?? "marketing_sync_required";
+        const heal = mergeHealCounts({});
         hardCapForceResume = {
           outcome: "ERROR",
           reason: "marketing_sync_required",
@@ -246,14 +277,15 @@ export async function POST(request: NextRequest) {
           targetsRepaired: 0,
           remainingUnder24h: 0,
           missingCurrent: 0,
-          adSetsActivated: 0,
-          adsActivated: 0,
-          campaignsMissingAds: 0,
-          error: syncErr,
+          adSetsActivated: heal.adSetsActivated,
+          adsActivated: heal.adsActivated,
+          campaignsMissingAds: heal.campaignsMissingAds,
+          error: syncErr || heal.error,
           statusRefresh: statusRefreshPayload,
         };
       }
     } catch {
+      const heal = mergeHealCounts({});
       hardCapForceResume = {
         outcome: "ERROR",
         reason: "force_resume_exception",
@@ -270,9 +302,9 @@ export async function POST(request: NextRequest) {
         targetsRepaired: 0,
         remainingUnder24h: 0,
         missingCurrent: 0,
-        adSetsActivated: 0,
-        adsActivated: 0,
-        campaignsMissingAds: 0,
+        adSetsActivated: heal.adSetsActivated,
+        adsActivated: heal.adsActivated,
+        campaignsMissingAds: heal.campaignsMissingAds,
         error: "force_resume_exception",
         statusRefresh: statusRefreshPayload,
       };
@@ -282,7 +314,7 @@ export async function POST(request: NextRequest) {
       const statusDrain = await drainHardCapStatusExecutionsForAccount({
         platformAccountId: customer.platformAccountId,
         userId: customer.userId,
-        maxRuns: 20,
+        maxRuns: 8,
       });
       hardCapStatus = {
         duePlans: statusDrain.duePlans,
@@ -303,39 +335,41 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // 3) Neue LAUNCH_CHAIN-Pläne (falls der Plan-Schritt welche angelegt hat).
+    // 4) Neue LAUNCH_CHAIN-Pläne (falls der Plan-Schritt welche angelegt hat).
     const drain = await drainOrganicBoostExecutionsForAccount({
       userId: customer.userId,
       platformAccountId: customer.platformAccountId,
-      maxRuns: 8,
+      maxRuns: 4,
     });
 
     let diagnose: unknown = null;
     let diagnoseError: string | null = null;
-    const { data: diagnoseData, error: diagnoseRpcError } = await admin.rpc(
-      "diagnose_meta_organic_boost_write_now",
-      {
-        p_user_id: customer.userId,
-        p_platform_account_id: customer.platformAccountId,
-      },
-    );
-    if (diagnoseRpcError) {
-      diagnoseError = diagnoseRpcError.message;
-    } else {
-      diagnose = diagnoseData;
-    }
-
     let deliveryStops: unknown = null;
     let deliveryStopsError: string | null = null;
-    const { data: deliveryStopsData, error: deliveryStopsRpcError } =
-      await admin.rpc("diagnose_meta_organic_boost_delivery_stops", {
-        p_user_id: customer.userId,
-        p_platform_account_id: customer.platformAccountId,
-      });
-    if (deliveryStopsRpcError) {
-      deliveryStopsError = deliveryStopsRpcError.message;
-    } else {
-      deliveryStops = deliveryStopsData;
+    if (!skipDiagnose) {
+      const { data: diagnoseData, error: diagnoseRpcError } = await admin.rpc(
+        "diagnose_meta_organic_boost_write_now",
+        {
+          p_user_id: customer.userId,
+          p_platform_account_id: customer.platformAccountId,
+        },
+      );
+      if (diagnoseRpcError) {
+        diagnoseError = diagnoseRpcError.message;
+      } else {
+        diagnose = diagnoseData;
+      }
+
+      const { data: deliveryStopsData, error: deliveryStopsRpcError } =
+        await admin.rpc("diagnose_meta_organic_boost_delivery_stops", {
+          p_user_id: customer.userId,
+          p_platform_account_id: customer.platformAccountId,
+        });
+      if (deliveryStopsRpcError) {
+        deliveryStopsError = deliveryStopsRpcError.message;
+      } else {
+        deliveryStops = deliveryStopsData;
+      }
     }
 
     // claim_idle is not a hard failure when Meta objects are already live and

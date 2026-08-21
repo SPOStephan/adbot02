@@ -276,6 +276,27 @@ async function repairManagedTarget(input: {
   return !error;
 }
 
+function isLocallyEndedCampaign(row: {
+  status?: string | null;
+  effective_status?: string | null;
+  stop_time?: string | null;
+}): boolean {
+  const status = String(row.status ?? "").toUpperCase();
+  const effective = String(row.effective_status ?? "").toUpperCase();
+  if (
+    status === "DELETED" ||
+    status === "ARCHIVED" ||
+    effective === "DELETED" ||
+    effective === "ARCHIVED" ||
+    effective === "COMPLETED" ||
+    effective === "CAMPAIGN_COMPLETED"
+  ) {
+    return true;
+  }
+  const stopMs = row.stop_time ? Date.parse(String(row.stop_time)) : Number.NaN;
+  return Number.isFinite(stopMs) && stopMs <= Date.now();
+}
+
 /**
  * Re-fetch Beitrag-Push campaign rows by Meta id, upsert local status, and
  * repair MANAGED automation targets for Meta-PAUSED campaigns.
@@ -283,6 +304,8 @@ async function repairManagedTarget(input: {
 export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
   platformAccountId: string;
   userId: string;
+  /** Skip finished history — for Abruf/Manuell prüfen latency. */
+  liveOnly?: boolean;
 }): Promise<OrganicBoostStatusRefreshResult> {
   const admin = createAdminClient();
   const empty = {
@@ -337,7 +360,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
     };
   }
 
-  const campaignIds = [
+  let campaignIds = [
     ...new Set(
       (bindingRows ?? [])
         .filter((row) => row.object_type === "CAMPAIGN")
@@ -348,27 +371,31 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
     ),
   ];
 
-  const adSetIds = [
-    ...new Set(
-      (bindingRows ?? [])
-        .filter((row) => row.object_type === "AD_SET")
-        .map((row) =>
-          typeof row.remote_object_id === "string" ? row.remote_object_id : null,
-        )
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
+  if (input.liveOnly && campaignIds.length > 0) {
+    const { data: localRows } = await admin
+      .from("campaigns")
+      .select("platform_campaign_id,status,effective_status,stop_time")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("is_current", true)
+      .in("platform_campaign_id", campaignIds);
 
-  const adIds = [
-    ...new Set(
-      (bindingRows ?? [])
-        .filter((row) => row.object_type === "AD")
-        .map((row) =>
-          typeof row.remote_object_id === "string" ? row.remote_object_id : null,
-        )
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
+    const known = new Set<string>();
+    const live = new Set<string>();
+    for (const row of localRows ?? []) {
+      const id =
+        typeof row.platform_campaign_id === "string"
+          ? row.platform_campaign_id
+          : null;
+      if (!id) continue;
+      known.add(id);
+      if (!isLocallyEndedCampaign(row)) {
+        live.add(id);
+      }
+    }
+    // Unknown locally → keep (may be live at Meta).
+    campaignIds = campaignIds.filter((id) => live.has(id) || !known.has(id));
+  }
 
   const campaignIdByPlanId = new Map<string, string>();
   for (const row of bindingRows ?? []) {
@@ -381,6 +408,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
     }
   }
 
+  const liveCampaignIdSet = new Set(campaignIds);
   const adSetIdsByCampaignId = new Map<string, string[]>();
   const adIdsByCampaignId = new Map<string, string[]>();
   for (const row of bindingRows ?? []) {
@@ -388,7 +416,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
       continue;
     }
     const campaignId = campaignIdByPlanId.get(row.plan_id);
-    if (!campaignId) {
+    if (!campaignId || !liveCampaignIdSet.has(campaignId)) {
       continue;
     }
     if (row.object_type === "AD_SET") {
@@ -402,6 +430,11 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
       adIdsByCampaignId.set(campaignId, list);
     }
   }
+
+  const adSetIds = [
+    ...new Set([...adSetIdsByCampaignId.values()].flat()),
+  ];
+  const adIds = [...new Set([...adIdsByCampaignId.values()].flat())];
 
   if (campaignIds.length < 1) {
     return empty;

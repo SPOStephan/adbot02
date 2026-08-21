@@ -102,12 +102,82 @@ export function OrganicBoostPlanButton({
   async function onClick() {
     setPending(true);
     setNotice(null);
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 90_000);
+    // Execute (Meta heal) first — plan+full Abruf used to burn the whole 90s
+    // budget before any ad ACTIVATE ran.
+    const executeController = new AbortController();
+    const planController = new AbortController();
+    const executeTimeoutId = window.setTimeout(
+      () => executeController.abort(),
+      75_000,
+    );
+    const planTimeoutId = window.setTimeout(
+      () => planController.abort(),
+      60_000,
+    );
+    let completedExecute: {
+      hardCapForceResume?: HardCapForceResumeNoticeInput | null;
+      hardCapStatus?: HardCapStatusDrainNoticeInput | null;
+    } | null = null;
     try {
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v1");
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v2");
       window.sessionStorage.removeItem("adbot.organicBoostAutoPlan.v3");
+
+      const executeResponse = await fetch(
+        "/api/meta/automation/organic-boost/execute",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            skipMarketingSync: true,
+            skipDiagnose: true,
+          }),
+          signal: executeController.signal,
+        },
+      );
+      const executeBody = (await executeResponse.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        marketingSync?: {
+          outcome?: string;
+          status?: string;
+          blockedReason?: string | null;
+          insightsCount?: number;
+          campaignsCount?: number;
+          spendTotal?: number;
+          insightsUntil?: string | null;
+          retryAt?: string | null;
+          marketingStatus?: string;
+        } | null;
+        marketingSyncError?: string | null;
+        hardCapForceResume?: HardCapForceResumeNoticeInput | null;
+        hardCapStatus?: HardCapStatusDrainNoticeInput | null;
+        drain?: {
+          duePlans?: number;
+          runs?: number;
+          succeeded?: number;
+          failed?: number;
+          lastOutcome?: string | null;
+          lastError?: string | null;
+          prepareDetail?: string | null;
+          preflightOkCount?: number | null;
+        };
+      };
+
+      if (!executeResponse.ok || executeBody.ok !== true) {
+        throw new Error(
+          executeBody.message ?? "Beitrag-Push-Execute fehlgeschlagen.",
+        );
+      }
+      completedExecute = {
+        hardCapForceResume: executeBody.hardCapForceResume,
+        hardCapStatus: executeBody.hardCapStatus,
+      };
+
       const planResponse = await fetch(
         "/api/meta/automation/organic-boost/plan",
         {
@@ -118,7 +188,7 @@ export function OrganicBoostPlanButton({
             "Content-Type": "application/json",
           },
           body: "{}",
-          signal: controller.signal,
+          signal: planController.signal,
         },
       );
       const planBody = (await planResponse.json().catch(() => ({}))) as {
@@ -159,54 +229,6 @@ export function OrganicBoostPlanButton({
         );
       }
 
-      const executeResponse = await fetch(
-        "/api/meta/automation/organic-boost/execute",
-        {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: "{}",
-          signal: controller.signal,
-        },
-      );
-      const executeBody = (await executeResponse.json().catch(() => ({}))) as {
-        ok?: boolean;
-        message?: string;
-        marketingSync?: {
-          outcome?: string;
-          status?: string;
-          blockedReason?: string | null;
-          insightsCount?: number;
-          campaignsCount?: number;
-          spendTotal?: number;
-          insightsUntil?: string | null;
-          retryAt?: string | null;
-          marketingStatus?: string;
-        } | null;
-        marketingSyncError?: string | null;
-        hardCapForceResume?: HardCapForceResumeNoticeInput | null;
-        hardCapStatus?: HardCapStatusDrainNoticeInput | null;
-        drain?: {
-          duePlans?: number;
-          runs?: number;
-          succeeded?: number;
-          failed?: number;
-          lastOutcome?: string | null;
-          lastError?: string | null;
-          prepareDetail?: string | null;
-          preflightOkCount?: number | null;
-        };
-      };
-
-      if (!executeResponse.ok || executeBody.ok !== true) {
-        throw new Error(
-          executeBody.message ?? "Beitrag-Push-Execute fehlgeschlagen.",
-        );
-      }
-
       const created =
         (planBody.organicBoost?.plansCreated ?? 0) +
         (planBody.organicBoost?.plansExisting ?? 0);
@@ -231,9 +253,9 @@ export function OrganicBoostPlanButton({
       const skipped = planBody.organicBoost?.candidatesSkipped ?? 0;
       const diagnosis = planBody.organicBoost?.candidateDiagnosis ?? null;
 
-      const sync = executeBody.marketingSync ?? planBody.marketingSync;
+      const sync = planBody.marketingSync ?? executeBody.marketingSync;
       const syncError =
-        executeBody.marketingSyncError ?? planBody.marketingSyncError ?? null;
+        planBody.marketingSyncError ?? executeBody.marketingSyncError ?? null;
       const marketingOk =
         sync?.marketingStatus === "success" ||
         (sync?.outcome === "completed" &&
@@ -322,15 +344,32 @@ export function OrganicBoostPlanButton({
       const aborted =
         (error instanceof DOMException && error.name === "AbortError") ||
         (error instanceof Error && error.name === "AbortError");
-      setNotice(
-        aborted
-          ? "Prüfung abgebrochen (Zeitlimit). Bitte erneut versuchen — der Server hat zu lange gebraucht."
+      if (completedExecute) {
+        const resumeNotice = formatHardCapResumeNotice(
+          completedExecute.hardCapForceResume,
+          completedExecute.hardCapStatus,
+        );
+        const timeoutBit = aborted
+          ? "Plan-Schritt Zeitlimit — Meta-Reaktivierung oben ist trotzdem gelaufen."
           : error instanceof Error
             ? error.message
-            : "Beitrag-Push konnte nicht gestartet werden.",
-      );
+            : "Plan-Schritt fehlgeschlagen.";
+        setNotice(
+          [resumeNotice, timeoutBit].filter(Boolean).join(" "),
+        );
+        router.refresh();
+      } else {
+        setNotice(
+          aborted
+            ? "Prüfung abgebrochen (Zeitlimit). Bitte erneut versuchen — der Server hat zu lange gebraucht."
+            : error instanceof Error
+              ? error.message
+              : "Beitrag-Push konnte nicht gestartet werden.",
+        );
+      }
     } finally {
-      window.clearTimeout(timeoutId);
+      window.clearTimeout(executeTimeoutId);
+      window.clearTimeout(planTimeoutId);
       setPending(false);
     }
   }

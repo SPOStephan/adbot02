@@ -1371,12 +1371,24 @@ assert.match(
 );
 assert.match(finalizeActiveNoStepMigration, /finalized_active=/);
 assert.match(
-  read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
-  /syncMetaConnector/,
+  read("src/lib/meta/organic-boost-status-refresh.ts"),
+  /liveOnly/,
 );
 assert.match(
   read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
-  /marketingSync/,
+  /skipMarketingSync/,
+);
+assert.match(
+  read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
+  /Delivery heal FIRST/,
+);
+assert.match(
+  read("src/components/OrganicBoostPlanButton.tsx"),
+  /skipMarketingSync:\s*true/,
+);
+assert.match(
+  read("src/components/OrganicBoostPlanButton.tsx"),
+  /Plan-Schritt Zeitlimit/,
 );
 assert.match(
   read("src/components/OrganicBoostPlanButton.tsx"),
