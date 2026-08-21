@@ -17,6 +17,7 @@ import {
   updateMetaAdSetStatus,
   updateMetaAdStatus,
 } from "@/lib/meta/write-client";
+import { repairMissingOrganicBoostAd } from "@/lib/meta/organic-boost-missing-ad-repair";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type OrganicBoostDeliveryHealResult = {
@@ -26,9 +27,12 @@ export type OrganicBoostDeliveryHealResult = {
   adSetsActivated: number;
   adsActivated: number;
   campaignsMissingAds: number;
+  adsCreated: number;
+  adSetsCreated: number;
   allowHealed: boolean;
   skippedKillSwitch: boolean;
   skippedPolicy: boolean;
+  rateLimited: boolean;
   error: string | null;
 };
 
@@ -281,9 +285,12 @@ export async function healOrganicBoostDeliveryTree(input: {
     adSetsActivated: 0,
     adsActivated: 0,
     campaignsMissingAds: 0,
+    adsCreated: 0,
+    adSetsCreated: 0,
     allowHealed: false,
     skippedKillSwitch: false,
     skippedPolicy: false,
+    rateLimited: false,
     error: null,
   };
 
@@ -336,11 +343,13 @@ export async function healOrganicBoostDeliveryTree(input: {
   }
 
   // Cap work per Abruf — only a few live incomplete trees should remain.
-  const campaignIds = resolved.campaignIds.slice(0, 20);
+  const campaignIds = resolved.campaignIds.slice(0, 8);
 
   const { data: account, error: accountError } = await admin
     .from("platform_accounts")
-    .select("access_token_encrypted, token_iv, token_auth_tag")
+    .select(
+      "access_token_encrypted, token_iv, token_auth_tag, marketing_meta_ad_account_id",
+    )
     .eq("id", input.platformAccountId)
     .eq("user_id", input.userId)
     .maybeSingle();
@@ -367,6 +376,11 @@ export async function healOrganicBoostDeliveryTree(input: {
     };
   }
 
+  const adAccountId =
+    typeof account.marketing_meta_ad_account_id === "string"
+      ? account.marketing_meta_ad_account_id
+      : null;
+
   try {
     const env = getMetaSyncEnv();
     const accessToken = decryptAccessToken(
@@ -381,9 +395,16 @@ export async function healOrganicBoostDeliveryTree(input: {
     const adSets: MetaAdSet[] = [];
     const ads: MetaAd[] = [];
     let campaignsMissingAds = 0;
+    let adsCreated = 0;
+    let adSetsCreated = 0;
     let fetchError: string | null = null;
+    let rateLimited = false;
+    let repairsAttempted = 0;
 
     for (const campaignId of campaignIds) {
+      if (rateLimited) {
+        break;
+      }
       try {
         const [edgeAdSets, edgeAds] = await Promise.all([
           getMetaAdSetsByCampaignId({
@@ -401,9 +422,33 @@ export async function healOrganicBoostDeliveryTree(input: {
         ads.push(...edgeAds.items);
         if (edgeAds.items.length < 1) {
           campaignsMissingAds += 1;
+          // One recreate per Abruf — avoids ad-account rate limits.
+          if (adAccountId && repairsAttempted < 1) {
+            repairsAttempted += 1;
+            const repair = await repairMissingOrganicBoostAd({
+              userId: input.userId,
+              platformAccountId: input.platformAccountId,
+              campaignId,
+              accessToken,
+              appSecret: env.appSecret,
+              adAccountId,
+              existingAdSetIds: edgeAdSets.items.map((row) => row.id),
+            });
+            adsCreated += repair.adsCreated;
+            adSetsCreated += repair.adSetsCreated;
+            if (repair.error) {
+              fetchError = repair.error;
+            }
+            if (repair.rateLimited) {
+              rateLimited = true;
+            }
+          }
         }
       } catch (error) {
         fetchError = formatOrganicBoostHealError(error);
+        if (error instanceof MetaGraphError && error.rateLimited) {
+          rateLimited = true;
+        }
         console.error("organic_boost_heal_campaign_edge_failed", {
           campaignId,
           error: fetchError,
@@ -416,21 +461,28 @@ export async function healOrganicBoostDeliveryTree(input: {
     ];
     const uniqueAds = [...new Map(ads.map((item) => [item.id, item])).values()];
 
-    const activated = await activatePausedObjects({
-      adSets: uniqueAdSets,
-      ads: uniqueAds,
-      accessToken,
-      appSecret: env.appSecret,
-    });
+    const activated = rateLimited
+      ? { adSetsActivated: 0, adsActivated: 0, lastError: fetchError }
+      : await activatePausedObjects({
+          adSets: uniqueAdSets,
+          ads: uniqueAds,
+          accessToken,
+          appSecret: env.appSecret,
+        });
+
+    if (
+      activated.lastError &&
+      /zu viele API-Aufrufe|too many api|rate limit/i.test(activated.lastError)
+    ) {
+      rateLimited = true;
+    }
 
     const error =
       activated.lastError ||
-      (activated.adSetsActivated + activated.adsActivated < 1 &&
+      fetchError ||
+      (activated.adSetsActivated + activated.adsActivated + adsCreated < 1 &&
       campaignsMissingAds > 0
         ? `keine_werbeanzeige:${campaignsMissingAds}_kampagne(n)_ohne_ad`
-        : null) ||
-      (activated.adSetsActivated + activated.adsActivated < 1
-        ? fetchError
         : null);
 
     return {
@@ -440,16 +492,22 @@ export async function healOrganicBoostDeliveryTree(input: {
       adSetsActivated: activated.adSetsActivated,
       adsActivated: activated.adsActivated,
       campaignsMissingAds,
+      adsCreated,
+      adSetsCreated,
       allowHealed: allow.healed,
       skippedKillSwitch: false,
       skippedPolicy: false,
+      rateLimited,
       error,
     };
   } catch (error) {
+    const rateLimited =
+      error instanceof MetaGraphError && error.rateLimited;
     return {
       ...empty,
       allowHealed: allow.healed,
       campaignsChecked: campaignIds.length,
+      rateLimited,
       error: formatOrganicBoostHealError(error),
     };
   }

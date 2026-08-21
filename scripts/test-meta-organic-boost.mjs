@@ -1371,8 +1371,20 @@ assert.match(
 );
 assert.match(finalizeActiveNoStepMigration, /finalized_active=/);
 assert.match(
-  read("src/lib/meta/organic-boost-status-refresh.ts"),
-  /liveOnly/,
+  read("src/lib/meta/organic-boost-missing-ad-repair.ts"),
+  /repairMissingOrganicBoostAd/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /repairMissingOrganicBoostAd/,
+);
+assert.match(
+  read("src/lib/meta/hard-cap-resume-notice.ts"),
+  /Fehlende Werbeanzeige nachgezogen/,
+);
+assert.match(
+  read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
+  /skipDeliveryHeal:\s*true/,
 );
 assert.match(
   read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
@@ -1380,7 +1392,7 @@ assert.match(
 );
 assert.match(
   read("src/app/api/meta/automation/organic-boost/execute/route.ts"),
-  /Delivery heal FIRST/,
+  /healOrganicBoostDeliveryTree/,
 );
 assert.match(
   read("src/components/OrganicBoostPlanButton.tsx"),
