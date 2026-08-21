@@ -24,7 +24,15 @@ import {
 import { MetaSyncButton } from "@/components/MetaSyncButton";
 import { OrganicBoostAutoPlanner } from "@/components/OrganicBoostAutoPlanner";
 import { shouldListAsContentCandidate } from "@/lib/meta/content-candidate-lifecycle";
-import type { ContentSyncCandidate } from "@/lib/meta/content-sync-snapshot";
+import {
+  isDetectionInWindow,
+  type ContentDetectionSourceCounts,
+} from "@/lib/meta/content-detection-history";
+import type {
+  ContentAssetSyncHint,
+  ContentDetectionHistoryItem,
+  ContentSyncCandidate,
+} from "@/lib/meta/content-sync-snapshot";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 
 type PreviewContentType =
@@ -115,6 +123,25 @@ type SyncSnapshotState = {
   newCount: number;
   storedCandidateCount: number;
   candidates: ContentSyncCandidate[];
+  detectionHistory: ContentDetectionHistoryItem[];
+  detectionSummary: {
+    today: ContentDetectionSourceCounts;
+    week: ContentDetectionSourceCounts;
+  };
+  assetSyncHints: ContentAssetSyncHint[];
+};
+
+type DetectionHistoryWindow = "today" | "week";
+
+const EMPTY_SOURCE_COUNTS: ContentDetectionSourceCounts = {
+  facebook: 0,
+  instagram: 0,
+  total: 0,
+};
+
+const EMPTY_DETECTION_SUMMARY = {
+  today: EMPTY_SOURCE_COUNTS,
+  week: EMPTY_SOURCE_COUNTS,
 };
 
 type BoostContext = {
@@ -152,6 +179,10 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
+function formatSourceCounts(counts: ContentDetectionSourceCounts) {
+  return `${counts.total} · FB ${counts.facebook} · IG ${counts.instagram}`;
+}
+
 function resolveSyncInfo(
   status: string | null,
   baselineCompleted: boolean,
@@ -181,6 +212,8 @@ export function MetaContentSyncPanel({
 }: Props) {
   const [snapshot, setSnapshot] = useState(initial);
   const [now, setNow] = useState(() => Date.now());
+  const [historyWindow, setHistoryWindow] =
+    useState<DetectionHistoryWindow>("today");
   const inFlightRef = useRef(false);
 
   const displayNextSyncAt = useMemo(
@@ -221,6 +254,9 @@ export function MetaContentSyncPanel({
         newCount?: number;
         storedCandidateCount?: number;
         candidates?: ContentSyncCandidate[];
+        detectionHistory?: ContentDetectionHistoryItem[];
+        detectionSummary?: SyncSnapshotState["detectionSummary"];
+        assetSyncHints?: ContentAssetSyncHint[];
       };
       if (!body.ok || body.connected === false) return;
       setSnapshot({
@@ -237,6 +273,13 @@ export function MetaContentSyncPanel({
         newCount: body.newCount ?? 0,
         storedCandidateCount: body.storedCandidateCount ?? 0,
         candidates: Array.isArray(body.candidates) ? body.candidates : [],
+        detectionHistory: Array.isArray(body.detectionHistory)
+          ? body.detectionHistory
+          : [],
+        detectionSummary: body.detectionSummary ?? EMPTY_DETECTION_SUMMARY,
+        assetSyncHints: Array.isArray(body.assetSyncHints)
+          ? body.assetSyncHints
+          : [],
       });
       setNow(Date.now());
     } finally {
@@ -293,6 +336,25 @@ export function MetaContentSyncPanel({
         }),
       ),
     [boost.heldPlanByCandidate, snapshot.candidates],
+  );
+
+  const historyItems = useMemo(() => {
+    const clock = new Date(now);
+    return snapshot.detectionHistory.filter((item) =>
+      isDetectionInWindow(item.firstSeenAt, historyWindow, clock),
+    );
+  }, [historyWindow, now, snapshot.detectionHistory]);
+
+  const historySummary =
+    historyWindow === "today"
+      ? snapshot.detectionSummary.today
+      : snapshot.detectionSummary.week;
+
+  const facebookSyncHint = snapshot.assetSyncHints.find(
+    (hint) => hint.assetType === "facebook_page",
+  );
+  const instagramSyncHint = snapshot.assetSyncHints.find(
+    (hint) => hint.assetType === "instagram_account",
   );
 
   return (
@@ -543,6 +605,160 @@ export function MetaContentSyncPanel({
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
               Nach dem ersten Ausgangsbestand erscheinen hier Beiträge, die bei einem
               späteren manuellen oder stündlichen Abruf neu erkannt werden.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-8 scroll-mt-24" id="erkannte-beitraege">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              Erkennungsrückschau
+            </p>
+            <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-800">
+              Was Adbot erkannt hat
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["today", "Heute", snapshot.detectionSummary.today],
+                ["week", "Diese Woche", snapshot.detectionSummary.week],
+              ] as const
+            ).map(([key, label, counts]) => {
+              const active = historyWindow === key;
+              return (
+                <button
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500 ${
+                    active
+                      ? "bg-slate-800 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                  key={key}
+                  onClick={() => setHistoryWindow(key)}
+                  type="button"
+                >
+                  {label}
+                  <span
+                    className={`tabular-nums ${active ? "text-slate-200" : "text-slate-500"}`}
+                  >
+                    {counts.total}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+          Übersicht der zuletzt beim Abruf gespeicherten Beiträge — unabhängig davon,
+          ob sie noch als offene Kandidaten gelten. Hilft zu sehen, ob Facebook und
+          Instagram überhaupt ankommen.
+        </p>
+
+        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <dt className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+              {historyWindow === "today" ? "Heute erkannt" : "Diese Woche erkannt"}
+            </dt>
+            <dd className="mt-1 text-sm font-bold text-slate-800">
+              {formatSourceCounts(historySummary)}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <dt className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+              Facebook-Seite zuletzt
+            </dt>
+            <dd className="mt-1 text-sm font-bold text-slate-800">
+              {formatDateTime(facebookSyncHint?.lastSyncedAt)}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <dt className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+              Instagram zuletzt
+            </dt>
+            <dd className="mt-1 text-sm font-bold text-slate-800">
+              {formatDateTime(instagramSyncHint?.lastSyncedAt)}
+            </dd>
+          </div>
+        </dl>
+
+        {historyWindow === "today" &&
+        historySummary.instagram > 0 &&
+        historySummary.facebook === 0 ? (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+            Heute wurden Instagram-Beiträge erkannt, aber keine Facebook-Beiträge.
+            Wenn auf der Seite neue Posts liegen, prüfe den Asset-Abruf oben
+            (Status „Teilweise aktualisiert“ oder fehlendes Facebook-Datum).
+          </p>
+        ) : null}
+
+        {historyItems.length ? (
+          <ul className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {historyItems.map((item) => (
+              <li
+                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                key={item.id}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">
+                      {item.source === "instagram" ? (
+                        <Camera className="size-3" />
+                      ) : (
+                        <Megaphone className="size-3" />
+                      )}
+                      {item.source === "instagram" ? "Instagram" : "Facebook"}
+                    </span>
+                    {item.isNew ? (
+                      <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
+                        Offen
+                      </span>
+                    ) : (
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">
+                        Archiviert
+                      </span>
+                    )}
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      Erkannt {formatDateTime(item.firstSeenAt)}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 line-clamp-2 text-sm leading-5 text-slate-700">
+                    {item.captionExcerpt ?? "Beitrag ohne verfügbaren Text"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3 text-xs text-slate-500">
+                  <span>
+                    Veröffentlicht{" "}
+                    {formatDateTime(item.publishedAt ?? item.firstSeenAt)}
+                  </span>
+                  {item.permalinkUrl ? (
+                    <a
+                      className="inline-flex items-center gap-1 font-bold text-slate-700 transition hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-600"
+                      href={item.permalinkUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Link
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center">
+            <p className="text-sm font-bold text-slate-800">
+              {historyWindow === "today"
+                ? "Heute noch keine Erkennungen gespeichert"
+                : "Diese Woche noch keine Erkennungen gespeichert"}
+            </p>
+            <p className="mx-auto mt-1.5 max-w-lg text-xs leading-5 text-slate-500">
+              Hier erscheinen Beiträge, sobald ein Abruf sie erstmals in Adbot
+              abgelegt hat — auch wenn sie später nicht mehr unter den offenen
+              Kandidaten stehen.
             </p>
           </div>
         )}
