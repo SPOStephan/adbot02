@@ -157,7 +157,11 @@ export async function loadContentSyncSnapshot(input: {
       )
       .eq("platform_account_id", input.platformAccountId)
       .eq("user_id", input.userId)
-      .gte("first_seen_at", historySince)
+      // Include posts published recently even if first_seen was earlier
+      // (baseline / prior Abruf), so Heute/Woche match customer expectation.
+      .or(
+        `first_seen_at.gte.${historySince},published_at.gte.${historySince}`,
+      )
       .order("first_seen_at", { ascending: false, nullsFirst: false })
       .limit(HISTORY_FETCH_LIMIT),
     input.supabase
