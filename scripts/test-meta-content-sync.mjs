@@ -202,6 +202,7 @@ try {
     .replace(/import \{[\s\S]*?\} from "\.\/client";/, `import {
   getFacebookPublishedPosts,
   getInstagramMedia,
+  getMetaPageAccessToken,
   getMetaPageAssets,
   mergeMetaUsage,
   MetaCollectionLimitError,
@@ -278,6 +279,19 @@ export async function getMetaPageAssets(input) {
   globalThis.__metaTest.calls.push({ name: "getMetaPageAssets", input });
   if (globalThis.__metaTest.pageError) throw globalThis.__metaTest.pageError;
   return globalThis.__metaTest.pagesResult;
+}
+
+export async function getMetaPageAccessToken(input) {
+  globalThis.__metaTest.calls.push({ name: "getMetaPageAccessToken", input });
+  if (globalThis.__metaTest.pageAccessTokenError) {
+    throw globalThis.__metaTest.pageAccessTokenError;
+  }
+  return (
+    globalThis.__metaTest.pageAccessTokenResult ?? {
+      accessToken: "resolved-page-token",
+      usage: emptyUsage,
+    }
+  );
 }
 
 export async function getFacebookPublishedPosts(input) {
@@ -973,6 +987,52 @@ export function createAdminClient() {
   assert.equal(partialResult.syncedAssetCount, 1);
   assert.equal(partialResult.failedAssetCount, 1);
   assert.equal(partialHarness.state.updates.at(-1).values.sync_error_code, "asset_partial");
+
+  // System-user /me/accounts often omit page access_token — Abruf must resolve
+  // a real Page token before published_posts (IG still works with user token).
+  const pageTokenHarness = makeAdminHarness({
+    assets: defaultAssets("2026-07-27T09:00:00.000Z"),
+  });
+  configureMeta(pageTokenHarness.admin, {
+    pagesResult: {
+      pages: [
+        {
+          id: "page-1",
+          name: "Test Page",
+          accessToken: "system-user-token-not-a-page-token",
+          hasPageAccessToken: false,
+          instagramAccount: {
+            id: "178414000000001",
+            name: "Test Instagram",
+            username: "test_account",
+          },
+        },
+      ],
+      usage: emptyUsage,
+    },
+    pageAccessTokenResult: {
+      accessToken: "resolved-ephemeral-page-token",
+      usage: emptyUsage,
+    },
+  });
+  const pageTokenResult = await syncModule.syncMetaConnector({
+    platformAccountId: pageTokenHarness.state.connector.id,
+    mode: "cron",
+  });
+  assert.equal(pageTokenResult.status, "success");
+  assert.equal(pageTokenResult.failedAssetCount, 0);
+  const pageTokenResolveCall = globalThis.__metaTest.calls.find(
+    (call) => call.name === "getMetaPageAccessToken",
+  );
+  assert.ok(pageTokenResolveCall);
+  assert.equal(pageTokenResolveCall.input.pageId, "page-1");
+  const facebookPostCall = globalThis.__metaTest.calls.find(
+    (call) => call.name === "getFacebookPublishedPosts",
+  );
+  assert.equal(
+    facebookPostCall.input.pageAccessToken,
+    "resolved-ephemeral-page-token",
+  );
 
   const rateLimitUsage = {
     appPercent: 100,

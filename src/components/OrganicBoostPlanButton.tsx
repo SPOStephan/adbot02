@@ -292,7 +292,7 @@ export function OrganicBoostPlanButton({
         (sync?.outcome === "blocked" && Boolean(sync?.retryAt))
       ) {
         syncNotice =
-          "Kampagnenstand: Abruf kurz im Cooldown — Reaktivierung läuft trotzdem mit dem letzten Stand.";
+          "Abruf im Cooldown (60s) — Beiträge und Kennzahlen wurden diesmal nicht neu von Meta geladen. Kurz warten, dann erneut prüfen.";
       } else if (syncBlocked) {
         syncNotice = `Kennzahlen-Abruf nicht erfolgreich (${syncError ?? sync?.blockedReason ?? sync?.marketingStatus ?? sync?.status ?? "unbekannt"}). Beitrag-Push braucht einen erfolgreichen Kampagnenabruf (EUR + marketing_sync_id).`;
       }
