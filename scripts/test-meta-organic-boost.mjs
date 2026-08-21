@@ -1371,6 +1371,14 @@ assert.match(
 );
 assert.match(finalizeActiveNoStepMigration, /finalized_active=/);
 assert.match(
+  read("src/lib/meta/organic-boost-missing-ad-repair.ts"),
+  /withRepairSchedule/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /confirmedEmpty/,
+);
+assert.match(
   read("src/lib/meta/organic-boost-delivery-watchdog.ts"),
   /runOrganicBoostDeliveryWatchdog/,
 );
