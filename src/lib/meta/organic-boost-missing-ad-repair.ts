@@ -108,16 +108,27 @@ const AD_REPAIR_FIELDS = new Set([
   "status",
 ]);
 
-function withOpenSchedule(adSet: MetaWritePayload): MetaWritePayload {
-  const endRaw = typeof adSet.end_time === "string" ? adSet.end_time : null;
-  const endMs = endRaw ? Date.parse(endRaw) : Number.NaN;
-  if (Number.isFinite(endMs) && endMs > Date.now()) {
-    return adSet;
+function withRepairSchedule(
+  adSet: MetaWritePayload,
+  campaignStopTime: string | null,
+): MetaWritePayload {
+  // Never reuse a stale planned start_time — that makes Meta show
+  // "Wird vorbereitet" / odd delivery windows under an already-live campaign.
+  const start = new Date();
+  start.setSeconds(0, 0);
+  let endMs = campaignStopTime ? Date.parse(campaignStopTime) : Number.NaN;
+  if (!Number.isFinite(endMs) || endMs <= start.getTime()) {
+    const fromPayload =
+      typeof adSet.end_time === "string" ? Date.parse(adSet.end_time) : Number.NaN;
+    endMs =
+      Number.isFinite(fromPayload) && fromPayload > start.getTime()
+        ? fromPayload
+        : start.getTime() + 24 * 60 * 60 * 1000;
   }
-  // Live campaign without ads but stale planned end_time — give Meta a 24h window.
   return {
     ...adSet,
-    end_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    start_time: start.toISOString(),
+    end_time: new Date(endMs).toISOString(),
   };
 }
 
@@ -287,6 +298,8 @@ export async function repairMissingOrganicBoostAd(input: {
   appSecret: string;
   adAccountId: string;
   existingAdSetIds: string[];
+  /** Local campaigns.stop_time — preferred end for a repair ad set. */
+  campaignStopTime?: string | null;
 }): Promise<MissingAdRepairResult> {
   const empty: MissingAdRepairResult = {
     attempted: false,
@@ -333,17 +346,21 @@ export async function repairMissingOrganicBoostAd(input: {
   let activated = 0;
 
   try {
+    // Prefer an existing ad set — never stack a second tree under the campaign.
     let adSetId =
-      input.existingAdSetIds.length === 1 ? input.existingAdSetIds[0]! : null;
+      input.existingAdSetIds.length > 0 ? input.existingAdSetIds[0]! : null;
 
     if (!adSetId) {
       const adSetPayload = pickFields(
         stripBindingRefs(
-          withOpenSchedule({
-            ...adSetTemplate,
-            campaign_id: input.campaignId,
-            status: "PAUSED",
-          }),
+          withRepairSchedule(
+            {
+              ...adSetTemplate,
+              campaign_id: input.campaignId,
+              status: "PAUSED",
+            },
+            input.campaignStopTime ?? null,
+          ),
         ),
         AD_SET_REPAIR_FIELDS,
       );

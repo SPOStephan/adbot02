@@ -420,10 +420,36 @@ export async function healOrganicBoostDeliveryTree(input: {
         ]);
         adSets.push(...edgeAdSets.items);
         ads.push(...edgeAds.items);
-        if (edgeAds.items.length < 1) {
+        const liveAds = edgeAds.items.filter(
+          (row) => !isTerminalDeliveryOff(row.status, row.effectiveStatus),
+        );
+        const liveAdSets = edgeAdSets.items.filter(
+          (row) => !isTerminalDeliveryOff(row.status, row.effectiveStatus),
+        );
+        // Ads already in Meta review/process count as present — do not recreate.
+        if (liveAds.length < 1) {
           campaignsMissingAds += 1;
-          // One recreate per Abruf — avoids ad-account rate limits.
-          if (adAccountId && repairsAttempted < 1) {
+          // Confirm once more before CREATE — avoids duplicate trees on flaky reads.
+          let confirmedEmpty = true;
+          try {
+            const confirm = await getMetaAdsByCampaignId({
+              campaignId,
+              accessToken,
+              appSecret: env.appSecret,
+            });
+            confirmedEmpty =
+              confirm.items.filter(
+                (row) =>
+                  !isTerminalDeliveryOff(row.status, row.effectiveStatus),
+              ).length < 1;
+          } catch {
+            confirmedEmpty = true;
+          }
+          if (
+            confirmedEmpty &&
+            adAccountId &&
+            repairsAttempted < 1
+          ) {
             repairsAttempted += 1;
             const repair = await repairMissingOrganicBoostAd({
               userId: input.userId,
@@ -432,7 +458,8 @@ export async function healOrganicBoostDeliveryTree(input: {
               accessToken,
               appSecret: env.appSecret,
               adAccountId,
-              existingAdSetIds: edgeAdSets.items.map((row) => row.id),
+              existingAdSetIds: liveAdSets.map((row) => row.id),
+              campaignStopTime: stopTimeByCampaignId.get(campaignId) ?? null,
             });
             adsCreated += repair.adsCreated;
             adSetsCreated += repair.adSetsCreated;
