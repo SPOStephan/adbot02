@@ -142,6 +142,9 @@ export async function POST() {
     targetsRepaired: number;
     remainingUnder24h: number;
     missingCurrent: number;
+    adSetsActivated: number;
+    adsActivated: number;
+    campaignsMissingAds: number;
     error: string | null;
   } | null = null;
   let hardCapDrain: {
@@ -188,6 +191,9 @@ export async function POST() {
         targetsRepaired: forceResume.targetsRepaired,
         remainingUnder24h: forceResume.remainingUnder24h,
         missingCurrent: forceResume.missingCurrent,
+        adSetsActivated: forceResume.adSetsActivated,
+        adsActivated: forceResume.adsActivated,
+        campaignsMissingAds: forceResume.campaignsMissingAds,
         error: forceResume.error,
       };
     }
@@ -208,6 +214,9 @@ export async function POST() {
       targetsRepaired: 0,
       remainingUnder24h: 0,
       missingCurrent: 0,
+      adSetsActivated: 0,
+      adsActivated: 0,
+      campaignsMissingAds: 0,
       error: "force_resume_exception",
     };
   }

@@ -829,7 +829,23 @@ assert.match(
 );
 assert.match(
   read("src/lib/meta/organic-boost-delivery-heal.ts"),
-  /Cap edge|only when bindings|Manuell erneut prüfen|missingCampaignIds/,
+  /resolveLiveOrganicBoostCampaignIds|finished history|per-campaign Meta edges/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /formatOrganicBoostHealError/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /keine_werbeanzeige/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-status-refresh.ts"),
+  /Live campaigns first|MAX_EDGE_LOOKUPS|edgeLookups/,
+);
+assert.match(
+  read("src/lib/meta/hard-cap-resume-notice.ts"),
+  /Anzeigen-Heal an Meta|Keine Werbeanzeige/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-delivery.ts"),

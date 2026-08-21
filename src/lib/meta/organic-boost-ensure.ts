@@ -9,7 +9,10 @@ import {
   drainHardCapStatusExecutionsForAccount,
   forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
-import { healOrganicBoostDeliveryTree } from "@/lib/meta/organic-boost-delivery-heal";
+import {
+  formatOrganicBoostHealError,
+  healOrganicBoostDeliveryTree,
+} from "@/lib/meta/organic-boost-delivery-heal";
 import { refreshOrganicBoostCampaignStatusesFromMeta } from "@/lib/meta/organic-boost-status-refresh";
 import type { MetaOrganicBoostPlannerResult } from "@/lib/meta/planner";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -303,10 +306,7 @@ async function recoverPausedOrganicBoostCampaigns(input: {
   }).catch((error) => ({
     adSetsActivated: 0,
     adsActivated: 0,
-    error:
-      error instanceof Error
-        ? error.message
-        : "organic_boost_delivery_heal_failed",
+    error: formatOrganicBoostHealError(error),
   }));
 
   if (!marketingSyncId) {
@@ -387,10 +387,7 @@ async function recoverPausedOrganicBoostCampaigns(input: {
   }).catch((error) => ({
     adSetsActivated: 0,
     adsActivated: 0,
-    error:
-      error instanceof Error
-        ? error.message
-        : "organic_boost_delivery_heal_failed",
+    error: formatOrganicBoostHealError(error),
   }));
 
   const adSetsActivated =

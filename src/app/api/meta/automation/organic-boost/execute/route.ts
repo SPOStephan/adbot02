@@ -10,6 +10,10 @@ import {
   drainHardCapStatusExecutionsForAccount,
   forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
+import {
+  formatOrganicBoostHealError,
+  healOrganicBoostDeliveryTree,
+} from "@/lib/meta/organic-boost-delivery-heal";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import { refreshOrganicBoostCampaignStatusesFromMeta } from "@/lib/meta/organic-boost-status-refresh";
 import { syncMetaConnector } from "@/lib/meta/sync";
@@ -85,6 +89,9 @@ export async function POST(request: NextRequest) {
       targetsRepaired: number;
       remainingUnder24h: number;
       missingCurrent: number;
+      adSetsActivated: number;
+      adsActivated: number;
+      campaignsMissingAds: number;
       error: string | null;
       statusRefresh: {
         requested: number;
@@ -175,12 +182,23 @@ export async function POST(request: NextRequest) {
           targetsRepaired: forceResume.targetsRepaired,
           remainingUnder24h: forceResume.remainingUnder24h,
           missingCurrent: forceResume.missingCurrent,
+          adSetsActivated: forceResume.adSetsActivated,
+          adsActivated: forceResume.adsActivated,
+          campaignsMissingAds: forceResume.campaignsMissingAds,
           error: forceResume.error,
           statusRefresh: statusRefreshPayload,
         };
-  } else if ((statusRefresh.paused ?? 0) === 0) {
-        // Nothing campaign-level to reactivate — child delivery heal still runs
-        // inside forceReactivate / recover. Do not sticky-banner marketing_sync.
+      } else if ((statusRefresh.paused ?? 0) === 0) {
+        // No campaign-level ACTIVATE queue — still heal paused ads/ad sets.
+        const heal = await healOrganicBoostDeliveryTree({
+          userId: customer.userId,
+          platformAccountId: customer.platformAccountId,
+        }).catch((error) => ({
+          adSetsActivated: 0,
+          adsActivated: 0,
+          campaignsMissingAds: 0,
+          error: formatOrganicBoostHealError(error),
+        }));
         hardCapForceResume = {
           outcome: "SKIPPED",
           reason:
@@ -200,7 +218,11 @@ export async function POST(request: NextRequest) {
           targetsRepaired: 0,
           remainingUnder24h: 0,
           missingCurrent: 0,
-          error: null,
+          adSetsActivated: heal.adSetsActivated ?? 0,
+          adsActivated: heal.adsActivated ?? 0,
+          campaignsMissingAds:
+            "campaignsMissingAds" in heal ? (heal.campaignsMissingAds ?? 0) : 0,
+          error: "error" in heal ? heal.error : null,
           statusRefresh: statusRefreshPayload,
         };
       } else {
@@ -224,6 +246,9 @@ export async function POST(request: NextRequest) {
           targetsRepaired: 0,
           remainingUnder24h: 0,
           missingCurrent: 0,
+          adSetsActivated: 0,
+          adsActivated: 0,
+          campaignsMissingAds: 0,
           error: syncErr,
           statusRefresh: statusRefreshPayload,
         };
@@ -245,6 +270,9 @@ export async function POST(request: NextRequest) {
         targetsRepaired: 0,
         remainingUnder24h: 0,
         missingCurrent: 0,
+        adSetsActivated: 0,
+        adsActivated: 0,
+        campaignsMissingAds: 0,
         error: "force_resume_exception",
         statusRefresh: statusRefreshPayload,
       };
