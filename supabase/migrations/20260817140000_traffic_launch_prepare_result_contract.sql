@@ -34,7 +34,7 @@ as $$
         'prepared_at',
         coalesce(
           nullif(p_result->>'prepared_at', ''),
-          p_prepared_at
+          p_prepared_at::text
         ),
         'budget_type',
         coalesce(
