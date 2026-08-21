@@ -39,7 +39,6 @@ export async function POST(request: NextRequest) {
     const skipMarketingSync = body.skipMarketingSync !== false;
     const skipDiagnose = body.skipDiagnose !== false;
 
-    // 1) Delivery heal FIRST — Meta ad/adset ACTIVATE must not wait on Abruf.
     const earlyHeal = await healOrganicBoostDeliveryTree({
       userId: customer.userId,
       platformAccountId: customer.platformAccountId,
@@ -47,6 +46,9 @@ export async function POST(request: NextRequest) {
       adSetsActivated: 0,
       adsActivated: 0,
       campaignsMissingAds: 0,
+      adsCreated: 0,
+      adSetsCreated: 0,
+      rateLimited: false,
       error: formatOrganicBoostHealError(error),
     }));
 
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
       marketingStatus: string;
     } | null = null;
     let marketingSyncError: string | null = null;
-    if (!skipMarketingSync) {
+    if (!skipMarketingSync && !earlyHeal.rateLimited) {
       try {
         const syncResult = await syncMetaConnector({
           platformAccountId: customer.platformAccountId,
@@ -88,12 +90,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3) Live Beitrag-Push status only — finished history must not burn Graph time.
-    const statusRefresh = await refreshOrganicBoostCampaignStatusesFromMeta({
-      platformAccountId: customer.platformAccountId,
-      userId: customer.userId,
-      liveOnly: true,
-    });
+    // 3) Live Beitrag-Push status only — skip when Meta already rate-limited.
+    const statusRefresh = earlyHeal.rateLimited
+      ? {
+          requested: 0,
+          refreshed: 0,
+          upserted: 0,
+          paused: 0,
+          childDeliveryIncomplete: 0,
+          active: 0,
+          completed: 0,
+          missingAtMeta: 0,
+          targetsRepaired: 0,
+          pausedPlatformIds: [] as string[],
+          error: earlyHeal.error,
+        }
+      : await refreshOrganicBoostCampaignStatusesFromMeta({
+          platformAccountId: customer.platformAccountId,
+          userId: customer.userId,
+          liveOnly: true,
+        });
 
     let hardCapForceResume: {
       outcome: string;
@@ -114,6 +130,8 @@ export async function POST(request: NextRequest) {
       adSetsActivated: number;
       adsActivated: number;
       campaignsMissingAds: number;
+      adsCreated: number;
+      adSetsCreated: number;
       error: string | null;
       statusRefresh: {
         requested: number;
@@ -154,6 +172,8 @@ export async function POST(request: NextRequest) {
       adSetsActivated?: number;
       adsActivated?: number;
       campaignsMissingAds?: number;
+      adsCreated?: number;
+      adSetsCreated?: number;
       error?: string | null;
     }) => ({
       adSetsActivated:
@@ -163,6 +183,8 @@ export async function POST(request: NextRequest) {
         earlyHeal.campaignsMissingAds ?? 0,
         later.campaignsMissingAds ?? 0,
       ),
+      adsCreated: (earlyHeal.adsCreated ?? 0) + (later.adsCreated ?? 0),
+      adSetsCreated: (earlyHeal.adSetsCreated ?? 0) + (later.adSetsCreated ?? 0),
       error: later.error || earlyHeal.error || null,
     });
 
@@ -203,6 +225,7 @@ export async function POST(request: NextRequest) {
           userId: customer.userId,
           marketingSyncId,
           pausedPlatformCampaignIds: statusRefresh.pausedPlatformIds,
+          skipDeliveryHeal: true,
         });
         const heal = mergeHealCounts(forceResume);
         hardCapForceResume = {
@@ -224,6 +247,8 @@ export async function POST(request: NextRequest) {
           adSetsActivated: heal.adSetsActivated,
           adsActivated: heal.adsActivated,
           campaignsMissingAds: heal.campaignsMissingAds,
+          adsCreated: heal.adsCreated,
+          adSetsCreated: heal.adSetsCreated,
           error: forceResume.error || heal.error,
           statusRefresh: statusRefreshPayload,
         };
@@ -252,6 +277,8 @@ export async function POST(request: NextRequest) {
           adSetsActivated: heal.adSetsActivated,
           adsActivated: heal.adsActivated,
           campaignsMissingAds: heal.campaignsMissingAds,
+          adsCreated: heal.adsCreated,
+          adSetsCreated: heal.adSetsCreated,
           error: heal.error,
           statusRefresh: statusRefreshPayload,
         };
@@ -280,6 +307,8 @@ export async function POST(request: NextRequest) {
           adSetsActivated: heal.adSetsActivated,
           adsActivated: heal.adsActivated,
           campaignsMissingAds: heal.campaignsMissingAds,
+          adsCreated: heal.adsCreated,
+          adSetsCreated: heal.adSetsCreated,
           error: syncErr || heal.error,
           statusRefresh: statusRefreshPayload,
         };
@@ -305,6 +334,8 @@ export async function POST(request: NextRequest) {
         adSetsActivated: heal.adSetsActivated,
         adsActivated: heal.adsActivated,
         campaignsMissingAds: heal.campaignsMissingAds,
+        adsCreated: heal.adsCreated,
+        adSetsCreated: heal.adSetsCreated,
         error: "force_resume_exception",
         statusRefresh: statusRefreshPayload,
       };

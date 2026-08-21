@@ -129,8 +129,14 @@ export async function forceReactivatePausedOrganicBoostCampaigns(input: {
   plannedAt?: string;
   /** When Meta already reported these as PAUSED, reactivate by id (hard path). */
   pausedPlatformCampaignIds?: string[];
+  /** Skip nested delivery heal when the caller already healed (rate-limit). */
+  skipDeliveryHeal?: boolean;
 }): Promise<OrganicBoostHardCapForceResumeResult> {
   const result = await forceReactivatePausedOrganicBoostCampaignsInner(input);
+
+  if (input.skipDeliveryHeal) {
+    return result;
+  }
 
   const heal = await healOrganicBoostDeliveryTree({
     userId: input.userId,
@@ -139,18 +145,22 @@ export async function forceReactivatePausedOrganicBoostCampaigns(input: {
     adSetsActivated: 0,
     adsActivated: 0,
     campaignsMissingAds: 0,
+    adsCreated: 0,
+    adSetsCreated: 0,
     error: formatOrganicBoostHealError(error),
   }));
 
   if (
     (heal.adSetsActivated ?? 0) > 0 ||
     (heal.adsActivated ?? 0) > 0 ||
+    (heal.adsCreated ?? 0) > 0 ||
     ("error" in heal && heal.error)
   ) {
     console.error("organic_boost_delivery_heal", {
       platformAccountId: input.platformAccountId,
       adSetsActivated: heal.adSetsActivated ?? 0,
       adsActivated: heal.adsActivated ?? 0,
+      adsCreated: "adsCreated" in heal ? heal.adsCreated : 0,
       campaignsMissingAds:
         "campaignsMissingAds" in heal ? heal.campaignsMissingAds : 0,
       error: "error" in heal ? heal.error : null,

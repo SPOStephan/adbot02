@@ -17,6 +17,8 @@ export type HardCapForceResumeNoticeInput = {
   adSetsActivated?: number;
   adsActivated?: number;
   campaignsMissingAds?: number;
+  adsCreated?: number;
+  adSetsCreated?: number;
   error?: string | null;
   statusRefresh?: {
     requested?: number;
@@ -44,10 +46,22 @@ export type HardCapStatusDrainNoticeInput = {
 export type HardCapResumeNoticeKind = "success" | "info" | "error";
 
 function humanizeForceResumeError(error: string): string {
+  if (error.startsWith("keine_werbeanzeige:laufzeit")) {
+    return "Kampagne ohne Werbeanzeige, aber Laufzeit bereits beendet — kein Neu-Anlegen möglich";
+  }
+  if (error.startsWith("keine_werbeanzeige:plan_payload")) {
+    return "Kampagne ohne Werbeanzeige — ursprünglicher Plan/Payload fehlt lokal, Neu-Anlegen nicht möglich";
+  }
   if (error.startsWith("keine_werbeanzeige:")) {
     return (
       "Bei Meta fehlt die Werbeanzeige (Kampagne ohne Ad) — " +
-      "Status-Aktualisierung allein reicht nicht; Anzeige muss neu angelegt werden"
+      "Adbot legt AdSet/Creative/Ad aus dem Original-Plan neu an"
+    );
+  }
+  if (/zu viele API-Aufrufe|too many api|rate limit/i.test(error)) {
+    return (
+      "Meta Rate-Limit (zu viele API-Aufrufe auf diesem Werbekonto) — " +
+      "kurz warten, dann erneut „Manuell prüfen“"
     );
   }
   return error;
@@ -77,6 +91,8 @@ export function formatHardCapResumeNotice(
   const adsActivated = forceResume?.adsActivated ?? 0;
   const adSetsActivated = forceResume?.adSetsActivated ?? 0;
   const campaignsMissingAds = forceResume?.campaignsMissingAds ?? 0;
+  const adsCreated = forceResume?.adsCreated ?? 0;
+  const adSetsCreated = forceResume?.adSetsCreated ?? 0;
   const succeeded = drain?.succeeded ?? 0;
   const failed = drain?.failed ?? 0;
   const forceError = forceResume?.error?.trim();
@@ -150,7 +166,11 @@ export function formatHardCapResumeNotice(
     );
   }
 
-  if (adsActivated + adSetsActivated > 0) {
+  if (adsCreated + adSetsCreated > 0) {
+    parts.push(
+      `Fehlende Werbeanzeige nachgezogen: ${adSetsCreated} AdSet(s), ${adsCreated} Ad(s) neu angelegt und aktiviert`,
+    );
+  } else if (adsActivated + adSetsActivated > 0) {
     parts.push(
       `Anzeigen-Heal an Meta: ${adsActivated} Ad(s), ${adSetsActivated} AdSet(s) auf ACTIVE gesetzt`,
     );
@@ -213,7 +233,10 @@ export function hardCapResumeNoticeKind(
     (forceResume?.candidates ?? 0) +
     (drain?.succeeded ?? 0);
   const healWrites =
-    (forceResume?.adsActivated ?? 0) + (forceResume?.adSetsActivated ?? 0);
+    (forceResume?.adsActivated ?? 0) +
+    (forceResume?.adSetsActivated ?? 0) +
+    (forceResume?.adsCreated ?? 0) +
+    (forceResume?.adSetsCreated ?? 0);
   const falsePausedError =
     forceResume?.error === "meta_paused_but_no_activate_queued" &&
     refreshPaused < 1;
