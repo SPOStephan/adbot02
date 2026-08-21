@@ -3,7 +3,10 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { processNextMetaMutation } from "@/lib/meta/executor";
-import { healOrganicBoostDeliveryTree } from "@/lib/meta/organic-boost-delivery-heal";
+import {
+  formatOrganicBoostHealError,
+  healOrganicBoostDeliveryTree,
+} from "@/lib/meta/organic-boost-delivery-heal";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type HardCapStatusDrainResult = {
@@ -32,6 +35,9 @@ export type OrganicBoostHardCapForceResumeResult = {
   targetsRepaired: number;
   remainingUnder24h: number;
   missingCurrent: number;
+  adSetsActivated: number;
+  adsActivated: number;
+  campaignsMissingAds: number;
   error: string | null;
 };
 
@@ -56,6 +62,9 @@ function emptyForceResume(
     targetsRepaired: 0,
     remainingUnder24h: 0,
     missingCurrent: 0,
+    adSetsActivated: 0,
+    adsActivated: 0,
+    campaignsMissingAds: 0,
     error,
   };
 }
@@ -98,6 +107,9 @@ function parseForceResumeRow(
     targetsRepaired: Number(row.targets_repaired ?? 0) || 0,
     remainingUnder24h: Number(row.remaining_under_24h ?? 0) || 0,
     missingCurrent: Number(row.missing_current ?? 0) || 0,
+    adSetsActivated: 0,
+    adsActivated: 0,
+    campaignsMissingAds: 0,
     error:
       outcome.toUpperCase() === "BLOCKED" || outcome.toUpperCase() === "ERROR"
         ? reason || "force_reactivate_blocked"
@@ -126,10 +138,8 @@ export async function forceReactivatePausedOrganicBoostCampaigns(input: {
   }).catch((error) => ({
     adSetsActivated: 0,
     adsActivated: 0,
-    error:
-      error instanceof Error
-        ? error.message
-        : "organic_boost_delivery_heal_failed",
+    campaignsMissingAds: 0,
+    error: formatOrganicBoostHealError(error),
   }));
 
   if (
@@ -141,14 +151,22 @@ export async function forceReactivatePausedOrganicBoostCampaigns(input: {
       platformAccountId: input.platformAccountId,
       adSetsActivated: heal.adSetsActivated ?? 0,
       adsActivated: heal.adsActivated ?? 0,
+      campaignsMissingAds:
+        "campaignsMissingAds" in heal ? heal.campaignsMissingAds : 0,
       error: "error" in heal ? heal.error : null,
     });
   }
 
-  if (("error" in heal && heal.error) && !result.error) {
-    return { ...result, error: heal.error };
-  }
-  return result;
+  return {
+    ...result,
+    adSetsActivated: heal.adSetsActivated ?? 0,
+    adsActivated: heal.adsActivated ?? 0,
+    campaignsMissingAds:
+      "campaignsMissingAds" in heal ? (heal.campaignsMissingAds ?? 0) : 0,
+    error:
+      result.error ||
+      ("error" in heal && heal.error ? heal.error : null),
+  };
 }
 
 async function forceReactivatePausedOrganicBoostCampaignsInner(input: {

@@ -500,7 +500,25 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
       // Fall through to per-campaign edges.
     }
 
-    for (const campaignId of campaignIds) {
+    const metaById = new Map(meta.items.map((campaign) => [campaign.id, campaign]));
+
+    // Live campaigns first — finished history must not consume the edge budget
+    // (that left live Beitrag-Push stuck on DELIVERY_UNVERIFIED).
+    const orderedCampaignIds = [...campaignIds].sort((a, b) => {
+      const aMeta = metaById.get(a);
+      const bMeta = metaById.get(b);
+      const aCompleted = aMeta ? isCompletedCampaign(aMeta) : false;
+      const bCompleted = bMeta ? isCompletedCampaign(bMeta) : false;
+      if (aCompleted === bCompleted) {
+        return 0;
+      }
+      return aCompleted ? 1 : -1;
+    });
+
+    let edgeLookups = 0;
+    const MAX_EDGE_LOOKUPS = 20;
+
+    for (const campaignId of orderedCampaignIds) {
       const fromBindingsAdSets = (adSetIdsByCampaignId.get(campaignId) ?? [])
         .map((id) => adSetById.get(id))
         .filter(
@@ -523,8 +541,19 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
         continue;
       }
 
+      const metaCampaign = metaById.get(campaignId);
+      // Ended campaigns do not need delivery-tree accuracy for the overlay.
+      if (metaCampaign && isCompletedCampaign(metaCampaign)) {
+        childTreeByCampaignId.set(campaignId, {
+          adSetStatuses: fromBindingsAdSets,
+          adStatuses: fromBindingsAds,
+          childrenFetched: true,
+        });
+        continue;
+      }
+
       // Cap edge lookups — full walks made Abruf / Manuell prüfen hang.
-      if (childTreeByCampaignId.size >= 15) {
+      if (edgeLookups >= MAX_EDGE_LOOKUPS) {
         childTreeByCampaignId.set(campaignId, {
           adSetStatuses: fromBindingsAdSets,
           adStatuses: fromBindingsAds,
@@ -533,6 +562,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
         continue;
       }
 
+      edgeLookups += 1;
       try {
         const [edgeAdSets, edgeAds] = await Promise.all([
           getMetaAdSetsByCampaignId({

@@ -2,9 +2,8 @@ import "server-only";
 
 import {
   getMetaAdsByCampaignId,
-  getMetaAdsByIds,
   getMetaAdSetsByCampaignId,
-  getMetaAdSetsByIds,
+  MetaGraphError,
   type MetaAd,
   type MetaAdSet,
 } from "@/lib/meta/client";
@@ -26,11 +25,31 @@ export type OrganicBoostDeliveryHealResult = {
   adsChecked: number;
   adSetsActivated: number;
   adsActivated: number;
+  campaignsMissingAds: number;
   allowHealed: boolean;
   skippedKillSwitch: boolean;
   skippedPolicy: boolean;
   error: string | null;
 };
+
+/** Prefer Meta's diagnosticDetail — Error.message is always the generic Graph string. */
+export function formatOrganicBoostHealError(error: unknown): string {
+  if (error instanceof MetaGraphError) {
+    if (error.diagnosticDetail) {
+      return error.diagnosticDetail;
+    }
+    const bits = [
+      `HTTP ${error.status}`,
+      error.code != null ? `code ${error.code}` : null,
+      error.subcode != null ? `sub ${error.subcode}` : null,
+    ].filter(Boolean);
+    return `Meta Graph API request failed (${bits.join(", ")})`;
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "organic_boost_delivery_heal_failed";
+}
 
 async function ensureAllowForOrganicDeliveryHeal(input: {
   userId: string;
@@ -89,7 +108,6 @@ async function ensureAllowForOrganicDeliveryHeal(input: {
     return { mode, healed: false };
   }
 
-  // Do not race Traffic/Lead prepare freeze windows.
   const reason = String(killRow?.reason ?? "");
   const createdAt = Date.parse(String(killRow?.created_at ?? ""));
   const isPrepareFreeze = /Freeze-Phase für Kampagnen-Vorbereitung/i.test(
@@ -104,7 +122,6 @@ async function ensureAllowForOrganicDeliveryHeal(input: {
   }
 
   if (mode === "PAUSE_MANAGED") {
-    // Customer explicitly paused managed objects — do not override.
     return { mode, healed: false };
   }
 
@@ -121,73 +138,62 @@ async function ensureAllowForOrganicDeliveryHeal(input: {
   return { mode: "ALLOW", healed: true };
 }
 
-async function resolveOrganicBoostCampaignIds(input: {
+/**
+ * Only live Beitrag-Push campaigns — never batch-heal finished history.
+ * Batching deleted/archived ad ids from old plans caused Meta Graph failures.
+ */
+async function resolveLiveOrganicBoostCampaignIds(input: {
   userId: string;
   platformAccountId: string;
 }): Promise<{ campaignIds: string[]; error: string | null }> {
   const admin = createAdminClient();
 
-  const { data: linkRows, error: linkError } = await admin
-    .from("meta_organic_boost_links")
-    .select("plan_id")
-    .eq("user_id", input.userId)
-    .eq("platform_account_id", input.platformAccountId)
-    .limit(500);
-
-  if (linkError) {
-    return { campaignIds: [], error: linkError.message || "boost_link_lookup_failed" };
-  }
-
-  const planIds = [
-    ...new Set(
-      (linkRows ?? [])
-        .map((row) => (typeof row.plan_id === "string" ? row.plan_id : null))
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
-
-  const campaignIds = new Set<string>();
-
-  if (planIds.length > 0) {
-    const { data: bindingRows, error: bindingError } = await admin
-      .from("remote_object_bindings")
-      .select("remote_object_id")
-      .eq("user_id", input.userId)
-      .eq("platform_account_id", input.platformAccountId)
-      .eq("object_type", "CAMPAIGN")
-      .in("plan_id", planIds);
-
-    if (bindingError) {
-      return {
-        campaignIds: [],
-        error: bindingError.message || "boost_binding_lookup_failed",
-      };
-    }
-
-    for (const row of bindingRows ?? []) {
-      if (typeof row.remote_object_id === "string" && row.remote_object_id) {
-        campaignIds.add(row.remote_object_id);
-      }
-    }
-  }
-
-  // Fallback: name-matched current campaigns (bindings may be missing).
-  const { data: named } = await admin
+  const { data: named, error: namedError } = await admin
     .from("campaigns")
-    .select("platform_campaign_id")
+    .select("platform_campaign_id,status,effective_status,stop_time")
     .eq("user_id", input.userId)
     .eq("platform_account_id", input.platformAccountId)
     .eq("is_current", true)
     .ilike("name", "Organic Boost%")
-    .limit(200);
+    .limit(100);
 
-  for (const row of named ?? []) {
-    if (typeof row.platform_campaign_id === "string" && row.platform_campaign_id) {
-      campaignIds.add(row.platform_campaign_id);
-    }
+  if (namedError) {
+    return {
+      campaignIds: [],
+      error: namedError.message || "campaign_lookup_failed",
+    };
   }
 
-  return { campaignIds: [...campaignIds], error: null };
+  const campaignIds: string[] = [];
+  for (const row of named ?? []) {
+    const id =
+      typeof row.platform_campaign_id === "string"
+        ? row.platform_campaign_id
+        : null;
+    if (!id) continue;
+
+    const status = String(row.status ?? "").toUpperCase();
+    const effective = String(row.effective_status ?? "").toUpperCase();
+    if (
+      status === "DELETED" ||
+      status === "ARCHIVED" ||
+      effective === "DELETED" ||
+      effective === "ARCHIVED" ||
+      effective === "COMPLETED" ||
+      effective === "CAMPAIGN_COMPLETED"
+    ) {
+      continue;
+    }
+
+    const stopMs = row.stop_time ? Date.parse(String(row.stop_time)) : Number.NaN;
+    if (Number.isFinite(stopMs) && stopMs <= Date.now()) {
+      continue;
+    }
+
+    campaignIds.push(id);
+  }
+
+  return { campaignIds, error: null };
 }
 
 async function activatePausedObjects(input: {
@@ -195,53 +201,74 @@ async function activatePausedObjects(input: {
   ads: MetaAd[];
   accessToken: string;
   appSecret: string;
-}): Promise<{ adSetsActivated: number; adsActivated: number }> {
+}): Promise<{
+  adSetsActivated: number;
+  adsActivated: number;
+  lastError: string | null;
+}> {
   const auth = {
     accessToken: input.accessToken,
     appSecret: input.appSecret,
   };
   let adSetsActivated = 0;
   let adsActivated = 0;
+  let lastError: string | null = null;
 
   for (const adSet of input.adSets) {
     if (isTerminalDeliveryOff(adSet.status, adSet.effectiveStatus)) {
       continue;
     }
-    if (!isConfiguredDeliveryPaused(adSet.status)) {
+    if (!isConfiguredDeliveryPaused(adSet.status, adSet.effectiveStatus)) {
       continue;
     }
-    await updateMetaAdSetStatus({
-      ...auth,
-      objectId: adSet.id,
-      status: "ACTIVE",
-      mode: "execute",
-    });
-    adSetsActivated += 1;
+    try {
+      await updateMetaAdSetStatus({
+        ...auth,
+        objectId: adSet.id,
+        status: "ACTIVE",
+        mode: "execute",
+      });
+      adSetsActivated += 1;
+    } catch (error) {
+      lastError = formatOrganicBoostHealError(error);
+      console.error("organic_boost_heal_adset_activate_failed", {
+        adSetId: adSet.id,
+        error: lastError,
+      });
+    }
   }
 
   for (const ad of input.ads) {
     if (isTerminalDeliveryOff(ad.status, ad.effectiveStatus)) {
       continue;
     }
-    if (!isConfiguredDeliveryPaused(ad.status)) {
+    if (!isConfiguredDeliveryPaused(ad.status, ad.effectiveStatus)) {
       continue;
     }
-    await updateMetaAdStatus({
-      ...auth,
-      objectId: ad.id,
-      status: "ACTIVE",
-      mode: "execute",
-    });
-    adsActivated += 1;
+    try {
+      await updateMetaAdStatus({
+        ...auth,
+        objectId: ad.id,
+        status: "ACTIVE",
+        mode: "execute",
+      });
+      adsActivated += 1;
+    } catch (error) {
+      lastError = formatOrganicBoostHealError(error);
+      console.error("organic_boost_heal_ad_activate_failed", {
+        adId: ad.id,
+        error: lastError,
+      });
+    }
   }
 
-  return { adSetsActivated, adsActivated };
+  return { adSetsActivated, adsActivated, lastError };
 }
 
 /**
- * Durable delivery heal: activate PAUSED ads/ad sets for every Beitrag-Push
- * campaign. Uses remote bindings when present, otherwise Meta campaign edges.
- * Independent of marketing_sync_id. Auto-ALLOW for Vollautomatik FREEZE.
+ * Activate PAUSED ads/ad sets for live Beitrag-Push campaigns only.
+ * Uses per-campaign Meta edges (not a global binding id dump) so finished
+ * history cannot poison Graph batch reads.
  */
 export async function healOrganicBoostDeliveryTree(input: {
   userId: string;
@@ -253,6 +280,7 @@ export async function healOrganicBoostDeliveryTree(input: {
     adsChecked: 0,
     adSetsActivated: 0,
     adsActivated: 0,
+    campaignsMissingAds: 0,
     allowHealed: false,
     skippedKillSwitch: false,
     skippedPolicy: false,
@@ -299,13 +327,16 @@ export async function healOrganicBoostDeliveryTree(input: {
     };
   }
 
-  const resolved = await resolveOrganicBoostCampaignIds(input);
+  const resolved = await resolveLiveOrganicBoostCampaignIds(input);
   if (resolved.error) {
     return { ...empty, allowHealed: allow.healed, error: resolved.error };
   }
   if (resolved.campaignIds.length < 1) {
     return { ...empty, allowHealed: allow.healed };
   }
+
+  // Cap work per Abruf — only a few live incomplete trees should remain.
+  const campaignIds = resolved.campaignIds.slice(0, 20);
 
   const { data: account, error: accountError } = await admin
     .from("platform_accounts")
@@ -318,7 +349,7 @@ export async function healOrganicBoostDeliveryTree(input: {
     return {
       ...empty,
       allowHealed: allow.healed,
-      campaignsChecked: resolved.campaignIds.length,
+      campaignsChecked: campaignIds.length,
       error: accountError?.message || "account_unavailable",
     };
   }
@@ -331,7 +362,7 @@ export async function healOrganicBoostDeliveryTree(input: {
     return {
       ...empty,
       allowHealed: allow.healed,
-      campaignsChecked: resolved.campaignIds.length,
+      campaignsChecked: campaignIds.length,
       error: "token_unavailable",
     };
   }
@@ -347,100 +378,36 @@ export async function healOrganicBoostDeliveryTree(input: {
       env.tokenEncryptionKey,
     );
 
-    // Prefer bindings when present (fewer Graph calls), else campaign edges.
-    const { data: linkRows } = await admin
-      .from("meta_organic_boost_links")
-      .select("plan_id")
-      .eq("user_id", input.userId)
-      .eq("platform_account_id", input.platformAccountId)
-      .limit(500);
-    const planIds = [
-      ...new Set(
-        (linkRows ?? [])
-          .map((row) => (typeof row.plan_id === "string" ? row.plan_id : null))
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ];
-
-    let bindingAdSetIds: string[] = [];
-    let bindingAdIds: string[] = [];
-    if (planIds.length > 0) {
-      const { data: childBindings } = await admin
-        .from("remote_object_bindings")
-        .select("object_type,remote_object_id")
-        .eq("user_id", input.userId)
-        .eq("platform_account_id", input.platformAccountId)
-        .in("plan_id", planIds)
-        .in("object_type", ["AD_SET", "AD"]);
-      bindingAdSetIds = [
-        ...new Set(
-          (childBindings ?? [])
-            .filter((row) => row.object_type === "AD_SET")
-            .map((row) =>
-              typeof row.remote_object_id === "string"
-                ? row.remote_object_id
-                : null,
-            )
-            .filter((id): id is string => Boolean(id)),
-        ),
-      ];
-      bindingAdIds = [
-        ...new Set(
-          (childBindings ?? [])
-            .filter((row) => row.object_type === "AD")
-            .map((row) =>
-              typeof row.remote_object_id === "string"
-                ? row.remote_object_id
-                : null,
-            )
-            .filter((id): id is string => Boolean(id)),
-        ),
-      ];
-    }
-
     const adSets: MetaAdSet[] = [];
     const ads: MetaAd[] = [];
+    let campaignsMissingAds = 0;
+    let fetchError: string | null = null;
 
-    if (bindingAdSetIds.length > 0) {
-      const metaAdSets = await getMetaAdSetsByIds({
-        adSetIds: bindingAdSetIds,
-        accessToken,
-        appSecret: env.appSecret,
-      });
-      adSets.push(...metaAdSets.items);
-    }
-    if (bindingAdIds.length > 0) {
-      const metaAds = await getMetaAdsByIds({
-        adIds: bindingAdIds,
-        accessToken,
-        appSecret: env.appSecret,
-      });
-      ads.push(...metaAds.items);
-    }
-
-    // Campaign-edge fallback only when bindings did not yield a full tree.
-    // Always walking every campaign edge made "Manuell erneut prüfen" hang.
-    if (adSets.length < 1 || ads.length < 1) {
-      const missingCampaignIds = resolved.campaignIds.slice(0, 20);
-      for (const campaignId of missingCampaignIds) {
-        try {
-          const [edgeAdSets, edgeAds] = await Promise.all([
-            getMetaAdSetsByCampaignId({
-              campaignId,
-              accessToken,
-              appSecret: env.appSecret,
-            }),
-            getMetaAdsByCampaignId({
-              campaignId,
-              accessToken,
-              appSecret: env.appSecret,
-            }),
-          ]);
-          adSets.push(...edgeAdSets.items);
-          ads.push(...edgeAds.items);
-        } catch {
-          // Continue other campaigns.
+    for (const campaignId of campaignIds) {
+      try {
+        const [edgeAdSets, edgeAds] = await Promise.all([
+          getMetaAdSetsByCampaignId({
+            campaignId,
+            accessToken,
+            appSecret: env.appSecret,
+          }),
+          getMetaAdsByCampaignId({
+            campaignId,
+            accessToken,
+            appSecret: env.appSecret,
+          }),
+        ]);
+        adSets.push(...edgeAdSets.items);
+        ads.push(...edgeAds.items);
+        if (edgeAds.items.length < 1) {
+          campaignsMissingAds += 1;
         }
+      } catch (error) {
+        fetchError = formatOrganicBoostHealError(error);
+        console.error("organic_boost_heal_campaign_edge_failed", {
+          campaignId,
+          error: fetchError,
+        });
       }
     }
 
@@ -456,26 +423,34 @@ export async function healOrganicBoostDeliveryTree(input: {
       appSecret: env.appSecret,
     });
 
+    const error =
+      activated.lastError ||
+      (activated.adSetsActivated + activated.adsActivated < 1 &&
+      campaignsMissingAds > 0
+        ? `keine_werbeanzeige:${campaignsMissingAds}_kampagne(n)_ohne_ad`
+        : null) ||
+      (activated.adSetsActivated + activated.adsActivated < 1
+        ? fetchError
+        : null);
+
     return {
-      campaignsChecked: resolved.campaignIds.length,
+      campaignsChecked: campaignIds.length,
       adSetsChecked: uniqueAdSets.length,
       adsChecked: uniqueAds.length,
       adSetsActivated: activated.adSetsActivated,
       adsActivated: activated.adsActivated,
+      campaignsMissingAds,
       allowHealed: allow.healed,
       skippedKillSwitch: false,
       skippedPolicy: false,
-      error: null,
+      error,
     };
   } catch (error) {
     return {
       ...empty,
       allowHealed: allow.healed,
-      campaignsChecked: resolved.campaignIds.length,
-      error:
-        error instanceof Error
-          ? error.message
-          : "organic_boost_delivery_heal_failed",
+      campaignsChecked: campaignIds.length,
+      error: formatOrganicBoostHealError(error),
     };
   }
 }

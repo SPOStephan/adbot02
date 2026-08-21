@@ -14,6 +14,9 @@ export type HardCapForceResumeNoticeInput = {
   targetsRepaired?: number;
   remainingUnder24h?: number;
   missingCurrent?: number;
+  adSetsActivated?: number;
+  adsActivated?: number;
+  campaignsMissingAds?: number;
   error?: string | null;
   statusRefresh?: {
     requested?: number;
@@ -40,6 +43,16 @@ export type HardCapStatusDrainNoticeInput = {
 
 export type HardCapResumeNoticeKind = "success" | "info" | "error";
 
+function humanizeForceResumeError(error: string): string {
+  if (error.startsWith("keine_werbeanzeige:")) {
+    return (
+      "Bei Meta fehlt die Werbeanzeige (Kampagne ohne Ad) — " +
+      "Status-Aktualisierung allein reicht nicht; Anzeige muss neu angelegt werden"
+    );
+  }
+  return error;
+}
+
 export function formatHardCapResumeNotice(
   forceResume: HardCapForceResumeNoticeInput | null | undefined,
   drain: HardCapStatusDrainNoticeInput | null | undefined,
@@ -61,6 +74,9 @@ export function formatHardCapResumeNotice(
   const targetsRepaired = forceResume?.targetsRepaired ?? 0;
   const remainingUnder24h = forceResume?.remainingUnder24h ?? 0;
   const missingCurrent = forceResume?.missingCurrent ?? 0;
+  const adsActivated = forceResume?.adsActivated ?? 0;
+  const adSetsActivated = forceResume?.adSetsActivated ?? 0;
+  const campaignsMissingAds = forceResume?.campaignsMissingAds ?? 0;
   const succeeded = drain?.succeeded ?? 0;
   const failed = drain?.failed ?? 0;
   const forceError = forceResume?.error?.trim();
@@ -134,6 +150,16 @@ export function formatHardCapResumeNotice(
     );
   }
 
+  if (adsActivated + adSetsActivated > 0) {
+    parts.push(
+      `Anzeigen-Heal an Meta: ${adsActivated} Ad(s), ${adSetsActivated} AdSet(s) auf ACTIVE gesetzt`,
+    );
+  } else if (campaignsMissingAds > 0) {
+    parts.push(
+      `${campaignsMissingAds} Live-Kampagne(n) ohne Werbeanzeige bei Meta (Keine Werbeanzeige)`,
+    );
+  }
+
   if (scheduleEnded > 0) {
     parts.push(
       `${scheduleEnded} nicht reaktiviert (Laufzeit bereits beendet)`,
@@ -165,7 +191,7 @@ export function formatHardCapResumeNotice(
     ) {
       // Drop false FEHLER when only ads/ad sets were incomplete.
     } else {
-      parts.push(`Reaktivierung-Fehler: ${forceError}`);
+      parts.push(`Reaktivierung-Fehler: ${humanizeForceResumeError(forceError)}`);
     }
   } else if (drainError && succeeded === 0 && created + existing + revived > 0) {
     parts.push(`Executor: ${drainError}`);
@@ -186,6 +212,8 @@ export function hardCapResumeNoticeKind(
     (forceResume?.existing ?? 0) +
     (forceResume?.candidates ?? 0) +
     (drain?.succeeded ?? 0);
+  const healWrites =
+    (forceResume?.adsActivated ?? 0) + (forceResume?.adSetsActivated ?? 0);
   const falsePausedError =
     forceResume?.error === "meta_paused_but_no_activate_queued" &&
     refreshPaused < 1;
@@ -204,7 +232,8 @@ export function hardCapResumeNoticeKind(
     (forceResume?.created ?? 0) +
       (forceResume?.existing ?? 0) +
       (forceResume?.revived ?? 0) +
-      (drain?.succeeded ?? 0) >
+      (drain?.succeeded ?? 0) +
+      healWrites >
     0
   ) {
     return "success";
