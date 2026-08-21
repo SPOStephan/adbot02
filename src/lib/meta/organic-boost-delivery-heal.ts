@@ -58,6 +58,8 @@ export function formatOrganicBoostHealError(error: unknown): string {
 async function ensureAllowForOrganicDeliveryHeal(input: {
   userId: string;
   platformAccountId: string;
+  /** When false, never flip FREEZE→ALLOW (background cron must not override). */
+  allowAutoUnfreeze?: boolean;
 }): Promise<{ mode: string; healed: boolean }> {
   const admin = createAdminClient();
   const [{ data: settings }, { data: killRow }, { data: account }] =
@@ -93,6 +95,10 @@ async function ensureAllowForOrganicDeliveryHeal(input: {
   const mode =
     typeof killRow?.mode === "string" ? killRow.mode : "FREEZE_WRITES";
   if (mode === "ALLOW") {
+    return { mode, healed: false };
+  }
+
+  if (input.allowAutoUnfreeze === false) {
     return { mode, healed: false };
   }
 
@@ -277,6 +283,13 @@ async function activatePausedObjects(input: {
 export async function healOrganicBoostDeliveryTree(input: {
   userId: string;
   platformAccountId: string;
+  /**
+   * When false, never flip FREEZE→ALLOW. Background watchdog must pass false
+   * so a customer FREEZE is never overridden by cron.
+   */
+  allowAutoUnfreeze?: boolean;
+  /** Restrict Meta edge/repair work to these campaign ids when set. */
+  onlyCampaignIds?: string[];
 }): Promise<OrganicBoostDeliveryHealResult> {
   const empty: OrganicBoostDeliveryHealResult = {
     campaignsChecked: 0,
@@ -295,7 +308,11 @@ export async function healOrganicBoostDeliveryTree(input: {
   };
 
   const admin = createAdminClient();
-  const allow = await ensureAllowForOrganicDeliveryHeal(input);
+  const allow = await ensureAllowForOrganicDeliveryHeal({
+    userId: input.userId,
+    platformAccountId: input.platformAccountId,
+    allowAutoUnfreeze: input.allowAutoUnfreeze,
+  });
 
   const [{ data: killRow }, { data: policy }] = await Promise.all([
     admin
@@ -342,8 +359,18 @@ export async function healOrganicBoostDeliveryTree(input: {
     return { ...empty, allowHealed: allow.healed };
   }
 
+  const only =
+    input.onlyCampaignIds && input.onlyCampaignIds.length > 0
+      ? new Set(input.onlyCampaignIds)
+      : null;
   // Cap work per Abruf — only a few live incomplete trees should remain.
-  const campaignIds = resolved.campaignIds.slice(0, 8);
+  const campaignIds = resolved.campaignIds
+    .filter((id) => (only ? only.has(id) : true))
+    .slice(0, only ? 3 : 8);
+
+  if (campaignIds.length < 1) {
+    return { ...empty, allowHealed: allow.healed };
+  }
 
   const stopTimeByCampaignId = new Map<string, string | null>();
   {

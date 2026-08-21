@@ -1379,6 +1379,34 @@ assert.match(
   /confirmedEmpty/,
 );
 assert.match(
+  read("src/lib/meta/organic-boost-delivery-watchdog.ts"),
+  /runOrganicBoostDeliveryWatchdog/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-watchdog.ts"),
+  /allowAutoUnfreeze:\s*false/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-watchdog.ts"),
+  /ORGANIC_BOOST_DELIVERY_WATCHDOG/,
+);
+assert.match(
+  read("src/app/api/cron/organic-boost-delivery/route.ts"),
+  /runOrganicBoostDeliveryWatchdog/,
+);
+assert.match(
+  read("vercel.json"),
+  /organic-boost-delivery/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /allowAutoUnfreeze/,
+);
+assert.match(
+  read("src/lib/meta/organic-boost-delivery-heal.ts"),
+  /onlyCampaignIds/,
+);
+assert.match(
   read("src/lib/meta/organic-boost-delivery-heal.ts"),
   /repairMissingOrganicBoostAd/,
 );
