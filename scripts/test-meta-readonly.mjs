@@ -51,6 +51,14 @@ try {
   assert.doesNotMatch(assignedAssetsSource, /\/assigned_ad_accounts/);
   assert.match(assignedAssetsSource, /parseAssignedPageAsset/);
   assert.match(assignedAssetsSource, /parseAssignedAdAccount/);
+  // Abruf path must use the same system-user page-token fallback as OAuth,
+  // otherwise Facebook pages are silently skipped while Instagram still syncs.
+  const pageAssetsFn = clientSource.slice(
+    clientSource.indexOf("export async function getMetaPageAssets"),
+    clientSource.indexOf("export async function getMetaInstagramAccountAssets"),
+  );
+  assert.match(pageAssetsFn, /parseAssignedPageAsset/);
+  assert.match(pageAssetsFn, /omit page access_token|system-user/i);
   assert.match(
     assignedAssetsSource,
     /instagram_business_account\{id,name,username\}/,

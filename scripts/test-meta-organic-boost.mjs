@@ -1379,8 +1379,12 @@ assert.match(
   /confirmedEmpty/,
 );
 assert.match(
-  read("src/lib/meta/organic-boost-delivery-watchdog.ts"),
-  /runOrganicBoostDeliveryWatchdog/,
+  read("src/lib/meta/sync.ts"),
+  /meta_sync_facebook_page_token_fallback/,
+);
+assert.match(
+  read("src/lib/meta/client.ts"),
+  /Abruf skips every Facebook page while Instagram still syncs/,
 );
 assert.match(
   read("src/lib/meta/organic-boost-delivery-watchdog.ts"),

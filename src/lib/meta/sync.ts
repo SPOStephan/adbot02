@@ -764,16 +764,15 @@ export async function syncMetaConnector(
 
     for (const pageAsset of pageAssets) {
       const page = pagesById.get(pageAsset.meta_asset_id);
-
-      if (!page) {
-        failedAssetCount += 1;
-        continue;
-      }
+      // Prefer page token from /me/accounts; fall back to connector token when
+      // the page is assigned but Meta omitted access_token (system-user case)
+      // or the page row was filtered out of the refresh map.
+      const pageAccessToken = page?.accessToken ?? accessToken;
 
       try {
         const posts = await getFacebookPublishedPosts({
-          pageId: page.id,
-          pageAccessToken: page.accessToken,
+          pageId: page?.id ?? pageAsset.meta_asset_id,
+          pageAccessToken,
           appSecret: env.appSecret,
         });
         usage = mergeMetaUsage(usage, posts.usage);
@@ -785,6 +784,12 @@ export async function syncMetaConnector(
         seenCount += persistedPosts.seenCount;
         newCount += persistedPosts.newCount;
         syncedAssetCount += 1;
+        if (!page) {
+          console.error("meta_sync_facebook_page_token_fallback", {
+            platformAccountId: connector.id,
+            pageId: pageAsset.meta_asset_id,
+          });
+        }
       } catch (error) {
         if (
           error instanceof MetaGraphError &&
@@ -794,6 +799,13 @@ export async function syncMetaConnector(
         }
 
         failedAssetCount += 1;
+        console.error("meta_sync_facebook_page_failed", {
+          platformAccountId: connector.id,
+          pageId: pageAsset.meta_asset_id,
+          hadPageToken: Boolean(page?.accessToken),
+          error:
+            error instanceof Error ? error.message : "facebook_page_sync_failed",
+        });
       }
     }
 

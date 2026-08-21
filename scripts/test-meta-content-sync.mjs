@@ -1162,6 +1162,7 @@ export function createAdminClient() {
     { path: "/api/cron/meta-sync", schedule: "0 * * * *" },
     { path: "/api/cron/creative-assets", schedule: "*/5 * * * *" },
     { path: "/api/cron/meta-executor", schedule: "* * * * *" },
+    { path: "/api/cron/organic-boost-delivery", schedule: "*/15 * * * *" },
   ]);
 
   console.log("Meta content sync checks passed");

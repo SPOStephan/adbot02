@@ -1208,7 +1208,16 @@ export async function getMetaPageAssets(input: {
     initialUrl: pageUrl,
     accessToken: input.accessToken,
     appSecret: input.appSecret,
-    parseItem: parsePageAsset,
+    parseItem: (value) => {
+      const withToken = parsePageAsset(value);
+      if (withToken) {
+        return withToken;
+      }
+      // System-user /me/accounts often omits page access_token. Without this
+      // fallback, Abruf skips every Facebook page while Instagram still syncs
+      // (IG uses the user/system token directly).
+      return parseAssignedPageAsset(value, input.accessToken);
+    },
   });
 
   // Empty allow-list means "no selected pages", not "allow every page visible
