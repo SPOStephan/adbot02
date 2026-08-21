@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
         refreshed: number;
         upserted: number;
         paused: number;
+        childDeliveryIncomplete: number;
         active: number;
         completed: number;
         missingAtMeta: number;
@@ -112,6 +113,7 @@ export async function POST(request: NextRequest) {
       refreshed: statusRefresh.refreshed,
       upserted: statusRefresh.upserted,
       paused: statusRefresh.paused,
+      childDeliveryIncomplete: statusRefresh.childDeliveryIncomplete,
       active: statusRefresh.active,
       completed: statusRefresh.completed,
       missingAtMeta: statusRefresh.missingAtMeta,
@@ -176,11 +178,15 @@ export async function POST(request: NextRequest) {
           error: forceResume.error,
           statusRefresh: statusRefreshPayload,
         };
-      } else if ((statusRefresh.paused ?? 0) === 0) {
-        // Nothing to reactivate — do not sticky-banner marketing_sync_required.
+  } else if ((statusRefresh.paused ?? 0) === 0) {
+        // Nothing campaign-level to reactivate — child delivery heal still runs
+        // inside forceReactivate / recover. Do not sticky-banner marketing_sync.
         hardCapForceResume = {
           outcome: "SKIPPED",
-          reason: "no_paused_organic_boost",
+          reason:
+            (statusRefresh.childDeliveryIncomplete ?? 0) > 0
+              ? "child_delivery_incomplete_heal_only"
+              : "no_paused_organic_boost",
           created: 0,
           existing: 0,
           blocked: 0,
@@ -190,7 +196,7 @@ export async function POST(request: NextRequest) {
           candidates: 0,
           linked: 0,
           activeLocal: 0,
-          adsetPausedOnly: 0,
+          adsetPausedOnly: statusRefresh.childDeliveryIncomplete ?? 0,
           targetsRepaired: 0,
           remainingUnder24h: 0,
           missingCurrent: 0,

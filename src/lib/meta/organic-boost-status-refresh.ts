@@ -18,10 +18,13 @@ export type OrganicBoostStatusRefreshResult = {
   refreshed: number;
   upserted: number;
   paused: number;
+  /** Campaign ACTIVE but ads/ad sets still paused or unverified. */
+  childDeliveryIncomplete: number;
   active: number;
   completed: number;
   missingAtMeta: number;
   targetsRepaired: number;
+  /** Campaign-level PAUSED only — safe for force ACTIVATE queue. */
   pausedPlatformIds: string[];
   error: string | null;
 };
@@ -287,6 +290,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
     refreshed: 0,
     upserted: 0,
     paused: 0,
+    childDeliveryIncomplete: 0,
     active: 0,
     completed: 0,
     missingAtMeta: 0,
@@ -565,6 +569,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
     let refreshed = 0;
     let upserted = 0;
     let paused = 0;
+    let childDeliveryIncomplete = 0;
     let active = 0;
     let completed = 0;
     let missingAtMeta = 0;
@@ -592,9 +597,12 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
       const completedAtMeta = isCompletedCampaign(campaign);
       if (completedAtMeta) {
         completed += 1;
-      } else if (pausedAtMeta || deliveryBlocked) {
+      } else if (pausedAtMeta) {
         paused += 1;
+        // Only campaign-level PAUSED belongs in ACTIVATE-by-id queue.
         pausedPlatformIds.push(campaign.id);
+      } else if (deliveryBlocked) {
+        childDeliveryIncomplete += 1;
       } else if ((campaign.effectiveStatus ?? "").toUpperCase() === "ACTIVE") {
         active += 1;
       }
@@ -655,6 +663,7 @@ export async function refreshOrganicBoostCampaignStatusesFromMeta(input: {
       refreshed,
       upserted,
       paused,
+      childDeliveryIncomplete,
       active,
       completed,
       missingAtMeta,

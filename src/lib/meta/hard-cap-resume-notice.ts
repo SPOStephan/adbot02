@@ -20,6 +20,7 @@ export type HardCapForceResumeNoticeInput = {
     refreshed?: number;
     upserted?: number;
     paused?: number;
+    childDeliveryIncomplete?: number;
     active?: number;
     completed?: number;
     missingAtMeta?: number;
@@ -70,8 +71,13 @@ export function formatHardCapResumeNotice(
 
   if (refresh && (refresh.requested ?? 0) > 0) {
     const statusBits: string[] = [];
-    if (typeof refresh.paused === "number") {
-      statusBits.push(`${refresh.paused} PAUSED`);
+    if (typeof refresh.paused === "number" && refresh.paused > 0) {
+      statusBits.push(`${refresh.paused} Kampagne(n) PAUSED`);
+    }
+    if ((refresh.childDeliveryIncomplete ?? 0) > 0) {
+      statusBits.push(
+        `${refresh.childDeliveryIncomplete} mit pausierter/unvollständiger Anzeige`,
+      );
     }
     if ((refresh.completed ?? 0) > 0) {
       statusBits.push(`${refresh.completed} beendet`);
@@ -106,6 +112,10 @@ export function formatHardCapResumeNotice(
       `FEHLER: Meta meldet ${refresh?.paused} PAUSED Beitrag-Push, aber kein ACTIVATE-Plan wurde angelegt` +
         (forceError ? ` (${forceError})` : "") +
         " — SQL 20260809150000 prüfen",
+    );
+  } else if ((refresh?.childDeliveryIncomplete ?? 0) > 0) {
+    parts.push(
+      `Hinweis: ${refresh?.childDeliveryIncomplete} Beitrag-Push-Kampagne(n) sind an, aber Anzeige/AdSet noch nicht vollständig aktiv — Adbot versucht die Anzeigen direkt zu aktivieren (kein Kampagnen-ACTIVATE nötig).`,
     );
   } else if (linked > 0) {
     parts.push(
@@ -148,7 +158,15 @@ export function formatHardCapResumeNotice(
   }
 
   if (forceError) {
-    parts.push(`Reaktivierung-Fehler: ${forceError}`);
+    // Child-delivery gaps are healed via ad/adset ACTIVATE — not campaign queue.
+    if (
+      forceError === "meta_paused_but_no_activate_queued" &&
+      (refresh?.paused ?? 0) < 1
+    ) {
+      // Drop false FEHLER when only ads/ad sets were incomplete.
+    } else {
+      parts.push(`Reaktivierung-Fehler: ${forceError}`);
+    }
   } else if (drainError && succeeded === 0 && created + existing + revived > 0) {
     parts.push(`Executor: ${drainError}`);
   }
@@ -161,20 +179,25 @@ export function hardCapResumeNoticeKind(
   drain: HardCapStatusDrainNoticeInput | null | undefined,
 ): HardCapResumeNoticeKind {
   const refreshPaused = forceResume?.statusRefresh?.paused ?? 0;
+  const childIncomplete =
+    forceResume?.statusRefresh?.childDeliveryIncomplete ?? 0;
   const queued =
     (forceResume?.created ?? 0) +
     (forceResume?.existing ?? 0) +
     (forceResume?.candidates ?? 0) +
     (drain?.succeeded ?? 0);
+  const falsePausedError =
+    forceResume?.error === "meta_paused_but_no_activate_queued" &&
+    refreshPaused < 1;
   if (
-    forceResume?.error ||
+    (forceResume?.error && !falsePausedError) ||
     (forceResume?.outcome ?? "").toUpperCase() === "BLOCKED" ||
     (drain?.failed ?? 0) > 0 ||
     (refreshPaused > 0 && queued < 1)
   ) {
     return "error";
   }
-  if ((forceResume?.scheduleEnded ?? 0) > 0) {
+  if ((forceResume?.scheduleEnded ?? 0) > 0 || childIncomplete > 0) {
     return "info";
   }
   if (

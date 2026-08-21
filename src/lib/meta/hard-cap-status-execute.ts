@@ -210,7 +210,7 @@ async function forceReactivatePausedOrganicBoostCampaignsInner(input: {
     if (scanned.created + scanned.existing + scanned.candidates > 0) {
       return scanned;
     }
-    if (byIdsResult) {
+  if (byIdsResult) {
       return {
         ...byIdsResult,
         error:
