@@ -59,6 +59,13 @@ export type MetaPageAsset = {
   id: string;
   name: string;
   accessToken: string;
+  /**
+   * False when /me/accounts omitted `access_token` and we substituted the
+   * system-user/user token. `published_posts` needs a real Page token — resolve
+   * via {@link getMetaPageAccessToken} before reading page content.
+   * Undefined means "treat accessToken as a Page token" (legacy callers/tests).
+   */
+  hasPageAccessToken?: boolean;
   instagramAccount: {
     id: string;
     name: string | null;
@@ -1087,6 +1094,7 @@ function parsePageAsset(value: unknown): MetaPageAsset | null {
     id,
     name: name.slice(0, 255),
     accessToken,
+    hasPageAccessToken: true,
     instagramAccount: instagramId
       ? {
           id: instagramId,
@@ -1150,14 +1158,16 @@ function parseAssignedPageAsset(
     : null;
   const instagramId = instagram ? asMetaAssetId(instagram.id) : null;
 
+  const pageAccessToken = asNonEmptyString(value.access_token);
+
   return {
     id,
     name:
       asNonEmptyString(value.name)?.slice(0, 255)
       ?? `Facebook-Seite ${id}`,
-    // Not persisted. Later syncs resolve the page again by assigned ID.
-    accessToken:
-      asNonEmptyString(value.access_token) ?? systemUserAccessToken,
+    // Not persisted. Later syncs resolve a real Page token when this is false.
+    accessToken: pageAccessToken ?? systemUserAccessToken,
+    hasPageAccessToken: Boolean(pageAccessToken),
     instagramAccount: instagramId
       ? {
           id: instagramId,
@@ -1333,8 +1343,8 @@ async function getMetaSystemUserAssignedAssets(input: {
         if (withToken) {
           return withToken;
         }
-        // System-user /me/accounts sometimes omit page access_token; the
-        // system-user token remains the call credential for later syncs.
+        // System-user /me/accounts sometimes omit page access_token; Abruf
+        // must later resolve a real Page token via getMetaPageAccessToken.
         return parseAssignedPageAsset(value, input.accessToken);
       },
       maxPages: META_ABSOLUTE_MAX_COLLECTION_PAGES,
@@ -1515,6 +1525,39 @@ function parseInstagramMedia(value: unknown): MetaContentItem | null {
     previewUrl: safeHttpsUrl(value.thumbnail_url) ?? safeHttpsUrl(value.media_url),
     publishedAt: validPublishedAt(value.timestamp),
   };
+}
+
+/**
+ * Resolve a Page access token for content edges (`published_posts`).
+ * System-user / user tokens from Login for Business often omit page
+ * `access_token` on `/me/accounts`; Meta still returns one via the page node
+ * when the token has a role on that page.
+ */
+export async function getMetaPageAccessToken(input: {
+  pageId: string;
+  accessToken: string;
+  appSecret: string;
+}): Promise<{ accessToken: string; usage: MetaUsageSnapshot }> {
+  const url = new URL(
+    `/${META_GRAPH_VERSION}/${encodeURIComponent(input.pageId)}`,
+    META_GRAPH_ORIGIN,
+  );
+  url.searchParams.set("fields", "access_token");
+
+  const { body, usage } = await fetchMetaJson(
+    url,
+    addTokenProtection(url, input.accessToken, input.appSecret),
+  );
+
+  const accessToken = isRecord(body)
+    ? asNonEmptyString(body.access_token)
+    : null;
+
+  if (!accessToken) {
+    throw new MetaGraphError(502, {}, usage);
+  }
+
+  return { accessToken, usage };
 }
 
 export async function getFacebookPublishedPosts(input: {

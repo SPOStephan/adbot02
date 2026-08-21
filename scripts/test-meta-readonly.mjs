@@ -59,6 +59,9 @@ try {
   );
   assert.match(pageAssetsFn, /parseAssignedPageAsset/);
   assert.match(pageAssetsFn, /omit page access_token|system-user/i);
+  assert.match(clientSource, /export async function getMetaPageAccessToken/);
+  assert.match(clientSource, /fields", "access_token"/);
+  assert.match(clientSource, /hasPageAccessToken/);
   assert.match(
     assignedAssetsSource,
     /instagram_business_account\{id,name,username\}/,

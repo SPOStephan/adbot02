@@ -3,6 +3,7 @@ import "server-only";
 import {
   getFacebookPublishedPosts,
   getInstagramMedia,
+  getMetaPageAccessToken,
   getMetaPageAssets,
   mergeMetaUsage,
   MetaCollectionLimitError,
@@ -764,14 +765,34 @@ export async function syncMetaConnector(
 
     for (const pageAsset of pageAssets) {
       const page = pagesById.get(pageAsset.meta_asset_id);
-      // Prefer page token from /me/accounts; fall back to connector token when
-      // the page is assigned but Meta omitted access_token (system-user case)
-      // or the page row was filtered out of the refresh map.
-      const pageAccessToken = page?.accessToken ?? accessToken;
+      const pageId = page?.id ?? pageAsset.meta_asset_id;
+      // Prefer page token from /me/accounts. When Meta omitted access_token
+      // (system-user) or the page row is missing from the refresh map, resolve
+      // a real Page token — published_posts rejects system-user credentials.
+      let pageAccessToken = page?.accessToken ?? accessToken;
+      let hadRealPageToken = page?.hasPageAccessToken !== false && Boolean(page);
+      let resolvedPageToken = false;
 
       try {
+        if (!hadRealPageToken) {
+          const resolved = await getMetaPageAccessToken({
+            pageId,
+            accessToken,
+            appSecret: env.appSecret,
+          });
+          usage = mergeMetaUsage(usage, resolved.usage);
+          pageAccessToken = resolved.accessToken;
+          hadRealPageToken = true;
+          resolvedPageToken = true;
+          console.error("meta_sync_facebook_page_token_resolved", {
+            platformAccountId: connector.id,
+            pageId,
+            pageListedInAccounts: Boolean(page),
+          });
+        }
+
         const posts = await getFacebookPublishedPosts({
-          pageId: page?.id ?? pageAsset.meta_asset_id,
+          pageId,
           pageAccessToken,
           appSecret: env.appSecret,
         });
@@ -802,7 +823,8 @@ export async function syncMetaConnector(
         console.error("meta_sync_facebook_page_failed", {
           platformAccountId: connector.id,
           pageId: pageAsset.meta_asset_id,
-          hadPageToken: Boolean(page?.accessToken),
+          hadRealPageToken,
+          resolvedPageToken,
           error:
             error instanceof Error ? error.message : "facebook_page_sync_failed",
         });
