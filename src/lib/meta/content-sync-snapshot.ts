@@ -1,5 +1,10 @@
 import "server-only";
 
+import {
+  CONTENT_DETECTION_LOOKBACK_DAYS,
+  summarizeDetectionWindows,
+  type ContentDetectionSourceCounts,
+} from "@/lib/meta/content-detection-history";
 import { shouldListAsContentCandidate } from "@/lib/meta/content-candidate-lifecycle";
 import { resolveCustomerNextSyncAt } from "@/lib/meta/schedule";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -16,6 +21,17 @@ export type ContentSyncCandidate = {
   firstSeenAt: string | null;
 };
 
+export type ContentDetectionHistoryItem = ContentSyncCandidate & {
+  lastSeenAt: string | null;
+  isNew: boolean;
+};
+
+export type ContentAssetSyncHint = {
+  assetType: "facebook_page" | "instagram_account";
+  label: string;
+  lastSyncedAt: string | null;
+};
+
 export type ContentSyncSnapshot = {
   status: string | null;
   errorCode: string | null;
@@ -28,10 +44,20 @@ export type ContentSyncSnapshot = {
   newCount: number;
   storedCandidateCount: number;
   candidates: ContentSyncCandidate[];
+  /** Recent detections for retrospective UI (not limited to is_new). */
+  detectionHistory: ContentDetectionHistoryItem[];
+  detectionSummary: {
+    today: ContentDetectionSourceCounts;
+    week: ContentDetectionSourceCounts;
+  };
+  assetSyncHints: ContentAssetSyncHint[];
 };
+
+export type { ContentDetectionSourceCounts };
 
 const CANDIDATE_FETCH_LIMIT = 40;
 const CANDIDATE_DISPLAY_LIMIT = 8;
+const HISTORY_FETCH_LIMIT = 60;
 
 function mapCandidate(candidate: Record<string, unknown>): ContentSyncCandidate {
   return {
@@ -69,6 +95,19 @@ function mapCandidate(candidate: Record<string, unknown>): ContentSyncCandidate 
   };
 }
 
+function mapHistoryItem(
+  candidate: Record<string, unknown>,
+): ContentDetectionHistoryItem {
+  return {
+    ...mapCandidate(candidate),
+    lastSeenAt:
+      candidate.last_seen_at === null || candidate.last_seen_at === undefined
+        ? null
+        : String(candidate.last_seen_at),
+    isNew: candidate.is_new === true,
+  };
+}
+
 export async function loadContentSyncSnapshot(input: {
   supabase: SupabaseClient;
   userId: string;
@@ -86,24 +125,49 @@ export async function loadContentSyncSnapshot(input: {
   now?: Date;
 }): Promise<ContentSyncSnapshot> {
   const now = input.now ?? new Date();
-  const [{ data: rawCandidates }, { count: storedCandidateCount }] =
-    await Promise.all([
-      input.supabase
-        .from("meta_content_candidates")
-        .select(
-          "id, source, meta_asset_id, content_type, caption_excerpt, permalink_url, preview_url, published_at, first_seen_at",
-        )
-        .eq("platform_account_id", input.platformAccountId)
-        .eq("user_id", input.userId)
-        .eq("is_new", true)
-        .order("published_at", { ascending: false, nullsFirst: false })
-        .limit(CANDIDATE_FETCH_LIMIT),
-      input.supabase
-        .from("meta_content_candidates")
-        .select("id", { count: "exact", head: true })
-        .eq("platform_account_id", input.platformAccountId)
-        .eq("user_id", input.userId),
-    ]);
+  const historySince = new Date(
+    now.getTime() - CONTENT_DETECTION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const [
+    { data: rawCandidates },
+    { count: storedCandidateCount },
+    { data: rawHistory },
+    { data: rawAssets },
+  ] = await Promise.all([
+    input.supabase
+      .from("meta_content_candidates")
+      .select(
+        "id, source, meta_asset_id, content_type, caption_excerpt, permalink_url, preview_url, published_at, first_seen_at",
+      )
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("user_id", input.userId)
+      .eq("is_new", true)
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(CANDIDATE_FETCH_LIMIT),
+    input.supabase
+      .from("meta_content_candidates")
+      .select("id", { count: "exact", head: true })
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("user_id", input.userId),
+    input.supabase
+      .from("meta_content_candidates")
+      .select(
+        "id, source, meta_asset_id, content_type, caption_excerpt, permalink_url, preview_url, published_at, first_seen_at, last_seen_at, is_new",
+      )
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("user_id", input.userId)
+      .gte("first_seen_at", historySince)
+      .order("first_seen_at", { ascending: false, nullsFirst: false })
+      .limit(HISTORY_FETCH_LIMIT),
+    input.supabase
+      .from("meta_assets")
+      .select("asset_type, name, username, last_synced_at")
+      .eq("platform_account_id", input.platformAccountId)
+      .eq("user_id", input.userId)
+      .in("asset_type", ["facebook_page", "instagram_account"])
+      .order("asset_type", { ascending: true }),
+  ]);
 
   const mapped = (rawCandidates ?? []).map((row) =>
     mapCandidate(row as Record<string, unknown>),
@@ -181,6 +245,29 @@ export async function loadContentSyncSnapshot(input: {
       .slice(0, CANDIDATE_DISPLAY_LIMIT);
   }
 
+  const detectionHistory = (rawHistory ?? []).map((row) =>
+    mapHistoryItem(row as Record<string, unknown>),
+  );
+
+  const assetSyncHints: ContentAssetSyncHint[] = (rawAssets ?? [])
+    .map((row) => {
+      const assetType = row.asset_type;
+      if (assetType !== "facebook_page" && assetType !== "instagram_account") {
+        return null;
+      }
+      const label =
+        (typeof row.name === "string" && row.name.trim()) ||
+        (typeof row.username === "string" && row.username.trim()) ||
+        (assetType === "facebook_page" ? "Facebook-Seite" : "Instagram");
+      return {
+        assetType,
+        label,
+        lastSyncedAt:
+          typeof row.last_synced_at === "string" ? row.last_synced_at : null,
+      } satisfies ContentAssetSyncHint;
+    })
+    .filter((row): row is ContentAssetSyncHint => row !== null);
+
   return {
     status: input.connector.sync_status,
     errorCode: input.connector.sync_error_code,
@@ -196,5 +283,8 @@ export async function loadContentSyncSnapshot(input: {
     newCount: input.connector.last_sync_new_count ?? 0,
     storedCandidateCount: storedCandidateCount ?? 0,
     candidates,
+    detectionHistory,
+    detectionSummary: summarizeDetectionWindows(detectionHistory, now),
+    assetSyncHints,
   };
 }

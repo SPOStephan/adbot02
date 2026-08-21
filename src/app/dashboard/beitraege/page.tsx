@@ -120,6 +120,9 @@ async function BeitraegeBody() {
         newCount: contentSyncSnapshot.newCount,
         storedCandidateCount: contentSyncSnapshot.storedCandidateCount,
         candidates: contentSyncSnapshot.candidates,
+        detectionHistory: contentSyncSnapshot.detectionHistory,
+        detectionSummary: contentSyncSnapshot.detectionSummary,
+        assetSyncHints: contentSyncSnapshot.assetSyncHints,
       }}
       needsContentAssetSetup={needsContentAssetSetup}
       reconnectRequired={reconnectRequired}

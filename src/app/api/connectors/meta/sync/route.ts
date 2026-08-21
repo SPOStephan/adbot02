@@ -91,6 +91,9 @@ export async function GET() {
     newCount: snapshot.newCount,
     storedCandidateCount: snapshot.storedCandidateCount,
     candidates: snapshot.candidates,
+    detectionHistory: snapshot.detectionHistory,
+    detectionSummary: snapshot.detectionSummary,
+    assetSyncHints: snapshot.assetSyncHints,
   });
 }
 
