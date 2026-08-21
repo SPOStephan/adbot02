@@ -345,6 +345,24 @@ export async function healOrganicBoostDeliveryTree(input: {
   // Cap work per Abruf — only a few live incomplete trees should remain.
   const campaignIds = resolved.campaignIds.slice(0, 8);
 
+  const stopTimeByCampaignId = new Map<string, string | null>();
+  {
+    const { data: stopRows } = await admin
+      .from("campaigns")
+      .select("platform_campaign_id,stop_time")
+      .eq("user_id", input.userId)
+      .eq("platform_account_id", input.platformAccountId)
+      .in("platform_campaign_id", campaignIds);
+    for (const row of stopRows ?? []) {
+      if (typeof row.platform_campaign_id === "string") {
+        stopTimeByCampaignId.set(
+          row.platform_campaign_id,
+          row.stop_time ? String(row.stop_time) : null,
+        );
+      }
+    }
+  }
+
   const { data: account, error: accountError } = await admin
     .from("platform_accounts")
     .select(
