@@ -137,6 +137,11 @@ assert.doesNotMatch(
   loaderSource,
   /access_token_encrypted|token_iv|token_auth_tag|sync_backoff_until/,
 );
+assert.doesNotMatch(
+  loaderSource,
+  /provider_sync_status|provider_sync_error_code|provider_last_success_at|provider_campaign_count|provider_ad_group_count|provider_ad_count|provider_insight_count/,
+  "The shared dashboard query must remain compatible before provider-specific migrations run",
+);
 
 assert.match(contentSyncPanelSource, /Meta Content Sync/);
 assert.match(contentSyncPanelSource, /Letzter Abruf/);
