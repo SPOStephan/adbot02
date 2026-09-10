@@ -56,6 +56,8 @@ assert.match(client, /Authorization.*Bearer/);
 assert.match(client, /cache:\s*"no-store"/);
 assert.match(client, /REQUEST_TIMEOUT_MS/);
 assert.match(openAIEnvironment, /https:\/\/api\.ads\.openai\.com\/v1/);
+assert.doesNotMatch(openAIEnvironment, /process\.env\.OPENAI_ADS_API_BASE_URL/);
+assert.doesNotMatch(environment, /OPENAI_ADS_API_BASE_URL/);
 assert.match(connection, /client\.getAdAccount\(\)/);
 assert.match(connection, /encryptCredential\(/);
 assert.match(connection, /access_token:\s*null/);

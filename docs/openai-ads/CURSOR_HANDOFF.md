@@ -6,7 +6,7 @@
 
 ## Implementierter Umfang
 
-Der Branch ergänzt einen produktionsnahen OpenAI-Ads-Connector auf Basis der offiziellen Advertiser API. Kunden können mehrere Werbekonten verbinden, weil jeder OpenAI-Ads-API-Key genau einem Ad Account zugeordnet ist. Der Key wird mit `GET /ad_account` verifiziert, danach per AES-256-GCM verschlüsselt und niemals an den Browser zurückgegeben.
+Der Branch ergänzt einen produktiven OpenAI-Ads-Connector auf Basis der offiziellen Advertiser API. Kunden können mehrere Werbekonten verbinden, weil jeder OpenAI-Ads-API-Key genau einem Ad Account zugeordnet ist. Der Key wird mit `GET /ad_account` verifiziert, danach per AES-256-GCM verschlüsselt und niemals an den Browser zurückgegeben.
 
 Der Read-Sync lädt Konto, Kampagnen, Anzeigengruppen, Anzeigen und die letzten 30 Tage täglicher Kampagnen-Insights. Die Hierarchie wird erst nach vollständig erfolgreichem Abruf atomar gespeichert. Die Views `cross_platform_account_performance_daily` und `cross_platform_campaign_performance_30d` normalisieren Meta- und OpenAI-Ads-Metriken als Basis für spätere Budgetoptimierung.
 
@@ -32,23 +32,20 @@ Der Write-Flow folgt Betriebsmodell A. Nach einmaliger ausdrücklicher Bestätig
 
 ```dotenv
 OPENAI_ADS_TOKEN_ENCRYPTION_KEY=<Base64-kodierter 32-Byte-Schlüssel>
-# optional nur für kontrollierte Staging-/Mock-Umgebungen:
-# OPENAI_ADS_API_BASE_URL=https://api.ads.openai.com/v1
 ```
 
-Einen Schlüssel erzeugt beispielsweise `openssl rand -base64 32`. Er muss serverseitig in Vercel hinterlegt werden und ist ausdrücklich nicht `OPENAI_API_KEY`. Der Ads-Key des Kunden wird über die Dashboard-Oberfläche eingegeben, nicht als Deployment-Variable.
+Einen Schlüssel erzeugt beispielsweise `openssl rand -base64 32`. Er muss serverseitig in der bestehenden Vercel-Live-Umgebung hinterlegt werden und ist ausdrücklich nicht `OPENAI_API_KEY`. Der Ads-Key des Kunden wird über die Dashboard-Oberfläche eingegeben, nicht als Deployment-Variable. Der Connector verwendet fest `https://api.ads.openai.com/v1`; es gibt keinen Staging-, Test- oder Mock-Endpunkt.
 
-## Sicherer Rollout
+## Direkter Live-Rollout
 
-1. Migration in Staging anwenden und `OPENAI_ADS_TOKEN_ENCRYPTION_KEY` in Staging setzen.
-2. Anwendung deployen und `/dashboard/chatgpt-ads` öffnen.
-3. Erstes OpenAI-Ads-Testkonto verbinden. Account-ID, Währung, Zeitzone, Accountstatus und Brand Review kontrollieren.
+1. Migration auf die bestehende Live-Datenbank anwenden und `OPENAI_ADS_TOKEN_ENCRYPTION_KEY` in der bestehenden Vercel-Live-Umgebung setzen.
+2. Anwendung live deployen und `/dashboard/chatgpt-ads` öffnen.
+3. Das erste OpenAI-Ads-Werbekonto verbinden. Account-ID, Währung, Zeitzone, Accountstatus und Brand Review kontrollieren.
 4. Manuellen Sync auslösen und Kampagnen-/Insightzahlen mit OpenAI Ads Manager vergleichen.
-5. Ein dediziertes Testkonto ohne produktive Kampagnen verwenden. Im Launchformular expliziten Standort, minimales Tagesbudget, minimales Laufzeitbudget und Maximalgebot eintragen. Die Checkbox macht klar, dass der folgende Klick kostenwirksam sein kann.
-6. „Kostenwirksam ACTIVE anlegen“ klicken und unmittelbar im OpenAI Ads Manager bestätigen, dass Campaign, Ad Group und Ad ACTIVE sind. Falls die Anzeige `in_review` ist, kann die Auslieferung direkt nach OpenAIs Genehmigung beginnen; deshalb die Limits bewusst klein halten.
+5. Für den ersten kostenwirksamen Lauf expliziten Standort, bewusst kleines Tagesbudget, kleines Laufzeitbudget und Maximalgebot eintragen. Die Checkbox macht klar, dass der folgende Klick direkt live wirkt.
+6. „Kostenwirksam ACTIVE anlegen“ klicken und unmittelbar im OpenAI Ads Manager bestätigen, dass Campaign, Ad Group und Ad ACTIVE sind. Falls die Anzeige `in_review` ist, kann die Auslieferung direkt nach OpenAIs Genehmigung beginnen.
 7. Anzeigenprüfung und erste Delivery-Daten abwarten. Manuellen Sync auslösen und Reviewstatus, Spend, Impressionen, Klicks sowie Conversion-Verfügbarkeit mit dem Ads Manager vergleichen.
-8. Zweites Konto über einen separaten accountbezogenen API-Key verbinden und Tenant-/Kontentrennung prüfen.
-9. Erst nach Staging-Abnahme Migration, Secret und Deployment in Produktion übernehmen.
+8. Das zweite Werbekonto über einen separaten accountbezogenen API-Key verbinden und Tenant-/Kontentrennung prüfen.
 
 ## Tests
 
