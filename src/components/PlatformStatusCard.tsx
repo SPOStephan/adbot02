@@ -20,6 +20,8 @@ export type PlatformStatusCardProps = {
   helperText?: string;
   actionHref?: string;
   actionLabel?: string;
+  manageHref?: string;
+  manageLabel?: string;
   showMetaConnectionActions?: boolean;
 };
 
@@ -34,6 +36,8 @@ export function PlatformStatusCard({
   helperText,
   actionHref,
   actionLabel,
+  manageHref,
+  manageLabel,
   showMetaConnectionActions = false,
 }: PlatformStatusCardProps) {
   const canConnect = Boolean(actionHref && actionLabel && !connected);
@@ -75,6 +79,15 @@ export function PlatformStatusCard({
       <div className="mt-auto pt-5">
         {connected && showMetaConnectionActions ? (
           <MetaConnectionActions reconnectHref="/api/connectors/meta/start?intent=extend" />
+        ) : connected && manageHref && manageLabel ? (
+          <Link
+            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-800 transition hover:bg-emerald-100"
+            href={manageHref}
+            prefetch={false}
+          >
+            <CheckCircle2 className="size-4" />
+            {manageLabel}
+          </Link>
         ) : connected ? (
           <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700">
             <CheckCircle2 className="size-4" />

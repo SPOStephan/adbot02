@@ -2,7 +2,13 @@ import "server-only";
 
 import { hasSupabaseAdminKey } from "@/lib/supabase/admin-env";
 
-export const platformIds = ["meta", "google", "tiktok", "pinterest"] as const;
+export const platformIds = [
+  "meta",
+  "openai_ads",
+  "google",
+  "tiktok",
+  "pinterest",
+] as const;
 
 export type PlatformId = (typeof platformIds)[number];
 
@@ -30,6 +36,13 @@ const definitions: Record<
       "META_STATE_SECRET",
       "META_TOKEN_ENCRYPTION_KEY",
     ],
+    requiresSupabaseAdminKey: true,
+  },
+  openai_ads: {
+    id: "openai_ads",
+    name: "ChatGPT Ads",
+    description: "Kampagnen, Chat Cards und Performance in ChatGPT",
+    requiredEnvironmentVariables: ["OPENAI_ADS_TOKEN_ENCRYPTION_KEY"],
     requiresSupabaseAdminKey: true,
   },
   google: {

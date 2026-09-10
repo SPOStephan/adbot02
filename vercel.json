@@ -6,6 +6,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/openai-ads-sync",
+      "schedule": "30 * * * *"
+    },
+    {
       "path": "/api/cron/creative-assets",
       "schedule": "*/5 * * * *"
     },
