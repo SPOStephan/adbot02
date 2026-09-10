@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextRequest } from "next/server";
 
 import { parseOpenAIAdsLaunchInput } from "@/lib/openai-ads/input";
-import { createPausedOpenAIAdsLaunch } from "@/lib/openai-ads/launch";
+import { createActiveOpenAIAdsLaunch } from "@/lib/openai-ads/launch";
 import {
   authenticateOpenAIAdsUser,
   openAIAdsErrorResponse,
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const body = await readOpenAIAdsJson(request);
     const command = parseOpenAIAdsLaunchInput(body);
     const user = await authenticateOpenAIAdsUser();
-    const result = await createPausedOpenAIAdsLaunch({
+    const result = await createActiveOpenAIAdsLaunch({
       userId: user.id,
       command,
     });

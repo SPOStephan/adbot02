@@ -137,22 +137,6 @@ export function OpenAIAdsWorkspace({ accounts }: Props) {
     );
   }
 
-  async function activate(account: OpenAIAdsDashboardAccount, launchId: string) {
-    if (
-      !window.confirm(
-        `Jetzt wirklich aktivieren? OpenAI kann ab Aktivierung bis zum hinterlegten Budget in ${account.currency} ausgeben. Adbot prüft vorher Konto- und Anzeigenfreigabe.`,
-      )
-    ) {
-      return;
-    }
-    await post(
-      `activate:${launchId}`,
-      "/api/openai-ads/launch/activate",
-      { launchId, confirmation: "activate_openai_ads_campaign" },
-      "Die vollständige ChatGPT-Ads-Kette wurde aktiviert.",
-    );
-  }
-
   if (accounts.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm leading-6 text-slate-600">
@@ -297,7 +281,8 @@ export function OpenAIAdsWorkspace({ accounts }: Props) {
                       <tr>
                         <th className="px-3 py-3">Kampagne</th>
                         <th className="px-3 py-3">Status</th>
-                        <th className="px-3 py-3">Budget</th>
+                        <th className="px-3 py-3">Laufzeitbudget</th>
+                        <th className="px-3 py-3">Tageslimit</th>
                         <th className="px-3 py-3">Spend</th>
                         <th className="px-3 py-3">Impr.</th>
                         <th className="px-3 py-3">Klicks</th>
@@ -324,6 +309,14 @@ export function OpenAIAdsWorkspace({ accounts }: Props) {
                               ? "–"
                               : currency(
                                   campaign.budgetMicros / 1_000_000,
+                                  account.currency,
+                                )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {campaign.dailyBudgetMicros === null
+                              ? "–"
+                              : currency(
+                                  campaign.dailyBudgetMicros / 1_000_000,
                                   account.currency,
                                 )}
                           </td>
@@ -390,19 +383,11 @@ export function OpenAIAdsWorkspace({ accounts }: Props) {
                           </p>
                         ) : null}
                       </div>
-                      {["ready_to_activate", "in_review", "blocked"].includes(
-                        launch.status,
-                      ) ? (
-                        <button
-                          className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
-                          disabled={Boolean(pending)}
-                          onClick={() => void activate(account, launch.id)}
-                          type="button"
-                        >
-                          {pending === `activate:${launch.id}`
-                            ? "Prüfung läuft …"
-                            : "Prüfen & aktivieren"}
-                        </button>
+                      {launch.status === "in_review" ? (
+                        <p className="max-w-sm text-sm font-semibold text-amber-900">
+                          Die Kette ist ACTIVE. Die Auslieferung beginnt nach
+                          OpenAIs Anzeigenfreigabe automatisch.
+                        </p>
                       ) : null}
                     </div>
                   ))}

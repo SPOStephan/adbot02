@@ -135,14 +135,33 @@ insert into public.ad_platform_sync_runs (
   'running'
 );
 
+insert into public.ad_platform_launches (
+  id, user_id, platform_account_id, platform, idempotency_key, status,
+  request_payload, remote_campaign_id, remote_ad_group_id, remote_ad_id,
+  review_status, activated_at
+) values (
+  '24000000-0000-4000-8000-000000000001',
+  '21000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  'openai_ads',
+  'active-launch-test',
+  'in_review',
+  '{"dailyBudgetMicros":25000000,"lifetimeBudgetMicros":100000000}'::jsonb,
+  'cmp-openai-1',
+  'ag-openai-1',
+  'ad-openai-1',
+  'in_review',
+  now()
+);
+
 select public.replace_openai_ads_snapshot(
   '21000000-0000-4000-8000-000000000001',
   '22000000-0000-4000-8000-000000000001',
   '23000000-0000-4000-8000-000000000001',
   '{"id":"oa-account-1","name":"OpenAI One","currency_code":"EUR","timezone":"Europe/Berlin","review_status":"approved","account_status":"active"}'::jsonb,
-  '[{"id":"cmp-openai-1","name":"Launch","status":"paused","objective":"clicks","bidding_type":"clicks","budget_amount_micros":100000000,"start_time":1788998400,"end_time":1789603200,"created_at":1788998400,"updated_at":1788998400,"provider_data":{}}]'::jsonb,
-  '[{"id":"ag-openai-1","campaign_id":"cmp-openai-1","name":"Intent","status":"paused","billing_event_type":"click","max_bid_micros":2000000,"bid_strategy":"fixed","created_at":1788998400,"updated_at":1788998400,"provider_data":{}}]'::jsonb,
-  '[{"id":"ad-openai-1","ad_group_id":"ag-openai-1","name":"Chat card","status":"paused","review_status":"approved","creative_type":"chat_card","target_url":"https://example.com/","created_at":1788998400,"updated_at":1788998400,"provider_data":{}}]'::jsonb,
+  '[{"id":"cmp-openai-1","name":"Launch","status":"active","objective":"clicks","bidding_type":"clicks","budget_amount_micros":100000000,"daily_budget_amount_micros":25000000,"start_time":1788998400,"end_time":1789603200,"created_at":1788998400,"updated_at":1788998400,"provider_data":{"budget":{"daily_spend_limit_micros":25000000}}}]'::jsonb,
+  '[{"id":"ag-openai-1","campaign_id":"cmp-openai-1","name":"Intent","status":"active","billing_event_type":"click","max_bid_micros":2000000,"bid_strategy":"fixed","created_at":1788998400,"updated_at":1788998400,"provider_data":{}}]'::jsonb,
+  '[{"id":"ad-openai-1","ad_group_id":"ag-openai-1","name":"Chat card","status":"active","review_status":"approved","creative_type":"chat_card","target_url":"https://example.com/","created_at":1788998400,"updated_at":1788998400,"provider_data":{}}]'::jsonb,
   '[{"campaign_id":"cmp-openai-1","date":"2026-09-09","date_stop":"2026-09-09","impressions":1000,"clicks":50,"spend":25.5,"conversions":5,"data_status":"final","provider_data":{}}]'::jsonb
 );
 
@@ -160,6 +179,15 @@ begin
     and is_current = true;
   if v_campaign_id is null then
     raise exception 'OpenAI campaign snapshot missing';
+  end if;
+  if not exists (
+    select 1
+    from public.campaigns
+    where id = v_campaign_id
+      and budget_amount_micros = 100000000
+      and daily_budget_amount_micros = 25000000
+  ) then
+    raise exception 'OpenAI daily/lifetime budget normalization missing';
   end if;
 
   if not exists (
@@ -198,6 +226,13 @@ begin
   where id = '23000000-0000-4000-8000-000000000001';
   if v_status <> 'success' then
     raise exception 'Expected successful sync run, got %', v_status;
+  end if;
+
+  select status into v_status
+  from public.ad_platform_launches
+  where id = '24000000-0000-4000-8000-000000000001';
+  if v_status <> 'active' then
+    raise exception 'Expected approved ACTIVE launch, got %', v_status;
   end if;
 end;
 $$;

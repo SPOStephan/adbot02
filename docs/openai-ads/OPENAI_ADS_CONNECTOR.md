@@ -23,11 +23,11 @@ API-Keys werden ausschließlich serverseitig entgegengenommen, zuerst mit `GET /
 
 Der Read-Sync lädt die komplette Hierarchie Campaign → Ad Group → Ad sowie tägliche Kampagnen-Insights und ersetzt den lokalen Snapshot erst nach vollständigem Erfolg atomar. Historische Daten bleiben beim Disconnect bestehen, während Ciphertext, IV und Authentifizierungstag entfernt werden.
 
-Der erste Write-Flow erstellt Bild, Kampagne, Anzeigengruppe und Chat-Card-Anzeige mit Idempotency Keys und durchgehend im Zustand `paused`. Aktivierung ist eine getrennte, ausdrücklich bestätigte Aktion. Unmittelbar davor prüft Adbot Konto- und Brandstatus sowie den Anzeigen-Review. Es aktiviert die Anzeige, danach die Anzeigengruppe und die Kampagne zuletzt. Bei einem Fehler wird die Kette sicherheitshalber pausiert; ein nicht eindeutig bestätigbarer Zustand wird als manueller Prüfungsfall markiert.
+Im Betriebsmodell A bestätigt der Kunde vor dem Write einmalig Kampagne, Targeting, Tagesbudget, Laufzeitbudget und Maximalgebot. Danach erstellt Adbot Kampagne, Anzeigengruppe und Chat-Card-Anzeige idempotent direkt im Zustand `active`; eine zweite Aktivierungsaktion ist für neue Launches nicht vorgesehen. Läuft die OpenAI-Anzeigenprüfung noch, bleibt die Kette ACTIVE und beginnt nach Genehmigung automatisch mit der Auslieferung. Bei abgelehnter Anzeige oder einem technischen Teilfehler pausiert Adbot alle bereits erzeugten Remoteobjekte als definierten Rückfallzustand. Kann diese Rücknahme nicht vollständig bestätigt werden, wird der Launch als `activation_uncertain` markiert und verlangt sofortige manuelle Prüfung.
 
 ## Abgrenzung der kanalübergreifenden Optimierung
 
-Die Migration ergänzt providerneutrale 30-Tage- und Tages-Views für Meta und OpenAI Ads. Damit können Spend, Impressions, Klicks, Conversions, CPC, CTR, Cost per Conversion und ROAS kanalübergreifend verglichen werden. Eine automatische Umschichtung wird erst freigeschaltet, wenn mindestens zwei Kanäle echte, vergleichbare Zielmetriken, Währungen, Attributionsfenster und aktuelle Daten liefern. Bis dahin bleibt die OpenAI-Ads-Aktivierung human-in-the-loop.
+Die Migration ergänzt providerneutrale 30-Tage- und Tages-Views für Meta und OpenAI Ads. Damit können Spend, Impressions, Klicks, Conversions, CPC, CTR, Cost per Conversion und ROAS kanalübergreifend verglichen werden. Die Bestätigung eines neuen kostenwirksamen Launches bleibt beim Kunden; dessen Objekte werden anschließend direkt ACTIVE erzeugt. Eine automatische Umschichtung bestehender Budgets wird erst freigeschaltet, wenn mindestens zwei Kanäle echte, vergleichbare Zielmetriken, Währungen, Attributionsfenster und aktuelle Daten liefern.
 
 ## Offizielle Quellen
 

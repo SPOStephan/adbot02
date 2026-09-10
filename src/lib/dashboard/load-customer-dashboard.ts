@@ -358,7 +358,7 @@ async function loadCustomerDashboardImpl(
             ? "Advertiser API live"
           : undefined,
       helperText: isOpenAIAds
-        ? "Accountbezogene API-Keys, tägliche Delivery-Daten und sichere PAUSED-Launches mit separater Aktivierung."
+        ? "Accountbezogene API-Keys, tägliche Delivery- und Conversion-Daten sowie bestätigte ACTIVE-Launches mit Tageslimit."
         : isMeta
         ? platformAccountReadFailed
           ? "Die vorhandene Verbindung konnte nicht gelesen werden und bleibt unverändert. Bitte keinen Reconnect starten."

@@ -85,6 +85,7 @@ function campaignPayload(campaign: OpenAIAdsCampaign) {
     objective: campaign.objective ?? campaign.bidding_type,
     bidding_type: campaign.bidding_type,
     budget_amount_micros: lifetime ?? daily,
+    daily_budget_amount_micros: daily,
     start_time: campaign.start_time,
     end_time: campaign.end_time,
     created_at: campaign.created_at,

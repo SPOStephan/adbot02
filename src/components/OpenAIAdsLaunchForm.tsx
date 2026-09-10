@@ -112,6 +112,7 @@ export function OpenAIAdsLaunchForm({
           campaignDescription: form.get("campaignDescription"),
           biddingType: form.get("biddingType"),
           lifetimeBudget: form.get("lifetimeBudget"),
+          dailyBudget: form.get("dailyBudget"),
           maxBid: form.get("maxBid"),
           startDate: form.get("startDate"),
           endDate: form.get("endDate"),
@@ -126,7 +127,7 @@ export function OpenAIAdsLaunchForm({
           body: form.get("body"),
           targetUrl: form.get("targetUrl"),
           imageUrl: form.get("imageUrl"),
-          confirmation: "create_paused_openai_ads_campaign",
+          confirmation: "create_active_openai_ads_campaign",
         }),
       });
       const payload: unknown = await response.json().catch(() => null);
@@ -134,12 +135,26 @@ export function OpenAIAdsLaunchForm({
         throw new Error(
           responseMessage(
             payload,
-            "Der pausierte Kampagnenentwurf konnte nicht erstellt werden.",
+            "Die ACTIVE-Kampagne konnte nicht sicher erstellt werden.",
           ),
         );
       }
+      const status =
+        typeof payload === "object" &&
+        payload !== null &&
+        "status" in payload &&
+        typeof payload.status === "string"
+          ? payload.status
+          : null;
+      if (status === "blocked") {
+        throw new Error(
+          "OpenAI hat die Anzeige abgelehnt. Die Kampagnenkette wurde pausiert.",
+        );
+      }
       setMessage(
-        "Kampagne, Anzeigengruppe und Anzeige wurden bei OpenAI pausiert angelegt. Es entstehen noch keine Ausgaben.",
+        status === "in_review"
+          ? "Die Kampagnenkette wurde ACTIVE angelegt. OpenAI prüft die Anzeige; nach Genehmigung beginnt die Auslieferung automatisch innerhalb der bestätigten Limits."
+          : "Kampagne, Anzeigengruppe und Anzeige wurden ACTIVE angelegt und können innerhalb der bestätigten Limits ausliefern.",
       );
       setConfirmed(false);
       router.refresh();
@@ -147,7 +162,7 @@ export function OpenAIAdsLaunchForm({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Der pausierte Kampagnenentwurf konnte nicht erstellt werden.",
+          : "Die ACTIVE-Kampagne konnte nicht sicher erstellt werden.",
       );
     } finally {
       setPending(false);
@@ -170,7 +185,7 @@ export function OpenAIAdsLaunchForm({
           </span>
         </span>
         <span className="rounded-lg border border-slate-200 px-3 py-1 text-sm font-bold text-slate-700">
-          {expanded ? "Schließen" : "PAUSED anlegen"}
+          {expanded ? "Schließen" : "ACTIVE anlegen"}
         </span>
       </button>
 
@@ -218,6 +233,19 @@ export function OpenAIAdsLaunchForm({
                 min="1"
                 name="lifetimeBudget"
                 placeholder="100.00"
+                required
+                step="0.01"
+                type="number"
+              />
+            </label>
+            <label className="text-sm font-bold text-slate-800">
+              Maximales Tagesbudget ({currency})
+              <input
+                className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5"
+                inputMode="decimal"
+                min="1"
+                name="dailyBudget"
+                placeholder="25.00"
                 required
                 step="0.01"
                 type="number"
@@ -400,9 +428,10 @@ export function OpenAIAdsLaunchForm({
               type="checkbox"
             />
             <span>
-              Ich bestätige die Angaben. Adbot legt Bild, Kampagne,
-              Anzeigengruppe und Anzeige ausschließlich <strong>pausiert</strong>
-              an. Ausgaben beginnen erst nach einer separaten Aktivierung.
+              Ich bestätige Kampagne, Targeting, Tages- und Laufzeitbudget.
+              Adbot legt Kampagne, Anzeigengruppe und Anzeige direkt
+              <strong> ACTIVE</strong> an. Bei noch laufender Anzeigenprüfung
+              beginnt die Auslieferung automatisch nach OpenAIs Genehmigung.
             </span>
           </label>
 
@@ -424,7 +453,9 @@ export function OpenAIAdsLaunchForm({
             }
             type="submit"
           >
-            {pending ? "PAUSED-Entwurf wird erstellt …" : "PAUSED-Entwurf anlegen"}
+            {pending
+              ? "ACTIVE-Kampagne wird erstellt …"
+              : "Kostenwirksam ACTIVE anlegen"}
           </button>
         </form>
       ) : null}

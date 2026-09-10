@@ -26,7 +26,7 @@ export default async function ChatGPTAdsPage() {
   return (
     <>
       <DashboardPageHeader
-        description="Werbekonten verbinden, echte Delivery-Daten vergleichen und ChatGPT-Ad-Kampagnen mit einer sicheren PAUSED-zu-ACTIVE-Freigabe steuern."
+        description="Werbekonten verbinden, echte Delivery-Daten vergleichen und ChatGPT-Ad-Kampagnen nach ausdrücklicher Budgetbestätigung direkt ACTIVE starten."
         eyebrow="OpenAI Advertiser API"
         title="ChatGPT Ads"
       />
@@ -35,10 +35,10 @@ export default async function ChatGPTAdsPage() {
         <p className="font-black">Neu in Adbot: echter ChatGPT-Ads-Connector</p>
         <p className="mt-1 max-w-4xl text-sm leading-6">
           Adbot liest Konten, Kampagnen, Anzeigengruppen, Anzeigen und Insights
-          direkt aus der OpenAI Advertiser API. Neue Launches werden zuerst auf
-          allen Ebenen pausiert angelegt. Erst eine zweite, ausdrückliche
-          Freigabe kann nach aktuellem Account- und Anzeigen-Review Ausgaben
-          starten.
+          direkt aus der OpenAI Advertiser API. Nach Bestätigung von Targeting,
+          Tages- und Laufzeitbudget legt Adbot neue Launches direkt ACTIVE an.
+          Läuft die Anzeigenprüfung noch, beginnt die Auslieferung automatisch
+          nach OpenAIs Genehmigung.
         </p>
       </section>
 

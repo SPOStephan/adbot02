@@ -87,6 +87,7 @@ assert.match(sync, /listDailyCampaignInsights/);
 assert.match(client, /\/conversions\/insights/);
 assert.match(sync, /listDailyCampaignConversions/);
 assert.match(sync, /conversionsAvailable/);
+assert.match(sync, /daily_budget_amount_micros/);
 assert.match(sync, /replace_openai_ads_snapshot/);
 assert.ok(
   sync.indexOf("listDailyCampaignInsights") <
@@ -94,8 +95,14 @@ assert.ok(
   "Snapshot write must happen only after the full provider read",
 );
 
-// Every remote object is created paused; campaign activation is deliberately last.
-assert.ok((launch.match(/status:\s*"paused"/g) ?? []).length >= 3);
+// Model A: all new remote objects are created ACTIVE after one explicit budget confirmation.
+const directActiveLaunch = launch.slice(
+  0,
+  launch.indexOf("export async function activateOpenAIAdsLaunch"),
+);
+assert.ok((directActiveLaunch.match(/status:\s*"active"/g) ?? []).length >= 3);
+assert.doesNotMatch(directActiveLaunch, /status:\s*"paused"/);
+assert.match(directActiveLaunch, /daily_spend_limit_micros/);
 assert.match(launch, /Idempotency|idempotency/i);
 const activateAd = launch.indexOf("activateAd(launch.remote_ad_id)");
 const activateGroup = launch.indexOf("activateAdGroup(launch.remote_ad_group_id)");
@@ -108,7 +115,9 @@ assert.match(launch, /activation_uncertain_manual_check_required/);
 assert.match(activationRoute, /parseOpenAIAdsActivationInput/);
 assert.match(input, /activate_openai_ads_campaign/);
 assert.match(workspace, /window\.confirm\(/);
-assert.match(launchForm, /create_paused_openai_ads_campaign/);
+assert.match(launchForm, /create_active_openai_ads_campaign/);
+assert.match(launchForm, /name="dailyBudget"/);
+assert.doesNotMatch(workspace, /Prüfen & aktivieren/);
 assert.match(launchForm, /weltweites Targeting/);
 
 // Multi-account support must not break the existing Meta singleton/reconnect RPC.
@@ -126,6 +135,8 @@ assert.match(migration, /security definer/gi);
 assert.match(migration, /revoke all on function public\.replace_openai_ads_snapshot/i);
 assert.match(migration, /cross_platform_account_performance_daily/i);
 assert.match(migration, /cross_platform_campaign_performance_30d/i);
+assert.match(migration, /daily_budget_amount_micros/i);
+assert.match(migration, /launch\.status = 'in_review'.*'approved'/s);
 
 // Product integration and scheduled refresh are explicit.
 assert.match(catalog, /openai_ads/);

@@ -273,12 +273,19 @@ create index if not exists platform_accounts_provider_due_idx
 
 alter table public.campaigns
   add column if not exists budget_amount_micros bigint,
+  add column if not exists daily_budget_amount_micros bigint,
   add column if not exists provider_data jsonb not null default '{}'::jsonb;
 
 alter table public.campaigns
   drop constraint if exists campaigns_budget_amount_micros_check,
   add constraint campaigns_budget_amount_micros_check
     check (budget_amount_micros is null or budget_amount_micros >= 0),
+  drop constraint if exists campaigns_daily_budget_amount_micros_check,
+  add constraint campaigns_daily_budget_amount_micros_check
+    check (
+      daily_budget_amount_micros is null
+      or daily_budget_amount_micros >= 0
+    ),
   drop constraint if exists campaigns_provider_data_object_check,
   add constraint campaigns_provider_data_object_check
     check (jsonb_typeof(provider_data) = 'object');
@@ -444,6 +451,7 @@ grant select (
 
 grant select (
   budget_amount_micros,
+  daily_budget_amount_micros,
   provider_data
 ) on public.campaigns to authenticated;
 
@@ -635,6 +643,7 @@ begin
     objective,
     budget_amount,
     budget_amount_micros,
+    daily_budget_amount_micros,
     bid_strategy,
     start_time,
     stop_time,
@@ -658,6 +667,7 @@ begin
       else (item->>'budget_amount_micros')::numeric / 1000000
     end,
     nullif(item->>'budget_amount_micros', '')::bigint,
+    nullif(item->>'daily_budget_amount_micros', '')::bigint,
     item->>'bidding_type',
     case
       when nullif(item->>'start_time', '') is null then null
@@ -684,6 +694,7 @@ begin
     objective = excluded.objective,
     budget_amount = excluded.budget_amount,
     budget_amount_micros = excluded.budget_amount_micros,
+    daily_budget_amount_micros = excluded.daily_budget_amount_micros,
     bid_strategy = excluded.bid_strategy,
     start_time = excluded.start_time,
     stop_time = excluded.stop_time,
@@ -819,6 +830,34 @@ begin
     last_seen_at = excluded.last_seen_at,
     last_seen_sync_id = excluded.last_seen_sync_id,
     is_current = true;
+
+  update public.ad_platform_launches launch
+  set
+    review_status = item->>'review_status',
+    status = case
+      when launch.status = 'in_review' and item->>'review_status' = 'approved'
+        then 'active'
+      when launch.status = 'in_review' and item->>'review_status' = 'rejected'
+        then 'blocked'
+      else launch.status
+    end,
+    error_code = case
+      when item->>'review_status' = 'rejected' then 'ad_review_rejected'
+      when item->>'review_status' = 'approved' then null
+      else launch.error_code
+    end,
+    activated_at = case
+      when item->>'review_status' = 'approved'
+        then coalesce(launch.activated_at, now_at)
+      else launch.activated_at
+    end,
+    updated_at = now_at
+  from jsonb_array_elements(p_ads) item
+  where launch.user_id = p_user_id
+    and launch.platform_account_id = p_platform_account_id
+    and launch.platform = 'openai_ads'
+    and launch.remote_ad_id = item->>'id'
+    and launch.status in ('in_review', 'active', 'blocked');
 
   insert into public.performance_data (
     entity_id,
@@ -1013,6 +1052,8 @@ select
   c.objective,
   c.status,
   c.effective_status,
+  c.budget_amount_micros,
+  c.daily_budget_amount_micros,
   totals.window_start,
   totals.window_end,
   totals.currency,
@@ -1058,7 +1099,7 @@ grant select on table public.cross_platform_campaign_performance_30d
 comment on column public.platform_accounts.access_token_encrypted is
   'AES-256-GCM ciphertext for an OAuth token or account-scoped API key; plaintext credentials must never be stored.';
 comment on table public.ad_platform_launches is
-  'Auditable provider launch records. OpenAI Ads launch chains are created PAUSED and require an explicit activation action.';
+  'Auditable provider launch records. New OpenAI Ads chains are explicitly confirmed and created ACTIVE; PAUSED states remain valid for safety rollback and legacy recovery.';
 comment on view public.cross_platform_campaign_performance_30d is
   'Comparable 30-day delivery metrics for Meta and OpenAI Ads; currencies must not be summed across unlike currency codes.';
 

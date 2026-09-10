@@ -9,6 +9,7 @@ export type OpenAIAdsDashboardCampaign = {
   status: string | null;
   objective: string | null;
   budgetMicros: number | null;
+  dailyBudgetMicros: number | null;
   startTime: string | null;
   stopTime: string | null;
   spend: number;
@@ -114,7 +115,7 @@ export async function loadOpenAIAdsDashboard(
           supabase
             .from("campaigns")
             .select(
-              "id,platform_campaign_id,name,status,objective,budget_amount_micros,start_time,stop_time",
+              "id,platform_campaign_id,name,status,objective,budget_amount_micros,daily_budget_amount_micros,start_time,stop_time",
             )
             .eq("user_id", userId)
             .eq("platform_account_id", accountId)
@@ -171,6 +172,7 @@ export async function loadOpenAIAdsDashboard(
           status: text(row.status),
           objective: text(row.objective),
           budgetMicros: nullableNumber(row.budget_amount_micros),
+          dailyBudgetMicros: nullableNumber(row.daily_budget_amount_micros),
           startTime: text(row.start_time),
           stopTime: text(row.stop_time),
           spend: number(performance?.spend),

@@ -169,10 +169,10 @@ export function parseOpenAIAdsGeoSearch(value: string | null) {
 
 export function parseOpenAIAdsLaunchInput(value: unknown) {
   const body = asRecord(value);
-  if (body.confirmation !== "create_paused_openai_ads_campaign") {
+  if (body.confirmation !== "create_active_openai_ads_campaign") {
     throw new OpenAIAdsInputError(
       "confirmation_required",
-      "Der pausierte Kampagnenentwurf muss ausdrücklich bestätigt werden.",
+      "Die kostenwirksame ACTIVE-Kampagne muss ausdrücklich bestätigt werden.",
     );
   }
 
@@ -225,6 +225,17 @@ export function parseOpenAIAdsLaunchInput(value: unknown) {
       "Mindestens ein Standort ist erforderlich; weltweites Targeting wird nicht implizit freigeschaltet.",
     );
   }
+  const lifetimeBudgetMicros = amountToMicros(
+    body.lifetimeBudget,
+    "Laufzeitbudget",
+  );
+  const dailyBudgetMicros = amountToMicros(body.dailyBudget, "Tagesbudget");
+  if (dailyBudgetMicros > lifetimeBudgetMicros) {
+    throw new OpenAIAdsInputError(
+      "daily_budget_exceeds_lifetime",
+      "Das maximale Tagesbudget darf das Laufzeitbudget nicht überschreiten.",
+    );
+  }
 
   return {
     platformAccountId: asUuid(body.platformAccountId, "Verbindung"),
@@ -239,7 +250,8 @@ export function parseOpenAIAdsLaunchInput(value: unknown) {
     }),
     biddingType,
     billingEventType,
-    lifetimeBudgetMicros: amountToMicros(body.lifetimeBudget, "Laufzeitbudget"),
+    lifetimeBudgetMicros,
+    dailyBudgetMicros,
     maxBidMicros: amountToMicros(body.maxBid, "Maximalgebot", 1),
     startTime,
     endTime,

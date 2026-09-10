@@ -52,6 +52,7 @@ function launchPayload(input: LaunchInput) {
     biddingType: input.biddingType,
     billingEventType: input.billingEventType,
     lifetimeBudgetMicros: input.lifetimeBudgetMicros,
+    dailyBudgetMicros: input.dailyBudgetMicros,
     maxBidMicros: input.maxBidMicros,
     startTime: input.startTime,
     endTime: input.endTime,
@@ -117,7 +118,7 @@ async function loadOrCreateLaunch(input: {
     throw new OpenAIAdsServiceError(
       "launch_storage_failed",
       500,
-      "Der pausierte Launch konnte nicht sicher angelegt werden.",
+      "Der ACTIVE-Launch konnte nicht sicher angelegt werden.",
     );
   }
   return raced as LaunchRow;
@@ -138,13 +139,13 @@ async function updateLaunch(id: string, values: Record<string, unknown>) {
   }
 }
 
-export async function createPausedOpenAIAdsLaunch(input: {
+export async function createActiveOpenAIAdsLaunch(input: {
   userId: string;
   command: LaunchInput;
 }) {
   const key = idempotencyKey(input.command, input.userId);
   let launch = await loadOrCreateLaunch({ ...input, key });
-  if (["paused", "in_review", "ready_to_activate", "active"].includes(launch.status)) {
+  if (["in_review", "active"].includes(launch.status)) {
     return {
       launchId: launch.id,
       status: launch.status,
@@ -202,8 +203,8 @@ export async function createPausedOpenAIAdsLaunch(input: {
         input.command.imageUrl,
         `${key}-image`,
       );
-      await updateLaunch(launch.id, { remote_file_id: fileId });
       launch = { ...launch, remote_file_id: fileId };
+      await updateLaunch(launch.id, { remote_file_id: fileId });
     }
 
     if (!launch.remote_campaign_id) {
@@ -211,9 +212,10 @@ export async function createPausedOpenAIAdsLaunch(input: {
         {
           name: `${input.command.campaignName} [adbot:${suffix}]`,
           description: input.command.campaignDescription,
-          status: "paused",
+          status: "active",
           budget: {
             lifetime_spend_limit_micros: input.command.lifetimeBudgetMicros,
+            daily_spend_limit_micros: input.command.dailyBudgetMicros,
           },
           bidding_type: input.command.biddingType,
           ...(input.command.startTime ? { start_time: input.command.startTime } : {}),
@@ -226,8 +228,8 @@ export async function createPausedOpenAIAdsLaunch(input: {
         },
         `${key}-campaign`,
       );
-      await updateLaunch(launch.id, { remote_campaign_id: campaign.id });
       launch = { ...launch, remote_campaign_id: campaign.id };
+      await updateLaunch(launch.id, { remote_campaign_id: campaign.id });
     }
 
     if (!launch.remote_ad_group_id) {
@@ -237,7 +239,7 @@ export async function createPausedOpenAIAdsLaunch(input: {
           name: `${input.command.adGroupName} [adbot:${suffix}]`,
           description: input.command.campaignDescription,
           context_hints: input.command.contextHints,
-          status: "paused",
+          status: "active",
           bidding_config: {
             billing_event_type: input.command.billingEventType,
             max_bid_micros: input.command.maxBidMicros,
@@ -245,8 +247,8 @@ export async function createPausedOpenAIAdsLaunch(input: {
         },
         `${key}-ad-group`,
       );
-      await updateLaunch(launch.id, { remote_ad_group_id: adGroup.id });
       launch = { ...launch, remote_ad_group_id: adGroup.id };
+      await updateLaunch(launch.id, { remote_ad_group_id: adGroup.id });
     }
 
     if (!launch.remote_ad_id) {
@@ -254,7 +256,7 @@ export async function createPausedOpenAIAdsLaunch(input: {
         {
           ad_group_id: launch.remote_ad_group_id,
           name: `${input.command.adName} [adbot:${suffix}]`,
-          status: "paused",
+          status: "active",
           creative: {
             type: "chat_card",
             title: input.command.title,
@@ -265,27 +267,60 @@ export async function createPausedOpenAIAdsLaunch(input: {
         },
         `${key}-ad`,
       );
-      await updateLaunch(launch.id, {
-        remote_ad_id: ad.id,
-        review_status: ad.review_status,
-      });
       launch = {
         ...launch,
         remote_ad_id: ad.id,
         review_status: ad.review_status,
       };
+      await updateLaunch(launch.id, {
+        remote_ad_id: ad.id,
+        review_status: ad.review_status,
+      });
     }
 
-    const remoteAd = await loaded.client.getAd(launch.remote_ad_id!);
+    const [remoteCampaign, remoteAdGroup, remoteAd] = await Promise.all([
+      loaded.client.getCampaign(launch.remote_campaign_id!),
+      loaded.client.getAdGroup(launch.remote_ad_group_id!),
+      loaded.client.getAd(launch.remote_ad_id!),
+    ]);
+    if (
+      remoteCampaign.status !== "active" ||
+      remoteAdGroup.status !== "active" ||
+      remoteAd.status !== "active"
+    ) {
+      throw new OpenAIAdsServiceError(
+        "active_launch_reconciliation_failed",
+        502,
+        "OpenAI Ads hat den ACTIVE-Status der vollständigen Kampagnenkette nicht bestätigt.",
+      );
+    }
+    if (
+      remoteAd.review_status === "approved" &&
+      ((remoteCampaign.serving_issues?.length ?? 0) > 0 ||
+        (remoteAdGroup.serving_issues?.length ?? 0) > 0 ||
+        (remoteAd.serving_issues?.length ?? 0) > 0)
+    ) {
+      throw new OpenAIAdsServiceError(
+        "provider_serving_issue",
+        409,
+        "OpenAI Ads meldet ein Auslieferungsproblem. Die Kette wird sicherheitshalber pausiert.",
+      );
+    }
     const status =
       remoteAd.review_status === "approved"
-        ? "ready_to_activate"
+        ? "active"
         : remoteAd.review_status === "rejected"
           ? "blocked"
           : "in_review";
+    if (status === "blocked") {
+      await loaded.client.pauseCampaign(launch.remote_campaign_id!);
+      await loaded.client.pauseAdGroup(launch.remote_ad_group_id!);
+      await loaded.client.pauseAd(launch.remote_ad_id!);
+    }
     await updateLaunch(launch.id, {
       status,
       review_status: remoteAd.review_status,
+      activated_at: status === "blocked" ? null : new Date().toISOString(),
       error_code:
         remoteAd.review_status === "rejected" ? "ad_review_rejected" : null,
     });
@@ -306,9 +341,33 @@ export async function createPausedOpenAIAdsLaunch(input: {
         : error instanceof OpenAIAdsServiceError
           ? error.code
           : "launch_failed";
-    await updateLaunch(launch.id, { status: "failed", error_code: code }).catch(
-      () => undefined,
-    );
+    let safetyPauseConfirmed = true;
+    try {
+      if (launch.remote_campaign_id) {
+        await loaded.client.pauseCampaign(launch.remote_campaign_id);
+      }
+      if (launch.remote_ad_group_id) {
+        await loaded.client.pauseAdGroup(launch.remote_ad_group_id);
+      }
+      if (launch.remote_ad_id) {
+        await loaded.client.pauseAd(launch.remote_ad_id);
+      }
+    } catch {
+      safetyPauseConfirmed = false;
+    }
+    await updateLaunch(launch.id, {
+      status: safetyPauseConfirmed ? "failed" : "activation_uncertain",
+      error_code: safetyPauseConfirmed
+        ? `${code}_safely_paused`
+        : "activation_uncertain_manual_check_required",
+    }).catch(() => undefined);
+    if (!safetyPauseConfirmed) {
+      throw new OpenAIAdsServiceError(
+        "activation_uncertain_manual_check_required",
+        502,
+        "Der ACTIVE-Launch konnte nicht eindeutig zurückgenommen werden. Bitte sofort im OpenAI Ads Manager prüfen und pausieren.",
+      );
+    }
     throw error;
   }
 }
