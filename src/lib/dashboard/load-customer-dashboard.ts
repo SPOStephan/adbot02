@@ -3,6 +3,7 @@ import "server-only";
 import {
   CircleDollarSign,
   Megaphone,
+  MessageSquareText,
   MousePointerClick,
   Pin,
   Play,
@@ -241,6 +242,10 @@ const platformVisuals = {
     accentClass: "bg-blue-50 text-blue-600",
     icon: Megaphone,
   },
+  openai_ads: {
+    accentClass: "bg-emerald-50 text-emerald-700",
+    icon: MessageSquareText,
+  },
   google: {
     accentClass: "bg-emerald-50 text-emerald-600",
     icon: Search,
@@ -302,18 +307,23 @@ async function loadCustomerDashboardImpl(
   const { data: connectedAccounts, error: connectedAccountsError } = await supabase
     .from("platform_accounts")
     .select(
-      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_meta_ad_account_id, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until, marketing_spend_total, marketing_spend_today, marketing_insight_spend_rows, instagram_account_ids",
+      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_meta_ad_account_id, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until, marketing_spend_total, marketing_spend_today, marketing_insight_spend_rows, instagram_account_ids, provider_sync_status, provider_sync_error_code, provider_last_success_at, provider_campaign_count, provider_ad_group_count, provider_ad_count, provider_insight_count",
     )
     .eq("user_id", user.id)
     .is("revoked_at", null);
   const platformAccountReadFailed = Boolean(connectedAccountsError);
 
   const platforms = getPlatformCatalog().map((platform) => {
+    const platformAccounts =
+      connectedAccounts?.filter(
+        (item) => item.platform === platform.id && !item.revoked_at,
+      ) ?? [];
     const account = connectedAccounts?.find(
       (item) => item.platform === platform.id && !item.revoked_at,
     );
 
     const isMeta = platform.id === "meta";
+    const isOpenAIAds = platform.id === "openai_ads";
     const metaWriteScopeGranted =
       isMeta &&
       Array.isArray(account?.meta_scopes) &&
@@ -323,10 +333,12 @@ async function loadCustomerDashboardImpl(
       id: platform.id,
       name: platform.name,
       description: platform.description,
-      status: platformAccountReadFailed && isMeta
+      status: platformAccountReadFailed && (isMeta || isOpenAIAds)
         ? "Verbindungsstatus vorübergehend nicht verfügbar"
         : account
-          ? isMeta
+          ? isOpenAIAds
+            ? `${platformAccounts.length} Werbekonto${platformAccounts.length === 1 ? "" : "en"} verbunden`
+            : isMeta
             ? "Verbunden"
             : account.account_name
               ? `Verbunden: ${account.account_name}`
@@ -342,8 +354,12 @@ async function loadCustomerDashboardImpl(
             : metaWriteScopeGranted
               ? "Minimaler Schreibscope bestätigt"
               : "Reconnect für Autonomie"
+          : isOpenAIAds && platform.configured
+            ? "Advertiser API live"
           : undefined,
-      helperText: isMeta
+      helperText: isOpenAIAds
+        ? "Accountbezogene API-Keys, tägliche Delivery- und Conversion-Daten sowie bestätigte ACTIVE-Launches mit Tageslimit."
+        : isMeta
         ? platformAccountReadFailed
           ? "Die vorhandene Verbindung konnte nicht gelesen werden und bleibt unverändert. Bitte keinen Reconnect starten."
           : metaWriteScopeGranted
@@ -353,11 +369,20 @@ async function loadCustomerDashboardImpl(
       actionHref:
         isMeta && platform.configured && !account && !platformAccountReadFailed
           ? "/api/connectors/meta/start"
+          : isOpenAIAds && platform.configured && !account && !platformAccountReadFailed
+            ? "/dashboard/chatgpt-ads"
           : undefined,
       actionLabel:
         isMeta && platform.configured && !account && !platformAccountReadFailed
           ? "Meta verbinden"
+          : isOpenAIAds && platform.configured && !account && !platformAccountReadFailed
+            ? "ChatGPT Ads verbinden"
           : undefined,
+      manageHref:
+        isOpenAIAds && account && !platformAccountReadFailed
+          ? "/dashboard/chatgpt-ads"
+          : undefined,
+      manageLabel: isOpenAIAds ? "Konten verwalten" : undefined,
       showMetaConnectionActions:
         isMeta && platform.configured && Boolean(account) && !platformAccountReadFailed,
       ...platformVisuals[platform.id],

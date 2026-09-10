@@ -9,6 +9,7 @@ import {
   Images,
   LayoutDashboard,
   Megaphone,
+  MessageSquareText,
   Rocket,
   Scale,
   ShieldCheck,
@@ -44,6 +45,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       icon: Megaphone,
       href: "/dashboard/kampagnen",
       match: "/dashboard/kampagnen",
+    },
+    {
+      label: "ChatGPT Ads",
+      icon: MessageSquareText,
+      href: "/dashboard/chatgpt-ads",
+      match: "/dashboard/chatgpt-ads",
     },
     {
       label: "Beiträge",

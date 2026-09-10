@@ -4,9 +4,13 @@ import { getPlatformCatalog } from "@/lib/platforms/catalog";
 import { createClient } from "@/lib/supabase/server";
 
 type AccountRow = {
+  id: string;
   platform: string;
+  platform_account_id: string;
   account_name: string | null;
   expires_at: string | null;
+  provider_sync_status: string | null;
+  provider_last_success_at: string | null;
 };
 
 export async function GET() {
@@ -21,7 +25,9 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("platform_accounts")
-    .select("platform, account_name, expires_at")
+    .select(
+      "id, platform, platform_account_id, account_name, expires_at, provider_sync_status, provider_last_success_at",
+    )
     .eq("user_id", user.id)
     .is("revoked_at", null);
 
@@ -34,7 +40,10 @@ export async function GET() {
 
   const accounts = (data ?? []) as AccountRow[];
   const connectors = getPlatformCatalog().map((platform) => {
-    const account = accounts.find((item) => item.platform === platform.id);
+    const platformAccounts = accounts.filter(
+      (item) => item.platform === platform.id,
+    );
+    const account = platformAccounts[0];
 
     return {
       id: platform.id,
@@ -47,6 +56,14 @@ export async function GET() {
           : "configuration_required",
       accountName: account?.account_name ?? null,
       expiresAt: account?.expires_at ?? null,
+      connectionCount: platformAccounts.length,
+      connections: platformAccounts.map((item) => ({
+        id: item.id,
+        remoteAccountId: item.platform_account_id,
+        accountName: item.account_name,
+        syncStatus: item.provider_sync_status,
+        lastSuccessAt: item.provider_last_success_at,
+      })),
     };
   });
 
