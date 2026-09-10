@@ -307,7 +307,7 @@ async function loadCustomerDashboardImpl(
   const { data: connectedAccounts, error: connectedAccountsError } = await supabase
     .from("platform_accounts")
     .select(
-      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_meta_ad_account_id, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until, marketing_spend_total, marketing_spend_today, marketing_insight_spend_rows, instagram_account_ids, provider_sync_status, provider_sync_error_code, provider_last_success_at, provider_campaign_count, provider_ad_group_count, provider_ad_count, provider_insight_count",
+      "id, platform, account_name, connected_at, revoked_at, meta_scopes, sync_status, sync_error_code, last_sync_started_at, last_synced_at, next_sync_at, baseline_completed_at, last_sync_seen_count, last_sync_new_count, marketing_currency, marketing_meta_ad_account_id, marketing_sync_status, marketing_sync_error_code, marketing_sync_id, marketing_last_success_at, marketing_campaign_count, marketing_ad_set_count, marketing_ad_count, marketing_creative_count, marketing_insight_count, marketing_recommendation_count, marketing_insights_since, marketing_insights_until, marketing_spend_total, marketing_spend_today, marketing_insight_spend_rows, instagram_account_ids",
     )
     .eq("user_id", user.id)
     .is("revoked_at", null);
