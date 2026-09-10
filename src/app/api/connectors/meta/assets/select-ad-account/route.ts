@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
+import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
 import { refreshMarketingSnapshotForAccount } from "@/lib/meta/launch-marketing-ensure";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -36,7 +37,11 @@ function normalizeAdAccountId(value: string): string {
   return value.trim().replace(/^act_/i, "");
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  if (!isDashboardSameOriginRequest(request)) {
+    return json({ error: "invalid_origin" }, 403);
+  }
+
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
     return json({ error: "unsupported_media_type" }, 415);

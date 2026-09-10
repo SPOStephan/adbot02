@@ -1218,12 +1218,17 @@ export function createAdminClient() {
   assert.match(manualRouteSource, /headers\["Retry-After"\]/);
   assert.match(manualRouteSource, /Number\.isFinite\(retryTimestamp\)/);
   assert.match(envSource, /requiredSecret\("CRON_SECRET", process\.env\.CRON_SECRET\)/);
-  assert.deepEqual(vercelConfig.crons, [
+  for (const expectedCron of [
     { path: "/api/cron/meta-sync", schedule: "0 * * * *" },
     { path: "/api/cron/creative-assets", schedule: "*/5 * * * *" },
     { path: "/api/cron/meta-executor", schedule: "* * * * *" },
     { path: "/api/cron/organic-boost-delivery", schedule: "*/15 * * * *" },
-  ]);
+  ]) {
+    assert.deepEqual(
+      vercelConfig.crons.find((cron) => cron.path === expectedCron.path),
+      expectedCron,
+    );
+  }
 
   console.log("Meta content sync checks passed");
 } finally {

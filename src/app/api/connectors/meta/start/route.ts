@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resetStoredMetaAuthorization } from "@/lib/meta/authorization-reset";
 import { createMetaLoginUrl, MetaGraphError } from "@/lib/meta/client";
 import { createOAuthState } from "@/lib/meta/crypto";
+import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
 import { getMetaCallbackEnv } from "@/lib/meta/env";
 import { APP_SITE_URL, createPortalUrl } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/server";
@@ -28,6 +29,13 @@ export function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isDashboardSameOriginRequest(request)) {
+    return new NextResponse(null, {
+      status: 403,
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

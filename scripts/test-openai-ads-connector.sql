@@ -102,6 +102,44 @@ begin
 end;
 $$;
 
+update public.platform_accounts
+set
+  marketing_meta_ad_account_id = 'act_old',
+  marketing_currency = 'EUR',
+  marketing_sync_status = 'success',
+  marketing_last_success_at = now(),
+  marketing_sync_id = '25000000-0000-4000-8000-000000000001',
+  marketing_campaign_count = 3,
+  marketing_spend_total = 42
+where user_id = '21000000-0000-4000-8000-000000000001'
+  and platform = 'meta';
+
+select public.reset_meta_connection_for_reauthorization(
+  '21000000-0000-4000-8000-000000000001'
+);
+
+do $$
+declare
+  v_account public.platform_accounts%rowtype;
+begin
+  select account.* into strict v_account
+  from public.platform_accounts account
+  where account.user_id = '21000000-0000-4000-8000-000000000001'
+    and account.platform = 'meta';
+
+  if v_account.marketing_meta_ad_account_id is not null
+    or v_account.marketing_currency is not null
+    or v_account.marketing_sync_status <> 'idle'
+    or v_account.marketing_last_success_at is not null
+    or v_account.marketing_sync_id is not null
+    or v_account.marketing_campaign_count <> 0
+    or v_account.marketing_spend_total is not null
+  then
+    raise exception 'Meta authorization reset retained stale marketing readiness';
+  end if;
+end;
+$$;
+
 -- Claim is atomic and cannot be acquired twice while fresh.
 select public.claim_ad_platform_sync(
   '22000000-0000-4000-8000-000000000001',

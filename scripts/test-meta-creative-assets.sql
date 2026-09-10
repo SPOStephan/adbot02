@@ -513,7 +513,7 @@ begin
     )
     or has_function_privilege(
       'authenticated',
-      'public.enqueue_creative_asset_job(uuid,uuid,uuid,text,text,text,jsonb,integer)',
+      'public.enqueue_creative_asset_job(uuid,uuid,uuid,text,text,text,jsonb,integer,uuid)',
       'EXECUTE'
     )
     or has_function_privilege(

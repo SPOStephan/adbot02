@@ -207,6 +207,7 @@ export function MetaSyncButton({
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- router.refresh supplies the authoritative server cooldown
     setRetryAt(initialRetryAt(lastSyncStartedAt));
   }, [lastSyncStartedAt]);
 

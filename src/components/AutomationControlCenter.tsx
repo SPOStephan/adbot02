@@ -394,6 +394,7 @@ export function AutomationControlCenter({
   // Autonomie-Save kann ALLOW setzen — UI-State muss dem Server folgen.
   useEffect(() => {
     if (killSwitch?.mode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- router.refresh supplies the authoritative server snapshot
       setKillMode(killSwitch.mode);
     }
   }, [killSwitch?.mode]);

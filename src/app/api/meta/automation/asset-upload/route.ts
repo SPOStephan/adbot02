@@ -9,6 +9,7 @@ import {
   CustomerControlServiceError,
   authenticateMetaCustomer,
 } from "@/lib/meta/customer-control-service";
+import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -36,6 +37,13 @@ function asUploadFile(value: FormDataEntryValue | null): File | null {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isDashboardSameOriginRequest(request)) {
+      return NextResponse.json(
+        { ok: false, error: "Ungültige Herkunft.", code: "invalid_origin" },
+        { status: 403 },
+      );
+    }
+
     const customer = await authenticateMetaCustomer();
 
     let form: FormData;

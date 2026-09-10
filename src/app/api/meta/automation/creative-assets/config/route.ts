@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { getPublicCreativeGenerationConfig } from "@/lib/creative-assets/env";
 import {
@@ -18,7 +18,7 @@ const NO_STORE = {
  * Public (authenticated) generation config for Media Library UI.
  * Never returns API keys or secrets.
  */
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     await authenticateMetaCustomer();
     const config = getPublicCreativeGenerationConfig();

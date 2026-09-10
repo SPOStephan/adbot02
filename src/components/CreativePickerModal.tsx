@@ -99,8 +99,11 @@ export function CreativePickerModal({
   const [message, setMessage] = useState<string | null>(null);
   const [slots, setSlots] = useState(emptySlots);
 
-  const uploadingRef = useRef(uploading);
-  uploadingRef.current = uploading;
+  const uploadingRef = useRef(false);
+
+  useEffect(() => {
+    uploadingRef.current = uploading;
+  }, [uploading]);
 
   useEffect(() => {
     if (!open) return;

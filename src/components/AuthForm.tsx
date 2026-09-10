@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { ArrowRight, LoaderCircle, Mail } from "lucide-react";
 
 import { PasswordInput } from "@/components/PasswordInput";
+import { normalizeSafeNextPath } from "@/lib/auth/safe-next-path";
 import { APP_SITE_URL } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/client";
 
@@ -24,7 +25,7 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const isLogin = mode === "login";
-  const safeNextPath = nextPath.startsWith("/") ? nextPath : "/dashboard";
+  const safeNextPath = normalizeSafeNextPath(nextPath);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -1468,7 +1468,7 @@ async function ensureActiveBrandProfileForLaunch(
     );
   }
 
-  let instagramActorId = actors.instagramActorId;
+  const instagramActorId = actors.instagramActorId;
   if (instagramActorId && !igIds.has(instagramActorId)) {
     serviceError(
       "invalid_instagram_actor",

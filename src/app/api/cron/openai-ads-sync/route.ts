@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { constantTimeEqual } from "@/lib/meta/crypto";
+import { hasOpenAIAdsEnv } from "@/lib/openai-ads/env";
 import {
   getDueOpenAIAdsAccountIds,
   OPENAI_ADS_CRON_BATCH_SIZE,
@@ -36,11 +37,22 @@ export async function GET(request: Request) {
     );
   }
 
+  if (!hasOpenAIAdsEnv()) {
+    return NextResponse.json(
+      { ok: true, processed: 0, skipped: "connector_not_configured" },
+      { headers: NO_STORE_HEADERS },
+    );
+  }
+
   try {
+    const deadlineAtMs = Date.now() + 150_000;
     const ids = await getDueOpenAIAdsAccountIds(OPENAI_ADS_CRON_BATCH_SIZE);
     const counters = { success: 0, error: 0, reconnect_required: 0, blocked: 0 };
     for (const platformAccountId of ids) {
-      const result = await syncOpenAIAdsAccount({ platformAccountId });
+      const result = await syncOpenAIAdsAccount({
+        platformAccountId,
+        deadlineAtMs,
+      });
       counters[result.status] += 1;
     }
 

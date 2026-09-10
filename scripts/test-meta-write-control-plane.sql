@@ -975,21 +975,35 @@ $$;
 -- Browser roles are read-only, tenant-filtered and cannot see lease internals.
 do $$
 begin
-  if has_table_privilege('anon', 'public.automation_policies', 'SELECT')
-    or has_table_privilege('authenticated', 'public.automation_policies', 'INSERT')
-    or has_table_privilege('authenticated', 'public.mutation_plans', 'UPDATE')
-    or has_table_privilege('authenticated', 'public.kill_switch_state', 'DELETE')
-    or has_table_privilege('authenticated', 'public.meta_account_operation_leases', 'SELECT')
-    or not has_column_privilege(
-      'authenticated', 'public.automation_policies', 'id', 'SELECT'
-    )
-    or has_column_privilege(
-      'authenticated', 'public.automation_policies', 'policy_payload', 'SELECT'
-    )
-    or has_column_privilege(
-      'authenticated', 'public.mutation_plans', 'planned_payload', 'SELECT'
-    ) then
-    raise exception 'Browser Control Plane grants are incorrect';
+  if has_table_privilege('anon', 'public.automation_policies', 'SELECT') then
+    raise exception 'anon may SELECT automation_policies';
+  end if;
+  if has_table_privilege('authenticated', 'public.automation_policies', 'INSERT') then
+    raise exception 'authenticated may INSERT automation_policies';
+  end if;
+  if has_table_privilege('authenticated', 'public.mutation_plans', 'UPDATE') then
+    raise exception 'authenticated may UPDATE mutation_plans';
+  end if;
+  if has_table_privilege('authenticated', 'public.kill_switch_state', 'DELETE') then
+    raise exception 'authenticated may DELETE kill_switch_state';
+  end if;
+  if has_table_privilege('authenticated', 'public.meta_account_operation_leases', 'SELECT') then
+    raise exception 'authenticated may SELECT meta_account_operation_leases';
+  end if;
+  if not has_column_privilege(
+    'authenticated', 'public.automation_policies', 'id', 'SELECT'
+  ) then
+    raise exception 'authenticated may not SELECT automation_policies.id';
+  end if;
+  if has_column_privilege(
+    'authenticated', 'public.automation_policies', 'policy_payload', 'SELECT'
+  ) then
+    raise exception 'authenticated may SELECT automation_policies.policy_payload';
+  end if;
+  if has_column_privilege(
+    'authenticated', 'public.mutation_plans', 'planned_payload', 'SELECT'
+  ) then
+    raise exception 'authenticated may SELECT mutation_plans.planned_payload';
   end if;
 
   if has_function_privilege(

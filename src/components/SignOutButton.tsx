@@ -13,6 +13,7 @@ export function SignOutButton() {
     setLoading(true);
     const supabase = createClient();
     await supabase.auth.signOut();
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- APP_SITE_URL may be a distinct configured app origin
     window.location.assign(`${APP_SITE_URL}/login`);
   }
 

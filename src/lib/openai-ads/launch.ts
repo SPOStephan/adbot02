@@ -2,7 +2,10 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { OpenAIAdsApiError } from "@/lib/openai-ads/client";
+import {
+  OpenAIAdsApiError,
+  type OpenAIAdsClient,
+} from "@/lib/openai-ads/client";
 import {
   loadOpenAIAdsClient,
   OpenAIAdsServiceError,
@@ -79,6 +82,7 @@ async function loadOrCreateLaunch(input: {
       "id,user_id,platform_account_id,status,idempotency_key,request_payload,remote_campaign_id,remote_ad_group_id,remote_ad_id,remote_file_id,review_status",
     )
     .eq("platform_account_id", input.command.platformAccountId)
+    .eq("user_id", input.userId)
     .eq("idempotency_key", input.key)
     .maybeSingle();
 
@@ -111,6 +115,7 @@ async function loadOrCreateLaunch(input: {
       "id,user_id,platform_account_id,status,idempotency_key,request_payload,remote_campaign_id,remote_ad_group_id,remote_ad_id,remote_file_id,review_status",
     )
     .eq("platform_account_id", input.command.platformAccountId)
+    .eq("user_id", input.userId)
     .eq("idempotency_key", input.key)
     .maybeSingle();
 
@@ -122,6 +127,39 @@ async function loadOrCreateLaunch(input: {
     );
   }
   return raced as LaunchRow;
+}
+
+async function pauseAndVerifyLaunchChain(
+  client: OpenAIAdsClient,
+  launch: LaunchRow,
+): Promise<boolean> {
+  const pauseOperations: Promise<unknown>[] = [];
+  if (launch.remote_campaign_id) {
+    pauseOperations.push(client.pauseCampaign(launch.remote_campaign_id));
+  }
+  if (launch.remote_ad_group_id) {
+    pauseOperations.push(client.pauseAdGroup(launch.remote_ad_group_id));
+  }
+  if (launch.remote_ad_id) {
+    pauseOperations.push(client.pauseAd(launch.remote_ad_id));
+  }
+  await Promise.allSettled(pauseOperations);
+
+  const verificationOperations: Promise<{ status: string }>[] = [];
+  if (launch.remote_campaign_id) {
+    verificationOperations.push(client.getCampaign(launch.remote_campaign_id));
+  }
+  if (launch.remote_ad_group_id) {
+    verificationOperations.push(client.getAdGroup(launch.remote_ad_group_id));
+  }
+  if (launch.remote_ad_id) {
+    verificationOperations.push(client.getAd(launch.remote_ad_id));
+  }
+
+  const verification = await Promise.allSettled(verificationOperations);
+  return verification.every(
+    (result) => result.status === "fulfilled" && result.value.status === "paused",
+  );
 }
 
 async function updateLaunch(id: string, values: Record<string, unknown>) {
@@ -144,6 +182,10 @@ export async function createActiveOpenAIAdsLaunch(input: {
   command: LaunchInput;
 }) {
   const key = idempotencyKey(input.command, input.userId);
+  const loaded = await loadOpenAIAdsClient({
+    platformAccountId: input.command.platformAccountId,
+    userId: input.userId,
+  });
   let launch = await loadOrCreateLaunch({ ...input, key });
   if (["in_review", "active"].includes(launch.status)) {
     return {
@@ -157,10 +199,6 @@ export async function createActiveOpenAIAdsLaunch(input: {
     };
   }
 
-  const loaded = await loadOpenAIAdsClient({
-    platformAccountId: input.command.platformAccountId,
-    userId: input.userId,
-  });
   const account = await loaded.client.getAdAccount();
   if (account.id !== loaded.connection.platform_account_id) {
     await updateLaunch(launch.id, {
@@ -215,7 +253,6 @@ export async function createActiveOpenAIAdsLaunch(input: {
           status: "active",
           budget: {
             lifetime_spend_limit_micros: input.command.lifetimeBudgetMicros,
-            daily_spend_limit_micros: input.command.dailyBudgetMicros,
           },
           bidding_type: input.command.biddingType,
           ...(input.command.startTime ? { start_time: input.command.startTime } : {}),
@@ -313,9 +350,17 @@ export async function createActiveOpenAIAdsLaunch(input: {
           ? "blocked"
           : "in_review";
     if (status === "blocked") {
-      await loaded.client.pauseCampaign(launch.remote_campaign_id!);
-      await loaded.client.pauseAdGroup(launch.remote_ad_group_id!);
-      await loaded.client.pauseAd(launch.remote_ad_id!);
+      const safetyPauseConfirmed = await pauseAndVerifyLaunchChain(
+        loaded.client,
+        launch,
+      );
+      if (!safetyPauseConfirmed) {
+        throw new OpenAIAdsServiceError(
+          "activation_uncertain_manual_check_required",
+          502,
+          "Die abgelehnte Kampagnenkette konnte nicht eindeutig pausiert werden. Bitte sofort im OpenAI Ads Manager prüfen.",
+        );
+      }
     }
     await updateLaunch(launch.id, {
       status,
@@ -341,20 +386,10 @@ export async function createActiveOpenAIAdsLaunch(input: {
         : error instanceof OpenAIAdsServiceError
           ? error.code
           : "launch_failed";
-    let safetyPauseConfirmed = true;
-    try {
-      if (launch.remote_campaign_id) {
-        await loaded.client.pauseCampaign(launch.remote_campaign_id);
-      }
-      if (launch.remote_ad_group_id) {
-        await loaded.client.pauseAdGroup(launch.remote_ad_group_id);
-      }
-      if (launch.remote_ad_id) {
-        await loaded.client.pauseAd(launch.remote_ad_id);
-      }
-    } catch {
-      safetyPauseConfirmed = false;
-    }
+    const safetyPauseConfirmed = await pauseAndVerifyLaunchChain(
+      loaded.client,
+      launch,
+    ).catch(() => false);
     await updateLaunch(launch.id, {
       status: safetyPauseConfirmed ? "failed" : "activation_uncertain",
       error_code: safetyPauseConfirmed

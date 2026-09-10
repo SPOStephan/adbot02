@@ -76,11 +76,13 @@ export function MediaLibraryClient({
   const [genMessage, setGenMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- router.refresh replaces the authoritative server asset snapshot
     setAssets(initialAssets);
   }, [initialAssets]);
 
   useEffect(() => {
     if (!brandProfileId && brandProfiles[0]?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- select a newly available server-provided default profile
       setBrandProfileId(brandProfiles[0].id);
     }
   }, [brandProfileId, brandProfiles]);

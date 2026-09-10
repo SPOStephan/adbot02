@@ -17,6 +17,7 @@ export const maxDuration = 180;
 
 export async function POST(request: NextRequest) {
   try {
+    const deadlineAtMs = Date.now() + 150_000;
     const body = await readOpenAIAdsJson(request);
     const command = parseOpenAIAdsConnectInput(body);
     const user = await authenticateOpenAIAdsUser();
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
     const sync = await syncOpenAIAdsAccount({
       userId: user.id,
       platformAccountId: connection.platformAccountId,
+      deadlineAtMs,
     });
 
     revalidatePath("/dashboard", "page");

@@ -39,14 +39,14 @@ const transpiled = ts.transpileModule(source, {
   },
 }).outputText;
 
-const module = { exports: {} };
+const evaluatedModule = { exports: {} };
 vm.runInNewContext(transpiled, {
-  module,
-  exports: module.exports,
+  module: evaluatedModule,
+  exports: evaluatedModule.exports,
   require: createRequire(import.meta.url),
 });
 
-const { normalizeLegalPlainText } = module.exports;
+const { normalizeLegalPlainText } = evaluatedModule.exports;
 assert.equal(
   normalizeLegalPlainText("# Impressum\n\n## Anbieter\nFirma"),
   "Impressum\n\nAnbieter\nFirma",

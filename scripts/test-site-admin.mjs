@@ -35,7 +35,7 @@ const dashboardNav = read("src/lib/dashboard/navigation.ts");
 assert.match(dashboardChrome, /isSiteAdmin/);
 assert.match(dashboardNav, /getDashboardNavigation/);
 assert.match(dashboardChrome, /isAdmin/);
-assert.match(dashboardNav, /\/dashboard\/logo/);
+assert.match(dashboardNav, /\/dashboard\/branding/);
 assert.match(dashboardNav, /\/dashboard\/rechtliches/);
 
 // Public legal pages stay readable without admin.
