@@ -37,6 +37,18 @@ assert.match(dashboardNav, /getDashboardNavigation/);
 assert.match(dashboardChrome, /isAdmin/);
 assert.match(dashboardNav, /\/dashboard\/branding/);
 assert.match(dashboardNav, /\/dashboard\/rechtliches/);
+assert.match(dashboardNav, /\/dashboard\/chatgpt-ads-anleitung/);
+
+const openAIAdsGuideAdminPage = read(
+  "src/app/dashboard/chatgpt-ads-anleitung/page.tsx",
+);
+const openAIAdsGuideAdminApi = read(
+  "src/app/api/admin/openai-ads-guide/route.ts",
+);
+assert.match(openAIAdsGuideAdminPage, /isSiteAdmin/);
+assert.match(openAIAdsGuideAdminPage, /redirect\("\/dashboard"\)/);
+assert.match(openAIAdsGuideAdminApi, /isSiteAdmin/);
+assert.match(openAIAdsGuideAdminApi, /isDashboardSameOriginRequest/);
 
 // Public legal pages stay readable without admin.
 assert.match(read("src/app/impressum/page.tsx"), /getLegalPage\("impressum"\)/);

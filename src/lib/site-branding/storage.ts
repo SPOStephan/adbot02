@@ -9,13 +9,15 @@ import type { LogoVariant } from "@/lib/site-branding/types";
 
 export const SITE_BRANDING_BUCKET = "site-branding";
 export const SITE_BRANDING_CACHE_CONTROL = "86400";
+export const SITE_BRANDING_BUCKET_MAX_BYTES = 8 * 1024 * 1024;
 
 const BUCKET_OPTIONS = {
   public: true,
-  fileSizeLimit: SITE_LOGO_RECOMMENDATIONS.maxBytes,
+  fileSizeLimit: SITE_BRANDING_BUCKET_MAX_BYTES,
   allowedMimeTypes: [
     ...SITE_LOGO_RECOMMENDATIONS.allowedMimeTypes,
     ...SITE_FAVICON_RECOMMENDATIONS.allowedMimeTypes,
+    "application/json",
   ],
 };
 
@@ -148,3 +150,5 @@ export function publicUrlForSiteLogoPath(
     .join("/");
   return `${base}/storage/v1/object/public/${SITE_BRANDING_BUCKET}/${encoded}`;
 }
+
+export const publicUrlForSiteBrandingPath = publicUrlForSiteLogoPath;
