@@ -141,8 +141,8 @@ export function OpenAIAdsWorkspace({ accounts, activeLaunchEnabled }: Props) {
   if (accounts.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm leading-6 text-slate-600">
-        Noch kein ChatGPT-Ads-Werbekonto verbunden. Füge unten den ersten
-        accountbezogenen API-Key hinzu.
+        Noch kein ChatGPT-Ads-Werbekonto verbunden. Starte den geführten
+        Zwei-Schritt-Ablauf, um das erste Konto sicher hinzuzufügen.
       </div>
     );
   }
@@ -202,14 +202,22 @@ export function OpenAIAdsWorkspace({ accounts, activeLaunchEnabled }: Props) {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {account.adsManagerUrl ? (
+                <a
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 hover:border-emerald-400"
+                  href="https://ads.openai.com"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Ads Manager
+                </a>
+                {account.advertiserUrl ? (
                   <a
                     className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 hover:border-emerald-400"
-                    href={account.adsManagerUrl}
+                    href={account.advertiserUrl}
                     rel="noreferrer"
                     target="_blank"
                   >
-                    Ads Manager
+                    Website
                   </a>
                 ) : null}
                 <button

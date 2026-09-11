@@ -126,6 +126,7 @@ export async function connectOpenAIAdsAccount(input: {
         provider_metadata: providerMetadata(account),
         provider_sync_status: "idle",
         provider_sync_error_code: null,
+        provider_next_sync_at: now,
         provider_backoff_until: null,
         provider_consecutive_failures: 0,
         connected_at: now,
