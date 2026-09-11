@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Megaphone,
   MessageSquareText,
+  Network,
   Rocket,
   Scale,
   ShieldCheck,
@@ -40,6 +41,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       icon: LayoutDashboard,
       href: "/dashboard",
       match: "/dashboard",
+    },
+    {
+      label: "Strategie",
+      icon: Network,
+      href: "/dashboard/strategie",
+      match: "/dashboard/strategie",
     },
     {
       label: "Kampagnen",

@@ -1,0 +1,228 @@
+export const STRATEGY_PLATFORM_IDS = [
+  "meta",
+  "google",
+  "openai_ads",
+  "tiktok",
+  "pinterest",
+  "microsoft",
+  "linkedin",
+  "x",
+  "reddit",
+  "snapchat",
+] as const;
+
+export const STRATEGY_OBJECTIVES = [
+  "awareness",
+  "traffic",
+  "engagement",
+  "leads",
+  "app_promotion",
+  "sales",
+] as const;
+
+export const STRATEGY_CURRENCIES = [
+  "EUR",
+  "USD",
+  "GBP",
+  "CHF",
+  "CAD",
+  "AUD",
+  "NZD",
+  "SEK",
+  "NOK",
+  "DKK",
+  "PLN",
+  "CZK",
+  "HUF",
+  "RON",
+  "BGN",
+  "ZAR",
+] as const;
+
+export type StrategyPlatformId = (typeof STRATEGY_PLATFORM_IDS)[number];
+export type StrategyObjective = (typeof STRATEGY_OBJECTIVES)[number];
+export type StrategyCurrency = (typeof STRATEGY_CURRENCIES)[number];
+
+export type StrategyPlatformProfile = {
+  id: StrategyPlatformId;
+  name: string;
+  description: string;
+  integrationStage: "live" | "next" | "roadmap";
+  supportedObjectives: readonly StrategyObjective[];
+  objectiveAffinity: Record<StrategyObjective, number>;
+};
+
+export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
+  {
+    id: "meta",
+    name: "Meta Ads",
+    description: "Facebook und Instagram für Reichweite, Nachfrage und Conversion.",
+    integrationStage: "live",
+    supportedObjectives: STRATEGY_OBJECTIVES,
+    objectiveAffinity: {
+      awareness: 92,
+      traffic: 84,
+      engagement: 94,
+      leads: 88,
+      app_promotion: 88,
+      sales: 90,
+    },
+  },
+  {
+    id: "google",
+    name: "Google Ads",
+    description: "Search, Display, YouTube und Performance Max für vorhandene Nachfrage.",
+    integrationStage: "next",
+    supportedObjectives: STRATEGY_OBJECTIVES,
+    objectiveAffinity: {
+      awareness: 78,
+      traffic: 96,
+      engagement: 68,
+      leads: 96,
+      app_promotion: 92,
+      sales: 98,
+    },
+  },
+  {
+    id: "openai_ads",
+    name: "ChatGPT Ads",
+    description: "Kontextuelle Nachfrage und Empfehlungen in ChatGPT.",
+    integrationStage: "live",
+    supportedObjectives: ["awareness", "traffic", "engagement", "leads", "sales"],
+    objectiveAffinity: {
+      awareness: 74,
+      traffic: 88,
+      engagement: 70,
+      leads: 86,
+      app_promotion: 76,
+      sales: 84,
+    },
+  },
+  {
+    id: "tiktok",
+    name: "TikTok Ads",
+    description: "Video-Discovery, Aufmerksamkeit und Nachfragegenerierung.",
+    integrationStage: "roadmap",
+    supportedObjectives: STRATEGY_OBJECTIVES,
+    objectiveAffinity: {
+      awareness: 98,
+      traffic: 78,
+      engagement: 98,
+      leads: 66,
+      app_promotion: 96,
+      sales: 76,
+    },
+  },
+  {
+    id: "pinterest",
+    name: "Pinterest Ads",
+    description: "Visuelle Inspiration mit starkem Planungs- und Kaufkontext.",
+    integrationStage: "roadmap",
+    supportedObjectives: ["awareness", "traffic", "leads", "sales"],
+    objectiveAffinity: {
+      awareness: 82,
+      traffic: 86,
+      engagement: 78,
+      leads: 72,
+      app_promotion: 58,
+      sales: 90,
+    },
+  },
+  {
+    id: "microsoft",
+    name: "Microsoft Advertising",
+    description: "Search- und Audience-Nachfrage im Microsoft-Netzwerk.",
+    integrationStage: "roadmap",
+    supportedObjectives: STRATEGY_OBJECTIVES,
+    objectiveAffinity: {
+      awareness: 66,
+      traffic: 90,
+      engagement: 54,
+      leads: 92,
+      app_promotion: 62,
+      sales: 92,
+    },
+  },
+  {
+    id: "linkedin",
+    name: "LinkedIn Ads",
+    description: "Beruflicher B2B-Kontext für Reichweite, Leads und Recruiting.",
+    integrationStage: "roadmap",
+    supportedObjectives: ["awareness", "traffic", "engagement", "leads", "sales"],
+    objectiveAffinity: {
+      awareness: 86,
+      traffic: 76,
+      engagement: 76,
+      leads: 98,
+      app_promotion: 54,
+      sales: 72,
+    },
+  },
+  {
+    id: "x",
+    name: "X Ads",
+    description: "Aktuelle Themen, öffentliche Konversationen und Reichweite.",
+    integrationStage: "roadmap",
+    supportedObjectives: ["awareness", "traffic", "engagement", "app_promotion", "sales"],
+    objectiveAffinity: {
+      awareness: 92,
+      traffic: 78,
+      engagement: 92,
+      leads: 60,
+      app_promotion: 68,
+      sales: 62,
+    },
+  },
+  {
+    id: "reddit",
+    name: "Reddit Ads",
+    description: "Community- und Interessen-Kontext für spezialisierte Zielgruppen.",
+    integrationStage: "roadmap",
+    supportedObjectives: ["awareness", "traffic", "leads", "app_promotion", "sales"],
+    objectiveAffinity: {
+      awareness: 82,
+      traffic: 82,
+      engagement: 90,
+      leads: 72,
+      app_promotion: 78,
+      sales: 70,
+    },
+  },
+  {
+    id: "snapchat",
+    name: "Snapchat Ads",
+    description: "Mobile Video- und AR-Reichweite für jüngere Zielgruppen.",
+    integrationStage: "roadmap",
+    supportedObjectives: STRATEGY_OBJECTIVES,
+    objectiveAffinity: {
+      awareness: 94,
+      traffic: 72,
+      engagement: 92,
+      leads: 58,
+      app_promotion: 94,
+      sales: 70,
+    },
+  },
+] as const;
+
+export function isStrategyPlatformId(value: string): value is StrategyPlatformId {
+  return STRATEGY_PLATFORM_IDS.includes(value as StrategyPlatformId);
+}
+
+export function isStrategyObjective(value: string): value is StrategyObjective {
+  return STRATEGY_OBJECTIVES.includes(value as StrategyObjective);
+}
+
+export function isStrategyCurrency(value: string): value is StrategyCurrency {
+  return STRATEGY_CURRENCIES.includes(value as StrategyCurrency);
+}
+
+export function getStrategyPlatformProfile(
+  platform: StrategyPlatformId,
+): StrategyPlatformProfile {
+  const profile = STRATEGY_PLATFORM_CATALOG.find((item) => item.id === platform);
+  if (!profile) {
+    throw new Error(`Unbekannte Strategieplattform: ${platform}`);
+  }
+  return profile;
+}
