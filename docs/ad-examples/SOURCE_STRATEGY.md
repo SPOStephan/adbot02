@@ -54,7 +54,9 @@ Für die erste Grundmenge ist ein ausgewogener Korpus sinnvoll. Pro Kombination 
 
 ## Nutzung für KI-Vorschläge
 
-Die Bibliothek trainiert kein Basismodell neu. Sie dient als **Retrieval- und Referenzschicht**. Vor einer Creative-Generierung wählt Adbot höchstens wenige passende, ausdrücklich freigegebene Beispiele anhand von Branche, Ziel, Funnel-Stufe, Plattform, Format, Sprache und Markt aus. Die Generierung darf abstrahierte Muster wie Hook-Typ, Angebotsstruktur, visuelle Hierarchie, Vertrauenselemente und Handlungsaufforderung verwenden. Fremde Texte oder Gestaltungen werden nicht unverändert reproduziert.
+Die administrative Bibliothek dient als **Retrieval- und Referenzschicht**. Vor einer Creative-Generierung wählt Adbot höchstens wenige passende, ausdrücklich freigegebene Beispiele anhand von Branche, Ziel, Funnel-Stufe, Plattform, Format, Sprache und Markt aus. Die Generierung darf abstrahierte Muster wie Hook-Typ, Angebotsstruktur, visuelle Hierarchie, Vertrauenselemente und Handlungsaufforderung verwenden. Fremde Texte oder Gestaltungen werden nicht unverändert reproduziert.
+
+Davon getrennt existiert ein rechtebereinigter synthetischer Seed-Korpus für das tatsächliche Fine-Tuning des plattformübergreifenden Adbot-Kreativkerns. Bibliotheks-Screenshots gelangen nicht automatisch in diesen Trainingskorpus. Die Trainingsarchitektur und ihre Freigabegates sind in `docs/ad-intelligence/CROSS_PLATFORM_TRAINING.md` dokumentiert.
 
 Leistungssignale werden unterschiedlich gewichtet. Ein rein visuelles Beispiel liefert kein Performance-Signal. Öffentliche Transparenzdaten können Reichweite oder Auslieferung belegen. Nur Daten aus einem eigenen autorisierten Werbekonto dürfen als verifizierte First-Party-Performance gewertet werden.
 

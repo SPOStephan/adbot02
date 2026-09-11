@@ -9,10 +9,12 @@ import {
 } from "@/lib/ad-copy/pricing";
 import {
   getAdCopyProvider,
+  type AdCopyIntelligenceContext,
   type AdCopyObjective,
   type AdCopySuggestion,
 } from "@/lib/ad-copy/providers";
 import { openAiRatesFromEnv } from "@/lib/ad-copy/providers/openai";
+import { togetherRatesFromEnv } from "@/lib/ad-copy/providers/together";
 import {
   commitCreditReservation,
   InsufficientCreditsError,
@@ -37,6 +39,9 @@ function estimateCreditsForActiveProvider(): number {
   if (key === "openai") {
     return estimateCopySuggestionCredits(openAiRatesFromEnv());
   }
+  if (key === "adbot_intelligence") {
+    return estimateCopySuggestionCredits(togetherRatesFromEnv());
+  }
   return 5;
 }
 
@@ -44,7 +49,7 @@ export async function suggestAdCopyForDestination(input: {
   userId: string;
   destinationUrl: string;
   objective?: AdCopyObjective;
-}): Promise<SuggestAdCopyResult> {
+} & AdCopyIntelligenceContext): Promise<SuggestAdCopyResult> {
   const objective = input.objective ?? "OUTCOME_TRAFFIC";
   const page = await fetchLandingPageContext(input.destinationUrl);
   const provider = getAdCopyProvider();
@@ -80,7 +85,18 @@ export async function suggestAdCopyForDestination(input: {
   }
 
   try {
-    const generated = await provider.generate({ page, objective });
+    const generated = await provider.generate({
+      page,
+      objective,
+      platform: input.platform,
+      market: input.market,
+      language: input.language,
+      industry: input.industry,
+      brandName: input.brandName,
+      offer: input.offer,
+      audience: input.audience,
+      brandAssets: input.brandAssets,
+    });
     const actualCredits = creditsFromProviderCostEur(generated.costEur, 5);
 
     // Prepaid estimate may be higher than actual; we keep the reserved amount

@@ -1,9 +1,18 @@
 import "server-only";
 
 import { createOpenAiAdCopyProvider, openAiRatesFromEnv } from "./openai";
+import {
+  createTogetherAdCopyProvider,
+  togetherRatesFromEnv,
+} from "./together";
 import type { AdCopyProvider } from "./types";
 
-export type { AdCopyObjective, AdCopyProvider, AdCopySuggestion } from "./types";
+export type {
+  AdCopyIntelligenceContext,
+  AdCopyObjective,
+  AdCopyProvider,
+  AdCopySuggestion,
+} from "./types";
 
 /**
  * Resolve the active ad-copy provider. Switch via AD_COPY_PROVIDER.
@@ -26,8 +35,23 @@ export function getAdCopyProvider(): AdCopyProvider {
     });
   }
 
+  if (key === "adbot_intelligence") {
+    const apiKey = process.env.TOGETHER_API_KEY?.trim();
+    const model = process.env.AD_COPY_TOGETHER_MODEL?.trim();
+    if (!apiKey || !model) {
+      throw new Error(
+        "TOGETHER_API_KEY oder AD_COPY_TOGETHER_MODEL fehlt. Adbot Intelligence ist nicht aktiviert.",
+      );
+    }
+    return createTogetherAdCopyProvider({
+      apiKey,
+      model,
+      rates: togetherRatesFromEnv(),
+    });
+  }
+
   throw new Error(
-    `Unbekannter AD_COPY_PROVIDER „${key}“. Erlaubt derzeit: openai.`,
+    `Unbekannter AD_COPY_PROVIDER „${key}“. Erlaubt: openai, adbot_intelligence.`,
   );
 }
 
