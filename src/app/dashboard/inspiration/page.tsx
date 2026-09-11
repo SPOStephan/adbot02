@@ -1,14 +1,15 @@
 import { redirect } from "next/navigation";
 
-import { InspirationVaultClient } from "@/components/InspirationVaultClient";
+import { AdExampleLibraryAdmin } from "@/components/AdExampleLibraryAdmin";
+import { loadAdExamples } from "@/lib/ad-examples/service";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export default async function InspirationVaultPage() {
+export default async function AdExampleLibraryPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,18 +18,11 @@ export default async function InspirationVaultPage() {
   if (!user) {
     redirect("/login?next=/dashboard/inspiration");
   }
-
   if (!(await isSiteAdmin(user.id))) {
     redirect("/dashboard");
   }
 
-  const admin = createAdminClient();
-  const { data: assets } = await admin
-    .from("brand_assets")
-    .select("id,original_filename,width,height,metadata,created_at")
-    .eq("library_scope", "INSPIRATION")
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const examples = await loadAdExamples();
 
   return (
     <>
@@ -37,30 +31,17 @@ export default async function InspirationVaultPage() {
           Admin
         </p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight">
-          Inspiration Vault
+          Werbebeispielbibliothek
         </h1>
-        <p className="mt-2 max-w-2xl text-slate-500">
-          Interne Referenzbilder und Notizen — nicht Teil der Kunden-Medienbibliothek.
+        <p className="mt-2 max-w-3xl text-slate-500">
+          Reale Anzeigen strukturiert nach Branche, Werbeziel, Funnel-Stufe,
+          Plattform und Evidenz erfassen. Die Bibliothek ist intern, für Kunden
+          unsichtbar und technisch von Kampagnen-Uploads getrennt.
         </p>
       </div>
 
       <div className="mt-8">
-        <InspirationVaultClient
-          assets={(assets ?? []).map(asset => {
-            const metadata =
-              asset.metadata && typeof asset.metadata === "object"
-                ? (asset.metadata as Record<string, unknown>)
-                : {};
-            return {
-              id: String(asset.id),
-              originalFilename: String(asset.original_filename ?? "Inspiration"),
-              width: typeof asset.width === "number" ? asset.width : null,
-              height: typeof asset.height === "number" ? asset.height : null,
-              note: typeof metadata.note === "string" ? metadata.note : null,
-              createdAt: String(asset.created_at),
-            };
-          })}
-        />
+        <AdExampleLibraryAdmin initialExamples={examples} />
       </div>
     </>
   );

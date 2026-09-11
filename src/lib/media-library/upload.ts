@@ -1,7 +1,10 @@
 import "server-only";
 
 import { getCreativeAssetStorageBucket } from "@/lib/creative-assets/env";
-import { inspectCreativeImage } from "@/lib/creative-assets/image";
+import {
+  inspectCreativeImage,
+  sanitizeAssetMetadata,
+} from "@/lib/creative-assets/image";
 import { CreativeAssetProviderError } from "@/lib/creative-assets/types";
 import {
   describeMetaFormatCheck,
@@ -296,6 +299,7 @@ export async function uploadInspirationVaultImage(input: {
   mimeType: string | null;
   bytes: Uint8Array;
   note?: string;
+  metadata?: Record<string, unknown>;
 }): Promise<{ brandAssetId: string }> {
   const declared = asImageMime(input.mimeType);
   if (!declared) {
@@ -343,13 +347,15 @@ export async function uploadInspirationVaultImage(input: {
     p_byte_size: inspected.byteSize,
     p_width: inspected.width,
     p_height: inspected.height,
-    p_metadata: {
-      contract_version: 1,
-      library: "inspiration_vault",
-      source_kind: "platform_inspiration",
-      never_launch: true,
-      note: (input.note ?? "").slice(0, 500),
-    },
+    p_metadata: sanitizeAssetMetadata(
+      input.metadata ?? {
+        contract_version: 1,
+        library: "inspiration_vault",
+        source_kind: "platform_inspiration",
+        never_launch: true,
+        note: (input.note ?? "").slice(0, 500),
+      },
+    ),
   });
 
   if (error || typeof data !== "string") {

@@ -25,11 +25,16 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const { data: asset, error } = await admin
     .from("brand_assets")
-    .select("id,user_id,library_scope,storage_bucket,storage_path")
+    .select("id,user_id,library_scope,storage_bucket,storage_path,status")
     .eq("id", assetId)
     .maybeSingle();
 
-  if (error || !asset?.storage_bucket || !asset.storage_path) {
+  if (
+    error ||
+    !asset?.storage_bucket ||
+    !asset.storage_path ||
+    asset.status === "REVOKED"
+  ) {
     return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
   }
 

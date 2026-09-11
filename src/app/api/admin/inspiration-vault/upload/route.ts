@@ -5,6 +5,7 @@ import {
   MediaLibraryError,
   uploadInspirationVaultImage,
 } from "@/lib/media-library/upload";
+import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -12,6 +13,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isDashboardSameOriginRequest(request)) {
+      return NextResponse.json(
+        { ok: false, error: "Ungültige Herkunft." },
+        { status: 403 },
+      );
+    }
     const supabase = await createClient();
     const {
       data: { user },

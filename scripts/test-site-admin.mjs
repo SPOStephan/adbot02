@@ -37,6 +37,8 @@ assert.match(dashboardNav, /getDashboardNavigation/);
 assert.match(dashboardChrome, /isAdmin/);
 assert.match(dashboardNav, /\/dashboard\/branding/);
 assert.match(dashboardNav, /\/dashboard\/rechtliches/);
+assert.match(dashboardNav, /Werbebeispiele/);
+assert.match(dashboardNav, /\/dashboard\/inspiration/);
 assert.match(dashboardNav, /\/dashboard\/chatgpt-ads-anleitung/);
 
 const openAIAdsGuideAdminPage = read(
@@ -49,6 +51,17 @@ assert.match(openAIAdsGuideAdminPage, /isSiteAdmin/);
 assert.match(openAIAdsGuideAdminPage, /redirect\("\/dashboard"\)/);
 assert.match(openAIAdsGuideAdminApi, /isSiteAdmin/);
 assert.match(openAIAdsGuideAdminApi, /isDashboardSameOriginRequest/);
+
+const adExampleAdminPage = read("src/app/dashboard/inspiration/page.tsx");
+const adExampleAdminApi = read("src/app/api/admin/ad-examples/route.ts");
+const adExampleService = read("src/lib/ad-examples/service.ts");
+assert.match(adExampleAdminPage, /isSiteAdmin/);
+assert.match(adExampleAdminPage, /redirect\("\/dashboard"\)/);
+assert.match(adExampleAdminApi, /isSiteAdmin/);
+assert.match(adExampleAdminApi, /isDashboardSameOriginRequest/);
+assert.match(adExampleService, /library_scope/);
+assert.match(adExampleService, /INSPIRATION/);
+assert.match(adExampleService, /REVOKED/);
 
 // Public legal pages stay readable without admin.
 assert.match(read("src/app/impressum/page.tsx"), /getLegalPage\("impressum"\)/);
