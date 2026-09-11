@@ -5,6 +5,12 @@ export const DASHBOARD_PAGE_COPY = {
     description:
       "Status der Werbeplattformen, Kennzahlen und die nächsten Schritte — Details liegen auf den Unterseiten.",
   },
+  strategie: {
+    eyebrow: "Kanalübergreifend",
+    title: "Strategie & Budget",
+    description:
+      "Geschäftsziel und Gesamtbudget in einen transparenten Kanalplan für verbundene und künftige Werbeplattformen übersetzen.",
+  },
   kampagnen: {
     eyebrow: "Meta Live",
     title: "Kampagnen",
