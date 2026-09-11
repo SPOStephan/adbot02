@@ -12,6 +12,7 @@ const [
   integrityForwardMigration,
   client,
   connection,
+  dashboard,
   input,
   sync,
   launch,
@@ -37,6 +38,7 @@ const [
   read("supabase/migrations/20260910115500_system_integrity_forward_fixes.sql"),
   read("src/lib/openai-ads/client.ts"),
   read("src/lib/openai-ads/connection.ts"),
+  read("src/lib/openai-ads/dashboard.ts"),
   read("src/lib/openai-ads/input.ts"),
   read("src/lib/openai-ads/sync.ts"),
   read("src/lib/openai-ads/launch.ts"),
@@ -71,6 +73,7 @@ assert.doesNotMatch(openAIEnvironment, /process\.env\.OPENAI_ADS_API_BASE_URL/);
 assert.doesNotMatch(environment, /OPENAI_ADS_API_BASE_URL/);
 assert.match(connection, /client\.getAdAccount\(\)/);
 assert.match(connection, /encryptCredential\(/);
+assert.match(connection, /id:\s*account\.id/);
 assert.match(connection, /access_token:\s*null/);
 assert.match(connection, /refresh_token:\s*null/);
 assert.match(connection, /provider_next_sync_at:\s*now/);
@@ -104,6 +107,12 @@ assert.doesNotMatch(connectRoute, /syncOpenAIAdsAccount/);
 assert.match(disconnectRoute, /parseOpenAIAdsDisconnectInput/);
 assert.match(input, /disconnect_openai_ads/);
 assert.match(syncRoute, /userId:\s*user\.id/);
+const dashboardAccountQuery = dashboard.slice(
+  dashboard.indexOf('.from("platform_accounts")'),
+  dashboard.indexOf("return Promise.all"),
+);
+assert.doesNotMatch(dashboardAccountQuery, /platform_account_id/);
+assert.match(dashboard, /remoteAccountId:\s*text\(metadata\.id\)/);
 
 // Full cursor pagination only advances using the provider's opaque last_id.
 assert.match(client, /response\.last_id/);

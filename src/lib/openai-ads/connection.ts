@@ -60,6 +60,7 @@ function mapProviderError(error: OpenAIAdsApiError): OpenAIAdsServiceError {
 
 function providerMetadata(account: OpenAIAdsAccount) {
   return {
+    id: account.id,
     url: account.url,
     preview_url: account.preview_url,
     account_status: account.status,
