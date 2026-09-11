@@ -96,7 +96,7 @@ export async function loadOpenAIAdsDashboard(
   const { data: accountRows, error: accountError } = await supabase
     .from("platform_accounts")
     .select(
-      "id,platform_account_id,account_name,connected_at,provider_metadata,provider_sync_status,provider_sync_error_code,provider_last_sync_started_at,provider_last_success_at,provider_next_sync_at,provider_campaign_count,provider_ad_group_count,provider_ad_count,provider_insight_count",
+      "id,account_name,connected_at,provider_metadata,provider_sync_status,provider_sync_error_code,provider_last_sync_started_at,provider_last_success_at,provider_next_sync_at,provider_campaign_count,provider_ad_group_count,provider_ad_count,provider_insight_count",
     )
     .eq("user_id", userId)
     .eq("platform", "openai_ads")
@@ -220,7 +220,7 @@ export async function loadOpenAIAdsDashboard(
         : {};
       return {
         id: accountId,
-        remoteAccountId: String(accountRow.platform_account_id),
+        remoteAccountId: text(metadata.id) ?? "–",
         name: text(accountRow.account_name) ?? "OpenAI Ads",
         connectedAt: text(accountRow.connected_at),
         accountStatus: text(metadata.account_status),
