@@ -155,6 +155,13 @@ assert.match(sync, /listAdGroups\(campaign\.id\)/);
 assert.match(sync, /listAds\(item\.id\)/);
 assert.match(sync, /listDailyCampaignInsights/);
 assert.match(client, /\/conversions\/insights/);
+const deliveryInsightMethod = client.slice(
+  client.indexOf("async listDailyCampaignInsights"),
+  client.indexOf("async searchGeoLocations"),
+);
+assert.match(deliveryInsightMethod, /metadata\.readable_time/);
+assert.match(deliveryInsightMethod, /campaign\.spend/);
+assert.doesNotMatch(deliveryInsightMethod, /metadata\.data_status/);
 assert.match(sync, /listDailyCampaignConversions/);
 assert.match(sync, /conversionsAvailable/);
 const conversionMethod = client.slice(
