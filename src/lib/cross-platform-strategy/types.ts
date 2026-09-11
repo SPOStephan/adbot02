@@ -5,22 +5,22 @@ import type {
 } from "@/lib/cross-platform-strategy/catalog";
 
 export const CROSS_PLATFORM_STRATEGY_VERSION =
-  "adbot-cross-platform-strategy-v1" as const;
+  "adbot-cross-platform-strategy-v2" as const;
 
 export const STRATEGY_MAX_BUDGET_CHANGE_BPS = 2_000 as const;
 export const STRATEGY_COOLDOWN_HOURS = 12 as const;
 export const STRATEGY_MAX_PLATFORMS = 10 as const;
 export const STRATEGY_MIN_SHARE_BPS = 500 as const;
 export const STRATEGY_MAX_SHARE_BPS = 6_000 as const;
-export const STRATEGY_EXPLORATION_SHARE_BPS = 1_000 as const;
 export const STRATEGY_MIN_MEASURED_SPEND_MINOR = 2_000 as const;
 export const STRATEGY_MIN_CONVERSIONS = 3 as const;
 export const STRATEGY_MAX_DATA_AGE_DAYS = 3 as const;
+export const STRATEGY_MIN_COMPARABLE_PLATFORMS = 2 as const;
 export const STRATEGY_MEASURED_PERFORMANCE_PLATFORMS = ["meta"] as const;
 
 export type StrategyConfidence = "low" | "medium" | "high";
 export type StrategySignalKind =
-  | "prior"
+  | "insufficient_evidence"
   | "awareness_efficiency"
   | "traffic_efficiency"
   | "conversion_efficiency"
@@ -39,6 +39,7 @@ export type StrategyPlatformReadiness = {
   description: string;
   integrationStage: "live" | "next" | "roadmap";
   connectedAccountCount: number;
+  performanceMeasurementApproved: boolean;
 };
 
 export type StrategyAccountInput = {
@@ -60,12 +61,16 @@ export type StrategyPerformanceInput = {
   purchases: number | null;
   conversionValueMinor: number | null;
   latestDataDate: string | null;
+  attributionSetting: string | null;
+  snapshotId: string | null;
+  coverageComplete: boolean;
 };
 
 export type StrategyPlannerContext = {
   now: Date;
   accounts: StrategyAccountInput[];
   performance: StrategyPerformanceInput[];
+  measuredPerformancePlatforms: StrategyPlatformId[];
   performanceReadErrorCode?: string | null;
 };
 
@@ -79,10 +84,8 @@ export type StrategyPlatformAllocation = {
   shareBps: number;
   signal: StrategySignalKind;
   confidence: StrategyConfidence;
-  objectiveAffinity: number;
   performanceScore: number | null;
-  score: number;
-  exploration: boolean;
+  score: number | null;
   reasons: string[];
   blockers: string[];
 };
@@ -94,9 +97,16 @@ export type CrossPlatformStrategyPlan = {
   currency: StrategyCurrency;
   requestedDailyBudgetMinor: number;
   targetAllocatedDailyBudgetMinor: number;
-  status: "ready" | "blocked" | "partial";
+  status: "ready" | "partial" | "insufficient_evidence";
   confidence: StrategyConfidence;
   executionMode: "read_only";
+  comparison: {
+    ready: boolean;
+    requiredMeasuredPlatforms: typeof STRATEGY_MIN_COMPARABLE_PLATFORMS;
+    measuredPlatforms: StrategyPlatformId[];
+    signal: StrategySignalKind | null;
+    attributionSetting: string | null;
+  };
   guardrails: {
     maxBudgetChangeBpsPer24Hours: typeof STRATEGY_MAX_BUDGET_CHANGE_BPS;
     cooldownHours: typeof STRATEGY_COOLDOWN_HOURS;

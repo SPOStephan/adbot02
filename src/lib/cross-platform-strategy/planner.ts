@@ -6,14 +6,13 @@ import {
 import {
   CROSS_PLATFORM_STRATEGY_VERSION,
   STRATEGY_COOLDOWN_HOURS,
-  STRATEGY_EXPLORATION_SHARE_BPS,
   STRATEGY_MAX_BUDGET_CHANGE_BPS,
   STRATEGY_MAX_DATA_AGE_DAYS,
   STRATEGY_MAX_SHARE_BPS,
+  STRATEGY_MIN_COMPARABLE_PLATFORMS,
   STRATEGY_MIN_CONVERSIONS,
   STRATEGY_MIN_MEASURED_SPEND_MINOR,
   STRATEGY_MIN_SHARE_BPS,
-  STRATEGY_MEASURED_PERFORMANCE_PLATFORMS,
   type CrossPlatformStrategyPlan,
   type StrategyConfidence,
   type StrategyPerformanceInput,
@@ -30,14 +29,11 @@ type Candidate = {
   blockers: string[];
   reasons: string[];
   eligible: boolean;
-  affinity: number;
   metric: number | null;
   signal: StrategySignalKind;
   measured: boolean;
+  attributionSetting: string | null;
 };
-
-const MEASURED_PERFORMANCE_PLATFORMS: readonly StrategyPlatformId[] =
-  STRATEGY_MEASURED_PERFORMANCE_PLATFORMS;
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -47,6 +43,11 @@ function finiteNonNegative(value: number | null | undefined): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? value
     : 0;
+}
+
+function normalizedAttributionSetting(value: string | null): string | null {
+  const normalized = value?.trim().toLowerCase().replace(/\s+/g, "_");
+  return normalized || null;
 }
 
 function performanceFor(
@@ -65,6 +66,14 @@ function performanceFor(
     .sort()
     .at(-1) ?? null;
   const currencies = new Set(matches.map((row) => row.currency));
+  const attributionSettings = new Set(
+    matches
+      .map((row) => normalizedAttributionSetting(row.attributionSetting))
+      .filter((value): value is string => Boolean(value)),
+  );
+  const snapshotIds = new Set(
+    matches.map((row) => row.snapshotId).filter((value): value is string => Boolean(value)),
+  );
   return {
     accountId,
     platform,
@@ -93,6 +102,13 @@ function performanceFor(
       ? sum(matches.map((row) => finiteNonNegative(row.conversionValueMinor)))
       : null,
     latestDataDate: latest,
+    attributionSetting:
+      attributionSettings.size === 1 ? [...attributionSettings][0] : null,
+    snapshotId: snapshotIds.size === 1 ? [...snapshotIds][0] : null,
+    coverageComplete:
+      matches.every((row) => row.coverageComplete) &&
+      attributionSettings.size === 1 &&
+      snapshotIds.size === 1,
   };
 }
 
@@ -111,14 +127,14 @@ function efficiencyMetric(
   if (spend === null) {
     return {
       metric: null,
-      signal: "prior",
-      reason: "Spend-Daten sind teilweise unvollständig; es gilt nur der Ziel-Prior.",
+      signal: "insufficient_evidence",
+      reason: "Spend-Daten sind teilweise unvollständig; eine Erfolgsbewertung ist nicht möglich.",
     };
   }
   if (spend < STRATEGY_MIN_MEASURED_SPEND_MINOR) {
     return {
       metric: null,
-      signal: "prior",
+      signal: "insufficient_evidence",
       reason: "Noch nicht genügend Spend für einen belastbaren Plattformvergleich.",
     };
   }
@@ -127,14 +143,14 @@ function efficiencyMetric(
     if (performance.impressions === null) {
       return {
         metric: null,
-        signal: "prior",
-        reason: "Impressionsdaten sind teilweise unvollständig; es gilt nur der Ziel-Prior.",
+        signal: "insufficient_evidence",
+        reason: "Impressionsdaten sind teilweise unvollständig; eine Erfolgsbewertung ist nicht möglich.",
       };
     }
     if (performance.impressions < 1_000) {
       return {
         metric: null,
-        signal: "prior",
+        signal: "insufficient_evidence",
         reason: "Noch nicht genügend Impressionen für einen Awareness-Vergleich.",
       };
     }
@@ -145,18 +161,26 @@ function efficiencyMetric(
     };
   }
 
-  if (objective === "traffic" || objective === "engagement") {
+  if (objective === "engagement") {
+    return {
+      metric: null,
+      signal: "insufficient_evidence",
+      reason: "Ein freigegebenes Engagement-Signal ist noch nicht normalisiert; Link-Klicks werden dafür nicht ersatzweise verwendet.",
+    };
+  }
+
+  if (objective === "traffic") {
     if (performance.clicks === null) {
       return {
         metric: null,
-        signal: "prior",
-        reason: "Klickdaten sind teilweise unvollständig; es gilt nur der Ziel-Prior.",
+        signal: "insufficient_evidence",
+        reason: "Klickdaten sind teilweise unvollständig; eine Erfolgsbewertung ist nicht möglich.",
       };
     }
     if (performance.clicks < 20) {
       return {
         metric: null,
-        signal: "prior",
+        signal: "insufficient_evidence",
         reason: "Noch nicht genügend Klicks für einen belastbaren Effizienzvergleich.",
       };
     }
@@ -170,16 +194,31 @@ function efficiencyMetric(
   if (objective === "app_promotion") {
     return {
       metric: null,
-      signal: "prior",
-      reason: "Ein freigegebenes App-Event-Signal ist noch nicht normalisiert; es gilt nur der Ziel-Prior.",
+      signal: "insufficient_evidence",
+      reason: "Ein freigegebenes App-Event-Signal ist noch nicht normalisiert; eine Erfolgsbewertung ist nicht möglich.",
     };
   }
 
-  if (objective === "sales" && performance.conversionValueMinor !== null && finiteNonNegative(performance.conversionValueMinor) > 0) {
+  if (
+    objective === "sales" &&
+    performance.conversionValueMinor !== null &&
+    finiteNonNegative(performance.conversionValueMinor) > 0
+  ) {
+    if (
+      performance.purchases === null ||
+      finiteNonNegative(performance.purchases) < STRATEGY_MIN_CONVERSIONS
+    ) {
+      return {
+        metric: null,
+        signal: "insufficient_evidence",
+        reason:
+          "Ein Umsatzwert ohne mindestens drei bestätigte Käufe reicht nicht für einen belastbaren Effizienzvergleich.",
+      };
+    }
     return {
       metric: finiteNonNegative(performance.conversionValueMinor) / spend,
       signal: "revenue_efficiency",
-      reason: "Gewichtung nutzt belegten Conversion-Wert relativ zum Spend.",
+      reason: "Gewichtung nutzt belegten Conversion-Wert aus mindestens drei bestätigten Käufen relativ zum Spend.",
     };
   }
 
@@ -190,14 +229,14 @@ function efficiencyMetric(
   if (results === null) {
     return {
       metric: null,
-      signal: "prior",
-      reason: "Ergebnisdaten sind teilweise unvollständig; es gilt nur der Ziel-Prior.",
+      signal: "insufficient_evidence",
+      reason: "Ergebnisdaten sind teilweise unvollständig; eine Erfolgsbewertung ist nicht möglich.",
     };
   }
   if (finiteNonNegative(results) < STRATEGY_MIN_CONVERSIONS) {
     return {
       metric: null,
-      signal: "prior",
+      signal: "insufficient_evidence",
       reason: "Noch nicht genügend bestätigte Ergebnisse für einen Effizienzvergleich.",
     };
   }
@@ -214,11 +253,7 @@ function normalizePerformanceScores(candidates: Candidate[]): Map<StrategyPlatfo
       candidate.eligible && candidate.metric !== null,
   );
   const result = new Map<StrategyPlatformId, number>();
-  if (measured.length === 0) return result;
-  if (measured.length === 1) {
-    result.set(measured[0].platform, 65);
-    return result;
-  }
+  if (measured.length < STRATEGY_MIN_COMPARABLE_PLATFORMS) return result;
 
   const minimum = Math.min(...measured.map((candidate) => candidate.metric));
   const maximum = Math.max(...measured.map((candidate) => candidate.metric));
@@ -343,6 +378,9 @@ export function createCrossPlatformStrategyPlan(
   if (request.selectedPlatforms.length < 1 || request.selectedPlatforms.length > 10) {
     throw new Error("Der Strategieplan benötigt eine bis zehn Plattformen.");
   }
+  if (new Set(request.selectedPlatforms).size !== request.selectedPlatforms.length) {
+    throw new Error("Jede Plattform darf im Strategieplan nur einmal vorkommen.");
+  }
 
   const candidates: Candidate[] = request.selectedPlatforms.map((platform) => {
     const profile = getStrategyPlatformProfile(platform);
@@ -368,7 +406,7 @@ export function createCrossPlatformStrategyPlan(
       blockers.push("Mehrere Werbekonten sind verbunden; vor einer Allokation ist eine Kontoauswahl nötig.");
     }
     const measuredPerformanceAllowed =
-      MEASURED_PERFORMANCE_PLATFORMS.includes(platform);
+      context.measuredPerformancePlatforms.includes(platform);
     const performance =
       readiness === "connected" && measuredPerformanceAllowed
         ? performanceFor(context.performance, platform, accountIds[0])
@@ -381,23 +419,29 @@ export function createCrossPlatformStrategyPlan(
     }
 
     let metric: number | null = null;
-    let signal: StrategySignalKind = "prior";
+    let signal: StrategySignalKind = "insufficient_evidence";
     if (blockers.length === 0 && !measuredPerformanceAllowed) {
       reasons.push(
-        "Der Provider besitzt noch keinen freigegebenen Vollständigkeitsvertrag; es gilt nur der Ziel-Prior.",
+        "Der Provider besitzt noch keinen freigegebenen Vollständigkeitsvertrag und kann deshalb nicht verglichen werden.",
       );
     } else if (performance && blockers.length === 0) {
-      const age = daysOld(performance.latestDataDate, context.now);
-      if (age === null || age > STRATEGY_MAX_DATA_AGE_DAYS) {
-        reasons.push("Performance-Daten sind nicht aktuell genug; es gilt nur der Ziel-Prior.");
+      if (!performance.coverageComplete) {
+        reasons.push(
+          "Snapshot- oder Attributionsabdeckung ist unvollständig beziehungsweise gemischt; eine Erfolgsbewertung ist nicht möglich.",
+        );
       } else {
-        const measured = efficiencyMetric(request.objective, performance);
-        metric = measured.metric;
-        signal = measured.signal;
-        reasons.push(measured.reason);
+        const age = daysOld(performance.latestDataDate, context.now);
+        if (age === null || age > STRATEGY_MAX_DATA_AGE_DAYS) {
+          reasons.push("Performance-Daten sind nicht aktuell genug für einen Erfolgsvergleich.");
+        } else {
+          const measured = efficiencyMetric(request.objective, performance);
+          metric = measured.metric;
+          signal = measured.signal;
+          reasons.push(measured.reason);
+        }
       }
     } else if (!performance) {
-      reasons.push("Noch keine normalisierten Performance-Daten; Startgewicht nach Ziel-Fit.");
+      reasons.push("Keine belastbaren Performance-Daten für dieses Ziel; der Kanal erhält kein berechnetes Zielbudget.");
     }
 
     return {
@@ -407,45 +451,62 @@ export function createCrossPlatformStrategyPlan(
       blockers,
       reasons,
       eligible: blockers.length === 0,
-      affinity: profile.objectiveAffinity[request.objective],
       metric,
       signal,
       measured: metric !== null,
+      attributionSetting:
+        metric !== null ? (performance?.attributionSetting ?? null) : null,
     };
   });
 
-  const performanceScores = normalizePerformanceScores(candidates);
-  const weighted = candidates
-    .filter((candidate) => candidate.eligible)
-    .map((candidate) => {
-      const performanceScore = performanceScores.get(candidate.platform);
-      return {
+  const eligibleCandidates = candidates.filter((candidate) => candidate.eligible);
+  const measuredCandidates = eligibleCandidates.filter(
+    (candidate): candidate is Candidate & { metric: number } =>
+      candidate.metric !== null,
+  );
+  const measuredSignals = new Set(
+    measuredCandidates.map((candidate) => candidate.signal),
+  );
+  const measuredAttributionSettings = new Set(
+    measuredCandidates
+      .map((candidate) => candidate.attributionSetting)
+      .filter((value): value is string => Boolean(value)),
+  );
+  const comparisonReady =
+    !context.performanceReadErrorCode &&
+    measuredCandidates.length >= STRATEGY_MIN_COMPARABLE_PLATFORMS &&
+    measuredSignals.size === 1 &&
+    measuredAttributionSettings.size === 1;
+  const performanceScores = comparisonReady
+    ? normalizePerformanceScores(measuredCandidates)
+    : new Map<StrategyPlatformId, number>();
+  const weighted = comparisonReady
+    ? measuredCandidates.map((candidate) => ({
         platform: candidate.platform,
-        minimumShareBps:
-          performanceScore === undefined
-            ? STRATEGY_EXPLORATION_SHARE_BPS
-            : STRATEGY_MIN_SHARE_BPS,
-        weight:
-          performanceScore === undefined
-            ? candidate.affinity
-            : Math.round(candidate.affinity * 0.35 + performanceScore * 0.65),
-      };
-    });
+        minimumShareBps: STRATEGY_MIN_SHARE_BPS,
+        weight: performanceScores.get(candidate.platform) ?? 0,
+      }))
+    : [];
   const shares = allocateShares(weighted);
   const targetAmounts = allocateMinorUnits(request.dailyBudgetMinor, shares);
+  const allocationConfidence: StrategyConfidence = !comparisonReady
+    ? "low"
+    : measuredCandidates.length === eligibleCandidates.length
+      ? "high"
+      : "medium";
 
   const allocations: StrategyPlatformAllocation[] = candidates.map((candidate) => {
     const profile = getStrategyPlatformProfile(candidate.platform);
     const shareBps = shares.get(candidate.platform) ?? 0;
     const target = targetAmounts.get(candidate.platform) ?? 0;
     const performanceScore = performanceScores.get(candidate.platform) ?? null;
-    const score =
-      performanceScore === null
-        ? candidate.affinity
-        : Math.round(candidate.affinity * 0.35 + performanceScore * 0.65);
     const reasons = [...candidate.reasons];
-    if (candidate.eligible && candidate.metric === null) {
-      reasons.push("Der Anteil ist als kontrollierte Exploration gekennzeichnet.");
+    if (candidate.eligible && candidate.metric !== null && !comparisonReady) {
+      reasons.push(
+        "Ein Messwert ist vorhanden, aber ohne zweiten vergleichbaren Kanal entsteht keine Erfolgsallokation.",
+      );
+    } else if (candidate.eligible && candidate.metric === null) {
+      reasons.push("Ohne belastbares Erfolgssignal wird kein Zielbudget berechnet.");
     }
 
     return {
@@ -457,12 +518,9 @@ export function createCrossPlatformStrategyPlan(
       targetDailyBudgetMinor: target,
       shareBps,
       signal: candidate.signal,
-      confidence:
-        performanceScore === null ? "low" : performanceScores.size >= 2 ? "high" : "medium",
-      objectiveAffinity: candidate.affinity,
+      confidence: performanceScore === null ? "low" : allocationConfidence,
       performanceScore,
-      score,
-      exploration: candidate.eligible && candidate.metric === null,
+      score: performanceScore,
       reasons,
       blockers: candidate.blockers,
     };
@@ -473,25 +531,49 @@ export function createCrossPlatformStrategyPlan(
     eligibleAllocations.map((allocation) => allocation.targetDailyBudgetMinor),
   );
   const blocked = allocations.filter((allocation) => !allocation.eligible);
-  const measuredCount = candidates.filter(
-    (candidate) => candidate.eligible && candidate.measured,
-  ).length;
-  const confidence = confidenceFor(
-    eligibleAllocations.length,
-    measuredCount,
-    Boolean(context.performanceReadErrorCode),
-  );
+  const measuredCount = measuredCandidates.length;
+  const confidence = comparisonReady
+    ? confidenceFor(
+        eligibleAllocations.length,
+        measuredCount,
+        Boolean(context.performanceReadErrorCode),
+      )
+    : "low";
   const blockers = blocked.flatMap((allocation) =>
     allocation.blockers.map((blocker) => `${allocation.platformName}: ${blocker}`),
   );
-  const reasons = [
-    "Der Zielmix wird exakt auf das bestätigte Gesamt-Tagesbudget verteilt.",
-    "Nicht ausreichend gemessene Plattformen werden über transparente Ziel-Priors exploriert.",
-    "Diese Version erzeugt weder Provider-Writes noch Mutationspläne.",
-  ];
+  const reasons = comparisonReady
+    ? [
+        "Das Zielbudget wird ausschließlich zwischen Plattformen mit vergleichbaren, zielspezifischen Performance-Signalen verteilt.",
+        "Nicht gemessene Plattformmerkmale beeinflussen die Budgetverteilung nicht.",
+        "Diese Version erzeugt weder Provider-Writes noch Mutationspläne.",
+      ]
+    : [
+        "Keine Erfolgsallokation: Dafür sind mindestens zwei Plattformen mit vergleichbaren, zielspezifischen Performance-Signalen erforderlich.",
+        "Nicht gemessene Plattformmerkmale sind keine Erfolgsdaten und erzeugen deshalb kein Zielbudget.",
+        "Diese Version erzeugt weder Provider-Writes noch Mutationspläne.",
+      ];
+  if (!comparisonReady) {
+    blockers.push(
+      `Vergleichbare Plattformen: ${measuredCount} von mindestens ${STRATEGY_MIN_COMPARABLE_PLATFORMS}.`,
+    );
+    if (measuredSignals.size > 1) {
+      blockers.push(
+        "Die verfügbaren Plattformdaten verwenden unterschiedliche Erfolgsmetriken und werden nicht gegeneinander gerechnet.",
+      );
+    }
+    if (
+      measuredCount >= STRATEGY_MIN_COMPARABLE_PLATFORMS &&
+      measuredAttributionSettings.size !== 1
+    ) {
+      blockers.push(
+        "Die verfügbaren Plattformdaten verwenden unterschiedliche oder unbekannte Attributionsfenster und werden nicht gegeneinander gerechnet.",
+      );
+    }
+  }
   if (context.performanceReadErrorCode) {
     reasons.push(
-      `Performance-Daten konnten nicht vollständig gelesen werden (${context.performanceReadErrorCode}); der Plan nutzt konservative Priors.`,
+      `Performance-Daten konnten nicht vollständig gelesen werden (${context.performanceReadErrorCode}); es wird keine Allokation ausgegeben.`,
     );
   }
 
@@ -503,13 +585,22 @@ export function createCrossPlatformStrategyPlan(
     requestedDailyBudgetMinor: request.dailyBudgetMinor,
     targetAllocatedDailyBudgetMinor: targetAllocated,
     status:
-      eligibleAllocations.length === 0
-        ? "blocked"
-        : blocked.length > 0 || Boolean(context.performanceReadErrorCode)
+      !comparisonReady
+        ? "insufficient_evidence"
+        : blocked.length > 0 || measuredCount < eligibleAllocations.length
           ? "partial"
           : "ready",
     confidence,
     executionMode: "read_only",
+    comparison: {
+      ready: comparisonReady,
+      requiredMeasuredPlatforms: STRATEGY_MIN_COMPARABLE_PLATFORMS,
+      measuredPlatforms: measuredCandidates.map((candidate) => candidate.platform),
+      signal: comparisonReady ? measuredCandidates[0].signal : null,
+      attributionSetting: comparisonReady
+        ? measuredCandidates[0].attributionSetting
+        : null,
+    },
     guardrails: {
       maxBudgetChangeBpsPer24Hours: STRATEGY_MAX_BUDGET_CHANGE_BPS,
       cooldownHours: STRATEGY_COOLDOWN_HOURS,

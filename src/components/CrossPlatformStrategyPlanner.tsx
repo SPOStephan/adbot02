@@ -4,8 +4,6 @@ import { FormEvent, useMemo, useState } from "react";
 import {
   Calculator,
   CircleAlert,
-  CircleCheckBig,
-  FlaskConical,
   LockKeyhole,
   Network,
 } from "lucide-react";
@@ -32,7 +30,7 @@ const OBJECTIVE_LABELS: Record<StrategyObjective, string> = {
 };
 
 const SIGNAL_LABELS: Record<string, string> = {
-  prior: "Ziel-Fit / Exploration",
+  insufficient_evidence: "Keine Vergleichsdaten",
   awareness_efficiency: "Ausspielungs-Effizienz",
   traffic_efficiency: "Traffic-Effizienz",
   conversion_efficiency: "Ergebnis-Effizienz",
@@ -56,13 +54,14 @@ function formatMoney(minor: number, currency: string): string {
   }).format(minor / 100);
 }
 
-function stageLabel(stage: StrategyPlatformReadiness["integrationStage"]): string {
-  if (stage === "live") return "Datenadapter vorhanden";
-  if (stage === "next") return "Nächster Adapter";
+function stageLabel(item: StrategyPlatformReadiness): string {
+  if (item.performanceMeasurementApproved) return "Strategie-Messung freigegeben";
+  if (item.integrationStage === "live") return "Connector vorhanden · Messvertrag ausstehend";
+  if (item.integrationStage === "next") return "Nächster Adapter";
   return "Vorbereitet";
 }
 
-type Notice = { tone: "error" | "success"; message: string } | null;
+type Notice = { tone: "error" | "success" | "warning"; message: string } | null;
 
 type Props = {
   readiness: StrategyPlatformReadiness[];
@@ -128,11 +127,16 @@ export function CrossPlatformStrategyPlanner({
       }
       setPlan(body.plan);
       setNotice({
-        tone: "success",
+        tone:
+          body.plan.status === "ready" || body.plan.status === "partial"
+            ? "success"
+            : "warning",
         message:
           body.plan.status === "ready"
-            ? "Strategieplan vollständig berechnet. Es wurden keine Werbekonten verändert."
-            : "Strategieplan berechnet. Nicht bereite Kanäle und Übergangsschritte sind gekennzeichnet.",
+              ? "Erfolgsvergleich berechnet. Es wurden keine Werbekonten verändert."
+              : body.plan.status === "partial"
+                ? "Erfolgsvergleich für die messbaren Kanäle berechnet. Nicht vergleichbare Kanäle erhalten kein Budget."
+                : "Noch keine belastbare Erfolgsallokation möglich. Adbot hat bewusst kein Budget verteilt.",
       });
     } catch (error) {
       setNotice({
@@ -156,15 +160,14 @@ export function CrossPlatformStrategyPlanner({
             Plattformübergreifende Strategie
           </div>
           <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
-            Ein Ziel, ein Gesamtbudget, ein nachvollziehbarer Kanalplan
+            Echte Ergebnisse vergleichen, erst dann Budget verteilen
           </h2>
           <p className="mt-3 max-w-4xl text-sm leading-6 text-blue-100">
-            Adbot kombiniert den Fit des Werbeziels mit freigegebenen Live-Kennzahlen;
-            in V1 ist die Performancegewichtung ausschließlich für Meta freigegeben.
-            Fehlende Daten werden als kontrollierte Exploration behandelt, niemals als
-            vermeintlicher Gewinner. Teilweise fehlende Kennzahlen führen nur zu Ziel-Priors;
-            gemischte oder abweichende Währungen blockieren den Kanal. Dieser Schritt plant
-            ausschließlich und verändert keine Kampagne.
+            Adbot verteilt Budget nur, wenn mindestens zwei Plattformen für dasselbe Ziel
+            belastbare und vergleichbare Live-Ergebnisse liefern. Ohne diese Daten gibt es
+            keine Schätzung, keinen künstlichen Gewinner und kein Zielbudget. Der aktuelle
+            Stand kann Meta messen; ChatGPT Ads bleibt bis zu einem vollständigen Messvertrag
+            ohne Erfolgsbewertung. Dieser Schritt verändert keine Kampagne.
           </p>
         </div>
 
@@ -273,7 +276,7 @@ export function CrossPlatformStrategyPlanner({
                           {item.description}
                         </span>
                         <span className="mt-2 block text-[11px] font-bold uppercase tracking-wide text-blue-700">
-                          {stageLabel(item.integrationStage)}
+                          {stageLabel(item)}
                         </span>
                       </span>
                     </span>
@@ -290,7 +293,7 @@ export function CrossPlatformStrategyPlanner({
               type="submit"
             >
               <Calculator className="size-4" />
-              {pending ? "Plan wird berechnet…" : "Strategie und Budget berechnen"}
+              {pending ? "Vergleich wird geprüft…" : "Erfolgsvergleich prüfen"}
             </button>
             <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500">
               <LockKeyhole className="size-4" /> Keine Provider-Writes in diesem Schritt
@@ -302,7 +305,9 @@ export function CrossPlatformStrategyPlanner({
               className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
                 notice.tone === "success"
                   ? "bg-emerald-50 text-emerald-800"
-                  : "bg-rose-50 text-rose-800"
+                  : notice.tone === "warning"
+                    ? "bg-amber-50 text-amber-900"
+                    : "bg-rose-50 text-rose-800"
               }`}
             >
               {notice.message}
@@ -316,9 +321,16 @@ export function CrossPlatformStrategyPlanner({
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
               ["Zielbudget", formatMoney(plan.requestedDailyBudgetMinor, plan.currency)],
-              ["Allokiert", formatMoney(plan.targetAllocatedDailyBudgetMinor, plan.currency)],
+              ["Erfolgsallokation", formatMoney(plan.targetAllocatedDailyBudgetMinor, plan.currency)],
               ["Vertrauen", CONFIDENCE_LABELS[plan.confidence] ?? plan.confidence],
-              ["Status", plan.status === "ready" ? "Bereit" : plan.status === "partial" ? "Teilweise" : "Blockiert"],
+              [
+                "Status",
+                plan.status === "ready"
+                  ? "Bereit"
+                  : plan.status === "partial"
+                    ? "Teilweise"
+                    : "Nicht genug Vergleichsdaten",
+              ],
             ].map(([label, value]) => (
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" key={label}>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
@@ -327,11 +339,48 @@ export function CrossPlatformStrategyPlanner({
             ))}
           </div>
 
+          {!plan.comparison.ready ? (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950">
+              <div className="flex items-start gap-3">
+                <CircleAlert className="mt-0.5 size-5 shrink-0" />
+                <div>
+                  <h3 className="font-extrabold">Keine belastbare Erfolgsallokation</h3>
+                  <p className="mt-1 text-sm leading-6">
+                    Gemessen sind {plan.comparison.measuredPlatforms.length} von mindestens {" "}
+                    {plan.comparison.requiredMeasuredPlatforms} erforderlichen Plattformen.
+                    Deshalb bleiben alle Zielbudgets bei 0,00 {plan.currency}. Eine Verteilung
+                    ohne echten kanalübergreifenden Vergleich wäre geraten.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="font-extrabold text-slate-900">Prüfgrundlage</h3>
+            {plan.blockers.length > 0 ? (
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-900">
+                {plan.blockers.map((blocker) => (
+                  <li className="flex gap-2" key={blocker}>
+                    <CircleAlert className="mt-1 size-4 shrink-0" /> {blocker}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+              {plan.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+
           <div className="grid gap-4 xl:grid-cols-2">
             {plan.allocations.map((allocation) => (
               <article
                 className={`rounded-2xl border bg-white p-5 shadow-sm ${
-                  allocation.eligible ? "border-slate-200" : "border-amber-200"
+                  allocation.targetDailyBudgetMinor > 0
+                    ? "border-slate-200"
+                    : "border-amber-200"
                 }`}
                 key={allocation.platform}
               >
@@ -347,12 +396,12 @@ export function CrossPlatformStrategyPlanner({
                   </div>
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-bold ${
-                      allocation.eligible
+                      allocation.targetDailyBudgetMinor > 0
                         ? "bg-blue-100 text-blue-800"
                         : "bg-amber-100 text-amber-900"
                     }`}
                   >
-                    {allocation.eligible
+                    {allocation.targetDailyBudgetMinor > 0
                       ? `${(allocation.shareBps / 100).toLocaleString("de-DE", { maximumFractionDigits: 1 })} %`
                       : "nicht allokiert"}
                   </span>
@@ -366,28 +415,18 @@ export function CrossPlatformStrategyPlanner({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold uppercase text-slate-500">Gesamtscore</p>
+                    <p className="text-[11px] font-bold uppercase text-slate-500">Performance-Vergleich</p>
                     <p className="mt-1 font-extrabold text-slate-900">
-                      {allocation.score}/100
+                      {allocation.score === null ? "—" : `${allocation.score}/100`}
                     </p>
                   </div>
                 </div>
 
-                {allocation.eligible ? (
+                {allocation.performanceScore !== null ? (
                   <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
                     <span className="rounded-lg bg-slate-100 px-2.5 py-1.5">
-                      Ziel-Fit {allocation.objectiveAffinity}/100
+                      Gemessene Performance {allocation.performanceScore}/100
                     </span>
-                    {allocation.performanceScore !== null ? (
-                      <span className="rounded-lg bg-slate-100 px-2.5 py-1.5">
-                        Performance {allocation.performanceScore}/100
-                      </span>
-                    ) : null}
-                    {allocation.exploration ? (
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2.5 py-1.5 text-violet-800">
-                        <FlaskConical className="size-3.5" /> Exploration
-                      </span>
-                    ) : null}
                   </div>
                 ) : null}
 
@@ -400,7 +439,7 @@ export function CrossPlatformStrategyPlanner({
                     ))}
                     {allocation.reasons.map((item) => (
                       <li className="flex gap-2" key={`reason-${item}`}>
-                        <CircleCheckBig className="mt-0.5 size-3.5 shrink-0 text-blue-600" /> {item}
+                        <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-slate-500" /> {item}
                       </li>
                     ))}
                   </ul>
@@ -412,9 +451,11 @@ export function CrossPlatformStrategyPlanner({
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <h3 className="font-extrabold text-slate-900">Grenzen vor einer späteren Ausführung</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Der Plan verteilt das bestätigte Gesamtbudget auf Plattformebene. Konkrete
-              Kampagnen- oder Anzeigengruppenänderungen benötigen zuerst providerbezogene
-              Budget-Owner, Währung und Mutationshistorie.
+              {plan.comparison.ready
+                ? "Der Plan verteilt das bestätigte Gesamtbudget ausschließlich zwischen vergleichbaren Plattformen. "
+                : "Dieser Stand verteilt kein Budget, weil noch kein belastbarer Plattformvergleich möglich ist. "}
+              Konkrete Kampagnen- oder Anzeigengruppenänderungen benötigen zusätzlich
+              providerbezogene Budget-Owner, Währung und Mutationshistorie.
             </p>
             <ul className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
               <li>Später maximal 20 % Budgetänderung je Budgetobjekt und 24 Stunden</li>
