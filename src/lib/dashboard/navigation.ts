@@ -129,7 +129,7 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       match: "/dashboard/rechtliches",
     },
     {
-      label: "Inspiration",
+      label: "Werbebeispiele",
       icon: EyeOff,
       href: "/dashboard/inspiration",
       match: "/dashboard/inspiration",

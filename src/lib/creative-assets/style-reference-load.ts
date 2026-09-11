@@ -76,7 +76,7 @@ export async function loadVerifiedStyleReferenceAssets(input: {
   const { data, error } = await admin
     .from("brand_assets")
     .select(
-      "id,user_id,platform_account_id,sha256,mime_type,byte_size,width,height,storage_bucket,storage_path,status,moderation_status,library_scope,asset_role,training_status",
+      "id,user_id,platform_account_id,sha256,mime_type,byte_size,width,height,storage_bucket,storage_path,status,moderation_status,library_scope,asset_role,training_status,metadata",
     )
     .in("id", uniqueIds)
     .eq("status", "READY")
@@ -123,9 +123,22 @@ export async function loadVerifiedStyleReferenceAssets(input: {
     const trainingStatus = String(row.training_status ?? "none");
     const ownerUserId = String(row.user_id ?? "");
     const ownerPlatformAccountId = String(row.platform_account_id ?? "");
+    const metadata =
+      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : {};
+    const adExample =
+      metadata.ad_example &&
+      typeof metadata.ad_example === "object" &&
+      !Array.isArray(metadata.ad_example)
+        ? (metadata.ad_example as Record<string, unknown>)
+        : {};
+    const isStructuredAdExample = metadata.library === "ad_example_library";
 
     const isInspiration =
-      libraryScope === "INSPIRATION" && assetRole === "STYLE_REFERENCE";
+      libraryScope === "INSPIRATION" &&
+      assetRole === "STYLE_REFERENCE" &&
+      (!isStructuredAdExample || adExample.use_for_generation === true);
     const isCustomerEligible =
       libraryScope === "CUSTOMER" &&
       ownerUserId === input.userId &&
@@ -138,7 +151,7 @@ export async function loadVerifiedStyleReferenceAssets(input: {
       throw new CreativeAssetProviderError({
         code: "style_reference_not_allowed",
         message:
-          "Style-Referenz muss Inspiration-Vault (STYLE_REFERENCE) oder eigenes marked_good/performance_winner Asset sein.",
+          "Style-Referenz muss ein ausdrücklich freigegebenes Inspiration-Asset oder ein eigenes marked_good/performance_winner Asset sein.",
         failureMode: "PRE_DISPATCH",
         safeToRetry: false,
       });
