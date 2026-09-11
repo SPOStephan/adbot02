@@ -13,6 +13,8 @@ OpenAI dokumentiert aktuell keinen OAuth-Autorisierungs- oder Token-Endpunkt fü
 
 Listen verwenden Cursor-Pagination mit `after`, `last_id` und `has_more`. Insights stehen auf Account-, Kampagnen-, Ad-Group- und Ad-Ebene bereit. Tägliche Kampagnenauswertung verwendet `GET /ad_account/insights` mit `time_granularity=daily`, `aggregation_level=campaign`, wiederholten `fields[]` und einem JSON-kodierten `time_ranges[]`-Parameter.
 
+Der Delivery-Request projiziert ausschließlich die aktuell dokumentierten Felder `metadata.readable_time`, `campaign.id`, `campaign.name`, `campaign.clicks`, `campaign.impressions` und `campaign.spend`. Ein früher verwendetes, inzwischen nicht dokumentiertes `metadata.data_status` wird nicht angefordert; sein lokales Feld bleibt für rückwärtskompatible Snapshots nullable.
+
 Conversionzahlen werden separat über `POST /conversions/insights` auf Kampagnenebene geladen. Da die dokumentierte Antwort kein Datum enthält, fragt Adbot jeden vorhandenen Tagesbucket separat ab und ordnet das Datum lokal aus dem Requestfenster zu. OpenAI weist `conversions` als Click-through-Conversions aus; View-through-Conversions bleiben als ergänzende Provider-Metadaten getrennt. Scheitert auch nur ein erforderlicher Conversionabruf, wird der gesamte atomare Snapshot nicht ersetzt; unvollständige Attribution wird dadurch weder als null gespeichert noch für Optimierungen verwendet.
 
 Geldwerte bei Writes werden in **Micros** übergeben. Kampagnen unterstützen laut aktueller Referenz ein Lifetime-Spend-Limit. Das dokumentierte Daily-Spend-Limit ist dagegen **kontoweit**, revisionsgebunden und betrifft damit alle Kampagnen des Werbekontos. Ohne Standorttargeting kann eine Kampagne alle verfügbaren Orte adressieren.

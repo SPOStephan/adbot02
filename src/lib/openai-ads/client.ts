@@ -602,7 +602,6 @@ export class OpenAIAdsClient {
     });
     for (const field of [
       "metadata.readable_time",
-      "metadata.data_status",
       "campaign.id",
       "campaign.name",
       "campaign.clicks",
