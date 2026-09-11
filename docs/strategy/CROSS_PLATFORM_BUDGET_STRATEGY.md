@@ -13,7 +13,7 @@ Adbot soll nicht nur Kampagnenoberflächen vereinheitlichen, sondern aus einem G
 | Ansatz | Vorteil | Risiko | Entscheidung |
 |---|---|---|---|
 | Ein Sprachmodell entscheidet direkt über Budgets | flexibel | nicht deterministisch, schwer auditierbar, anfällig für erfundene Kennzahlen | nicht verwendet |
-| Rein regelbasierter Planer | transparent, testbar, reproduzierbar | benötigt gepflegte Ziel-Priors | als Ausführungskern gewählt |
+| Rein regelbasierter Planer | transparent, testbar, reproduzierbar | benötigt vergleichbare reale Messdaten | als Ausführungskern gewählt |
 | Hybrider Ansatz | Modell kann Strategiehypothesen liefern, Code erzwingt Budget- und Sicherheitsregeln | zwei getrennte Verträge erforderlich | vorbereitet: Intelligence liefert Ideen, deterministischer Code entscheidet über Geld |
 
 Die Budgetentscheidung wird durch `src/lib/cross-platform-strategy/planner.ts` getroffen. Der bestehende Adbot-Intelligence-Kern darf später Zielgruppen-, Creative- oder Testhypothesen liefern, erhält aber **keine alleinige Autorität über Geldbewegungen**.
@@ -21,17 +21,20 @@ Die Budgetentscheidung wird durch `src/lib/cross-platform-strategy/planner.ts` g
 ## Planungsalgorithmus
 
 1. Der Nutzer bestätigt Geschäftsziel, Währung, Gesamt-Tagesbudget und bis zu zehn Plattformen.
-2. Adbot liest ausschließlich mandanteneigene rohe Performance-Tageszeilen aktiver Konten. In V1 ist nur Meta für Performancegewichtung freigegeben, mit der kanonischen Körnung Anzeige/Tag. ChatGPT Ads bleibt trotz vorhandenen Read-Adapters Prior-only, bis sein Sync fehlende Basismetriken unverändert als `NULL` erhält.
+2. Adbot liest ausschließlich mandanteneigene rohe Performance-Tageszeilen aktiver Konten. Derzeit ist nur Meta für Performancegewichtung freigegeben, mit der kanonischen Körnung Anzeige/Tag. ChatGPT Ads bleibt trotz vorhandenen Read-Adapters ohne Messfreigabe, bis sein Sync fehlende Basismetriken unverändert als `NULL` erhält.
 3. Eine Plattform ist nur allokationsfähig, wenn genau ein nutzbares Werbekonto verbunden ist, das Ziel freigegeben ist und vorhandene Performance-Daten zur Planwährung passen.
-4. Ohne ausreichende oder frische Daten nutzt der Planer einen transparenten, objektivspezifischen **Ziel-Fit-Prior**. Diese Werte sind interne Produktprioren und keine Behauptung über garantierte Plattformleistung.
-5. Mit ausreichenden Daten eines ausdrücklich freigegebenen Providervertrags bewertet der Planer je nach Ziel Impressionen, Klicks, bestätigte Ergebnisse oder Conversion-Wert relativ zum Spend. Ein Performancewert ersetzt den Ziel-Fit nicht vollständig; beide Signale werden kombiniert.
-6. Plattformen ohne belastbare Daten erhalten bei einem Mehrkanalplan mindestens zehn Prozent kontrollierte Exploration. Gemessene Kanäle behalten mindestens fünf Prozent. Kein Kanal erhält bei mehreren geeigneten Plattformen mehr als 60 Prozent.
-7. Minor Units werden deterministisch und centgenau verteilt. Die Summe der Zielbudgets entspricht exakt dem bestätigten Gesamtbudget.
-8. Das Ergebnis ist eine Plattform-Zielallokation. Es behauptet noch keinen zulässigen Write-Schritt für einzelne Kampagnen oder Anzeigengruppen.
+4. Der Planer benötigt mindestens **zwei ausgewählte und verbundene Plattformen**, die für dasselbe Ziel aktuelle, vollständige und zielspezifische Performance-Signale liefern. Die Messgröße muss auf allen verglichenen Plattformen gleich sein.
+5. Fehlt diese Vergleichsbasis, lautet der Status `insufficient_evidence`. Adbot weist dann **0,00 Budget** zu. Weder Plattformreputation noch nicht gemessene Annahmen erzeugen eine Budgetempfehlung.
+6. Erst bei ausreichender Vergleichsbasis bewertet der Planer je nach Ziel Impressionen, Klicks, bestätigte Leads, Käufe oder Conversion-Wert relativ zum Spend. Die Budgetgewichte entstehen ausschließlich aus diesen gemessenen Effizienzen.
+7. Nicht gemessene oder nicht vergleichbare Kanäle erhalten 0,00 Budget. Zwischen mindestens zwei vergleichbaren Kanälen behält jeder mindestens fünf Prozent; kein Kanal erhält mehr als 60 Prozent.
+8. Minor Units werden deterministisch und centgenau verteilt. Bei einem zulässigen Vergleich entspricht die Summe exakt dem bestätigten Gesamtbudget; ohne Vergleich beträgt sie exakt null.
+9. Das Ergebnis ist eine Plattform-Zielallokation. Es behauptet noch keinen zulässigen Write-Schritt für einzelne Kampagnen oder Anzeigengruppen.
+
+> **Konsequenz für den aktuellen Live-Stand:** Da derzeit ausschließlich Meta einen freigegebenen Performancevertrag besitzt, kann Adbot aktuell noch keinen echten kanalübergreifenden Gewinner bestimmen. Die Oberfläche muss daher 0,00 Budget allokieren. Erst ein zweiter vollständiger Messadapter – voraussichtlich Google Ads – ermöglicht eine datenbasierte Verteilung. Aktivität auf nur einem Kanal beweist lediglich dessen eigene Effizienz, aber keine Überlegenheit gegenüber einem anderen Kanal.
 
 V1 akzeptiert ausschließlich explizit gelistete ISO-Währungen mit zwei Dezimalstellen. Währungen mit anderen Minor-Unit-Exponenten werden abgewiesen, bis eine einheitliche ISO-4217-Exponententabelle für Eingabe, Datenimport, Allokation und Anzeige vorliegt.
 
-Die Datenabfrage verwendet bewusst nicht die ältere aggregierte View `cross_platform_account_performance_daily`: Eine Voraggregation mit `MIN(currency)` könnte verschiedene Währungen unter einem Label summieren, und SQL-`SUM` würde partielle `NULL`-Attribution ausblenden. Stattdessen werden die letzten 30 Tage direkt aus `performance_data`, ausschließlich für das eine eindeutig verbundene Meta-Konto, in **einem** count-verifizierten Datenbankstatement gelesen. Ein clientseitig paginierter Mehrfachread wäre während eines parallel laufenden Snapshot-Syncs nicht konsistent genug. Der Normalisierer erhält jede Zeilenwährung und jedes `NULL`. Weicht der exakte Count von der gelieferten Zeilenzahl ab, fehlt der Count, überschreitet das Fenster 1.000 Rohzeilen oder tritt ein Read-Fehler auf, wird der gesamte Performance-Read verworfen und fail-closed ausschließlich mit Priors geplant. Mehrere oder unbekannte Währungen blockieren den Kanal; fehlt für den gewählten Effizienztyp nur ein Teil der erforderlichen Kennzahlen, wird dieser Kanal nicht performancegewichtet.
+Die Datenabfrage verwendet bewusst nicht die ältere aggregierte View `cross_platform_account_performance_daily`: Eine Voraggregation mit `MIN(currency)` könnte verschiedene Währungen unter einem Label summieren, und SQL-`SUM` würde partielle `NULL`-Attribution ausblenden. Stattdessen werden die letzten 30 Tage direkt aus `performance_data`, ausschließlich für das eine eindeutig verbundene Meta-Konto, in **einem** count-verifizierten Datenbankstatement gelesen. Ein clientseitig paginierter Mehrfachread wäre während eines parallel laufenden Snapshot-Syncs nicht konsistent genug. Der Normalisierer erhält jede Zeilenwährung, jedes `NULL`, `date_stop`, `attribution_setting` und `updated_at`. Jede Tageszeile muss `date_stop = date` erfüllen und eine Attributionseinstellung sowie einen Update-Zeitpunkt besitzen. Da PostgreSQL `now()` innerhalb der atomaren Snapshot-Transaktion stabil ist, dient `updated_at` als lesbarer Snapshot-Marker; die interne Sync-ID bleibt weiterhin nicht an Browser-/Session-Clients freigegeben. Innerhalb eines Kontofensters müssen Attribution und Snapshot-Marker eindeutig sein. Unterschiedliche oder unbekannte Attributionsfenster zwischen Plattformen werden nicht verglichen. Weicht der exakte Count von der gelieferten Zeilenzahl ab, fehlt der Count, überschreitet das Fenster 1.000 Rohzeilen oder tritt ein Read-Fehler auf, wird der gesamte Performance-Read verworfen. Mehrere oder unbekannte Währungen blockieren den Kanal; fehlt für den gewählten Effizienztyp nur ein Teil der erforderlichen Kennzahlen, wird dieser Kanal nicht performancegewichtet. Wenn danach weniger als zwei Plattformen vergleichbar bleiben, entsteht keine Budgetallokation.
 
 ## Sicherheits- und Ausführungsvertrag
 
@@ -50,13 +53,13 @@ Diese Grenzen sind bereits Teil des zurückgegebenen Planvertrags. `providerWrit
 
 ## Plattformprofile und offizielle Zielgrundlage
 
-Die internen Ziel-Fit-Werte sind **Prioren**, keine Benchmarks. Ob ein Ziel überhaupt unterstützt wird, basiert dagegen auf aktueller offizieller Dokumentation.
+Die Plattformprofile begrenzen ausschließlich, welche Ziele fachlich unterstützt werden. Der Katalog enthält keine numerischen Erfolgsannahmen und beeinflusst weder Score noch Budgetallokation.
 
 | Plattform | Normalisierte Ziele | Strategischer Schwerpunkt | Integrationsstand |
 |---|---|---|---|
 | Meta Ads | Bekanntheit, Traffic, Interaktion, Leads, App, Sales | soziale Discovery und Conversion | Datenadapter live |
 | Google Ads | Bekanntheit, Traffic, Interaktion, Leads, App, Sales | Search Intent, Performance Max, YouTube/Demand Gen | nächster Connector |
-| ChatGPT Ads | Bekanntheit, Traffic, Interaktion, Leads/Sales | kontextuelle Nachfrage in Gesprächen | Read-Adapter live; V1-Messgewichtung Prior-only |
+| ChatGPT Ads | Bekanntheit, Traffic, Interaktion, Leads/Sales | kontextuelle Nachfrage in Gesprächen | Read-Adapter live; noch keine Messfreigabe |
 | TikTok Ads | alle sechs Kernziele | Video-Discovery, Engagement, App | vorbereitet |
 | Pinterest Ads | Bekanntheit, Traffic, Leads, Sales | visuelle Planung und Kaufkontext | vorbereitet |
 | Microsoft Advertising | alle sechs Kernziele | Search Intent und Audience Network | vorbereitet |
@@ -71,11 +74,11 @@ Meta konsolidiert seine Kampagnenziele auf Awareness, Traffic, Engagement, Leads
 
 | Confidence | Bedeutung |
 |---|---|
-| niedrig | keine ausreichenden vergleichbaren Live-Daten oder ein Read-Fehler; Planung basiert überwiegend auf Ziel-Priors |
-| mittel | nur ein Teil der geeigneten Plattformen besitzt belastbare Daten |
-| hoch | mindestens zwei geeignete Plattformen besitzen aktuelle, vergleichbare Daten |
+| niedrig | weniger als zwei vergleichbare Live-Datenquellen oder ein Read-Fehler; keine Budgetallokation |
+| mittel | mindestens zwei Plattformen sind vergleichbar, weitere ausgewählte Kanäle besitzen aber keine belastbaren Daten und erhalten 0,00 Budget |
+| hoch | alle geeigneten Plattformen besitzen aktuelle, vollständige und über dieselbe Erfolgsmetrik vergleichbare Daten |
 
-Für Meta Awareness sind mindestens 1.000 vollständig gelesene Impressionen und ein vollständiger Mindest-Spend erforderlich. Für Traffic/Engagement sind mindestens 20 vollständig gelesene `inline_link_clicks` erforderlich. Lead-Pläne benötigen vollständige Leadwerte, Sales-Pläne vollständige Käufe oder einen über alle relevanten Rohzeilen vollständigen Conversion-Wert; generische Conversions ersetzen diese zielspezifischen Signale nicht. App-Promotion bleibt Prior-only, bis ein echtes App-Install-/App-Event-Signal normalisiert ist. Daten älter als drei Tage werden nicht als aktuelles Performance-Signal verwendet, und future-datierte Zeilen werden bereits in der Abfrage ausgeschlossen. Der Mindest-Spend beträgt intern 20 Währungseinheiten; für Lead/Sales sind mindestens drei bestätigte zielspezifische Ergebnisse erforderlich. Diese Schwellen sind konservative Adbot-Gates und keine Vorgaben der Plattformen.
+Für Meta Awareness sind mindestens 1.000 vollständig gelesene Impressionen und ein vollständiger Mindest-Spend erforderlich. Für Traffic sind mindestens 20 vollständig gelesene `inline_link_clicks` erforderlich. **Engagement verwendet Link-Klicks nicht als Ersatzsignal** und bleibt ohne Messwert, bis eine echte Engagement-Metrik normalisiert ist. Lead-Pläne benötigen vollständige Leadwerte, Sales-Pläne vollständige Käufe oder einen über alle relevanten Rohzeilen vollständigen Conversion-Wert; generische Conversions ersetzen diese zielspezifischen Signale nicht. App-Promotion bleibt ohne Messwert, bis ein echtes App-Install-/App-Event-Signal normalisiert ist. Daten älter als drei Tage werden nicht als aktuelles Performance-Signal verwendet, und future-datierte Zeilen werden bereits in der Abfrage ausgeschlossen. Der Mindest-Spend beträgt intern 20 Währungseinheiten; für Lead/Sales sind mindestens drei bestätigte zielspezifische Ergebnisse erforderlich. Diese Schwellen sind konservative Adbot-Gates und keine Vorgaben der Plattformen.
 
 ## Erweiterung um weitere Provider
 
@@ -89,16 +92,17 @@ Der Planer selbst muss für den elften Provider nicht neu entworfen werden. Das 
 
 ## Bekannte Grenzen dieser Stufe
 
-Der Planer aggregiert die letzten 30 Tage. Saisonale Effekte, Margen, Offline-Conversions, Customer Lifetime Value, inkrementeller Lift, Attribution zwischen Kanälen und kreative Sättigung werden noch nicht modelliert. Mehrere verbundene Konten derselben Plattform werden absichtlich blockiert, bis der Nutzer ein Zielkonto auswählt. Neue Kanäle werden nicht als Gewinner bezeichnet, sondern als Exploration gekennzeichnet.
+Der Planer aggregiert die letzten 30 Tage. Saisonale Effekte, Margen, Offline-Conversions, Customer Lifetime Value, inkrementeller Lift, Attribution zwischen Kanälen und kreative Sättigung werden noch nicht modelliert. Mehrere verbundene Konten derselben Plattform werden absichtlich blockiert, bis der Nutzer ein Zielkonto auswählt. Neue oder inaktive Kanäle werden weder als Gewinner bezeichnet noch mit einem geschätzten Budget versehen. Die aktuelle Logik vergleicht Plattformen; die Auswahl des erfolgreichsten Anzeigen- oder Creative-Formats innerhalb einer Plattform benötigt einen separaten, ebenfalls datenbasierten Vertrag.
 
 ## Nächste sichere Ausbaustufe
 
-1. Google-Ads-Connector und normalisierte Insights ergänzen.
-2. Strategiepläne versioniert speichern und Nutzerfreigaben auditieren.
-3. Simulation gegen historische Tagesdaten und Holdout-Evaluation aufsetzen.
-4. Execution-Adapter zunächst im Shadow Mode betreiben: Entscheidungen protokollieren, aber nicht schreiben.
-5. Erst nach erfolgreicher Simulation einzelne Budgetänderungen mit kleinen Caps aktivieren.
-6. Danach TikTok, Pinterest und Microsoft Advertising priorisieren; weitere Provider folgen über denselben Vertrag.
+1. Google-Ads-Connector und normalisierte Insights ergänzen, damit erstmals zwei Plattformen real vergleichbar sind.
+2. Für neue Kanäle eine ausdrücklich getrennte Messphase entwerfen. Ein kleines Testbudget darf dort nur nach separater Freigabe eingesetzt und niemals als Erfolgsoptimierung bezeichnet werden.
+3. Strategiepläne versioniert speichern und Nutzerfreigaben auditieren.
+4. Simulation gegen historische Tagesdaten und Holdout-Evaluation aufsetzen.
+5. Execution-Adapter zunächst im Shadow Mode betreiben: Entscheidungen protokollieren, aber nicht schreiben.
+6. Erst nach erfolgreicher Simulation einzelne Budgetänderungen mit kleinen Caps aktivieren.
+7. Danach TikTok, Pinterest und Microsoft Advertising priorisieren; weitere Provider folgen über denselben Vertrag.
 
 ## Quellen
 

@@ -110,7 +110,7 @@ export async function loadStrategyPlannerData(
       const pageResult = await supabase
         .from("performance_data")
         .select(
-          "id,platform_account_id,platform,entity_type,date,currency,spend,impressions,clicks,inline_link_clicks,conversions,leads,purchases,purchase_value",
+          "id,platform_account_id,platform,entity_type,date,date_stop,currency,spend,impressions,clicks,inline_link_clicks,conversions,leads,purchases,purchase_value,attribution_setting,updated_at",
           { count: "exact" },
         )
         .eq("user_id", userId)
@@ -147,6 +147,7 @@ export async function loadStrategyPlannerData(
     connectedAccountCount: accounts.filter(
       (account) => account.platform === profile.id && account.connected,
     ).length,
+    performanceMeasurementApproved: isPerformancePlatform(profile.id),
   }));
   const currencies = performance
     .map((row) => row.currency)
@@ -158,6 +159,7 @@ export async function loadStrategyPlannerData(
       now,
       accounts,
       performance,
+      measuredPerformancePlatforms: [...STRATEGY_MEASURED_PERFORMANCE_PLATFORMS],
       performanceReadErrorCode,
     },
     readiness,

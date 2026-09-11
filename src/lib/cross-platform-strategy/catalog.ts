@@ -49,7 +49,6 @@ export type StrategyPlatformProfile = {
   description: string;
   integrationStage: "live" | "next" | "roadmap";
   supportedObjectives: readonly StrategyObjective[];
-  objectiveAffinity: Record<StrategyObjective, number>;
 };
 
 export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
@@ -59,14 +58,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Facebook und Instagram für Reichweite, Nachfrage und Conversion.",
     integrationStage: "live",
     supportedObjectives: STRATEGY_OBJECTIVES,
-    objectiveAffinity: {
-      awareness: 92,
-      traffic: 84,
-      engagement: 94,
-      leads: 88,
-      app_promotion: 88,
-      sales: 90,
-    },
   },
   {
     id: "google",
@@ -74,14 +65,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Search, Display, YouTube und Performance Max für vorhandene Nachfrage.",
     integrationStage: "next",
     supportedObjectives: STRATEGY_OBJECTIVES,
-    objectiveAffinity: {
-      awareness: 78,
-      traffic: 96,
-      engagement: 68,
-      leads: 96,
-      app_promotion: 92,
-      sales: 98,
-    },
   },
   {
     id: "openai_ads",
@@ -89,14 +72,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Kontextuelle Nachfrage und Empfehlungen in ChatGPT.",
     integrationStage: "live",
     supportedObjectives: ["awareness", "traffic", "engagement", "leads", "sales"],
-    objectiveAffinity: {
-      awareness: 74,
-      traffic: 88,
-      engagement: 70,
-      leads: 86,
-      app_promotion: 76,
-      sales: 84,
-    },
   },
   {
     id: "tiktok",
@@ -104,14 +79,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Video-Discovery, Aufmerksamkeit und Nachfragegenerierung.",
     integrationStage: "roadmap",
     supportedObjectives: STRATEGY_OBJECTIVES,
-    objectiveAffinity: {
-      awareness: 98,
-      traffic: 78,
-      engagement: 98,
-      leads: 66,
-      app_promotion: 96,
-      sales: 76,
-    },
   },
   {
     id: "pinterest",
@@ -119,14 +86,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Visuelle Inspiration mit starkem Planungs- und Kaufkontext.",
     integrationStage: "roadmap",
     supportedObjectives: ["awareness", "traffic", "leads", "sales"],
-    objectiveAffinity: {
-      awareness: 82,
-      traffic: 86,
-      engagement: 78,
-      leads: 72,
-      app_promotion: 58,
-      sales: 90,
-    },
   },
   {
     id: "microsoft",
@@ -134,14 +93,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Search- und Audience-Nachfrage im Microsoft-Netzwerk.",
     integrationStage: "roadmap",
     supportedObjectives: STRATEGY_OBJECTIVES,
-    objectiveAffinity: {
-      awareness: 66,
-      traffic: 90,
-      engagement: 54,
-      leads: 92,
-      app_promotion: 62,
-      sales: 92,
-    },
   },
   {
     id: "linkedin",
@@ -149,14 +100,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Beruflicher B2B-Kontext für Reichweite, Leads und Recruiting.",
     integrationStage: "roadmap",
     supportedObjectives: ["awareness", "traffic", "engagement", "leads", "sales"],
-    objectiveAffinity: {
-      awareness: 86,
-      traffic: 76,
-      engagement: 76,
-      leads: 98,
-      app_promotion: 54,
-      sales: 72,
-    },
   },
   {
     id: "x",
@@ -164,14 +107,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Aktuelle Themen, öffentliche Konversationen und Reichweite.",
     integrationStage: "roadmap",
     supportedObjectives: ["awareness", "traffic", "engagement", "app_promotion", "sales"],
-    objectiveAffinity: {
-      awareness: 92,
-      traffic: 78,
-      engagement: 92,
-      leads: 60,
-      app_promotion: 68,
-      sales: 62,
-    },
   },
   {
     id: "reddit",
@@ -179,14 +114,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Community- und Interessen-Kontext für spezialisierte Zielgruppen.",
     integrationStage: "roadmap",
     supportedObjectives: ["awareness", "traffic", "leads", "app_promotion", "sales"],
-    objectiveAffinity: {
-      awareness: 82,
-      traffic: 82,
-      engagement: 90,
-      leads: 72,
-      app_promotion: 78,
-      sales: 70,
-    },
   },
   {
     id: "snapchat",
@@ -194,14 +121,6 @@ export const STRATEGY_PLATFORM_CATALOG: readonly StrategyPlatformProfile[] = [
     description: "Mobile Video- und AR-Reichweite für jüngere Zielgruppen.",
     integrationStage: "roadmap",
     supportedObjectives: STRATEGY_OBJECTIVES,
-    objectiveAffinity: {
-      awareness: 94,
-      traffic: 72,
-      engagement: 92,
-      leads: 58,
-      app_promotion: 94,
-      sales: 70,
-    },
   },
 ] as const;
 

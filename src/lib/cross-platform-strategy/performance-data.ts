@@ -20,6 +20,7 @@ export type RawStrategyPerformanceRow = {
   platform?: unknown;
   entity_type?: unknown;
   date?: unknown;
+  date_stop?: unknown;
   currency?: unknown;
   spend?: unknown;
   impressions?: unknown;
@@ -29,6 +30,8 @@ export type RawStrategyPerformanceRow = {
   leads?: unknown;
   purchases?: unknown;
   purchase_value?: unknown;
+  attribution_setting?: unknown;
+  updated_at?: unknown;
 };
 
 export type StrategyPerformancePage = {
@@ -65,6 +68,11 @@ export async function readCompleteStrategyPerformanceRows(
 
 function nonEmptyText(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizedAttributionSetting(value: unknown): string | null {
+  const normalized = nonEmptyText(value)?.toLowerCase().replace(/\s+/g, "_");
+  return normalized || null;
 }
 
 function nullableNonNegativeNumber(value: unknown): number | null {
@@ -117,6 +125,13 @@ export function normalizeStrategyPerformanceRows(
     if (scopedAccounts.get(accountId) !== platform) continue;
     if (STRATEGY_CANONICAL_ENTITY_TYPE[platform] !== entityType) continue;
 
+    const date = nonEmptyText(row.date);
+    const dateStop = nonEmptyText(row.date_stop);
+    const attributionSetting = normalizedAttributionSetting(
+      row.attribution_setting,
+    );
+    const snapshotId = nonEmptyText(row.updated_at);
+
     normalized.push({
       accountId,
       platform,
@@ -128,7 +143,15 @@ export function normalizeStrategyPerformanceRows(
       leads: nullableNonNegativeNumber(row.leads),
       purchases: nullableNonNegativeNumber(row.purchases),
       conversionValueMinor: nullableMajorToMinor(row.purchase_value),
-      latestDataDate: nonEmptyText(row.date),
+      latestDataDate: date,
+      attributionSetting,
+      snapshotId,
+      coverageComplete: Boolean(
+        date &&
+          dateStop === date &&
+          attributionSetting &&
+          snapshotId,
+      ),
     });
   }
 

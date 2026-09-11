@@ -9,7 +9,7 @@ export const DASHBOARD_PAGE_COPY = {
     eyebrow: "Kanalübergreifend",
     title: "Strategie & Budget",
     description:
-      "Geschäftsziel und Gesamtbudget in einen transparenten Kanalplan für verbundene und künftige Werbeplattformen übersetzen.",
+      "Prüfen, ob echte kanalübergreifende Erfolgsdaten für eine belastbare Budgetallokation vorliegen.",
   },
   kampagnen: {
     eyebrow: "Meta Live",
