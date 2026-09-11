@@ -45,7 +45,7 @@ export type OpenAIAdsDashboardAccount = {
   conversionInsightsAvailable: boolean;
   currency: string;
   timezone: string | null;
-  adsManagerUrl: string | null;
+  advertiserUrl: string | null;
   syncStatus: string;
   syncErrorCode: string | null;
   lastSyncStartedAt: string | null;
@@ -230,7 +230,7 @@ export async function loadOpenAIAdsDashboard(
           metadata.conversion_insights_status === "available",
         currency: text(metadata.currency_code)?.toUpperCase() ?? "EUR",
         timezone: text(metadata.timezone),
-        adsManagerUrl: text(metadata.url),
+        advertiserUrl: text(metadata.url),
         syncStatus: text(accountRow.provider_sync_status) ?? "idle",
         syncErrorCode: text(accountRow.provider_sync_error_code),
         lastSyncStartedAt: text(accountRow.provider_last_sync_started_at),

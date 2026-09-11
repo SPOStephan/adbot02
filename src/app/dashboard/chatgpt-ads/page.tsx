@@ -51,26 +51,34 @@ export default async function ChatGPTAdsPage() {
       {dashboardAvailable ? (
         <>
           <section className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
-            <p className="font-black">Neu in Adbot: echter ChatGPT-Ads-Connector</p>
+            <p className="font-black">ChatGPT Ads direkt mit Adbot verbinden</p>
             <p className="mt-1 max-w-4xl text-sm leading-6">
               Adbot liest Konten, Kampagnen, Anzeigengruppen, Anzeigen und Insights
-              direkt aus der OpenAI Advertiser API. Die kostenwirksame
-              Kampagnenanlage bleibt gesperrt, bis Tageslimits mit der offiziellen
-              API eindeutig durchgesetzt und anschließend verifiziert werden
-              können.
+              direkt aus der OpenAI Advertiser API. OpenAI nutzt derzeit
+              accountgebundene Ads-API-Keys statt eines OAuth-Dialogs; Adbot führt
+              deshalb durch die zwei nötigen Schritte und bestätigt das erkannte
+              Werbekonto sofort.
             </p>
           </section>
 
-          <div className="mt-8">
-            <OpenAIAdsWorkspace
-              accounts={accounts}
-              activeLaunchEnabled={OPENAI_ADS_ACTIVE_LAUNCH_ENABLED}
-            />
-          </div>
+          {accounts.length === 0 ? (
+            <div className="mt-8">
+              <OpenAIAdsConnectionForm />
+            </div>
+          ) : (
+            <>
+              <div className="mt-8">
+                <OpenAIAdsWorkspace
+                  accounts={accounts}
+                  activeLaunchEnabled={OPENAI_ADS_ACTIVE_LAUNCH_ENABLED}
+                />
+              </div>
 
-          <div className="mt-8">
-            <OpenAIAdsConnectionForm />
-          </div>
+              <div className="mt-8">
+                <OpenAIAdsConnectionForm />
+              </div>
+            </>
+          )}
         </>
       ) : (
         <section className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">

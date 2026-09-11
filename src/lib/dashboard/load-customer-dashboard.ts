@@ -358,7 +358,7 @@ async function loadCustomerDashboardImpl(
             ? "Advertiser API live"
           : undefined,
       helperText: isOpenAIAds
-        ? "Accountbezogene API-Keys, tägliche Delivery- und Conversion-Daten sowie bestätigte ACTIVE-Launches mit Tageslimit."
+        ? "In zwei Schritten verbinden: Key im OpenAI Ads Manager erstellen, in Adbot einfügen und das erkannte Werbekonto direkt bestätigen lassen."
         : isMeta
         ? platformAccountReadFailed
           ? "Die vorhandene Verbindung konnte nicht gelesen werden und bleibt unverändert. Bitte keinen Reconnect starten."
