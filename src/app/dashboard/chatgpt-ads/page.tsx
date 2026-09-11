@@ -4,6 +4,7 @@ import { DashboardPageHeader } from "@/components/DashboardPageHeader";
 import { OpenAIAdsConnectionForm } from "@/components/OpenAIAdsConnectionForm";
 import { OpenAIAdsWorkspace } from "@/components/OpenAIAdsWorkspace";
 import { loadOpenAIAdsDashboard } from "@/lib/openai-ads/dashboard";
+import { getPublishedOpenAIAdsGuide } from "@/lib/openai-ads/guide";
 import {
   hasOpenAIAdsEnv,
   OPENAI_ADS_ACTIVE_LAUNCH_ENABLED,
@@ -28,6 +29,7 @@ export default async function ChatGPTAdsPage() {
   const configured = hasOpenAIAdsEnv();
   let accounts: Awaited<ReturnType<typeof loadOpenAIAdsDashboard>> = [];
   let dashboardAvailable = configured;
+  let guideAvailable = false;
 
   if (configured) {
     try {
@@ -40,6 +42,14 @@ export default async function ChatGPTAdsPage() {
     }
   }
 
+  try {
+    guideAvailable = Boolean(await getPublishedOpenAIAdsGuide());
+  } catch (error) {
+    console.error("openai_ads_guide_unavailable", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+
   return (
     <>
       <DashboardPageHeader
@@ -50,7 +60,7 @@ export default async function ChatGPTAdsPage() {
 
       {dashboardAvailable ? (
         <>
-          <section className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
+          <section className="mt-8 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950">
             <p className="font-black">ChatGPT Ads direkt mit Adbot verbinden</p>
             <p className="mt-1 max-w-4xl text-sm leading-6">
               Adbot liest Konten, Kampagnen, Anzeigengruppen, Anzeigen und Insights
@@ -63,7 +73,7 @@ export default async function ChatGPTAdsPage() {
 
           {accounts.length === 0 ? (
             <div className="mt-8">
-              <OpenAIAdsConnectionForm />
+              <OpenAIAdsConnectionForm guideAvailable={guideAvailable} />
             </div>
           ) : (
             <>
@@ -75,7 +85,7 @@ export default async function ChatGPTAdsPage() {
               </div>
 
               <div className="mt-8">
-                <OpenAIAdsConnectionForm />
+                <OpenAIAdsConnectionForm guideAvailable={guideAvailable} />
               </div>
             </>
           )}

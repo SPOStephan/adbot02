@@ -27,6 +27,10 @@ const [
   launchForm,
   workspace,
   chatGPTAdsPage,
+  guideService,
+  guideAdminRoute,
+  guideAdminPage,
+  guideCustomerPage,
   connectorStatusRoute,
   catalog,
   navigation,
@@ -53,6 +57,10 @@ const [
   read("src/components/OpenAIAdsLaunchForm.tsx"),
   read("src/components/OpenAIAdsWorkspace.tsx"),
   read("src/app/dashboard/chatgpt-ads/page.tsx"),
+  read("src/lib/openai-ads/guide.ts"),
+  read("src/app/api/admin/openai-ads-guide/route.ts"),
+  read("src/app/dashboard/chatgpt-ads-anleitung/page.tsx"),
+  read("src/app/dashboard/chatgpt-ads/anleitung/page.tsx"),
   read("src/app/api/connectors/route.ts"),
   read("src/lib/platforms/catalog.ts"),
   read("src/lib/dashboard/navigation.ts"),
@@ -89,11 +97,31 @@ assert.match(connectionForm, /void startInitialSync\(account\)/);
 assert.match(connectionForm, /\/api\/connectors\/openai-ads\/sync/);
 assert.match(connectionForm, /Konto ist verbunden.*automatisch erneut versucht/s);
 assert.match(connectionForm, /Kostenwirksame ChatGPT-Ads-Aktionen bleiben/);
+assert.match(connectionForm, /guideAvailable/);
+assert.match(connectionForm, /Anleitung mit Bildern öffnen/);
+assert.match(connectionForm, /target="_blank"/);
+const onboardingPanel = connectionForm.slice(
+  connectionForm.indexOf('border border-slate-200 bg-white shadow-sm'),
+);
+assert.match(onboardingPanel, /from-blue-950 via-blue-900 to-blue-700/);
+assert.match(onboardingPanel, /bg-blue-600/);
+assert.doesNotMatch(onboardingPanel, /emerald/);
 assert.match(chatGPTAdsPage, /hasOpenAIAdsEnv\(\)/);
 assert.match(chatGPTAdsPage, /try\s*{[\s\S]*loadOpenAIAdsDashboard/);
 assert.match(chatGPTAdsPage, /dashboardAvailable = false/);
 assert.match(chatGPTAdsPage, /ChatGPT Ads wird technisch aktiviert/);
 assert.match(chatGPTAdsPage, /Bestehende Meta-Verbindungen/);
+assert.match(chatGPTAdsPage, /border-blue-200 bg-blue-50/);
+assert.match(chatGPTAdsPage, /getPublishedOpenAIAdsGuide/);
+assert.match(guideService, /SITE_BRANDING_BUCKET/);
+assert.match(guideService, /openai-ads-guide\/manifest\.json/);
+assert.match(guideService, /image\/webp/);
+assert.match(guideService, /published:\s*manifest\.published/);
+assert.match(guideAdminRoute, /isSiteAdmin/);
+assert.match(guideAdminRoute, /isDashboardSameOriginRequest/);
+assert.match(guideAdminPage, /redirect\("\/dashboard"\)/);
+assert.match(guideCustomerPage, /getPublishedOpenAIAdsGuide/);
+assert.match(guideCustomerPage, /target="_blank"/);
 assert.match(
   connectorStatusRoute,
   /\.select\(\s*"id, platform, platform_account_id, account_name, expires_at",?\s*\)/,

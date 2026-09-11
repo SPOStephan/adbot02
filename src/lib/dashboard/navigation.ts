@@ -7,6 +7,7 @@ import {
   Globe2,
   ImageIcon,
   Images,
+  ListChecks,
   LayoutDashboard,
   Megaphone,
   MessageSquareText,
@@ -132,6 +133,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       icon: EyeOff,
       href: "/dashboard/inspiration",
       match: "/dashboard/inspiration",
+    },
+    {
+      label: "ChatGPT-Anleitung",
+      icon: ListChecks,
+      href: "/dashboard/chatgpt-ads-anleitung",
+      match: "/dashboard/chatgpt-ads-anleitung",
     },
   ];
 }

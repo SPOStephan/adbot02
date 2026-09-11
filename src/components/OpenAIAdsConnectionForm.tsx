@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpen,
   CheckCircle2,
   ExternalLink,
   KeyRound,
@@ -93,7 +94,11 @@ function syncSummary(payload: unknown): string {
   } Anzeigen wurden importiert.`;
 }
 
-export function OpenAIAdsConnectionForm() {
+export function OpenAIAdsConnectionForm({
+  guideAvailable = false,
+}: {
+  guideAvailable?: boolean;
+}) {
   const router = useRouter();
   const [apiKey, setApiKey] = useState("");
   const [pending, setPending] = useState(false);
@@ -252,14 +257,14 @@ export function OpenAIAdsConnectionForm() {
 
           <div className="flex flex-wrap gap-3">
             <button
-              className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700"
               onClick={() => router.refresh()}
               type="button"
             >
               Kontoübersicht anzeigen
             </button>
             <a
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-emerald-400"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-blue-400 hover:text-blue-700"
               href={OPENAI_ADS_MANAGER_URL}
               rel="noreferrer"
               target="_blank"
@@ -286,8 +291,8 @@ export function OpenAIAdsConnectionForm() {
   return (
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
       <div className="grid lg:grid-cols-[0.85fr_1.15fr]">
-        <div className="bg-slate-950 p-6 text-white sm:p-8">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-300">
+        <div className="bg-gradient-to-br from-blue-950 via-blue-900 to-blue-700 p-6 text-white sm:p-8">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-200">
             ChatGPT Ads verbinden
           </p>
           <h2 className="mt-2 text-2xl font-black">
@@ -301,7 +306,7 @@ export function OpenAIAdsConnectionForm() {
 
           <ol className="mt-7 space-y-5">
             <li className="flex gap-4">
-              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-500 font-black text-slate-950">
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-blue-500 font-black text-white">
                 1
               </span>
               <div>
@@ -313,7 +318,7 @@ export function OpenAIAdsConnectionForm() {
               </div>
             </li>
             <li className="flex gap-4">
-              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-500 font-black text-slate-950">
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-blue-500 font-black text-white">
                 2
               </span>
               <div>
@@ -326,24 +331,37 @@ export function OpenAIAdsConnectionForm() {
             </li>
           </ol>
 
-          <a
-            className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400"
-            href={OPENAI_ADS_MANAGER_URL}
-            rel="noreferrer"
-            target="_blank"
-          >
-            OpenAI Ads Manager öffnen
-            <ExternalLink className="size-4" />
-          </a>
+          <div className="mt-7 grid gap-3">
+            <a
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-400"
+              href={OPENAI_ADS_MANAGER_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              OpenAI Ads Manager öffnen
+              <ExternalLink className="size-4" />
+            </a>
+            {guideAvailable ? (
+              <a
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-300/60 bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:bg-white/20"
+                href="/dashboard/chatgpt-ads/anleitung"
+                rel="noreferrer"
+                target="_blank"
+              >
+                <BookOpen className="size-4" />
+                Anleitung mit Bildern öffnen
+              </a>
+            ) : null}
+          </div>
         </div>
 
         <form className="p-6 sm:p-8" onSubmit={connect}>
           <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
               <KeyRound className="size-5" />
             </span>
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">
                 Schritt 2
               </p>
               <h3 className="mt-1 text-xl font-black text-slate-950">
@@ -364,7 +382,7 @@ export function OpenAIAdsConnectionForm() {
               autoCapitalize="none"
               autoComplete="off"
               autoCorrect="off"
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-mono text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-mono text-sm outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
               name="apiKey"
               onChange={(event) => setApiKey(event.target.value)}
               placeholder="Ads-API-Key hier einfügen"
@@ -379,7 +397,7 @@ export function OpenAIAdsConnectionForm() {
             className="mt-4 flex gap-3 rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600"
             id="openai-ads-key-security"
           >
-            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-700" />
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-blue-700" />
             <p>
               Der Key wird serverseitig bei OpenAI geprüft, anschließend
               AES-256-GCM-verschlüsselt gespeichert und nach dem Absenden aus diesem
@@ -401,7 +419,7 @@ export function OpenAIAdsConnectionForm() {
           ) : null}
 
           <button
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={apiKey.trim().length < 20 || pending}
             type="submit"
           >
