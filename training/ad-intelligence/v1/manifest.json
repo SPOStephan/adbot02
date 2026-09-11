@@ -1,0 +1,39 @@
+{
+  "contract_version": "adbot-training-manifest-v1",
+  "dataset_version": "adbot-cross-platform-seed-v1",
+  "source": "synthetic_first_party",
+  "contains_customer_data": false,
+  "contains_third_party_ads": false,
+  "teacher_model": "gpt-5-mini",
+  "judge_model": "gpt-5",
+  "records": 160,
+  "train_records": 116,
+  "eval_records": 44,
+  "preference_records": 116,
+  "platform_distribution": {
+    "meta": 40,
+    "openai_ads": 40,
+    "google": 40,
+    "tiktok": 40
+  },
+  "industry_distribution": {
+    "Hotels & Reisen": 16,
+    "E-Commerce": 16,
+    "SaaS & Software": 16,
+    "Lokale Dienstleistungen": 16,
+    "Gesundheit & Prävention": 16,
+    "Bildung & Weiterbildung": 16,
+    "Immobilien": 16,
+    "Automotive & Mobilität": 16,
+    "Gastronomie": 16,
+    "Beauty & Kosmetik": 16
+  },
+  "usage": {
+    "teacher_input": 109165,
+    "teacher_output": 514471,
+    "judge_input": 254228,
+    "judge_output": 273018
+  },
+  "split_rule": "sha256(adbot-v1-split|industry|objective) modulo 10; buckets 0-1 eval; all platforms stay in one split",
+  "rights_note": "Fictional brands and offers generated from Adbot-owned seed specifications; no customer or third-party ad content."
+}
