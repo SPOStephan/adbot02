@@ -4,6 +4,10 @@ import { DashboardPageHeader } from "@/components/DashboardPageHeader";
 import { OpenAIAdsConnectionForm } from "@/components/OpenAIAdsConnectionForm";
 import { OpenAIAdsWorkspace } from "@/components/OpenAIAdsWorkspace";
 import { loadOpenAIAdsDashboard } from "@/lib/openai-ads/dashboard";
+import {
+  hasOpenAIAdsEnv,
+  OPENAI_ADS_ACTIVE_LAUNCH_ENABLED,
+} from "@/lib/openai-ads/env";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -21,34 +25,64 @@ export default async function ChatGPTAdsPage() {
     redirect("/login?next=/dashboard/chatgpt-ads");
   }
 
-  const accounts = await loadOpenAIAdsDashboard(user.id);
+  const configured = hasOpenAIAdsEnv();
+  let accounts: Awaited<ReturnType<typeof loadOpenAIAdsDashboard>> = [];
+  let dashboardAvailable = configured;
+
+  if (configured) {
+    try {
+      accounts = await loadOpenAIAdsDashboard(user.id);
+    } catch (error) {
+      dashboardAvailable = false;
+      console.error("openai_ads_dashboard_unavailable", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  }
 
   return (
     <>
       <DashboardPageHeader
-        description="Werbekonten verbinden, echte Delivery-Daten vergleichen und ChatGPT-Ad-Kampagnen nach ausdrücklicher Budgetbestätigung direkt ACTIVE starten."
+        description="Werbekonten verbinden und echte Delivery- sowie Conversion-Daten für die kanalübergreifende Auswertung laden."
         eyebrow="OpenAI Advertiser API"
         title="ChatGPT Ads"
       />
 
-      <section className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
-        <p className="font-black">Neu in Adbot: echter ChatGPT-Ads-Connector</p>
-        <p className="mt-1 max-w-4xl text-sm leading-6">
-          Adbot liest Konten, Kampagnen, Anzeigengruppen, Anzeigen und Insights
-          direkt aus der OpenAI Advertiser API. Nach Bestätigung von Targeting,
-          Tages- und Laufzeitbudget legt Adbot neue Launches direkt ACTIVE an.
-          Läuft die Anzeigenprüfung noch, beginnt die Auslieferung automatisch
-          nach OpenAIs Genehmigung.
-        </p>
-      </section>
+      {dashboardAvailable ? (
+        <>
+          <section className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
+            <p className="font-black">Neu in Adbot: echter ChatGPT-Ads-Connector</p>
+            <p className="mt-1 max-w-4xl text-sm leading-6">
+              Adbot liest Konten, Kampagnen, Anzeigengruppen, Anzeigen und Insights
+              direkt aus der OpenAI Advertiser API. Die kostenwirksame
+              Kampagnenanlage bleibt gesperrt, bis Tageslimits mit der offiziellen
+              API eindeutig durchgesetzt und anschließend verifiziert werden
+              können.
+            </p>
+          </section>
 
-      <div className="mt-8">
-        <OpenAIAdsWorkspace accounts={accounts} />
-      </div>
+          <div className="mt-8">
+            <OpenAIAdsWorkspace
+              accounts={accounts}
+              activeLaunchEnabled={OPENAI_ADS_ACTIVE_LAUNCH_ENABLED}
+            />
+          </div>
 
-      <div className="mt-8">
-        <OpenAIAdsConnectionForm />
-      </div>
+          <div className="mt-8">
+            <OpenAIAdsConnectionForm />
+          </div>
+        </>
+      ) : (
+        <section className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
+          <p className="font-black">ChatGPT Ads wird technisch aktiviert</p>
+          <p className="mt-1 max-w-4xl text-sm leading-6">
+            Der Connector ist noch nicht vollständig betriebsbereit. Deshalb sind
+            Verbindung und Kampagnenstart bis zur abgeschlossenen
+            Live-Konfiguration sicher deaktiviert. Bestehende Meta-Verbindungen
+            und Kampagnen bleiben davon unverändert.
+          </p>
+        </section>
+      )}
     </>
   );
 }

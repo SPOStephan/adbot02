@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { CircleCheckBig, Sparkles } from "lucide-react";
 
 import { AuthForm } from "@/components/AuthForm";

@@ -143,6 +143,7 @@ export function OrganicBoostAutoPlanner({
     }
     const raw = window.sessionStorage.getItem(SESSION_KEY);
     if (!raw) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage is the external completion ledger
       setDone(false);
       return;
     }

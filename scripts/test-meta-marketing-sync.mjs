@@ -579,7 +579,23 @@ export function createAdminClient() {
     "creative-1",
     "historical-creative",
   ]]);
-  assert.equal(globalThis.__marketingSyncTest.rpcCalls.length, 4);
+  const firstSyncRpcNames = globalThis.__marketingSyncTest.rpcCalls.map(
+    (entry) => entry.name,
+  );
+  for (const expectedRpcName of [
+    "heal_meta_marketing_account_ready",
+    "replace_meta_marketing_snapshot",
+    "retain_meta_organic_boost_campaigns",
+    "merge_meta_creative_media_fields",
+    "apply_brand_asset_performance_winners",
+    "apply_meta_campaign_insight_spend",
+  ]) {
+    assert.equal(
+      firstSyncRpcNames.filter((name) => name === expectedRpcName).length,
+      1,
+      `${expectedRpcName} must run exactly once during a successful sync`,
+    );
+  }
   assert.equal(
     globalThis.__marketingSyncTest.rpcCalls[0].name,
     "heal_meta_marketing_account_ready",
@@ -639,6 +655,7 @@ export function createAdminClient() {
   assert.doesNotMatch(JSON.stringify(call.args), /test-user-token|test-app-secret/);
 
   globalThis.__marketingSyncTest.rejectAdInsightsCode100 = true;
+  const softFailRpcCountBefore = globalThis.__marketingSyncTest.rpcCalls.length;
   const softFailResult = await marketingModule.syncMetaMarketingSnapshot({
     platformAccountId: "00000000-0000-4000-8000-000000000001",
     userId: "00000000-0000-4000-8000-000000000002",
@@ -649,7 +666,9 @@ export function createAdminClient() {
   });
   assert.equal(softFailResult.insightsCount, 0);
   assert.ok(softFailResult.campaignsCount >= 1);
-  const softFailCalls = globalThis.__marketingSyncTest.rpcCalls.slice(-3);
+  const softFailCalls = globalThis.__marketingSyncTest.rpcCalls.slice(
+    softFailRpcCountBefore,
+  );
   const softFailCall = softFailCalls.find(
     (entry) => entry.name === "replace_meta_marketing_snapshot",
   );

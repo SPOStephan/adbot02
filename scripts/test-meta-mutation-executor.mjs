@@ -196,6 +196,10 @@ try {
     .replace('from "./client";', 'from "./client.mjs";')
     .replace('from "./crypto";', 'from "./crypto.mjs";')
     .replace('from "./env";', 'from "./env.mjs";')
+    .replace(
+      'from "@/lib/meta/organic-boost-pause-guard";',
+      'from "./organic-boost-pause-guard.mjs";',
+    )
     .replace('from "./write-client";', 'from "./write-client.mjs";');
 
   assert.match(executorSource, /await input\.beforeRemote\(\)/);
@@ -218,7 +222,7 @@ try {
   await writeFile(join(temporaryDirectory, "write-client.mjs"), transpile(writeClientSource));
   await writeFile(
     join(temporaryDirectory, "admin.mjs"),
-    "export function createAdminClient(){ throw new Error('admin stub must not be called'); }\n",
+    "export function createAdminClient(){ const chain = { from(){ return chain; }, select(){ return chain; }, eq(){ return chain; }, async maybeSingle(){ return { data: null, error: null }; } }; return chain; }\n",
   );
   await writeFile(
     join(temporaryDirectory, "image.mjs"),
@@ -228,6 +232,10 @@ try {
   await writeFile(
     join(temporaryDirectory, "env.mjs"),
     "export function getMetaSyncEnv(){ throw new Error('env stub must not be called'); }\n",
+  );
+  await writeFile(
+    join(temporaryDirectory, "organic-boost-pause-guard.mjs"),
+    "export function isAutomatedPauseAction(){ return false; }\nexport async function isOrganicBoostRemoteObject(){ return false; }\n",
   );
   await writeFile(join(temporaryDirectory, "executor.mjs"), transpile(executorSource));
 

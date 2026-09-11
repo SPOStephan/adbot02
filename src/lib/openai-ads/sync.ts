@@ -14,7 +14,7 @@ import {
 } from "@/lib/openai-ads/connection";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const OPENAI_ADS_CRON_BATCH_SIZE = 5;
+export const OPENAI_ADS_CRON_BATCH_SIZE = 1;
 const SYNC_STALE_AFTER_SECONDS = 15 * 60;
 const SUCCESS_INTERVAL_MS = 60 * 60 * 1000;
 const ERROR_BACKOFF_MS = 15 * 60 * 1000;
@@ -214,17 +214,31 @@ async function recordFailure(input: {
     1,
     Number(account?.provider_consecutive_failures ?? 0) + 1,
   );
+  const retireCredential = [
+    "credential_rejected",
+    "credential_decryption_failed",
+  ].includes(input.code);
+  const accountUpdate: Record<string, unknown> = {
+    provider_sync_status: "error",
+    provider_sync_error_code: input.code,
+    provider_backoff_until: retireCredential ? null : next,
+    provider_next_sync_at: retireCredential ? null : next,
+    provider_consecutive_failures: failures,
+    updated_at: now.toISOString(),
+  };
+  if (retireCredential) {
+    Object.assign(accountUpdate, {
+      access_token_encrypted: null,
+      token_iv: null,
+      token_auth_tag: null,
+      credential_kind: null,
+      revoked_at: now.toISOString(),
+    });
+  }
 
   await admin
     .from("platform_accounts")
-    .update({
-      provider_sync_status: "error",
-      provider_sync_error_code: input.code,
-      provider_backoff_until: next,
-      provider_next_sync_at: next,
-      provider_consecutive_failures: failures,
-      updated_at: now.toISOString(),
-    })
+    .update(accountUpdate)
     .eq("id", input.platformAccountId)
     .eq("platform", "openai_ads");
 
@@ -243,6 +257,7 @@ async function recordFailure(input: {
 export async function syncOpenAIAdsAccount(input: {
   platformAccountId: string;
   userId?: string;
+  deadlineAtMs?: number;
 }): Promise<SyncResult> {
   const emptyCounts = { campaigns: 0, adGroups: 0, ads: 0, insights: 0 };
   const admin = createAdminClient();
@@ -334,34 +349,53 @@ export async function syncOpenAIAdsAccount(input: {
         ? await loaded.client.listDailyCampaignInsights({ startUnix, endUnix })
         : [];
     let conversionInsights: OpenAIAdsConversionInsight[] = [];
-    let conversionsAvailable = campaigns.length === 0;
-    if (campaigns.length > 0 && endUnix > startUnix) {
+    let conversionsAvailable = false;
+    if (campaigns.length > 0 && insights.length > 0) {
       try {
         const chunks: string[][] = [];
         for (let index = 0; index < campaigns.length; index += 500) {
           chunks.push(campaigns.slice(index, index + 500).map((item) => item.id));
         }
+        const windowsByDate = new Map<
+          string,
+          { date: string; startUnix: number; endUnix: number }
+        >();
+        for (const insight of insights) {
+          const date = insightDate(insight);
+          if (date && insight.end_time > insight.start_time) {
+            windowsByDate.set(date, {
+              date,
+              startUnix: insight.start_time,
+              endUnix: insight.end_time,
+            });
+          }
+        }
+        const requests = [...windowsByDate.values()].flatMap((window) =>
+          chunks.map((campaignIds) => ({ ...window, campaignIds })),
+        );
         const chunkResults = await mapWithConcurrency(
-          chunks,
+          requests,
           2,
-          (campaignIds) =>
+          (request) =>
             loaded.client.listDailyCampaignConversions({
-              startUnix,
-              endUnix,
-              campaignIds,
+              date: request.date,
+              startUnix: request.startUnix,
+              endUnix: request.endUnix,
+              campaignIds: request.campaignIds,
             }),
         );
         conversionInsights = chunkResults.flat();
-        conversionsAvailable = true;
+        conversionsAvailable = requests.length > 0;
       } catch {
-        conversionInsights = [];
-        conversionsAvailable = false;
+        throw new OpenAIAdsServiceError(
+          "conversion_insights_unavailable",
+          502,
+          "OpenAI-Conversiondaten konnten nicht vollständig und eindeutig geladen werden.",
+        );
       }
     }
     const conversionByCampaignDate = new Map(
-      conversionInsights
-        .filter((item) => item.date)
-        .map((item) => [`${item.entity_id}:${item.date}`, item]),
+      conversionInsights.map((item) => [`${item.entity_id}:${item.date}`, item]),
     );
 
     const accountPayload = {

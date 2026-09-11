@@ -24,6 +24,7 @@ export function OrganicBoostLiveRefresh({ active }: Props) {
   useEffect(() => {
     if (!active) {
       startedAtRef.current = null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- a newly inactive server state resets the prior timeout
       setTimedOut(false);
       return;
     }

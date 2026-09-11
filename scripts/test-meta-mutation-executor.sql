@@ -8,7 +8,7 @@ values
 insert into public.platform_accounts (
   id, user_id, platform, platform_account_id, account_id, account_name,
   access_token, access_token_encrypted, token_iv, token_auth_tag,
-  ad_account_ids, meta_scopes, expires_at, data_access_expires_at,
+  ad_account_ids, instagram_account_ids, meta_scopes, expires_at, data_access_expires_at,
   marketing_meta_ad_account_id, marketing_currency, marketing_timezone_name,
   marketing_sync_status, marketing_sync_id, marketing_last_success_at,
   marketing_campaign_count, marketing_ad_set_count, marketing_ad_count,
@@ -21,7 +21,7 @@ insert into public.platform_accounts (
     '12000000-0000-4000-8000-000000000001',
     'meta', 'executor-owner', '900000000001', 'Executor Owner Meta',
     null, 'ciphertext', 'iv', 'auth-tag',
-    '["act_111111111111"]'::jsonb,
+    '["act_111111111111"]'::jsonb, '["333333333391"]'::jsonb,
     array['ads_read','ads_management']::text[],
     now() + interval '30 days', now() + interval '30 days',
     '111111111111', 'EUR', 'Europe/Berlin', 'success',
@@ -33,13 +33,22 @@ insert into public.platform_accounts (
     '12000000-0000-4000-8000-000000000002',
     'meta', 'executor-other', '900000000002', 'Executor Other Meta',
     null, 'ciphertext-2', 'iv-2', 'auth-tag-2',
-    '["act_222222222222"]'::jsonb,
+    '["act_222222222222"]'::jsonb, '[]'::jsonb,
     array['ads_read','ads_management']::text[],
     now() + interval '30 days', now() + interval '30 days',
     '222222222222', 'EUR', 'Europe/Berlin', 'success',
     '32000000-0000-4000-8000-000000000002', now(),
     1, 0, 0, 0, 0, 0, current_date - 13, current_date
   );
+
+insert into public.meta_assets (
+  id, platform_account_id, user_id, asset_type, meta_asset_id, name
+) values (
+  '23000000-0000-4000-8000-000000000001',
+  '22000000-0000-4000-8000-000000000001',
+  '12000000-0000-4000-8000-000000000001',
+  'instagram_account', '333333333391', 'Launch Regression Instagram'
+);
 
 insert into public.campaigns (
   id, user_id, platform_account_id, platform_campaign_id, name, status,
@@ -2557,7 +2566,7 @@ begin
     or has_function_privilege('authenticated',
       'public.reconcile_meta_mutation_plan(uuid,uuid,uuid)', 'EXECUTE')
     or has_function_privilege('authenticated',
-      'public.fail_meta_mutation_execution(uuid,uuid,uuid,text,text,text,integer)', 'EXECUTE') then
+      'public.fail_meta_mutation_execution(uuid,uuid,uuid,text,text,text,integer,text)', 'EXECUTE') then
     raise exception 'Authenticated role can execute an Executor mutation RPC';
   end if;
 end;

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:meta-security": "node scripts/test-meta-security.mjs",
+    "test:meta-csrf": "node scripts/test-meta-csrf.mjs",
     "test:meta-scope-policy": "node scripts/test-meta-scope-policy.mjs",
     "test:meta-readonly": "node scripts/test-meta-readonly.mjs",
     "test:supabase-admin-env": "node scripts/test-supabase-admin-env.mjs",
@@ -54,17 +55,17 @@
     "test:site-admin": "node scripts/test-site-admin.mjs",
     "test:site-logo": "node scripts/test-site-logo.mjs",
     "test:openai-ads": "node scripts/test-openai-ads-connector.mjs && node scripts/test-openai-ads-database.mjs",
-    "test:meta-all": "npm run test:meta-security && npm run test:meta-scope-policy && npm run test:meta-readonly && npm run test:supabase-admin-env && npm run test:staging-routing && npm run test:password-reset && npm run test:dashboard-meta-connector && npm run test:meta-disconnect && npm run test:meta-asset-prune && npm run test:meta-content-sync && npm run test:meta-marketing-readonly && npm run test:meta-marketing-sync && npm run test:meta-write-client && npm run test:meta-customer-controls && npm run test:meta-mutation-executor && npm run test:meta-write-control-plane && npm run test:meta-organic-boost && npm run test:content-candidate-lifecycle && npm run test:launch-prepare-result && npm run test:launch-approve-ux && npm run test:launch-chain-delivery && npm run test:launch-creative-instagram-user-id && npm run test:meta-format-slots && npm run test:creative-text-variants && npm run test:creative-generation-phase1 && npm run test:creative-generation-phase2 && npm run test:creative-generation-phase3 && npm run test:creative-generation-phase4 && npm run test:creative-generation-phase5 && npm run test:creative-generation-phase6 && npm run test:creative-generation-phase7 && npm run test:creative-generation-phase8 && npm run test:structural-multi-ad && npm run test:structural-two-adsets && npm run test:success-control-rank && npm run test:ad-sibling-success-pause && npm run test:success-control-dashboard && npm run test:legal-pages && npm run test:legal-plain-text && npm run test:site-admin && npm run test:site-logo",
+    "test:meta-all": "npm run test:meta-security && npm run test:meta-csrf && npm run test:meta-scope-policy && npm run test:meta-readonly && npm run test:supabase-admin-env && npm run test:staging-routing && npm run test:password-reset && npm run test:dashboard-meta-connector && npm run test:meta-disconnect && npm run test:meta-asset-prune && npm run test:meta-content-sync && npm run test:meta-marketing-readonly && npm run test:meta-marketing-sync && npm run test:meta-write-client && npm run test:meta-customer-controls && npm run test:meta-mutation-executor && npm run test:meta-write-control-plane && npm run test:meta-organic-boost && npm run test:content-candidate-lifecycle && npm run test:launch-prepare-result && npm run test:launch-approve-ux && npm run test:launch-chain-delivery && npm run test:launch-creative-instagram-user-id && npm run test:meta-format-slots && npm run test:creative-text-variants && npm run test:creative-generation-phase1 && npm run test:creative-generation-phase2 && npm run test:creative-generation-phase3 && npm run test:creative-generation-phase4 && npm run test:creative-generation-phase5 && npm run test:creative-generation-phase6 && npm run test:creative-generation-phase7 && npm run test:creative-generation-phase8 && npm run test:structural-multi-ad && npm run test:structural-two-adsets && npm run test:success-control-rank && npm run test:ad-sibling-success-pause && npm run test:success-control-dashboard && npm run test:legal-pages && npm run test:legal-plain-text && npm run test:site-admin && npm run test:site-logo",
     "test:structural-two-adsets": "node scripts/test-structural-two-adsets.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
     "lucide-react": "^1.25.0",
-    "next": "16.2.11",
+    "next": "16.3.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sharp": "0.35.0"
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -72,12 +73,12 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.11",
+    "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
   "overrides": {
-    "postcss": "8.5.22",
-    "sharp": "0.35.0"
+    "postcss": "8.5.28",
+    "sharp": "0.35.4"
   }
 }

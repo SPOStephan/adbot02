@@ -165,6 +165,7 @@ export async function connectOpenAIAdsAccount(input: {
 export async function loadOpenAIAdsClient(input: {
   platformAccountId: string;
   userId?: string;
+  deadlineAtMs?: number;
 }) {
   const env = getOpenAIAdsEnv();
   const admin = createAdminClient();
@@ -225,7 +226,11 @@ export async function loadOpenAIAdsClient(input: {
 
   return {
     connection,
-    client: new OpenAIAdsClient({ apiKey, baseUrl: env.baseUrl }),
+    client: new OpenAIAdsClient({
+      apiKey,
+      baseUrl: env.baseUrl,
+      deadlineAtMs: input.deadlineAtMs,
+    }),
   };
 }
 

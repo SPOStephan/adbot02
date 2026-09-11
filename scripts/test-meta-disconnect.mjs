@@ -91,6 +91,12 @@ assert.match(resetMigrationSource, /grant execute on function public\.reset_meta
 assert.doesNotMatch(resetMigrationSource, /delete from public\.(campaigns|meta_content_candidates)/i);
 
 assert.match(connectorStatusSource, /\.is\("revoked_at", null\)/);
+assert.match(
+  connectorStatusSource,
+  /\.select\(\s*"id, platform, platform_account_id, account_name, expires_at",?\s*\)[\s\S]*?\.eq\("user_id", user\.id\)/,
+);
+assert.match(connectorStatusSource, /if \(openAIAccountIds\.length > 0\)/);
+assert.match(connectorStatusSource, /connector_provider_status_unavailable/);
 
 assert.match(reconnectMigrationSource, /revoked_at = null/);
 assert.match(

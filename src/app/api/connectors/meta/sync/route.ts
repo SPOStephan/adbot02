@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { loadContentSyncSnapshot } from "@/lib/meta/content-sync-snapshot";
 import {
   drainHardCapStatusExecutionsForAccount,
   forceReactivatePausedOrganicBoostCampaigns,
 } from "@/lib/meta/hard-cap-status-execute";
+import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
 import { syncMetaConnector } from "@/lib/meta/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -97,7 +98,11 @@ export async function GET() {
   });
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  if (!isDashboardSameOriginRequest(request)) {
+    return json({ ok: false, error: "invalid_origin" }, 403);
+  }
+
   const { user, connector } = await authenticatedConnector();
 
   if (!user) {

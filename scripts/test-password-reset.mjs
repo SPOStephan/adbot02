@@ -23,4 +23,12 @@ assert.match(read("src/lib/supabase/proxy.ts"), /\/passwort-vergessen/);
 assert.match(read("src/app/passwort-vergessen/page.tsx"), /ForgotPasswordForm/);
 assert.match(read("src/app/passwort-neu/page.tsx"), /UpdatePasswordForm/);
 
+const safeNextPathSource = read("src/lib/auth/safe-next-path.ts");
+assert.match(safeNextPathSource, /candidate\.startsWith\("\/\/"\)/);
+assert.match(safeNextPathSource, /candidate\.includes\("\\\\"\)/);
+assert.match(safeNextPathSource, /%2f\|%5c/i);
+assert.match(safeNextPathSource, /parsed\.origin !== SAFE_ORIGIN/);
+assert.match(read("src/app/auth/callback/route.ts"), /normalizeSafeNextPath/);
+assert.match(read("src/components/AuthForm.tsx"), /normalizeSafeNextPath/);
+
 console.log("test-password-reset: ok");

@@ -8,6 +8,7 @@ import type { OpenAIAdsDashboardAccount } from "@/lib/openai-ads/dashboard";
 
 type Props = {
   accounts: OpenAIAdsDashboardAccount[];
+  activeLaunchEnabled: boolean;
 };
 
 function dateTime(value: string | null): string {
@@ -81,7 +82,7 @@ function payloadMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
-export function OpenAIAdsWorkspace({ accounts }: Props) {
+export function OpenAIAdsWorkspace({ accounts, activeLaunchEnabled }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -395,11 +396,23 @@ export function OpenAIAdsWorkspace({ accounts }: Props) {
               </section>
             ) : null}
 
-            <OpenAIAdsLaunchForm
-              currency={account.currency}
-              platformAccountId={account.id}
-              servingReady={servingReady}
-            />
+            {activeLaunchEnabled ? (
+              <OpenAIAdsLaunchForm
+                currency={account.currency}
+                platformAccountId={account.id}
+                servingReady={servingReady}
+              />
+            ) : (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
+                <p className="font-black">ACTIVE-Launch vorübergehend gesperrt</p>
+                <p className="mt-1">
+                  OpenAI dokumentiert das Tageslimit derzeit kontoweit statt
+                  kampagnenbezogen. Bis diese Kostenwirkung separat bestätigt und
+                  mit einem Provider-Read-back abgesichert ist, erstellt Adbot keine
+                  kostenwirksamen ChatGPT-Ads-Kampagnen.
+                </p>
+              </div>
+            )}
 
             <footer className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
               <span>Zeitzone: {account.timezone ?? "–"}</span>

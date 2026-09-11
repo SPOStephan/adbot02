@@ -815,7 +815,8 @@ export function sanitizeCreativeInstagramFields(
     next = { ...next, object_story_spec: spec };
   }
   if ("instagram_actor_id" in next) {
-    const { instagram_actor_id: _removed, ...rest } = next;
+    const rest = { ...next };
+    delete rest.instagram_actor_id;
     return rest;
   }
   return next;

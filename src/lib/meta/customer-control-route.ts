@@ -21,15 +21,18 @@ export function controlJson(
   });
 }
 
-export async function readControlJson(request: NextRequest): Promise<unknown> {
+export function isDashboardSameOriginRequest(request: NextRequest): boolean {
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");
+  return Boolean(
+    origin &&
+      origin === request.nextUrl.origin &&
+      (!fetchSite || fetchSite === "same-origin"),
+  );
+}
 
-  if (
-    !origin ||
-    origin !== request.nextUrl.origin ||
-    (fetchSite && fetchSite !== "same-origin")
-  ) {
+export async function readControlJson(request: NextRequest): Promise<unknown> {
+  if (!isDashboardSameOriginRequest(request)) {
     throw new CustomerControlServiceError(
       "invalid_origin",
       403,

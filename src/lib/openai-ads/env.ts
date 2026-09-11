@@ -5,6 +5,11 @@ import { assertValidCredentialEncryptionKey } from "@/lib/platforms/credential-c
 const OPENAI_ADS_BASE_URL = "https://api.ads.openai.com/v1";
 const OPENAI_ADS_ENCRYPTION_VARIABLE = "OPENAI_ADS_TOKEN_ENCRYPTION_KEY";
 
+// OpenAI currently documents a lifetime limit on campaigns, but its daily
+// spend-limit endpoint is account-wide.  Do not expose ACTIVE campaign launch
+// until Adbot has a separately approved account-limit design and read-back.
+export const OPENAI_ADS_ACTIVE_LAUNCH_ENABLED = false;
+
 function required(name: string, value: string | undefined): string {
   const normalized = value?.trim();
 

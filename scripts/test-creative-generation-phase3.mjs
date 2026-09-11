@@ -286,7 +286,6 @@ try {
   assert.equal(composed.composeVersion, "adbot-locked-photo-compose-v1");
 
   // Mutate a pixel in the locked region → guard must fail
-  const mutated = Buffer.from(composed.bytes);
   // Corrupt a mid-file byte that is likely IDAT payload (best-effort);
   // stronger check: recompose with different locked bytes expectation via assertLockedPhotoPixelGuard
   const wrongLocked = {

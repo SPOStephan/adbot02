@@ -342,6 +342,7 @@ export function TrafficLaunchCanary({
 
   useEffect(() => {
     if (!prepareInFlight) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- a completed request must reset the displayed timer immediately
       setPrepareElapsedSec(0);
       return;
     }

@@ -96,7 +96,7 @@ export type OpenAIAdsGeoLocation = {
 
 export type OpenAIAdsConversionInsight = {
   entity_id: string;
-  date: string | null;
+  date: string;
   conversions: number;
   click_through_conversions: number | null;
   view_through_conversions: number | null;
@@ -391,7 +391,10 @@ function parseGeoLocation(payload: unknown): OpenAIAdsGeoLocation {
   };
 }
 
-function parseConversionInsight(payload: unknown): OpenAIAdsConversionInsight {
+function parseConversionInsight(
+  payload: unknown,
+  date: string,
+): OpenAIAdsConversionInsight {
   if (!isRecord(payload)) {
     throw new OpenAIAdsApiError({
       message: "OpenAI Ads hat ungültige Conversiondaten zurückgegeben.",
@@ -402,7 +405,7 @@ function parseConversionInsight(payload: unknown): OpenAIAdsConversionInsight {
 
   return {
     entity_id: asString(payload.entity_id, "conversion.entity_id"),
-    date: asNullableString(payload.date),
+    date,
     conversions: asFiniteNumber(payload.conversions),
     click_through_conversions:
       typeof payload.click_through_conversions === "number"
@@ -419,12 +422,14 @@ export type OpenAIAdsClientOptions = {
   apiKey: string;
   baseUrl: string;
   fetchImpl?: typeof fetch;
+  deadlineAtMs?: number;
 };
 
 export class OpenAIAdsClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly deadlineAtMs: number | null;
 
   constructor(options: OpenAIAdsClientOptions) {
     if (!options.apiKey.trim()) {
@@ -434,11 +439,25 @@ export class OpenAIAdsClient {
     this.apiKey = options.apiKey.trim();
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.deadlineAtMs = options.deadlineAtMs ?? null;
   }
 
   private async request(path: string, init: RequestInit = {}): Promise<unknown> {
+    const remainingMs = this.deadlineAtMs
+      ? this.deadlineAtMs - Date.now()
+      : REQUEST_TIMEOUT_MS;
+    if (remainingMs <= 1_000) {
+      throw new OpenAIAdsApiError({
+        message: "Das Zeitbudget des OpenAI-Ads-Abrufs ist ausgeschöpft.",
+        status: 503,
+        code: "sync_deadline_exceeded",
+      });
+    }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.min(REQUEST_TIMEOUT_MS, remainingMs),
+    );
 
     try {
       const headers = new Headers(init.headers);
@@ -622,6 +641,7 @@ export class OpenAIAdsClient {
   }
 
   async listDailyCampaignConversions(input: {
+    date: string;
     startUnix: number;
     endUnix: number;
     campaignIds: string[];
@@ -633,7 +653,6 @@ export class OpenAIAdsClient {
       method: "POST",
       body: JSON.stringify({
         aggregation_level: "campaign",
-        time_granularity: "daily",
         time_ranges: [
           JSON.stringify({
             type: "unix_range",
@@ -642,8 +661,6 @@ export class OpenAIAdsClient {
           }),
         ],
         entity_ids: input.campaignIds,
-        group_by_entity: true,
-        include_zero_rows: false,
       }),
     });
     if (!isRecord(payload) || !Array.isArray(payload.data)) {
@@ -653,7 +670,7 @@ export class OpenAIAdsClient {
         code: "invalid_provider_response",
       });
     }
-    return payload.data.map(parseConversionInsight);
+    return payload.data.map((item) => parseConversionInsight(item, input.date));
   }
 
   async uploadImageUrl(imageUrl: string, idempotencyKey?: string): Promise<string> {

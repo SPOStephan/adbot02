@@ -104,6 +104,9 @@ export async function loadOpenAIAdsDashboard(
     .order("connected_at", { ascending: true });
 
   if (accountError) {
+    console.error("openai_ads_dashboard_accounts_failed", {
+      code: accountError.code,
+    });
     throw new Error("OpenAI-Ads-Konten konnten nicht geladen werden.");
   }
 
@@ -155,6 +158,10 @@ export async function loadOpenAIAdsDashboard(
         accountDailyResult.error ??
         launchResult.error;
       if (firstError) {
+        console.error("openai_ads_dashboard_data_failed", {
+          accountId,
+          code: firstError.code,
+        });
         throw new Error("OpenAI-Ads-Dashboarddaten konnten nicht geladen werden.");
       }
 
