@@ -346,8 +346,34 @@ export function deriveOrganicBoostDelivery(input: {
 
 const SUCCESS_CONTROL_RULE_KEYS = new Set([
   "abo_sibling_success_rank_7d",
-  "ad_sibling_success_pause_7d",
 ]);
+
+export type MetaCreativeOptimizationCycleView = {
+  id: string;
+  testKind: "FORMAT" | "CREATIVE";
+  status:
+    | "PLANNED"
+    | "ACTIVE_TEST"
+    | "PAUSE_PLANNED"
+    | "COMPLETED"
+    | "FAILED"
+    | "CANCELLED";
+  platformAdSetId: string;
+  startedAt: string | null;
+  measurementStartDate: string | null;
+  measurementEndDate: string | null;
+  completedAt: string | null;
+  completionReason: string | null;
+  createdAt: string;
+};
+
+const CREATIVE_CYCLE_COMPLETION_LABELS: Record<string, string> = {
+  operational_traffic_dominance: "Operativ klarer Traffic-Gewinner",
+  insufficient_volume: "Ohne Gewinner: Mindestvolumen nicht erreicht",
+  imbalanced_delivery: "Ohne Gewinner: Auslieferung nicht vergleichbar",
+  no_delivery_agreement: "Ohne Gewinner: Reichweite und Spend widersprechen dem CTR-Rang",
+  no_consistent_lift: "Ohne Gewinner: Vorsprung nicht über sechs Tage stabil",
+};
 
 type MetaCampaignOverviewProps = {
   campaigns: CampaignPerformance[];
@@ -375,6 +401,7 @@ type MetaCampaignOverviewProps = {
   insightsUntil: string | null;
   lastSuccessAt: string | null;
   recommendations: CampaignRecommendation[];
+  creativeOptimizationCycles?: MetaCreativeOptimizationCycleView[];
   status: string;
 };
 
@@ -591,18 +618,6 @@ function recommendationAutomationBadge(
       className: "bg-slate-100 text-slate-700",
     };
   }
-  if (ruleKey === "ad_sibling_success_pause_7d") {
-    if (writesReady && options.allowStatusChanges) {
-      return {
-        label: "Automatik: Anzeige pausieren",
-        className: "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200",
-      };
-    }
-    return {
-      label: "Empfehlung (Status-Autonomie aus)",
-      className: "bg-slate-100 text-slate-700",
-    };
-  }
   return null;
 }
 
@@ -724,6 +739,7 @@ export function MetaCampaignOverview({
   insightsUntil,
   lastSuccessAt,
   recommendations,
+  creativeOptimizationCycles = [],
   status,
 }: MetaCampaignOverviewProps) {
   // Spin only while Meta write is actually in flight. Pending candidates alone
@@ -1059,6 +1075,90 @@ export function MetaCampaignOverview({
           </div>
         ) : null}
 
+        <section className="mt-8" aria-labelledby="meta-creative-optimizer-title">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+            Autonome Creative-Optimierung
+          </p>
+          <h3 className="mt-2 text-lg font-extrabold" id="meta-creative-optimizer-title">
+            Anzeigen und Formate im kontrollierten Test
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+            Adbot startet höchstens eine zusätzliche Anzeige im bestehenden Ad Set.
+            Ein Verlierer wird erst nach einem vorab festen Sieben-Tage-Fenster pausiert:
+            pro Arm mindestens 1.000 Impressionen, 50 EUR Spend und 100 Link-Klicks;
+            das Verhältnis kleiner zu größer muss bei Impressionen und Spend jeweils
+            mindestens 0,5 betragen. Der Gewinner braucht mindestens zehn Prozent
+            Link-CTR-Vorsprung und die höhere Link-CTR an wenigstens sechs Tagen.
+            Diese festen Regeln definieren die operative Traffic-Dominanz.
+            Kampagnen-, Ad-Set- und Budgetwerte bleiben unverändert.
+            Meta verteilt die Ads adaptiv; das Ergebnis ist daher eine konservative
+            Betriebsentscheidung in der beobachteten Auslieferung, kein randomisierter
+            Kausaltest des Creatives.
+          </p>
+          {creativeOptimizationCycles.length ? (
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              {creativeOptimizationCycles.map((cycle) => {
+                const activeCycle = ["PLANNED", "ACTIVE_TEST", "PAUSE_PLANNED"]
+                  .includes(cycle.status);
+                const statusLabel = cycle.status === "PLANNED"
+                  ? "Test wird gestartet"
+                  : cycle.status === "ACTIVE_TEST"
+                    ? "Messung läuft"
+                    : cycle.status === "PAUSE_PLANNED"
+                      ? "Gewinner bestimmt – Pause wird ausgeführt"
+                    : cycle.status === "COMPLETED"
+                      ? "Test abgeschlossen"
+                      : cycle.status === "FAILED"
+                        ? "Test fehlgeschlagen"
+                        : "Test abgebrochen";
+                return (
+                  <article
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                    key={cycle.id}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
+                        activeCycle
+                          ? "bg-blue-50 text-blue-800 ring-blue-200"
+                          : cycle.status === "COMPLETED"
+                            ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                            : "bg-slate-100 text-slate-700 ring-slate-200"
+                      }`}>
+                        {statusLabel}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-500">
+                        {cycle.testKind === "FORMAT" ? "Formattest" : "Creative-Test"}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm font-bold text-slate-900">
+                      Ad Set {cycle.platformAdSetId}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Gestartet: {formatDateTime(cycle.startedAt ?? cycle.createdAt)}
+                      {cycle.measurementStartDate && cycle.measurementEndDate
+                        ? ` · Festes Messfenster: ${cycle.measurementStartDate} bis ${cycle.measurementEndDate}`
+                        : ""}
+                      {cycle.completedAt ? ` · Beendet: ${formatDateTime(cycle.completedAt)}` : ""}
+                      {cycle.completionReason
+                        && CREATIVE_CYCLE_COMPLETION_LABELS[cycle.completionReason]
+                        ? ` · ${CREATIVE_CYCLE_COMPLETION_LABELS[cycle.completionReason]}`
+                        : ""}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
+              <p className="text-sm font-bold text-slate-900">Noch kein sicherer Testzyklus</p>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                Adbot startet automatisch, sobald ein von Adbot verwaltetes aktives Ad Set
+                genau eine geeignete Anzeige und ein freigegebenes alternatives Asset enthält.
+              </p>
+            </div>
+          )}
+        </section>
+
         <section className="mt-8" aria-labelledby="meta-recommendations-title">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1069,9 +1169,9 @@ export function MetaCampaignOverview({
                 Ranking, Umschichtung und feste Schwellen
               </h3>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                Klassische Regeln bleiben Analyse. Erfolgskontrolle (Budget zwischen
-                Ad Sets / schwächste Anzeige) kann bei aktiver Autonomie automatisch
-                handeln — Summe des Kundenbudgets bleibt gleich.
+                Klassische Regeln bleiben Analyse. Budget-Umschichtung kann bei aktiver
+                Autonomie automatisch handeln. Anzeigenpausen erfolgen ausschließlich
+                über den oben dokumentierten festen Traffic-Creative-Testvertrag.
               </p>
             </div>
           </div>

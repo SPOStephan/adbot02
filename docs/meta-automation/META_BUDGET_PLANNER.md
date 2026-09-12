@@ -40,11 +40,12 @@ Eine Budgetänderung verwendet immer das aktuell synchronisierte Budget als Ausg
 | `cost_per_result_up_30pct` | Budget um 20 % senken | Aktuelle Empfehlung aus demselben Snapshot. |
 | `cost_per_result_down_15pct` | Budget um 10 % erhöhen | Je mindestens fünf Ergebnisse in beiden Siebentagesfenstern; Kosten je Ergebnis mindestens 15 % besser. |
 | `abo_sibling_reallocate_v1` | Bis 10 % des **Verlierer**-Tagesbudgets zum Gewinner umschichten (ABO, ≥2 aktive Ad-Set-Owner) | **Relative** Erfolgsrangfolge je Ziel (Traffic: Link-Klicks / CPC; Leads: Leads / CPL; Sales: Purchases). Keine Mindestvolumen-Stopps — niedrige Volumina beenden keine Kampagne. Summe der Geschwister-Tagesbudgets bleibt konstant. Cooldown, 20 %/24 h, Policy und Kill-Switch gelten weiter. DECREASE zuerst, dann INCREASE. |
-| `ad_sibling_success_pause_7d` | Schwächste **Anzeige** `PAUSE`n (nicht `SAFETY_PAUSE`) | Nur bei **genau 1** ACTIVE Ad Set und **≥2** ACTIVE MANAGED Ads. Dieselbe relative KPI-Rangfolge wie ABO-Geschwister; Pause nur bei klarem Verlierer; mindestens eine Anzeige bleibt ACTIVE. Bei 2+ ACTIVE Ad Sets greift die Budget-Umschichtung, nicht dieser Pfad. Erfordert `allow_status_changes` und Kill-Switch **ALLOW**. |
+| `ad_sibling_success_pause_7d` | **Deaktiviert** | Die frühere relative Ad-Pause hatte keine belastbaren Mindestvolumen- und Signifikanzgates. Migration `20260912130000` liefert für diesen Scanner nur noch `SKIPPED`. |
+| `meta_creative_format_optimizer_v1` | Zweite Testanzeige starten; nach klarer Evidenz schwächere Anzeige pausieren | Nur Traffic/`LINK_CLICKS`; festes Sieben-Tage-Fenster, Mindestvolumen, Delivery-Balance, mindestens zehn Prozent Link-CTR-Lift, Dominanz an mindestens sechs Tagen, unmittelbarer Meta-Fresh-Read und unveränderte Parentbudgets. Das ist eine operative Regel, kein randomisierter Kausaltest. Details: `META_CREATIVE_FORMAT_OPTIMIZER.md`. |
 | Hard-Cap-Verletzung | Aktive MANAGED-Kampagnen pausieren, **außer Beitrag-Push** (`organic-boost`) | Sicherheitspfad über **Exposure** (`Tagesbudget × Flexfaktor`), nicht über beobachteten Spend. Beitrag-Push bleibt mid-flight ACTIVE; neue Launches bleiben über Preflight am Hard-Cap geblockt. Bereits fälschlich pausierte Beitrag-Pushes werden auch im `HARD_CAP_SAFETY`-Pfad per `force_resume_meta_organic_boost_hard_cap_pauses` wieder `ACTIVATE`t. |
 | Neuer Werbekonto-Tag unter Cap | Zuvor per Hard-Cap `SAFETY_PAUSE`te MANAGED-Kampagnen wieder `ACTIVATE` (`safety_action`) | PAUSED Owner werden am neuen Tag nicht erneut in die SNAPSHOT-Exposure aufgenommen; Same-Day-Reserve bleibt erhalten. `mutation_plans_safety_type_check` erlaubt `safety_action` für `SAFETY_PAUSE` und `ACTIVATE`. |
 
-Analyse-Empfehlung `abo_sibling_success_rank_7d` (Severity `opportunity`) spiegelt dieselbe relative Rangfolge und den vorgeschlagenen Delta-Betrag wider, ohne Remote-Mutation. Empfehlung `ad_sibling_success_pause_7d` (Priority ~54) spiegelt die schwächste Anzeige unter einem einzelnen Ad Set wider; der Write-Pfad läuft über `queue_meta_ad_sibling_success_pause_scan_internal` nach der ABO-Umschichtung.
+Analyse-Empfehlung `abo_sibling_success_rank_7d` (Severity `opportunity`) spiegelt dieselbe relative Rangfolge und den vorgeschlagenen Delta-Betrag wider, ohne Remote-Mutation. Historische Empfehlungen mit Schlüssel `ad_sibling_success_pause_7d` bleiben als Analyse sichtbar, lösen aber keinen Write mehr aus. Neue Anzeigenpausen entstehen ausschließlich über `queue_meta_creative_evidence_pause_internal` mit dem versionierten Evidenzvertrag.
 
 Jeder Budgetplan besitzt die vier ausführbaren Schritte `VALIDATE_REMOTE`, `UPDATE_BUDGET`, `READ_AFTER_WRITE` und `RECONCILE`. Ein Sicherheitspausenplan besitzt `VALIDATE_REMOTE`, `UPDATE_STATUS`, `READ_AFTER_WRITE` und `RECONCILE`. Planneroutput ist idempotent über Policy, Marketing-Snapshot, Target, Regel und Regelversion.
 
@@ -70,6 +71,7 @@ Der Campaign-Sharing-Vektor muss exakt so viele eindeutige, numerische Campaign-
 npm run test:meta-budget-planner
 npm run test:success-control-rank
 npm run test:ad-sibling-success-pause
+npm run test:meta-creative-format-optimizer
 npm run test:success-control-dashboard
 npm run test:meta-content-sync
 npm run test:meta-marketing-sync

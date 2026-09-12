@@ -9,6 +9,13 @@ const migrationPath = join(
   "supabase/migrations/20260818220000_meta_ad_sibling_success_pause.sql",
 );
 const migration = await readFile(migrationPath, "utf8");
+const optimizerMigration = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260912130000_meta_creative_format_optimizer.sql",
+  ),
+  "utf8",
+);
 
 assert.match(migration, /ad_sibling_success_pause_7d/);
 assert.match(migration, /queue_meta_ad_sibling_success_pause_internal/);
@@ -66,6 +73,20 @@ assert.match(migration, /abo_sibling_success_rank_7d/);
 assert.match(
   migration,
   /queue_meta_sibling_budget_reallocate_internal[\s\S]*queue_meta_ad_sibling_success_pause_scan_internal|after ABO sibling reallocate/i,
+);
+
+assert.match(optimizerMigration, /disabled_legacy_no_minimum/);
+assert.match(
+  optimizerMigration,
+  /source_rule_key = 'ad_sibling_success_pause_7d'/,
+);
+assert.match(
+  optimizerMigration,
+  /create or replace function public\.queue_meta_ad_sibling_success_pause_scan_internal[\s\S]*'outcome','SKIPPED'/,
+);
+assert.match(
+  optimizerMigration,
+  /create or replace function public\.queue_meta_ad_sibling_success_pause_internal[\s\S]*'outcome','SKIPPED'/,
 );
 
 console.log("test-ad-sibling-success-pause: ok");

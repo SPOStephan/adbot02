@@ -583,6 +583,17 @@ assert.match(
   noAccountRefreezeMigration,
   /meta-organic-boost-no-account-refreeze/,
 );
+const creativeOptimizerMigration = read(
+  "supabase/migrations/20260912130000_meta_creative_format_optimizer.sql",
+);
+assert.match(
+  creativeOptimizerMigration,
+  /v_action_type='LAUNCH_CHAIN' and v_rule <> 'organic-boost'/,
+);
+assert.match(
+  creativeOptimizerMigration,
+  /organic_boost_creative_test_forbidden/,
+);
 assert.match(
   read("src/components/MetaCampaignOverview.tsx"),
   /Executor arbeitet — noch kein Meta-Versand/,

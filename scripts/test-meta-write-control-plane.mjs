@@ -22,6 +22,10 @@ const executorRegressionPath = join(
   scriptsDirectory,
   "test-meta-mutation-executor.sql",
 );
+const creativeOptimizerRegressionPath = join(
+  scriptsDirectory,
+  "test-meta-creative-format-optimizer.sql",
+);
 const scopeRegressionPath = join(
   scriptsDirectory,
   "test-meta-customer-campaign-scope.sql",
@@ -229,6 +233,14 @@ try {
     throw new Error("Mutation Executor regression did not emit its success marker");
   }
 
+  const { stdout: creativeOptimizerStdout } = await run(psqlPath, [
+    ...psqlBase,
+    "--file", creativeOptimizerRegressionPath,
+  ]);
+  if (!creativeOptimizerStdout.includes("Meta Creative/Format optimizer migration checks passed")) {
+    throw new Error("Creative/Format optimizer regression did not emit its success marker");
+  }
+
   await run(psqlPath, [
     ...psqlBase,
     "--command", "create database adbot_reconnect_test",
@@ -247,7 +259,7 @@ try {
   }
 
   console.log(
-    "Meta Write Control Plane, Customer Campaign Scope, Budget Canary, Operator Budget Canary, Lifetime Budget Canary, Creative Asset, Budget Planner, Mutation Executor and reconnect persistence checks passed on a fresh PostgreSQL cluster",
+    "Meta Write Control Plane, Customer Campaign Scope, Budget Canary, Operator Budget Canary, Lifetime Budget Canary, Creative Asset, Budget Planner, Mutation Executor, Creative/Format Optimizer and reconnect persistence checks passed on a fresh PostgreSQL cluster",
   );
 } finally {
   if (serverStarted && pgCtlPath) {

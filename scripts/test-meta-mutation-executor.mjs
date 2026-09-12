@@ -88,6 +88,9 @@ function dependenciesFor({
   credentialsError = null,
   brandAssetError = null,
   completeRemoteError = null,
+  claimOverrides = {},
+  withFreshPreflight = false,
+  emergencyPauseResult = null,
 } = {}) {
   const events = [];
   const failures = [];
@@ -98,7 +101,7 @@ function dependenciesFor({
   const dependencies = {
     async claim(workerId, leaseSeconds) {
       events.push(`claim:${workerId}:${leaseSeconds}`);
-      return firstStep ? claim(firstStep) : null;
+      return firstStep ? claim(firstStep, claimOverrides) : null;
     },
     async heartbeat(_executionId, _leaseToken, leaseSeconds) {
       events.push(`heartbeat:${leaseSeconds}`);
@@ -147,6 +150,7 @@ function dependenciesFor({
         accessToken: "executor-token-not-for-logs",
         appSecret: "executor-app-secret",
         adAccountId: "111111111",
+        currentMarketingSyncId: "39000000-0000-4000-8000-000000000001",
       };
     },
     async brandAsset() {
@@ -160,6 +164,17 @@ function dependenciesFor({
       };
     },
   };
+  if (withFreshPreflight) {
+    dependencies.freshPreflight = async () => {
+      events.push("fresh-preflight");
+    };
+  }
+  if (typeof emergencyPauseResult === "boolean") {
+    dependencies.emergencyPauseCreativeTest = async ({ remoteAdId }) => {
+      events.push(`emergency-pause:${remoteAdId}`);
+      return emergencyPauseResult;
+    };
+  }
 
   return {
     dependencies,
@@ -200,10 +215,18 @@ try {
       'from "@/lib/meta/organic-boost-pause-guard";',
       'from "./organic-boost-pause-guard.mjs";',
     )
+    .replace(
+      'from "@/lib/meta/creative-format-fresh-preflight";',
+      'from "./creative-format-fresh-preflight.mjs";',
+    )
     .replace('from "./write-client";', 'from "./write-client.mjs";');
 
   assert.match(executorSource, /await input\.beforeRemote\(\)/);
   assert.match(executorSource, /remoteOutcome:.*"UNKNOWN"/s);
+  assert.match(
+    executorSource,
+    /async emergencyPauseCreativeTest[\s\S]*?const before = await getMetaWriteObjectSnapshot[\s\S]*?before\.value\.account_id[\s\S]*?before\.value\.adset_id[\s\S]*?await updateMetaAdStatus/,
+  );
   assert.doesNotMatch(executorSource, /console\.(?:log|error|warn)/);
   assert.doesNotMatch(executorSource, /access_token_encrypted.*console/s);
   assert.match(executorRouteSource, /constantTimeEqual\(supplied, `Bearer \$\{cronSecret\}`\)/);
@@ -236,6 +259,20 @@ try {
   await writeFile(
     join(temporaryDirectory, "organic-boost-pause-guard.mjs"),
     "export function isAutomatedPauseAction(){ return false; }\nexport async function isOrganicBoostRemoteObject(){ return false; }\n",
+  );
+  await writeFile(
+    join(temporaryDirectory, "creative-format-fresh-preflight.mjs"),
+    `export class MetaCreativeFreshPreflightError extends Error {
+  constructor(code){ super(code); this.code = code; }
+}
+export async function assertMetaCreativeOptimizerFreshState(){ return; }
+export function needsMetaCreativeFreshPreflight(input){
+  return input.plannedPayload?.contract === "meta_existing_adset_creative_test_v1"
+    && input.operation === "CREATE_CREATIVE"
+    && input.objectType === "CREATIVE"
+    && input.stepOperation === "CREATE";
+}
+`,
   );
   await writeFile(join(temporaryDirectory, "executor.mjs"), transpile(executorSource));
 
@@ -340,6 +377,131 @@ try {
       < harness.events.indexOf(`complete:${IDS.step2}`),
     );
     assert.equal(harness.failures.length, 0);
+  }
+
+  {
+    let fetchCalls = 0;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      return jsonResponse({ id: "555555555" });
+    };
+    const createCreative = step({
+      operation: "CREATE",
+      objectType: "CREATIVE",
+      request: {
+        operation: "CREATE_CREATIVE",
+        object_type: "CREATIVE",
+        mode: "execute",
+        payload: {
+          name: "Fresh-gated creative",
+          object_story_spec: {
+            page_id: "333333333",
+            link_data: {
+              link: "https://example.test",
+              image_hash: "0123456789abcdef0123456789abcdef",
+            },
+          },
+        },
+      },
+    });
+    const claimOverrides = {
+      actionType: "LAUNCH_AD",
+      targetType: "AD_SET",
+      plannedPayload: { contract: "meta_existing_adset_creative_test_v1" },
+    };
+    const missingFresh = dependenciesFor({
+      firstStep: createCreative,
+      claimOverrides,
+    });
+    const blocked = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-creative-no-fresh-read",
+      dependencies: missingFresh.dependencies,
+    });
+    assert.equal(blocked.outcome, "failed");
+    assert.equal(fetchCalls, 0);
+    assert.equal(
+      missingFresh.failures[0].failure.errorCode,
+      "creative_optimizer_fresh_preflight_required",
+    );
+    assert.equal(
+      missingFresh.events.some((value) => value.startsWith("begin:")),
+      false,
+    );
+
+    const withFresh = dependenciesFor({
+      firstStep: createCreative,
+      claimOverrides,
+      withFreshPreflight: true,
+    });
+    const dispatched = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-creative-with-fresh-read",
+      dependencies: withFresh.dependencies,
+    });
+    assert.equal(dispatched.outcome, "deferred");
+    assert.equal(fetchCalls, 1);
+    assert.ok(
+      withFresh.events.indexOf("fresh-preflight")
+        < withFresh.events.indexOf(`begin:${IDS.step1}`),
+    );
+
+    const activate = step({
+      operation: "UPDATE",
+      objectType: "AD",
+      request: {
+        operation: "UPDATE_STATUS",
+        object_type: "AD",
+        object_id: { $binding_step_id: IDS.step2 },
+        status: "ACTIVE",
+        mode: "execute",
+      },
+    });
+    const compensated = dependenciesFor({
+      firstStep: activate,
+      claimOverrides,
+      bindings: [{ stepId: IDS.step2, objectType: "AD", remoteObjectId: "555555555" }],
+      withFreshPreflight: true,
+      completeRemoteError: new Error("database unavailable after activation"),
+      emergencyPauseResult: true,
+    });
+    const compensatedResult = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-creative-compensation",
+      dependencies: compensated.dependencies,
+    });
+    assert.equal(compensatedResult.outcome, "failed");
+    assert.equal(
+      compensated.failures[0].failure.errorCode,
+      "creative_test_compensated_paused",
+    );
+    assert.ok(
+      compensated.events.indexOf("emergency-pause:555555555")
+        < compensated.events.indexOf("fail:NOT_APPLIED"),
+    );
+
+    const reconcileStep = step({
+      operation: "RECONCILE",
+      objectType: "AD",
+      request: {
+        operation: "RECONCILE",
+        object_type: "AD",
+        contract: "meta_existing_adset_creative_test_v1",
+      },
+    });
+    const mismatch = dependenciesFor({
+      firstStep: reconcileStep,
+      claimOverrides,
+      bindings: [{ stepId: IDS.step2, objectType: "AD", remoteObjectId: "555555555" }],
+      reconcileOutcome: "MISMATCH",
+      emergencyPauseResult: true,
+    });
+    const mismatchResult = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-creative-mismatch-compensation",
+      dependencies: mismatch.dependencies,
+    });
+    assert.equal(mismatchResult.outcome, "failed");
+    assert.equal(
+      mismatch.failures[0].failure.errorCode,
+      "creative_test_compensated_paused",
+    );
   }
 
   {

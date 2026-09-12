@@ -17,7 +17,22 @@ const dashboard = await readFile(
 assert.match(overview, /abo_sibling_success_rank_7d/);
 assert.match(overview, /ad_sibling_success_pause_7d/);
 assert.match(overview, /Automatik: Umschichtung/);
-assert.match(overview, /Automatik: Anzeige pausieren/);
+assert.doesNotMatch(overview, /Automatik: Anzeige pausieren/);
+assert.match(overview, /Autonome Creative-Optimierung/);
+assert.match(overview, /vorab festen Sieben-Tage-Fenster/);
+assert.match(overview, /Traffic-Dominanz/);
+assert.match(overview, /kein randomisierter/);
+assert.match(overview, /1\.000 Impressionen/);
+assert.match(overview, /50 EUR Spend/);
+assert.match(overview, /100 Link-Klicks/);
+assert.match(overview, /mindestens 0,5/);
+assert.match(overview, /mindestens zehn Prozent/);
+assert.match(overview, /Kampagnen-, Ad-Set- und Budgetwerte bleiben unverändert/);
+assert.match(overview, /insufficient_volume/);
+assert.match(overview, /Mindestvolumen nicht erreicht/);
+assert.match(overview, /no_consistent_lift/);
+assert.match(overview, /Vorsprung nicht über sechs Tage stabil/);
+assert.match(overview, /creativeOptimizationCycles/);
 assert.match(overview, /allowBudgetChanges/);
 assert.match(overview, /allowStatusChanges/);
 assert.match(overview, /recommendationEvidence/);
@@ -41,5 +56,7 @@ assert.match(
   dashboard,
   /allowStatusChanges=\{Boolean\(policyView\?\.allowStatusChanges\)\}/,
 );
+assert.match(dashboard, /meta_creative_optimization_cycles/);
+assert.match(dashboard, /creativeOptimizationCycles=\{creativeOptimizationCycles\}/);
 
 console.log("test-success-control-dashboard: ok");

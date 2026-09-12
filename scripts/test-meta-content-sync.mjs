@@ -217,6 +217,7 @@ try {
     .replace('from "./executor";', 'from "./executor.mjs";')
     .replace('from "./schedule";', 'from "./schedule.mjs";')
     .replace('from "./ad-account";', 'from "./ad-account.mjs";')
+    .replace('from "./creative-format-optimizer";', 'from "./creative-format-optimizer.mjs";')
     .replace('from "../supabase/admin";', 'from "./admin.mjs";');
 
   const scheduleSource = await readFile(scheduleSourcePath, "utf8");
@@ -420,6 +421,32 @@ export async function processNextMetaMutation(workerId) {
 }
 `;
 
+  const creativeOptimizerStub = `
+export async function runMetaCreativeFormatOptimizerAfterSnapshot(input) {
+  globalThis.__metaTest.calls.push({
+    name: "runMetaCreativeFormatOptimizerAfterSnapshot",
+    input,
+  });
+  return {
+    status: "DONE",
+    groupsConsidered: 1,
+    testsQueued: 0,
+    pausesQueued: 0,
+    existingPlans: 0,
+    skipped: 1,
+    failed: 0,
+    usage: {
+      appPercent: null,
+      pagePercent: null,
+      businessPercent: null,
+      adAccountPercent: null,
+      insightsPercent: null,
+      retryAfterSeconds: null,
+    },
+  };
+}
+`;
+
   const cryptoStub = `
 export function decryptAccessToken(value, key) {
   globalThis.__metaTest.decryptInput = { value, key };
@@ -459,6 +486,11 @@ export function createAdminClient() {
     "utf8",
   );
   await writeFile(join(temporaryDirectory, "executor.mjs"), executorStub, "utf8");
+  await writeFile(
+    join(temporaryDirectory, "creative-format-optimizer.mjs"),
+    creativeOptimizerStub,
+    "utf8",
+  );
   await writeFile(join(temporaryDirectory, "crypto.mjs"), cryptoStub, "utf8");
   await writeFile(join(temporaryDirectory, "env.mjs"), envStub, "utf8");
   await writeFile(join(temporaryDirectory, "admin.mjs"), adminStub, "utf8");

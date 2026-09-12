@@ -1751,6 +1751,12 @@ export type MetaAdInsight = {
   attributionSetting: string | null;
 };
 
+export type MetaCreativeOptimizationInsight = MetaAdInsight & {
+  actionsObserved: boolean;
+  actionValuesObserved: boolean;
+  attributionContract: "link_ctr:daily:v1";
+};
+
 export type MetaMarketingCollection<T> = {
   items: T[];
   usage: MetaUsageSnapshot;
@@ -2056,6 +2062,22 @@ function parseAdInsight(value: unknown): MetaAdInsight | null {
     actionValues: actionMetrics(value.action_values),
     costPerActionType: actionMetrics(value.cost_per_action_type),
     attributionSetting: enumString(value.attribution_setting),
+  };
+}
+
+function parseCreativeOptimizationInsight(
+  value: unknown,
+): MetaCreativeOptimizationInsight | null {
+  const parsed = parseAdInsight(value);
+  if (!parsed || !isRecord(value)) {
+    return null;
+  }
+
+  return {
+    ...parsed,
+    actionsObserved: Array.isArray(value.actions),
+    actionValuesObserved: Array.isArray(value.action_values),
+    attributionContract: "link_ctr:daily:v1",
   };
 }
 
@@ -2434,6 +2456,40 @@ export function getMetaAdInsights(input: {
     accessToken: input.accessToken,
     appSecret: input.appSecret,
     parseItem: parseAdInsight,
+    maxPages: META_MARKETING_MAX_PAGES,
+    maxItems: META_INSIGHTS_MAX_ROWS,
+    requireComplete: true,
+  });
+}
+
+export function getMetaCreativeOptimizationInsights(input: {
+  adAccountId: string;
+  accessToken: string;
+  appSecret: string;
+  since: string;
+  until: string;
+}): Promise<MetaMarketingCollection<MetaCreativeOptimizationInsight>> {
+  const { since, until } = assertInsightsDateRange(input.since, input.until);
+  const url = marketingCollectionUrl(
+    input.adAccountId,
+    "insights",
+    "account_id,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop,impressions,inline_link_clicks,spend",
+  );
+  url.searchParams.set("level", "ad");
+  url.searchParams.set("time_increment", "1");
+  applyInsightsTimeRange(url, since, until);
+
+  return fetchMetaCollection({
+    initialUrl: url,
+    accessToken: input.accessToken,
+    appSecret: input.appSecret,
+    parseItem(value) {
+      const parsed = parseCreativeOptimizationInsight(value);
+      if (!parsed) {
+        throw new TypeError("Invalid Meta creative optimization insight row");
+      }
+      return parsed;
+    },
     maxPages: META_MARKETING_MAX_PAGES,
     maxItems: META_INSIGHTS_MAX_ROWS,
     requireComplete: true,

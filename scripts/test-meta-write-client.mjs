@@ -335,6 +335,43 @@ try {
   requests.length = 0;
   globalThis.fetch = async (input, init) => {
     requests.push({ url: new URL(String(input)), init });
+    return jsonResponse({
+      data: [{
+        id: "900000004",
+        account_id: "123456789",
+        campaign_id: "900000001",
+        adset_id: "900000002",
+        status: "ACTIVE",
+        effective_status: "ACTIVE",
+        creative: { id: "900000003" },
+      }],
+      paging: { cursors: { after: "end-cursor-is-not-a-next-page" } },
+    });
+  };
+  const adSetAds = await writeClient.getMetaAdSetAdsSnapshot({
+    ...auth,
+    adSetId: "900000002",
+  });
+  assert.equal(adSetAds.adSetId, "900000002");
+  assert.equal(adSetAds.ads.length, 1);
+  assert.equal(requests[0].url.pathname, "/v25.0/900000002/ads");
+  assert.equal(requests[0].url.searchParams.get("limit"), "100");
+
+  globalThis.fetch = async () => jsonResponse({
+    data: [],
+    paging: { next: "https://graph.facebook.com/v25.0/next" },
+  });
+  await assert.rejects(
+    () => writeClient.getMetaAdSetAdsSnapshot({
+      ...auth,
+      adSetId: "900000002",
+    }),
+    (error) => error instanceof writeClient.MetaWriteProtocolError,
+  );
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: new URL(String(input)), init });
     assert.ok(init.body instanceof FormData);
     const file = init.body.get("filename");
     assert.ok(file instanceof Blob);
