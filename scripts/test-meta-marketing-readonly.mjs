@@ -489,6 +489,76 @@ try {
   );
   assert.equal(requests[0].init.method, "GET");
 
+  requests.length = 0;
+  const optimizationInsights = await client.getMetaCreativeOptimizationInsights({
+    adAccountId: "act_123456789",
+    accessToken: "read-only-token",
+    appSecret: "test-secret",
+    since: "2026-07-01",
+    until: "2026-07-31",
+  });
+  assert.equal(optimizationInsights.items[0].actionsObserved, true);
+  assert.equal(optimizationInsights.items[0].actionValuesObserved, true);
+  assert.equal(
+    optimizationInsights.items[0].attributionContract,
+    "link_ctr:daily:v1",
+  );
+  assert.equal(requests[0].url.searchParams.has("action_attribution_windows"), false);
+  assert.equal(requests[0].url.searchParams.has("action_report_time"), false);
+  assert.equal(requests[0].url.searchParams.get("fields").includes("actions"), false);
+
+  requests.length = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push({ url, init });
+    return jsonResponse({
+      data: [{
+        account_id: "123456789",
+        campaign_id: "1",
+        adset_id: "11",
+        ad_id: "111",
+        date_start: "2026-07-01",
+        date_stop: "2026-07-01",
+        impressions: "1000",
+        inline_link_clicks: "30",
+        spend: "25.50",
+      }],
+    });
+  };
+  const missingActions = await client.getMetaCreativeOptimizationInsights({
+    adAccountId: "act_123456789",
+    accessToken: "read-only-token",
+    appSecret: "test-secret",
+    since: "2026-07-01",
+    until: "2026-07-01",
+  });
+  assert.equal(missingActions.items[0].actionsObserved, false);
+  assert.equal(missingActions.items[0].actionValuesObserved, false);
+  assert.deepEqual(missingActions.items[0].actions, []);
+
+  globalThis.fetch = async () => jsonResponse({
+    data: [{
+      account_id: "123456789",
+      campaign_id: "1",
+      adset_id: "11",
+      date_start: "2026-07-01",
+      date_stop: "2026-07-01",
+      impressions: "1000",
+      inline_link_clicks: "30",
+      spend: "25.50",
+    }],
+  });
+  await assert.rejects(
+    client.getMetaCreativeOptimizationInsights({
+      adAccountId: "act_123456789",
+      accessToken: "read-only-token",
+      appSecret: "test-secret",
+      since: "2026-07-01",
+      until: "2026-07-01",
+    }),
+    TypeError,
+  );
+
   await assert.rejects(
     Promise.resolve().then(() => client.getMetaAdInsights({
       adAccountId: "act_123456789",

@@ -14,6 +14,11 @@ import {
   isOrganicBoostRemoteObject,
 } from "@/lib/meta/organic-boost-pause-guard";
 import {
+  assertMetaCreativeOptimizerFreshState,
+  MetaCreativeFreshPreflightError,
+  needsMetaCreativeFreshPreflight,
+} from "@/lib/meta/creative-format-fresh-preflight";
+import {
   createMetaAd,
   createMetaAdCreative,
   createMetaAdSet,
@@ -128,6 +133,7 @@ type MetaExecutorCredentials = {
   accessToken: string;
   appSecret: string;
   adAccountId: string;
+  currentMarketingSyncId: string;
 };
 
 type VerifiedBrandAsset = {
@@ -177,6 +183,17 @@ export type MetaMutationExecutorDependencies = {
     stepId: string,
     leaseToken: string,
   ): Promise<void>;
+  freshPreflight?(input: {
+    claim: MetaExecutorClaim;
+    step: MetaExecutorStep;
+    credentials: MetaExecutorCredentials;
+    bindings: MetaRemoteBinding[];
+  }): Promise<void>;
+  emergencyPauseCreativeTest?(input: {
+    claim: MetaExecutorClaim;
+    credentials: MetaExecutorCredentials;
+    remoteAdId: string;
+  }): Promise<boolean>;
   bindings(
     executionId: string,
     leaseToken: string,
@@ -227,6 +244,7 @@ export class MetaMutationExecutorError extends Error {
     | "asset_invalid"
     | "database_failed"
     | "step_limit_reached"
+    | "creative_optimizer_fresh_preflight_required"
     | "organic_boost_auto_pause_forbidden";
 
   constructor(code: MetaMutationExecutorError["code"]) {
@@ -745,6 +763,16 @@ function classifyFailure(
     };
   }
 
+  if (error instanceof MetaCreativeFreshPreflightError) {
+    return {
+      errorClass: "PREFLIGHT",
+      errorCode: error.code,
+      errorDetail: null,
+      remoteOutcome: dispatchPersisted ? "PERMANENT" : "NOT_APPLIED",
+      retryAfterSeconds: 0,
+    };
+  }
+
   if (error instanceof MetaMutationExecutorError) {
     if (error.code === "organic_boost_auto_pause_forbidden") {
       return {
@@ -817,7 +845,30 @@ export async function runMetaMutationExecutorOnce(input: {
       claim.userId,
     );
   } catch (error) {
-    const failure = classifyFailure(error, claim.firstStep, false);
+    let failure = classifyFailure(error, claim.firstStep, false);
+    if (claim.plannedPayload.contract === "meta_existing_adset_creative_test_v1") {
+      try {
+        const remoteAds = (await input.dependencies.bindings(
+          claim.executionId,
+          claim.leaseToken,
+        )).filter((binding) => binding.objectType === "AD");
+        if (remoteAds.length > 0) {
+          failure = {
+            ...failure,
+            errorClass: "RECONCILIATION",
+            errorCode: "creative_test_compensation_credentials_unavailable",
+            remoteOutcome: "UNKNOWN",
+          };
+        }
+      } catch {
+        failure = {
+          ...failure,
+          errorClass: "RECONCILIATION",
+          errorCode: "creative_test_compensation_state_unknown",
+          remoteOutcome: "UNKNOWN",
+        };
+      }
+    }
     const status = await input.dependencies.fail({
       executionId: claim.executionId,
       stepId: claim.firstStep.stepId,
@@ -835,6 +886,67 @@ export async function runMetaMutationExecutorOnce(input: {
   let step: MetaExecutorStep | null = claim.firstStep;
   let stepsProcessed = 0;
 
+  async function compensateCreativeTestIfBound(
+    failure: FailureClassification,
+  ): Promise<FailureClassification> {
+    if (!claim) return failure;
+    if (claim.plannedPayload.contract !== "meta_existing_adset_creative_test_v1") {
+      return failure;
+    }
+    let bindingRows: MetaRemoteBinding[];
+    try {
+      bindingRows = await input.dependencies.bindings(
+        claim.executionId,
+        claim.leaseToken,
+      );
+    } catch {
+      return {
+        ...failure,
+        errorClass: "RECONCILIATION",
+        errorCode: "creative_test_compensation_binding_read_failed",
+        remoteOutcome: "UNKNOWN",
+      };
+    }
+    const adBindings = bindingRows.filter((binding) =>
+      binding.objectType === "AD" && NUMERIC_ID_PATTERN.test(binding.remoteObjectId));
+    if (adBindings.length === 0) return failure;
+    if (adBindings.length !== 1 || !input.dependencies.emergencyPauseCreativeTest) {
+      return {
+        ...failure,
+        errorClass: "RECONCILIATION",
+        errorCode: "creative_test_compensation_required",
+        remoteOutcome: "UNKNOWN",
+      };
+    }
+    try {
+      const paused = await input.dependencies.emergencyPauseCreativeTest({
+        claim,
+        credentials,
+        remoteAdId: adBindings[0].remoteObjectId,
+      });
+      return paused
+        ? {
+            ...failure,
+            errorClass: "RECONCILIATION",
+            errorCode: "creative_test_compensated_paused",
+            remoteOutcome: "NOT_APPLIED",
+          }
+        : {
+            ...failure,
+            errorClass: "RECONCILIATION",
+            errorCode: "creative_test_compensation_readback_failed",
+            remoteOutcome: "UNKNOWN",
+          };
+    } catch {
+      return {
+        ...failure,
+        errorClass: "RECONCILIATION",
+        errorCode: "creative_test_compensation_failed",
+        remoteOutcome: "UNKNOWN",
+      };
+    }
+  }
+
   while (step && stepsProcessed < maxSteps) {
     await input.dependencies.heartbeat(
       claim.executionId,
@@ -844,9 +956,31 @@ export async function runMetaMutationExecutorOnce(input: {
 
     if (step.operation === "READ") {
       try {
+        const bindingRows = await input.dependencies.bindings(
+          claim.executionId,
+          claim.leaseToken,
+        );
+        if (needsMetaCreativeFreshPreflight({
+          plannedPayload: claim.plannedPayload,
+          operation: requiredString(step.plannedRequest.operation),
+          objectType: step.objectType,
+          stepOperation: step.operation,
+          plannedRequest: step.plannedRequest,
+        })) {
+          if (!input.dependencies.freshPreflight) {
+            throw new MetaMutationExecutorError(
+              "creative_optimizer_fresh_preflight_required",
+            );
+          }
+          await input.dependencies.freshPreflight({
+            claim,
+            step,
+            credentials,
+            bindings: bindingRows,
+          });
+        }
         const bindings = new Map(
-          (await input.dependencies.bindings(claim.executionId, claim.leaseToken))
-            .map((binding) => [binding.stepId, binding]),
+          bindingRows.map((binding) => [binding.stepId, binding]),
         );
         const resolved = resolveBindingValue(step.plannedRequest.object_id, bindings);
         const objectId = requiredNumericId(resolved);
@@ -865,7 +999,9 @@ export async function runMetaMutationExecutorOnce(input: {
         });
         stepsProcessed += 1;
       } catch (error) {
-        const failure = classifyFailure(error, step, false);
+        const failure = await compensateCreativeTestIfBound(
+          classifyFailure(error, step, false),
+        );
         const status = await input.dependencies.fail({
           executionId: claim.executionId,
           stepId: step.stepId,
@@ -886,6 +1022,30 @@ export async function runMetaMutationExecutorOnce(input: {
           step.stepId,
           claim.leaseToken,
         );
+        if (
+          outcome === "MISMATCH"
+          && claim.plannedPayload.contract === "meta_existing_adset_creative_test_v1"
+        ) {
+          const failure = await compensateCreativeTestIfBound({
+            errorClass: "RECONCILIATION",
+            errorCode: "creative_test_reconciliation_mismatch",
+            errorDetail: null,
+            remoteOutcome: "PERMANENT",
+            retryAfterSeconds: 120,
+          });
+          const status = await input.dependencies.fail({
+            executionId: claim.executionId,
+            stepId: step.stepId,
+            leaseToken: claim.leaseToken,
+            failure,
+          });
+          return {
+            processed: true,
+            outcome: terminalOutcome(status),
+            stepsProcessed: stepsProcessed + 1,
+            ...claimed,
+          };
+        }
         return {
           processed: true,
           outcome: outcome === "SUCCEEDED" ? "succeeded" : "mismatch",
@@ -894,7 +1054,7 @@ export async function runMetaMutationExecutorOnce(input: {
         };
       } catch (error) {
         const invalidResult = error instanceof TypeError;
-        const failure: FailureClassification = {
+        const failure = await compensateCreativeTestIfBound({
           errorClass: invalidResult ? "RECONCILIATION" : "TRANSPORT",
           errorCode: invalidResult
             ? "reconciliation_result_invalid"
@@ -902,7 +1062,7 @@ export async function runMetaMutationExecutorOnce(input: {
           errorDetail: null,
           remoteOutcome: invalidResult ? "PERMANENT" : "NOT_APPLIED",
           retryAfterSeconds: 120,
-        };
+        });
         const status = await input.dependencies.fail({
           executionId: claim.executionId,
           stepId: step.stepId,
@@ -934,6 +1094,25 @@ export async function runMetaMutationExecutorOnce(input: {
           bindings,
           dependencies: input.dependencies,
           async beforeRemote() {
+            if (needsMetaCreativeFreshPreflight({
+              plannedPayload: claim.plannedPayload,
+              operation: requiredString(step!.plannedRequest.operation),
+              objectType: step!.objectType,
+              stepOperation: step!.operation,
+              plannedRequest: step!.plannedRequest,
+            })) {
+              if (!input.dependencies.freshPreflight) {
+                throw new MetaMutationExecutorError(
+                  "creative_optimizer_fresh_preflight_required",
+                );
+              }
+              await input.dependencies.freshPreflight({
+                claim,
+                step: step!,
+                credentials,
+                bindings: bindingRows,
+              });
+            }
             await input.dependencies.beginDispatch(
               claim.executionId,
               step!.stepId,
@@ -951,7 +1130,7 @@ export async function runMetaMutationExecutorOnce(input: {
         });
         stepsProcessed += 1;
       } catch (error) {
-        const failure = remoteCompleted
+        const failure = await compensateCreativeTestIfBound(remoteCompleted
           ? {
             errorClass: "TRANSPORT" as const,
             errorCode: "remote_completion_persist_failed",
@@ -959,7 +1138,7 @@ export async function runMetaMutationExecutorOnce(input: {
             remoteOutcome: step.operation === "VALIDATE" ? "NOT_APPLIED" as const : "UNKNOWN" as const,
             retryAfterSeconds: 120,
           }
-          : classifyFailure(error, step, dispatchPersisted);
+          : classifyFailure(error, step, dispatchPersisted));
         const status = await input.dependencies.fail({
           executionId: claim.executionId,
           stepId: step.stepId,
@@ -1015,7 +1194,7 @@ async function loadExecutorCredentials(
   const { data, error } = await admin
     .from("platform_accounts")
     .select(
-      "id,user_id,account_id,marketing_meta_ad_account_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at",
+      "id,user_id,account_id,marketing_meta_ad_account_id,marketing_sync_id,access_token_encrypted,token_iv,token_auth_tag,expires_at,data_access_expires_at",
     )
     .eq("id", platformAccountId)
     .eq("user_id", userId)
@@ -1062,6 +1241,7 @@ async function loadExecutorCredentials(
       accessToken,
       appSecret: env.appSecret,
       adAccountId,
+      currentMarketingSyncId: requiredString(row.marketing_sync_id),
     };
   } catch {
     throw new MetaMutationExecutorError("credential_invalid");
@@ -1177,6 +1357,61 @@ export function createMetaMutationExecutorDependencies(): MetaMutationExecutorDe
       ) {
         throw new MetaMutationExecutorError("database_failed");
       }
+    },
+    async freshPreflight(input) {
+      await assertMetaCreativeOptimizerFreshState({
+        plannedPayload: input.claim.plannedPayload,
+        expectedBefore: input.claim.expectedBefore,
+        operation: requiredString(input.step.plannedRequest.operation),
+        objectType: input.step.objectType,
+        plannedRequest: input.step.plannedRequest,
+        bindings: input.bindings,
+        credentials: input.credentials,
+      });
+    },
+    async emergencyPauseCreativeTest(input) {
+      const expectedAccount = requiredString(
+        input.claim.plannedPayload.meta_ad_account_id,
+      );
+      const expectedSync = requiredString(
+        input.claim.plannedPayload.source_marketing_sync_id,
+      );
+      if (
+        input.credentials.adAccountId.replace(/^act_/, "") !== expectedAccount
+        || input.credentials.currentMarketingSyncId !== expectedSync
+      ) {
+        return false;
+      }
+      const expectedAdSet = requiredString(
+        input.claim.plannedPayload.platform_ad_set_id,
+      );
+      const before = await getMetaWriteObjectSnapshot({
+        ...input.credentials,
+        kind: "ad",
+        objectId: input.remoteAdId,
+      });
+      if (
+        before.value.account_id !== expectedAccount
+        || before.value.adset_id !== expectedAdSet
+      ) {
+        return false;
+      }
+      await updateMetaAdStatus({
+        ...input.credentials,
+        objectId: input.remoteAdId,
+        status: "PAUSED",
+        mode: "execute",
+      });
+      const snapshot = await getMetaWriteObjectSnapshot({
+        ...input.credentials,
+        kind: "ad",
+        objectId: input.remoteAdId,
+      });
+      const remoteAccount = snapshot.value.account_id;
+      const remoteStatus = snapshot.value.status;
+      return remoteAccount === expectedAccount
+        && typeof remoteStatus === "string"
+        && remoteStatus.toUpperCase() === "PAUSED";
     },
     async bindings(executionId, leaseToken) {
       return parseBindings(await rpcData("get_meta_mutation_remote_bindings", {

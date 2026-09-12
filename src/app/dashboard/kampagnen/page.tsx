@@ -2,7 +2,10 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { MetaAdAccountPicker } from "@/components/MetaAdAccountPicker";
-import { MetaCampaignOverview } from "@/components/MetaCampaignOverview";
+import {
+  MetaCampaignOverview,
+  type MetaCreativeOptimizationCycleView,
+} from "@/components/MetaCampaignOverview";
 import {
   DashboardContentSkeleton,
   DashboardPageHeader,
@@ -53,6 +56,50 @@ async function KampagnenBody() {
     );
   }
 
+  const { data: creativeCycleRows, error: creativeCycleError } = await supabase
+    .from("meta_creative_optimization_cycles")
+    .select(
+      "id,test_kind,status,platform_ad_set_id,started_at,measurement_start_date,measurement_end_date,completed_at,completion_reason,created_at",
+    )
+    .eq("platform_account_id", metaAccount.id)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(8);
+  const creativeOptimizationCycles: MetaCreativeOptimizationCycleView[] =
+    creativeCycleError || !Array.isArray(creativeCycleRows)
+      ? []
+      : creativeCycleRows.flatMap((row) => {
+          if (
+            typeof row.id !== "string"
+            || (row.test_kind !== "FORMAT" && row.test_kind !== "CREATIVE")
+            || ![
+              "PLANNED", "ACTIVE_TEST", "PAUSE_PLANNED",
+              "COMPLETED", "FAILED", "CANCELLED",
+            ].includes(String(row.status))
+            || typeof row.platform_ad_set_id !== "string"
+            || typeof row.created_at !== "string"
+          ) return [];
+          return [{
+            id: row.id,
+            testKind: row.test_kind,
+            status: row.status as MetaCreativeOptimizationCycleView["status"],
+            platformAdSetId: row.platform_ad_set_id,
+            startedAt: typeof row.started_at === "string" ? row.started_at : null,
+            measurementStartDate:
+              typeof row.measurement_start_date === "string"
+                ? row.measurement_start_date
+                : null,
+            measurementEndDate:
+              typeof row.measurement_end_date === "string"
+                ? row.measurement_end_date
+                : null,
+            completedAt: typeof row.completed_at === "string" ? row.completed_at : null,
+            completionReason:
+              typeof row.completion_reason === "string" ? row.completion_reason : null,
+            createdAt: row.created_at,
+          }];
+        });
+
   return (
     <>
       {adAccountPickerOptions.length > 0 ? (
@@ -89,6 +136,7 @@ async function KampagnenBody() {
         insightsUntil={metaAccount.marketing_insights_until ?? null}
         lastSuccessAt={metaAccount.marketing_last_success_at ?? null}
         recommendations={recommendationRows}
+        creativeOptimizationCycles={creativeOptimizationCycles}
         status={metaAccount.marketing_sync_status ?? "idle"}
       />
     </>

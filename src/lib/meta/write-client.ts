@@ -208,6 +208,7 @@ export type MetaWriteOperation =
   | "update_ad_status"
   | "read_campaign"
   | "read_ad_set"
+  | "read_ad_set_ads"
   | "read_creative"
   | "read_ad";
 
@@ -257,6 +258,13 @@ export type MetaWriteObjectSnapshot = {
   kind: MetaWriteObjectKind;
   id: string;
   value: Readonly<Record<string, unknown>>;
+  responseFingerprint: string;
+  usage: MetaUsageSnapshot;
+};
+
+export type MetaAdSetAdsSnapshot = {
+  adSetId: string;
+  ads: ReadonlyArray<Readonly<Record<string, unknown>>>;
   responseFingerprint: string;
   usage: MetaUsageSnapshot;
 };
@@ -1165,6 +1173,71 @@ export async function getMetaWriteObjectSnapshot(input: MetaAuth & {
     kind: input.kind,
     id,
     value: result.body,
+    responseFingerprint: fingerprintJson(result.body),
+    usage: result.usage,
+  };
+}
+
+export async function getMetaAdSetAdsSnapshot(input: MetaAuth & {
+  adSetId: string;
+}): Promise<MetaAdSetAdsSnapshot> {
+  const adSetId = normalizeMetaObjectId(input.adSetId);
+  const url = new URL(
+    `/${META_GRAPH_VERSION}/${adSetId}/ads`,
+    META_GRAPH_ORIGIN,
+  );
+  url.searchParams.set(
+    "fields",
+    "id,account_id,campaign_id,adset_id,status,effective_status,creative,updated_time",
+  );
+  url.searchParams.set("limit", "100");
+  const result = await metaRequest({
+    url,
+    auth: input,
+    operation: "read_ad_set_ads",
+    method: "GET",
+    ambiguousOnTransport: false,
+  });
+  if (!isRecord(result.body) || !Array.isArray(result.body.data)) {
+    throw new MetaWriteProtocolError(
+      "read_ad_set_ads",
+      "Meta returned an invalid ad-set ads snapshot",
+    );
+  }
+  if (
+    isRecord(result.body.paging)
+    && typeof result.body.paging.next === "string"
+  ) {
+    throw new MetaWriteProtocolError(
+      "read_ad_set_ads",
+      "Meta ad-set ads snapshot exceeded the bounded page",
+    );
+  }
+  const ads = result.body.data.map((row) => {
+    if (!isRecord(row)) {
+      throw new MetaWriteProtocolError(
+        "read_ad_set_ads",
+        "Meta returned an invalid ad row",
+      );
+    }
+    const id = row.id;
+    const rowAdSetId = row.adset_id;
+    if (
+      typeof id !== "string"
+      || !/^[1-9][0-9]{0,39}$/.test(id)
+      || rowAdSetId !== adSetId
+    ) {
+      throw new MetaWriteProtocolError(
+        "read_ad_set_ads",
+        "Meta returned an ad outside the requested ad set",
+      );
+    }
+    return row;
+  });
+
+  return {
+    adSetId,
+    ads,
     responseFingerprint: fingerprintJson(result.body),
     usage: result.usage,
   };

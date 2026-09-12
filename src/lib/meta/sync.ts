@@ -32,6 +32,7 @@ import { getMetaSyncEnv } from "./env";
 import { createAdminClient } from "../supabase/admin";
 import { nextHourlyRun } from "./schedule";
 import { resolveMarketingAdAccountId } from "./ad-account";
+import { runMetaCreativeFormatOptimizerAfterSnapshot } from "./creative-format-optimizer";
 
 const SYNC_LOCK_SECONDS = 5 * 60;
 const MANUAL_SYNC_COOLDOWN_SECONDS = 60;
@@ -977,6 +978,28 @@ export async function syncMetaConnector(
               });
             } catch (error) {
               plannerErrorCode = classifyPlannerError(error);
+            }
+          }
+
+          if (!isHighUsage(usage)) {
+            try {
+              const creativeOptimizer =
+                await runMetaCreativeFormatOptimizerAfterSnapshot({
+                  platformAccountId: connector.id,
+                  userId: connector.user_id,
+                  adAccountId: marketingAdAccountId,
+                  accessToken,
+                  appSecret: env.appSecret,
+                  marketingSyncId: marketingResult.syncId,
+                  readLeaseToken,
+                  accountLocalToday: marketingResult.insightsUntil,
+                });
+              usage = mergeMetaUsage(usage, creativeOptimizer.usage);
+            } catch (error) {
+              console.error("meta_creative_format_optimizer_failed", {
+                platformAccountId: connector.id,
+                errorName: error instanceof Error ? error.name : "unknown",
+              });
             }
           }
 
