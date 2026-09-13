@@ -12,6 +12,16 @@ import {
   loadOpenAIAdsClient,
   OpenAIAdsServiceError,
 } from "@/lib/openai-ads/connection";
+import {
+  containUncertainOpenAIAdsLaunchesForAccount,
+  reconcileOpenAIAdsLaunchControlPlane,
+} from "@/lib/openai-ads/launch";
+import {
+  accountLocalReportingWindows,
+  assertOpenAIAdsDeliveryCoverage,
+  buildOpenAIAdsConversionRequests,
+  completeAccountLocalReportingRange,
+} from "@/lib/openai-ads/sync-reporting";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const OPENAI_ADS_CRON_BATCH_SIZE = 1;
@@ -84,7 +94,7 @@ function campaignPayload(campaign: OpenAIAdsCampaign) {
     status: campaign.status,
     objective: campaign.objective ?? campaign.bidding_type,
     bidding_type: campaign.bidding_type,
-    budget_amount_micros: lifetime ?? daily,
+    budget_amount_micros: lifetime,
     daily_budget_amount_micros: daily,
     start_time: campaign.start_time,
     end_time: campaign.end_time,
@@ -94,7 +104,11 @@ function campaignPayload(campaign: OpenAIAdsCampaign) {
       description: campaign.description,
       budget: campaign.budget,
       targeting: campaign.targeting ?? null,
+      product_feed_id: campaign.product_feed_id,
+      landing_page_configuration:
+        campaign.landing_page_configuration ?? null,
       serving_issues: campaign.serving_issues ?? [],
+      serving_issues_observed: campaign.serving_issues_observed,
     },
   };
 }
@@ -114,7 +128,11 @@ function adGroupPayload(campaignId: string, adGroup: OpenAIAdsAdGroup) {
       description: adGroup.description,
       context_hints: adGroup.context_hints,
       bidding_config: adGroup.bidding_config,
+      product_set: adGroup.product_set ?? null,
+      landing_page_configuration:
+        adGroup.landing_page_configuration ?? null,
       serving_issues: adGroup.serving_issues ?? [],
+      serving_issues_observed: adGroup.serving_issues_observed,
     },
   };
 }
@@ -132,7 +150,9 @@ function adPayload(adGroupId: string, ad: OpenAIAdsAd) {
     updated_at: ad.updated_at,
     provider_data: {
       creative: ad.creative,
+      landing_page_configuration: ad.landing_page_configuration ?? null,
       serving_issues: ad.serving_issues ?? [],
+      serving_issues_observed: ad.serving_issues_observed,
     },
   };
 }
@@ -142,14 +162,21 @@ function insightPayload(
   conversion: OpenAIAdsConversionInsight | undefined,
   conversionsAvailable: boolean,
 ) {
+  if (conversionsAvailable && !conversion) {
+    throw new OpenAIAdsServiceError(
+      "conversion_insights_incomplete",
+      502,
+      "OpenAI-Conversiondaten decken den angeforderten Kampagnen-/Tageswert nicht vollständig ab.",
+    );
+  }
   return {
     campaign_id: insight.campaign_id,
     date: insightDate(insight),
     date_stop: insightEndDate(insight),
-    impressions: insight.impressions ?? 0,
-    clicks: insight.clicks ?? 0,
-    spend: insight.spend ?? 0,
-    conversions: conversionsAvailable ? (conversion?.conversions ?? 0) : null,
+    impressions: insight.impressions,
+    clicks: insight.clicks,
+    spend: insight.spend,
+    conversions: conversionsAvailable ? conversion!.conversions : null,
     data_status: insight.data_status ?? null,
     provider_data: {
       source_id: insight.id,
@@ -198,59 +225,32 @@ function classifyError(error: unknown) {
 async function recordFailure(input: {
   platformAccountId: string;
   syncRunId: string | null;
+  syncClaimToken: string;
+  credentialGeneration: string;
   code: string;
   backoffMs: number;
 }) {
   const admin = createAdminClient();
   const now = new Date();
   const next = new Date(now.getTime() + input.backoffMs).toISOString();
-
-  const { data: account } = await admin
-    .from("platform_accounts")
-    .select("provider_consecutive_failures")
-    .eq("id", input.platformAccountId)
-    .maybeSingle();
-  const failures = Math.max(
-    1,
-    Number(account?.provider_consecutive_failures ?? 0) + 1,
-  );
   const retireCredential = [
     "credential_rejected",
     "credential_decryption_failed",
   ].includes(input.code);
-  const accountUpdate: Record<string, unknown> = {
-    provider_sync_status: "error",
-    provider_sync_error_code: input.code,
-    provider_backoff_until: retireCredential ? null : next,
-    provider_next_sync_at: retireCredential ? null : next,
-    provider_consecutive_failures: failures,
-    updated_at: now.toISOString(),
-  };
-  if (retireCredential) {
-    Object.assign(accountUpdate, {
-      access_token_encrypted: null,
-      token_iv: null,
-      token_auth_tag: null,
-      credential_kind: null,
-      revoked_at: now.toISOString(),
+  const { error } = await admin.rpc("fail_openai_ads_account_sync", {
+    p_platform_account_id: input.platformAccountId,
+    p_sync_run_id: input.syncRunId,
+    p_sync_claim_token: input.syncClaimToken,
+    p_credential_generation: input.credentialGeneration,
+    p_error_code: input.code,
+    p_backoff_until: retireCredential ? null : next,
+    p_retire_credential: retireCredential,
+  });
+  if (error) {
+    console.error("openai_ads_sync_failure_finalize_failed", {
+      code: error.code,
+      platformAccountId: input.platformAccountId,
     });
-  }
-
-  await admin
-    .from("platform_accounts")
-    .update(accountUpdate)
-    .eq("id", input.platformAccountId)
-    .eq("platform", "openai_ads");
-
-  if (input.syncRunId) {
-    await admin
-      .from("ad_platform_sync_runs")
-      .update({
-        status: "error",
-        completed_at: now.toISOString(),
-        error_code: input.code,
-      })
-      .eq("id", input.syncRunId);
   }
 }
 
@@ -262,7 +262,7 @@ export async function syncOpenAIAdsAccount(input: {
   const emptyCounts = { campaigns: 0, adGroups: 0, ads: 0, insights: 0 };
   const admin = createAdminClient();
   const { data: claimed, error: claimError } = await admin.rpc(
-    "claim_ad_platform_sync",
+    "claim_openai_ads_account_sync",
     {
       p_platform_account_id: input.platformAccountId,
       p_user_id: input.userId ?? null,
@@ -277,7 +277,12 @@ export async function syncOpenAIAdsAccount(input: {
       "Der OpenAI-Ads-Abruf konnte nicht sicher gestartet werden.",
     );
   }
-  if (claimed !== true) {
+  const claim = Array.isArray(claimed) ? claimed[0] : claimed;
+  if (
+    !claim ||
+    typeof claim.sync_claim_token !== "string" ||
+    typeof claim.credential_generation !== "string"
+  ) {
     return {
       outcome: "blocked",
       status: "blocked",
@@ -285,10 +290,16 @@ export async function syncOpenAIAdsAccount(input: {
       counts: emptyCounts,
     };
   }
+  const syncClaimToken = claim.sync_claim_token;
+  const credentialGeneration = claim.credential_generation;
 
   let syncRunId: string | null = null;
   try {
-    const loaded = await loadOpenAIAdsClient(input);
+    const loaded = await loadOpenAIAdsClient({
+      ...input,
+      syncClaimToken,
+      credentialGeneration,
+    });
     const { data: syncRun, error: syncRunError } = await admin
       .from("ad_platform_sync_runs")
       .insert({
@@ -296,6 +307,8 @@ export async function syncOpenAIAdsAccount(input: {
         platform_account_id: input.platformAccountId,
         platform: "openai_ads",
         status: "running",
+        sync_claim_token: syncClaimToken,
+        credential_generation: credentialGeneration,
       })
       .select("id")
       .single();
@@ -342,37 +355,50 @@ export async function syncOpenAIAdsAccount(input: {
       items.map((item) => ({ adGroupId, item })),
     );
 
-    const endUnix = Math.floor(Date.now() / 3_600_000) * 3_600;
-    const startUnix = Math.max(946684800, endUnix - 30 * 24 * 60 * 60);
+    const launchControl = await reconcileOpenAIAdsLaunchControlPlane({
+      platformAccountId: input.platformAccountId,
+      account,
+      campaigns,
+      adGroups,
+      ads,
+    });
+    if (launchControl.uncertain > 0) {
+      throw new OpenAIAdsServiceError(
+        "launch_control_containment_unconfirmed",
+        502,
+        "Eine OpenAI-Launchabweichung konnte nicht sicher pausiert werden.",
+      );
+    }
+    if (launchControl.safelyPaused > 0) {
+      throw new OpenAIAdsServiceError(
+        "launch_control_drift_contained",
+        409,
+        "Eine OpenAI-Launchabweichung wurde sicher pausiert; der Reporting-Snapshot wird beim nächsten Abruf erneuert.",
+      );
+    }
+
+    const { startUnix, endUnix } = completeAccountLocalReportingRange({
+      nowUnix: Math.floor(Date.now() / 1000),
+      timeZone: account.timezone,
+      days: 30,
+    });
     const insights =
       endUnix > startUnix
         ? await loaded.client.listDailyCampaignInsights({ startUnix, endUnix })
         : [];
+    const reportingWindows = accountLocalReportingWindows({
+      startUnix,
+      endUnix,
+      timeZone: account.timezone,
+    });
     let conversionInsights: OpenAIAdsConversionInsight[] = [];
     let conversionsAvailable = false;
-    if (campaigns.length > 0 && insights.length > 0) {
+    if (campaigns.length > 0 && reportingWindows.length > 0) {
       try {
-        const chunks: string[][] = [];
-        for (let index = 0; index < campaigns.length; index += 500) {
-          chunks.push(campaigns.slice(index, index + 500).map((item) => item.id));
-        }
-        const windowsByDate = new Map<
-          string,
-          { date: string; startUnix: number; endUnix: number }
-        >();
-        for (const insight of insights) {
-          const date = insightDate(insight);
-          if (date && insight.end_time > insight.start_time) {
-            windowsByDate.set(date, {
-              date,
-              startUnix: insight.start_time,
-              endUnix: insight.end_time,
-            });
-          }
-        }
-        const requests = [...windowsByDate.values()].flatMap((window) =>
-          chunks.map((campaignIds) => ({ ...window, campaignIds })),
-        );
+        const requests = buildOpenAIAdsConversionRequests({
+          campaignIds: campaigns.map((item) => item.id),
+          windows: reportingWindows,
+        });
         const chunkResults = await mapWithConcurrency(
           requests,
           2,
@@ -394,6 +420,19 @@ export async function syncOpenAIAdsAccount(input: {
         );
       }
     }
+    try {
+      assertOpenAIAdsDeliveryCoverage({
+        campaignIds: campaigns.map((item) => item.id),
+        windows: reportingWindows,
+        insights,
+      });
+    } catch {
+      throw new OpenAIAdsServiceError(
+        "delivery_insights_incomplete",
+        502,
+        "OpenAI-Deliverydaten decken nicht alle Kampagnen-/Tageswerte ab.",
+      );
+    }
     const conversionByCampaignDate = new Map(
       conversionInsights.map((item) => [`${item.entity_id}:${item.date}`, item]),
     );
@@ -408,6 +447,10 @@ export async function syncOpenAIAdsAccount(input: {
       currency_code: account.currency_code,
       review_status: account.review.status,
       review_reason: account.review.reason ?? null,
+      account_integrity_review_observed:
+        account.account_integrity_review !== null,
+      account_integrity_review_status:
+        account.account_integrity_review?.review.status ?? null,
       api_version: "v1",
       conversion_insights_status: conversionsAvailable
         ? "available"
@@ -421,13 +464,12 @@ export async function syncOpenAIAdsAccount(input: {
     const insightRows = insights
       .map((insight) => {
         const date = insightDate(insight);
-        const conversion =
-          date && insight.campaign_id
-            ? conversionByCampaignDate.get(`${insight.campaign_id}:${date}`)
-            : undefined;
+        const conversion = date
+          ? conversionByCampaignDate.get(`${insight.campaign_id}:${date}`)
+          : undefined;
         return insightPayload(insight, conversion, conversionsAvailable);
       })
-      .filter((row) => row.campaign_id && row.date);
+      .filter((row) => row.date);
 
     const { data: snapshotCounts, error: snapshotError } = await admin.rpc(
       "replace_openai_ads_snapshot",
@@ -455,6 +497,28 @@ export async function syncOpenAIAdsAccount(input: {
       );
     }
 
+    const unsafeLaunches = Number(snapshotCounts?.unsafe_launches ?? 0);
+    if (!Number.isSafeInteger(unsafeLaunches) || unsafeLaunches < 0) {
+      throw new OpenAIAdsServiceError(
+        "snapshot_unsafe_launch_count_invalid",
+        500,
+        "Der OpenAI-Ads-Snapshot lieferte keinen gültigen Safety-Status.",
+      );
+    }
+    if (unsafeLaunches > 0) {
+      const containment = await containUncertainOpenAIAdsLaunchesForAccount({
+        platformAccountId: input.platformAccountId,
+        expectedCount: unsafeLaunches,
+      });
+      if (containment.uncertain > 0) {
+        throw new OpenAIAdsServiceError(
+          "snapshot_launch_containment_unconfirmed",
+          502,
+          "Mindestens eine unsichere OpenAI-Ads-Launchkette konnte nicht bestätigt pausiert werden.",
+        );
+      }
+    }
+
     const counts = {
       campaigns: Number(snapshotCounts?.campaigns ?? campaignRows.length),
       adGroups: Number(snapshotCounts?.ad_groups ?? adGroupRows.length),
@@ -473,6 +537,8 @@ export async function syncOpenAIAdsAccount(input: {
     await recordFailure({
       platformAccountId: input.platformAccountId,
       syncRunId,
+      syncClaimToken,
+      credentialGeneration,
       code: classified.code,
       backoffMs: classified.backoffMs,
     });

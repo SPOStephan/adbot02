@@ -71,9 +71,11 @@ Die neue Forward-Migration ist additiv und löscht keine aktive Meta-Autorisieru
 
 ## Empfohlener Rollout
 
+> **Folgestand vom 12. September 2026:** Die damalige ACTIVE-Sperre bleibt als historische Sicherheitsentscheidung korrekt. Der aktuelle OpenAI-Campaign-Vertrag belegt inzwischen ein kampagnenspezifisches `daily_spend_limit_micros`. Die Sperre wird deshalb nicht durch einen direkten ACTIVE-Launch ersetzt, sondern durch pausierte Erstellung, vollständigen Read-back, OpenAIs echte temporäre Iframe-Vorschau, eine explizite Kostenbestätigung und erneut validierte Pre-/Post-ACTIVE-Zustände. Der Snapshot behandelt ACTIVE-, Legacy- und Missing-ID-Drift fail-closed und löst unmittelbares Safety-Containment aus. Dieser neuere Vertrag ist in [`SAFE_PAUSED_DAILY_LAUNCH.md`](../openai-ads/SAFE_PAUSED_DAILY_LAUNCH.md) beschrieben und ersetzt ausschließlich die damalige offene Launch-Empfehlung; aktiv wird er erst nach Review, manueller Live-Migration und anschließendem Merge.
+
 Der Prüfbranch sollte zunächst als Pull Request reviewed werden. Danach müssen Code-Deployment und Datenbankmigration als ein kontrollierter Live-Rollout behandelt werden, obwohl Adbot keine getrennten Staging- oder Testumgebungen verwendet. Vor der Migration ist das tatsächlich von `app.adbot.one` genutzte Supabase-Projekt `aalmikwjyhdcmfeblofn` eindeutig mit dem Supabase-Zugang zu verbinden. Anschließend sind Migration, Deployment, Health-Check, Login, Meta-Status, manuelle Meta-Synchronisation und ChatGPT-Ads-Fallback in genau dieser Reihenfolge zu prüfen.
 
-Bis dieser Rollout abgeschlossen ist, darf der neue OpenAI-ACTIVE-Launch nicht freigegeben werden. Die Google-Ads-Implementierung sollte erst danach beginnen, damit keine weitere Providerarbeit auf ungeklärten Betriebszuständen aufsetzt.
+Zum damaligen Prüfstand durfte der neue OpenAI-ACTIVE-Launch bis zum Abschluss dieses Rollouts nicht freigegeben werden. Der Folgestand vom 12. September ersetzt diese offene Empfehlung durch den oben beschriebenen Zwei-Phasen-Vertrag.
 
 ## Ergebnis
 

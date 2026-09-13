@@ -1,8 +1,7 @@
-import { revalidatePath } from "next/cache";
 import { NextRequest } from "next/server";
 
-import { parseOpenAIAdsLaunchInput } from "@/lib/openai-ads/input";
-import { createPausedOpenAIAdsLaunch } from "@/lib/openai-ads/launch";
+import { parseOpenAIAdsActivationPreviewInput } from "@/lib/openai-ads/input";
+import { previewOpenAIAdsActivation } from "@/lib/openai-ads/launch";
 import {
   authenticateOpenAIAdsUser,
   openAIAdsErrorResponse,
@@ -12,20 +11,19 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 180;
+export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   try {
     const body = await readOpenAIAdsJson(request);
-    const command = parseOpenAIAdsLaunchInput(body);
+    const command = parseOpenAIAdsActivationPreviewInput(body);
     const user = await authenticateOpenAIAdsUser();
-    const result = await createPausedOpenAIAdsLaunch({
+    const result = await previewOpenAIAdsActivation({
       userId: user.id,
-      command,
+      launchId: command.launchId,
     });
 
-    revalidatePath("/dashboard/chatgpt-ads", "page");
-    return openAIAdsJson({ ok: true, ...result }, result.alreadyExisted ? 200 : 201);
+    return openAIAdsJson({ ok: true, ...result });
   } catch (error) {
     return openAIAdsErrorResponse(error);
   }

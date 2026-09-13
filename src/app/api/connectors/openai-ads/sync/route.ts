@@ -16,7 +16,7 @@ export const maxDuration = 180;
 
 export async function POST(request: NextRequest) {
   try {
-    const deadlineAtMs = Date.now() + 150_000;
+    const deadlineAtMs = Date.now() + 110_000;
     const body = await readOpenAIAdsJson(request);
     const command = parseOpenAIAdsAccountCommand(body);
     const user = await authenticateOpenAIAdsUser();

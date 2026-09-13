@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { constantTimeEqual } from "@/lib/meta/crypto";
 import { hasOpenAIAdsEnv } from "@/lib/openai-ads/env";
+import { recoverStaleOpenAIAdsLaunchOperations } from "@/lib/openai-ads/launch";
 import {
   getDueOpenAIAdsAccountIds,
   OPENAI_ADS_CRON_BATCH_SIZE,
@@ -45,7 +46,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const deadlineAtMs = Date.now() + 150_000;
+    const deadlineAtMs = Date.now() + 110_000;
+    const recovery = await recoverStaleOpenAIAdsLaunchOperations(2);
     const ids = await getDueOpenAIAdsAccountIds(OPENAI_ADS_CRON_BATCH_SIZE);
     const counters = { success: 0, error: 0, reconnect_required: 0, blocked: 0 };
     for (const platformAccountId of ids) {
@@ -57,7 +59,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(
-      { ok: true, processed: ids.length, results: counters },
+      { ok: true, processed: ids.length, recovery, results: counters },
       { headers: NO_STORE_HEADERS },
     );
   } catch {

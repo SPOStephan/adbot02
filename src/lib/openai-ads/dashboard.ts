@@ -42,6 +42,8 @@ export type OpenAIAdsDashboardAccount = {
   accountStatus: string | null;
   reviewStatus: string | null;
   reviewReason: string | null;
+  accountIntegrityReviewObserved: boolean;
+  accountIntegrityReviewStatus: string | null;
   conversionInsightsAvailable: boolean;
   currency: string;
   timezone: string | null;
@@ -226,6 +228,11 @@ export async function loadOpenAIAdsDashboard(
         accountStatus: text(metadata.account_status),
         reviewStatus: text(metadata.review_status),
         reviewReason: text(metadata.review_reason),
+        accountIntegrityReviewObserved:
+          metadata.account_integrity_review_observed === true,
+        accountIntegrityReviewStatus: text(
+          metadata.account_integrity_review_status,
+        ),
         conversionInsightsAvailable:
           metadata.conversion_insights_status === "available",
         currency: text(metadata.currency_code)?.toUpperCase() ?? "EUR",
