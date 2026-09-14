@@ -111,7 +111,6 @@ export function OpenAIAdsLaunchForm({
           campaignName: form.get("campaignName"),
           campaignDescription: form.get("campaignDescription"),
           biddingType: form.get("biddingType"),
-          lifetimeBudget: form.get("lifetimeBudget"),
           dailyBudget: form.get("dailyBudget"),
           maxBid: form.get("maxBid"),
           startDate: form.get("startDate"),
@@ -127,7 +126,7 @@ export function OpenAIAdsLaunchForm({
           body: form.get("body"),
           targetUrl: form.get("targetUrl"),
           imageUrl: form.get("imageUrl"),
-          confirmation: "create_active_openai_ads_campaign",
+          confirmation: "create_paused_openai_ads_campaign",
         }),
       });
       const payload: unknown = await response.json().catch(() => null);
@@ -135,7 +134,7 @@ export function OpenAIAdsLaunchForm({
         throw new Error(
           responseMessage(
             payload,
-            "Die ACTIVE-Kampagne konnte nicht sicher erstellt werden.",
+            "Der pausierte Kampagnenentwurf konnte nicht sicher erstellt werden.",
           ),
         );
       }
@@ -148,13 +147,15 @@ export function OpenAIAdsLaunchForm({
           : null;
       if (status === "blocked") {
         throw new Error(
-          "OpenAI hat die Anzeige abgelehnt. Die Kampagnenkette wurde pausiert.",
+          "OpenAI hat die Anzeige abgelehnt. Die Kampagnenkette bleibt pausiert.",
         );
       }
       setMessage(
-        status === "in_review"
-          ? "Die Kampagnenkette wurde ACTIVE angelegt. OpenAI prüft die Anzeige; nach Genehmigung beginnt die Auslieferung automatisch innerhalb der bestätigten Limits."
-          : "Kampagne, Anzeigengruppe und Anzeige wurden ACTIVE angelegt und können innerhalb der bestätigten Limits ausliefern.",
+        status === "active"
+          ? "Diese identische Kampagnenkette ist bereits aktiv. Adbot hat keinen zweiten Launch erstellt."
+          : status === "in_review"
+          ? "Die Kampagnenkette wurde pausiert angelegt. OpenAI prüft die Anzeige; es entstehen noch keine Ausgaben."
+          : "Kampagne, Anzeigengruppe und Anzeige wurden pausiert angelegt und vollständig zurückgelesen. Es entstehen noch keine Ausgaben.",
       );
       setConfirmed(false);
       router.refresh();
@@ -162,7 +163,7 @@ export function OpenAIAdsLaunchForm({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Die ACTIVE-Kampagne konnte nicht sicher erstellt werden.",
+          : "Der pausierte Kampagnenentwurf konnte nicht sicher erstellt werden.",
       );
     } finally {
       setPending(false);
@@ -185,7 +186,7 @@ export function OpenAIAdsLaunchForm({
           </span>
         </span>
         <span className="rounded-lg border border-slate-200 px-3 py-1 text-sm font-bold text-slate-700">
-          {expanded ? "Schließen" : "ACTIVE anlegen"}
+          {expanded ? "Schließen" : "Pausiert anlegen"}
         </span>
       </button>
 
@@ -226,20 +227,7 @@ export function OpenAIAdsLaunchForm({
               />
             </label>
             <label className="text-sm font-bold text-slate-800">
-              Laufzeitbudget ({currency})
-              <input
-                className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5"
-                inputMode="decimal"
-                min="1"
-                name="lifetimeBudget"
-                placeholder="100.00"
-                required
-                step="0.01"
-                type="number"
-              />
-            </label>
-            <label className="text-sm font-bold text-slate-800">
-              Maximales Tagesbudget ({currency})
+              Kampagnenspezifisches tägliches Ausgabenlimit ({currency})
               <input
                 className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5"
                 inputMode="decimal"
@@ -250,6 +238,11 @@ export function OpenAIAdsLaunchForm({
                 step="0.01"
                 type="number"
               />
+              <span className="mt-1 block text-xs font-medium leading-5 text-slate-500">
+                Dieser Wert wird als <code>daily_spend_limit_micros</code> direkt
+                an dieser Kampagne gespeichert. Adbot setzt oder verändert dabei
+                kein kontoweites Spend-Limit.
+              </span>
             </label>
             <label className="text-sm font-bold text-slate-800">
               Maximalgebot ({currency})
@@ -268,6 +261,8 @@ export function OpenAIAdsLaunchForm({
               Startdatum (optional)
               <input
                 className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5"
+                max="2100-01-01"
+                min="2000-01-01"
                 name="startDate"
                 type="date"
               />
@@ -276,6 +271,8 @@ export function OpenAIAdsLaunchForm({
               Enddatum (optional)
               <input
                 className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5"
+                max="2100-01-01"
+                min="2000-01-01"
                 name="endDate"
                 type="date"
               />
@@ -428,10 +425,10 @@ export function OpenAIAdsLaunchForm({
               type="checkbox"
             />
             <span>
-              Ich bestätige Kampagne, Targeting, Tages- und Laufzeitbudget.
-              Adbot legt Kampagne, Anzeigengruppe und Anzeige direkt
-              <strong> ACTIVE</strong> an. Bei noch laufender Anzeigenprüfung
-              beginnt die Auslieferung automatisch nach OpenAIs Genehmigung.
+              Ich bestätige Kampagne, Targeting und Tagesbudget. Adbot legt
+              Kampagne, Anzeigengruppe und Anzeige ausschließlich
+              <strong> pausiert</strong> an und liest alle Werte bei OpenAI zurück.
+              Ausgaben beginnen erst nach einer separaten Aktivierung.
             </span>
           </label>
 
@@ -454,8 +451,8 @@ export function OpenAIAdsLaunchForm({
             type="submit"
           >
             {pending
-              ? "ACTIVE-Kampagne wird erstellt …"
-              : "Kostenwirksam ACTIVE anlegen"}
+              ? "Pausierter Entwurf wird erstellt …"
+              : "Pausierten Entwurf anlegen"}
           </button>
         </form>
       ) : null}

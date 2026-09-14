@@ -42,6 +42,9 @@ function asText(
     throw new OpenAIAdsInputError("invalid_text", `${field} ist ungültig.`);
   }
   const normalized = value.trim();
+  if (options.optional && normalized === "") {
+    return null;
+  }
   if (normalized.length < options.min || normalized.length > options.max) {
     throw new OpenAIAdsInputError(
       "invalid_text_length",
@@ -84,6 +87,7 @@ function amountToMicros(
   value: unknown,
   field: string,
   minimumMicros = 1_000_000,
+  maximumMicros = Number.MAX_SAFE_INTEGER,
 ): number {
   if (typeof value !== "string" && typeof value !== "number") {
     throw new OpenAIAdsInputError("invalid_amount", `${field} ist ungültig.`);
@@ -102,7 +106,7 @@ function amountToMicros(
   if (
     !Number.isSafeInteger(micros) ||
     micros < minimumMicros ||
-    micros > Number.MAX_SAFE_INTEGER
+    micros > maximumMicros
   ) {
     throw new OpenAIAdsInputError(
       "amount_out_of_range",
@@ -125,15 +129,13 @@ function asDate(value: unknown, field: string): string | null {
   const timestamp = Date.parse(`${value}T00:00:00Z`);
   if (
     !Number.isFinite(timestamp) ||
-    new Date(timestamp).toISOString().slice(0, 10) !== value
+    new Date(timestamp).toISOString().slice(0, 10) !== value ||
+    value < "2000-01-01" ||
+    value > "2100-01-01"
   ) {
     throw new OpenAIAdsInputError("invalid_date", `${field} ist ungültig.`);
   }
   return value;
-}
-
-function dateToUnix(value: string | null): number | null {
-  return value ? Math.floor(Date.parse(`${value}T00:00:00Z`) / 1000) : null;
 }
 
 export function parseOpenAIAdsConnectInput(value: unknown) {
@@ -167,12 +169,40 @@ export function parseOpenAIAdsGeoSearch(value: string | null) {
   return query!;
 }
 
-export function parseOpenAIAdsLaunchInput(value: unknown) {
+export type OpenAIAdsLaunchInput = {
+  platformAccountId: string;
+  campaignName: string;
+  campaignDescription: string | null;
+  biddingType: "impressions" | "clicks";
+  billingEventType: "impression" | "click";
+  dailyBudgetMicros: number;
+  maxBidMicros: number;
+  startDate: string | null;
+  endDate: string | null;
+  locationIds: string[];
+  adGroupName: string;
+  contextHints: string[];
+  adName: string;
+  title: string;
+  body: string;
+  targetUrl: string;
+  imageUrl: string;
+};
+
+export function parseOpenAIAdsLaunchInput(
+  value: unknown,
+): OpenAIAdsLaunchInput {
   const body = asRecord(value);
-  if (body.confirmation !== "create_active_openai_ads_campaign") {
+  if (body.lifetimeBudget !== undefined) {
+    throw new OpenAIAdsInputError(
+      "legacy_budget_not_supported",
+      "Neue OpenAI-Ads-Launches verwenden ausschließlich ein kampagnenspezifisches Tagesbudget.",
+    );
+  }
+  if (body.confirmation !== "create_paused_openai_ads_campaign") {
     throw new OpenAIAdsInputError(
       "confirmation_required",
-      "Die kostenwirksame ACTIVE-Kampagne muss ausdrücklich bestätigt werden.",
+      "Die pausierte OpenAI-Ads-Kampagnenkette muss ausdrücklich bestätigt werden.",
     );
   }
 
@@ -187,9 +217,7 @@ export function parseOpenAIAdsLaunchInput(value: unknown) {
   const billingEventType = biddingType === "clicks" ? "click" : "impression";
   const startDate = asDate(body.startDate, "Startdatum");
   const endDate = asDate(body.endDate, "Enddatum");
-  const startTime = dateToUnix(startDate);
-  const endTime = dateToUnix(endDate);
-  if (startTime && endTime && endTime <= startTime) {
+  if (startDate && endDate && endDate <= startDate) {
     throw new OpenAIAdsInputError(
       "invalid_date_range",
       "Das Enddatum muss nach dem Startdatum liegen.",
@@ -225,17 +253,7 @@ export function parseOpenAIAdsLaunchInput(value: unknown) {
       "Mindestens ein Standort ist erforderlich; weltweites Targeting wird nicht implizit freigeschaltet.",
     );
   }
-  const lifetimeBudgetMicros = amountToMicros(
-    body.lifetimeBudget,
-    "Laufzeitbudget",
-  );
   const dailyBudgetMicros = amountToMicros(body.dailyBudget, "Tagesbudget");
-  if (dailyBudgetMicros > lifetimeBudgetMicros) {
-    throw new OpenAIAdsInputError(
-      "daily_budget_exceeds_lifetime",
-      "Das maximale Tagesbudget darf das Laufzeitbudget nicht überschreiten.",
-    );
-  }
 
   return {
     platformAccountId: asUuid(body.platformAccountId, "Verbindung"),
@@ -250,11 +268,15 @@ export function parseOpenAIAdsLaunchInput(value: unknown) {
     }),
     biddingType,
     billingEventType,
-    lifetimeBudgetMicros,
     dailyBudgetMicros,
-    maxBidMicros: amountToMicros(body.maxBid, "Maximalgebot", 1),
-    startTime,
-    endTime,
+    maxBidMicros: amountToMicros(
+      body.maxBid,
+      "Maximalgebot",
+      1,
+      30_400_000_000_000,
+    ),
+    startDate,
+    endDate,
     locationIds: [...new Set(locationIds)],
     adGroupName: asText(body.adGroupName, "Anzeigengruppenname", {
       min: 3,
@@ -269,6 +291,13 @@ export function parseOpenAIAdsLaunchInput(value: unknown) {
   };
 }
 
+export function parseOpenAIAdsActivationPreviewInput(value: unknown) {
+  const body = asRecord(value);
+  return {
+    launchId: asUuid(body.launchId, "Launch"),
+  };
+}
+
 export function parseOpenAIAdsActivationInput(value: unknown) {
   const body = asRecord(value);
   if (body.confirmation !== "activate_openai_ads_campaign") {
@@ -280,5 +309,9 @@ export function parseOpenAIAdsActivationInput(value: unknown) {
 
   return {
     launchId: asUuid(body.launchId, "Launch"),
+    previewToken: asText(body.previewToken, "Aktivierungsbeleg", {
+      min: 32,
+      max: 4096,
+    })!,
   };
 }

@@ -2,6 +2,8 @@ import "server-only";
 
 const REQUEST_TIMEOUT_MS = 25_000;
 const MAX_PAGES = 100;
+const MAX_PREVIEW_ITEMS = 10;
+const MAX_PREVIEW_BODY_LENGTH = 1_000_000;
 
 export type OpenAIAdsAccount = {
   id: string;
@@ -15,6 +17,17 @@ export type OpenAIAdsAccount = {
     status: "in_review" | "rejected" | "approved";
     reason?: string | null;
   };
+  account_integrity_review: {
+    review: {
+      status: "in_review" | "rejected" | "approved";
+      reason?: string | null;
+    };
+    details: {
+      decision?: string | null;
+      reason?: string | null;
+      status_updated_at?: string | null;
+    } | null;
+  } | null;
 };
 
 export type OpenAIAdsCampaign = {
@@ -25,6 +38,7 @@ export type OpenAIAdsCampaign = {
   bidding_type: string;
   budget: {
     lifetime_spend_limit_micros?: number | null;
+    lifetime_spend_limit_micros_present: boolean;
     daily_spend_limit_micros?: number | null;
   };
   start_time: number | null;
@@ -33,7 +47,10 @@ export type OpenAIAdsCampaign = {
   updated_at: number;
   objective?: string | null;
   targeting?: Record<string, unknown> | null;
+  product_feed_id: string | null;
+  landing_page_configuration?: Record<string, unknown> | null;
   serving_issues?: unknown[];
+  serving_issues_observed: boolean;
 };
 
 export type OpenAIAdsAdGroup = {
@@ -42,14 +59,18 @@ export type OpenAIAdsAdGroup = {
   description: string | null;
   context_hints: string[];
   status: string;
+  landing_page_configuration?: Record<string, unknown> | null;
+  product_set?: Record<string, unknown> | null;
   bidding_config: {
     billing_event_type: string;
     strategy?: string | null;
     max_bid_micros?: number | null;
+    custom_audience_bid_multipliers?: unknown[];
   };
   created_at: number;
   updated_at: number;
   serving_issues?: unknown[];
+  serving_issues_observed: boolean;
 };
 
 export type OpenAIAdsAd = {
@@ -61,25 +82,29 @@ export type OpenAIAdsAd = {
     type: string;
     title: string;
     body: string;
+    price?: string | null;
     file_id?: string | null;
     image_url?: string | null;
+    image_crop?: Record<string, unknown> | null;
     target_url: string | null;
   };
+  landing_page_configuration?: Record<string, unknown> | null;
   created_at: number;
   updated_at: number;
   serving_issues?: unknown[];
+  serving_issues_observed: boolean;
 };
 
 export type OpenAIAdsInsight = {
   id: string;
   start_time: number;
   end_time: number;
-  readable_time?: string | null;
-  campaign_id?: string | null;
-  campaign_name?: string | null;
-  impressions?: number | null;
-  clicks?: number | null;
-  spend?: number | null;
+  readable_time: string;
+  campaign_id: string;
+  campaign_name: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
   conversions?: number | null;
   data_status?: string | null;
   [key: string]: unknown;
@@ -100,6 +125,10 @@ export type OpenAIAdsConversionInsight = {
   conversions: number;
   click_through_conversions: number | null;
   view_through_conversions: number | null;
+};
+
+export type OpenAIAdsAdPreview = {
+  bodies: string[];
 };
 
 type ListResponse<T> = {
@@ -149,12 +178,451 @@ function asString(value: unknown, field: string): string {
   return value;
 }
 
+function asRequiredString(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} fehlt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return value;
+}
+
 function asNullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function asFiniteNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+function asOptionalNullableString(value: unknown, field: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value;
+  throw new OpenAIAdsApiError({
+    message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht lesbar.`,
+    status: 502,
+    code: "invalid_provider_response",
+  });
+}
+
+function asRequiredNullableString(
+  payload: Record<string, unknown>,
+  key: string,
+  field: string,
+): string | null {
+  if (!Object.prototype.hasOwnProperty.call(payload, key)) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} fehlt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return asOptionalNullableString(payload[key], field);
+}
+
+function asOptionalString(
+  payload: Record<string, unknown>,
+  key: string,
+  field: string,
+): string | null {
+  if (!Object.prototype.hasOwnProperty.call(payload, key)) return null;
+  return asString(payload[key], field);
+}
+
+function asOptionalNonNegativeSafeInteger(
+  payload: Record<string, unknown>,
+  key: string,
+  field: string,
+): number | null {
+  if (!Object.prototype.hasOwnProperty.call(payload, key)) return null;
+  const value = payload[key];
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0
+  ) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht exakt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return value;
+}
+
+function asRequiredNonNegativeFiniteNumber(
+  payload: Record<string, unknown>,
+  key: string,
+  field: string,
+): number {
+  if (!Object.prototype.hasOwnProperty.call(payload, key)) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} fehlt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  const value = payload[key];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht exakt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return value;
+}
+
+function asOptionalRecord(
+  value: unknown,
+  field: string,
+): Record<string, unknown> | null {
+  if (value === null || value === undefined) return null;
+  if (isRecord(value) && !Array.isArray(value)) return value;
+  throw new OpenAIAdsApiError({
+    message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht lesbar.`,
+    status: 502,
+    code: "invalid_provider_response",
+  });
+}
+
+function asLandingPageConfiguration(
+  value: unknown,
+  field: string,
+): Record<string, unknown> | null {
+  const record = asOptionalRecord(value, field);
+  if (
+    record &&
+    (!Object.prototype.hasOwnProperty.call(record, "query_string_template") ||
+      (record.query_string_template !== null &&
+        typeof record.query_string_template !== "string"))
+  ) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field}.query_string_template fehlt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return record;
+}
+
+function asTargetingGeoLocations(value: unknown, field: string) {
+  if (!isRecord(value) || Array.isArray(value)) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht lesbar.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  const result: Record<string, unknown> = { ...value };
+  if (Object.prototype.hasOwnProperty.call(value, "countries")) {
+    result.countries = asStringArray(value.countries, `${field}.countries`);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "include")) {
+    if (!Array.isArray(value.include)) {
+      throw new OpenAIAdsApiError({
+        message: `Ungültige OpenAI-Ads-Antwort: ${field}.include ist nicht lesbar.`,
+        status: 502,
+        code: "invalid_provider_response",
+      });
+    }
+    result.include = value.include.map((item, index) => {
+      if (!isRecord(item) || Array.isArray(item)) {
+        throw new OpenAIAdsApiError({
+          message: `Ungültige OpenAI-Ads-Antwort: ${field}.include.${index} ist nicht lesbar.`,
+          status: 502,
+          code: "invalid_provider_response",
+        });
+      }
+      return {
+        id: asString(item.id, `${field}.include.${index}.id`),
+        name: asString(item.name, `${field}.include.${index}.name`),
+        type: asString(item.type, `${field}.include.${index}.type`),
+        country_code: asString(
+          item.country_code,
+          `${field}.include.${index}.country_code`,
+        ),
+        region_code: asRequiredNullableString(
+          item,
+          "region_code",
+          `${field}.include.${index}.region_code`,
+        ),
+      };
+    });
+  }
+  return result;
+}
+
+function asTargetingDimensionRecord(
+  value: unknown,
+  field: string,
+  requiredArrayKey: string | null,
+) {
+  if (!isRecord(value) || Array.isArray(value)) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht lesbar.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  const result: Record<string, unknown> = { ...value };
+  if (requiredArrayKey) {
+    if (!Object.prototype.hasOwnProperty.call(value, requiredArrayKey)) {
+      throw new OpenAIAdsApiError({
+        message: `Ungültige OpenAI-Ads-Antwort: ${field}.${requiredArrayKey} fehlt.`,
+        status: 502,
+        code: "invalid_provider_response",
+      });
+    }
+    result[requiredArrayKey] = asStringArray(
+      value[requiredArrayKey],
+      `${field}.${requiredArrayKey}`,
+    );
+  } else if (Object.prototype.hasOwnProperty.call(value, "included")) {
+    result.included = asStringArray(value.included, `${field}.included`);
+  }
+  return result;
+}
+
+function asTargeting(
+  payload: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | null {
+  if (!Object.prototype.hasOwnProperty.call(payload, key)) return null;
+  const value = payload[key];
+  if (!isRecord(value) || Array.isArray(value)) {
+    throw new OpenAIAdsApiError({
+      message: "Ungültige OpenAI-Ads-Antwort: campaign.targeting ist nicht lesbar.",
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  const result: Record<string, unknown> = { ...value };
+  for (const dimension of ["locations", "excluded_locations"] as const) {
+    if (Object.prototype.hasOwnProperty.call(value, dimension)) {
+      result[dimension] = asTargetingGeoLocations(
+        value[dimension],
+        `campaign.targeting.${dimension}`,
+      );
+    }
+  }
+  for (const dimension of [
+    "custom_audiences",
+    "excluded_custom_audiences",
+  ] as const) {
+    if (Object.prototype.hasOwnProperty.call(value, dimension)) {
+      result[dimension] = asTargetingDimensionRecord(
+        value[dimension],
+        `campaign.targeting.${dimension}`,
+        "ids",
+      );
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "platforms")) {
+    result.platforms = asTargetingDimensionRecord(
+      value.platforms,
+      "campaign.targeting.platforms",
+      null,
+    );
+  }
+  return result;
+}
+
+function asImageCrop(
+  payload: Record<string, unknown>,
+  key: string,
+): Record<string, number> | null {
+  if (!Object.prototype.hasOwnProperty.call(payload, key)) return null;
+  const value = payload[key];
+  if (!isRecord(value) || Array.isArray(value)) {
+    throw new OpenAIAdsApiError({
+      message: "Ungültige OpenAI-Ads-Antwort: ad.creative.image_crop ist nicht lesbar.",
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  const crop = Object.fromEntries(
+    ["x", "y", "width", "height"].map((field) => {
+      const coordinate = value[field];
+      if (typeof coordinate !== "number" || !Number.isFinite(coordinate)) {
+        throw new OpenAIAdsApiError({
+          message: `Ungültige OpenAI-Ads-Antwort: ad.creative.image_crop.${field} fehlt.`,
+          status: 502,
+          code: "invalid_provider_response",
+        });
+      }
+      return [field, coordinate];
+    }),
+  ) as Record<"x" | "y" | "width" | "height", number>;
+  if (
+    crop.x < 0 ||
+    crop.y < 0 ||
+    crop.width <= 0 ||
+    crop.height <= 0 ||
+    Math.abs(crop.width - crop.height) > 1e-9 ||
+    crop.x + crop.width > 1 ||
+    crop.y + crop.height > 1
+  ) {
+    throw new OpenAIAdsApiError({
+      message: "Ungültige OpenAI-Ads-Antwort: ad.creative.image_crop liegt außerhalb des Bildes.",
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return crop;
+}
+
+function asStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht lesbar.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return value;
+}
+
+function servingIssues(payload: Record<string, unknown>, field: string) {
+  const observed = Object.prototype.hasOwnProperty.call(payload, "serving_issues");
+  if (observed && !Array.isArray(payload.serving_issues)) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht lesbar.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  const values = observed ? (payload.serving_issues as unknown[]) : [];
+  for (const item of values) {
+    if (!isRecord(item) || Array.isArray(item)) {
+      throw new OpenAIAdsApiError({
+        message: `Ungültige OpenAI-Ads-Antwort: ${field}.code fehlt.`,
+        status: 502,
+        code: "invalid_provider_response",
+      });
+    }
+    asString(item.code, `${field}.code`);
+  }
+  return {
+    values,
+    observed,
+  };
+}
+
+function asProductSet(value: unknown): Record<string, unknown> | null {
+  const productSet = asOptionalRecord(value, "ad_group.product_set");
+  if (!productSet) return null;
+  const productFeedId = asString(
+    productSet.product_feed_id,
+    "ad_group.product_set.product_feed_id",
+  );
+  if (!Array.isArray(productSet.filters)) {
+    throw new OpenAIAdsApiError({
+      message: "Ungültige OpenAI-Ads-Antwort: ad_group.product_set.filters fehlt.",
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  const filters = productSet.filters.map((value, index) => {
+    if (!isRecord(value) || Array.isArray(value)) {
+      throw new OpenAIAdsApiError({
+        message: `Ungültige OpenAI-Ads-Antwort: ad_group.product_set.filters.${index} fehlt.`,
+        status: 502,
+        code: "invalid_provider_response",
+      });
+    }
+    return {
+      field: asString(value.field, `ad_group.product_set.filters.${index}.field`),
+      operator: asString(
+        value.operator,
+        `ad_group.product_set.filters.${index}.operator`,
+      ),
+      values: asStringArray(
+        value.values,
+        `ad_group.product_set.filters.${index}.values`,
+      ),
+    };
+  });
+  return { product_feed_id: productFeedId, filters };
+}
+
+function asBidMultipliers(value: unknown): unknown[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new OpenAIAdsApiError({
+      message: "OpenAI Ads hat ungültige Gebotsmultiplikatoren zurückgegeben.",
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return value.map((item, index) => {
+    if (!isRecord(item) || Array.isArray(item)) {
+      throw new OpenAIAdsApiError({
+        message: `Ungültige OpenAI-Ads-Antwort: bid_multiplier.${index} fehlt.`,
+        status: 502,
+        code: "invalid_provider_response",
+      });
+    }
+    return {
+      custom_audience_id: asString(
+        item.custom_audience_id,
+        `bid_multiplier.${index}.custom_audience_id`,
+      ),
+      bid_multiplier_micros: asRequiredNonNegativeSafeInteger(
+        item,
+        "bid_multiplier_micros",
+        `bid_multiplier.${index}.bid_multiplier_micros`,
+      ),
+    };
+  });
+}
+
+function asNullableNonNegativeSafeInteger(
+  value: unknown,
+  field: string,
+): number | null {
+  if (value === null || value === undefined) return null;
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0
+  ) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} ist nicht exakt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return value;
+}
+
+function asRequiredNullableNonNegativeSafeInteger(
+  payload: Record<string, unknown>,
+  key: string,
+  field: string,
+): number | null {
+  if (!Object.prototype.hasOwnProperty.call(payload, key)) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} fehlt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return asNullableNonNegativeSafeInteger(payload[key], field);
+}
+
+function asRequiredNonNegativeSafeInteger(
+  payload: Record<string, unknown>,
+  key: string,
+  field: string,
+): number {
+  const value = asRequiredNullableNonNegativeSafeInteger(payload, key, field);
+  if (value === null) {
+    throw new OpenAIAdsApiError({
+      message: `Ungültige OpenAI-Ads-Antwort: ${field} fehlt.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return value;
 }
 
 function parseError(payload: unknown): { message: string; code: string | null } {
@@ -180,8 +648,26 @@ function parseError(payload: unknown): { message: string; code: string | null } 
   };
 }
 
-function parseList<T>(payload: unknown, itemParser: (value: unknown) => T): ListResponse<T> {
-  if (!isRecord(payload) || !Array.isArray(payload.data)) {
+function parseList<T>(
+  payload: unknown,
+  itemParser: (value: unknown) => T,
+  requireCount = false,
+): ListResponse<T> {
+  if (
+    !isRecord(payload) ||
+    !Array.isArray(payload.data) ||
+    typeof payload.object !== "string" ||
+    !Object.prototype.hasOwnProperty.call(payload, "first_id") ||
+    (payload.first_id !== null && typeof payload.first_id !== "string") ||
+    !Object.prototype.hasOwnProperty.call(payload, "last_id") ||
+    (payload.last_id !== null && typeof payload.last_id !== "string") ||
+    typeof payload.has_more !== "boolean" ||
+    (requireCount && !Object.prototype.hasOwnProperty.call(payload, "count")) ||
+    (Object.prototype.hasOwnProperty.call(payload, "count") &&
+      (typeof payload.count !== "number" ||
+        !Number.isSafeInteger(payload.count) ||
+        payload.count < 0))
+  ) {
     throw new OpenAIAdsApiError({
       message: "OpenAI Ads hat keine gültige Liste zurückgegeben.",
       status: 502,
@@ -190,12 +676,81 @@ function parseList<T>(payload: unknown, itemParser: (value: unknown) => T): List
   }
 
   return {
-    object: typeof payload.object === "string" ? payload.object : "list",
+    object: payload.object,
     data: payload.data.map(itemParser),
-    first_id: asNullableString(payload.first_id),
-    last_id: asNullableString(payload.last_id),
-    has_more: payload.has_more === true,
-    count: asFiniteNumber(payload.count, payload.data.length),
+    first_id: payload.first_id,
+    last_id: payload.last_id,
+    has_more: payload.has_more,
+    count: typeof payload.count === "number" ? payload.count : payload.data.length,
+  };
+}
+
+function parseAccountIntegrityReview(
+  payload: Record<string, unknown>,
+): OpenAIAdsAccount["account_integrity_review"] {
+  if (!Object.prototype.hasOwnProperty.call(payload, "account_integrity_review")) {
+    return null;
+  }
+  const integrity = payload.account_integrity_review;
+  if (!isRecord(integrity) || Array.isArray(integrity) || !isRecord(integrity.review)) {
+    throw new OpenAIAdsApiError({
+      message: "OpenAI Ads hat kein gültiges Account-Integrity-Review zurückgegeben.",
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  const status = asString(
+    integrity.review.status,
+    "account_integrity_review.review.status",
+  );
+  if (!["in_review", "rejected", "approved"].includes(status)) {
+    throw new OpenAIAdsApiError({
+      message: "OpenAI Ads hat einen unbekannten Account-Integrity-Reviewstatus zurückgegeben.",
+      status: 502,
+      code: "unknown_review_status",
+    });
+  }
+  let details: OpenAIAdsAccount["account_integrity_review"] extends infer T
+    ? T extends { details: infer D }
+      ? D
+      : never
+    : never = null;
+  if (Object.prototype.hasOwnProperty.call(integrity, "details")) {
+    if (!isRecord(integrity.details) || Array.isArray(integrity.details)) {
+      throw new OpenAIAdsApiError({
+        message: "OpenAI Ads hat ungültige Account-Integrity-Details zurückgegeben.",
+        status: 502,
+        code: "invalid_provider_response",
+      });
+    }
+    details = {
+      decision: asOptionalString(
+        integrity.details,
+        "decision",
+        "account_integrity_review.details.decision",
+      ),
+      reason: asOptionalString(
+        integrity.details,
+        "reason",
+        "account_integrity_review.details.reason",
+      ),
+      status_updated_at: asOptionalString(
+        integrity.details,
+        "status_updated_at",
+        "account_integrity_review.details.status_updated_at",
+      ),
+    };
+  }
+  return {
+    review: {
+      status: status as "in_review" | "rejected" | "approved",
+      reason: asOptionalString(
+        integrity.review,
+        "reason",
+        "account_integrity_review.review.reason",
+      ),
+    },
+    details,
   };
 }
 
@@ -221,14 +776,15 @@ function parseAccount(payload: unknown): OpenAIAdsAccount {
     id: asString(payload.id, "id"),
     name: asString(payload.name, "name"),
     url: asString(payload.url, "url"),
-    preview_url: asNullableString(payload.preview_url),
-    status: asNullableString(payload.status),
+    preview_url: asRequiredNullableString(payload, "preview_url", "preview_url"),
+    status: asOptionalString(payload, "status", "status"),
     timezone: asString(payload.timezone, "timezone"),
     currency_code: asString(payload.currency_code, "currency_code").toUpperCase(),
     review: {
       status: reviewStatus as OpenAIAdsAccount["review"]["status"],
-      reason: asNullableString(payload.review.reason),
+      reason: asOptionalString(payload.review, "reason", "review.reason"),
     },
+    account_integrity_review: parseAccountIntegrityReview(payload),
   };
 }
 
@@ -240,33 +796,70 @@ function parseCampaign(payload: unknown): OpenAIAdsCampaign {
       code: "invalid_provider_response",
     });
   }
+  const campaignServingIssues = servingIssues(
+    payload,
+    "campaign.serving_issues",
+  );
 
   return {
     id: asString(payload.id, "campaign.id"),
     name: asString(payload.name, "campaign.name"),
-    description: asNullableString(payload.description),
+    description: asRequiredNullableString(
+      payload,
+      "description",
+      "campaign.description",
+    ),
     status: asString(payload.status, "campaign.status"),
     bidding_type: asString(payload.bidding_type, "campaign.bidding_type"),
     budget: {
-      lifetime_spend_limit_micros:
-        typeof payload.budget.lifetime_spend_limit_micros === "number"
-          ? payload.budget.lifetime_spend_limit_micros
-          : null,
-      daily_spend_limit_micros:
-        typeof payload.budget.daily_spend_limit_micros === "number"
-          ? payload.budget.daily_spend_limit_micros
-          : null,
+      lifetime_spend_limit_micros: asOptionalNonNegativeSafeInteger(
+        payload.budget,
+        "lifetime_spend_limit_micros",
+        "campaign.budget.lifetime_spend_limit_micros",
+      ),
+      lifetime_spend_limit_micros_present: Object.prototype.hasOwnProperty.call(
+        payload.budget,
+        "lifetime_spend_limit_micros",
+      ),
+      daily_spend_limit_micros: asOptionalNonNegativeSafeInteger(
+        payload.budget,
+        "daily_spend_limit_micros",
+        "campaign.budget.daily_spend_limit_micros",
+      ),
     },
-    start_time:
-      typeof payload.start_time === "number" ? payload.start_time : null,
-    end_time: typeof payload.end_time === "number" ? payload.end_time : null,
-    created_at: asFiniteNumber(payload.created_at),
-    updated_at: asFiniteNumber(payload.updated_at),
-    objective: asNullableString(payload.objective),
-    targeting: isRecord(payload.targeting) ? payload.targeting : null,
-    serving_issues: Array.isArray(payload.serving_issues)
-      ? payload.serving_issues
-      : [],
+    start_time: asRequiredNullableNonNegativeSafeInteger(
+      payload,
+      "start_time",
+      "campaign.start_time",
+    ),
+    end_time: asRequiredNullableNonNegativeSafeInteger(
+      payload,
+      "end_time",
+      "campaign.end_time",
+    ),
+    created_at: asRequiredNonNegativeSafeInteger(
+      payload,
+      "created_at",
+      "campaign.created_at",
+    ),
+    updated_at: asRequiredNonNegativeSafeInteger(
+      payload,
+      "updated_at",
+      "campaign.updated_at",
+    ),
+    objective: asOptionalString(payload, "objective", "campaign.objective"),
+    targeting: asTargeting(payload, "targeting"),
+    product_feed_id: asRequiredNullableString(
+      payload,
+      "product_feed_id",
+      "campaign.product_feed_id",
+    ),
+    landing_page_configuration: asLandingPageConfiguration(
+      payload.landing_page_configuration,
+      "campaign.landing_page_configuration",
+    ),
+    serving_issues: campaignServingIssues.values,
+    serving_issues_observed: campaignServingIssues.observed,
   };
 }
 
@@ -278,42 +871,75 @@ function parseAdGroup(payload: unknown): OpenAIAdsAdGroup {
       code: "invalid_provider_response",
     });
   }
-
+  const adGroupServingIssues = servingIssues(
+    payload,
+    "ad_group.serving_issues",
+  );
   return {
     id: asString(payload.id, "ad_group.id"),
     name: asString(payload.name, "ad_group.name"),
-    description: asNullableString(payload.description),
-    context_hints: Array.isArray(payload.context_hints)
-      ? payload.context_hints.filter((item): item is string => typeof item === "string")
-      : [],
+    description: asRequiredNullableString(
+      payload,
+      "description",
+      "ad_group.description",
+    ),
+    context_hints: asStringArray(
+      payload.context_hints,
+      "ad_group.context_hints",
+    ),
     status: asString(payload.status, "ad_group.status"),
+    landing_page_configuration: asLandingPageConfiguration(
+      payload.landing_page_configuration,
+      "ad_group.landing_page_configuration",
+    ),
+    product_set: asProductSet(payload.product_set),
     bidding_config: {
       billing_event_type: asString(
         payload.bidding_config.billing_event_type,
         "ad_group.billing_event_type",
       ),
-      strategy: asNullableString(payload.bidding_config.strategy),
-      max_bid_micros:
-        typeof payload.bidding_config.max_bid_micros === "number"
-          ? payload.bidding_config.max_bid_micros
-          : null,
+      strategy: asOptionalString(
+        payload.bidding_config,
+        "strategy",
+        "ad_group.bidding_config.strategy",
+      ),
+      max_bid_micros: asOptionalNonNegativeSafeInteger(
+        payload.bidding_config,
+        "max_bid_micros",
+        "ad_group.bidding_config.max_bid_micros",
+      ),
+      custom_audience_bid_multipliers: asBidMultipliers(
+        payload.bidding_config.custom_audience_bid_multipliers,
+      ),
     },
-    created_at: asFiniteNumber(payload.created_at),
-    updated_at: asFiniteNumber(payload.updated_at),
-    serving_issues: Array.isArray(payload.serving_issues)
-      ? payload.serving_issues
-      : [],
+    created_at: asRequiredNonNegativeSafeInteger(
+      payload,
+      "created_at",
+      "ad_group.created_at",
+    ),
+    updated_at: asRequiredNonNegativeSafeInteger(
+      payload,
+      "updated_at",
+      "ad_group.updated_at",
+    ),
+    serving_issues: adGroupServingIssues.values,
+    serving_issues_observed: adGroupServingIssues.observed,
   };
 }
 
 function parseAd(payload: unknown): OpenAIAdsAd {
-  if (!isRecord(payload) || !isRecord(payload.creative)) {
+  if (
+    !isRecord(payload) ||
+    !isRecord(payload.creative) ||
+    !isRecord(payload.review)
+  ) {
     throw new OpenAIAdsApiError({
       message: "OpenAI Ads hat eine ungültige Anzeige zurückgegeben.",
       status: 502,
       code: "invalid_provider_response",
     });
   }
+  const adServingIssues = servingIssues(payload, "ad.serving_issues");
 
   const reviewStatus = asString(payload.review_status, "ad.review_status");
   if (!["in_review", "rejected", "approved"].includes(reviewStatus)) {
@@ -321,6 +947,14 @@ function parseAd(payload: unknown): OpenAIAdsAd {
       message: "OpenAI Ads hat einen unbekannten Anzeigen-Reviewstatus zurückgegeben.",
       status: 502,
       code: "unknown_review_status",
+    });
+  }
+  const nestedReviewStatus = asString(payload.review.status, "ad.review.status");
+  if (nestedReviewStatus !== reviewStatus) {
+    throw new OpenAIAdsApiError({
+      message: "OpenAI Ads hat widersprüchliche Anzeigen-Reviewstatus geliefert.",
+      status: 502,
+      code: "invalid_provider_response",
     });
   }
 
@@ -332,16 +966,40 @@ function parseAd(payload: unknown): OpenAIAdsAd {
     creative: {
       type: asString(payload.creative.type, "ad.creative.type"),
       title: asString(payload.creative.title, "ad.creative.title"),
-      body: typeof payload.creative.body === "string" ? payload.creative.body : "",
-      file_id: asNullableString(payload.creative.file_id),
-      image_url: asNullableString(payload.creative.image_url),
-      target_url: asNullableString(payload.creative.target_url),
+      body: asRequiredString(payload.creative.body, "ad.creative.body"),
+      price: asOptionalString(payload.creative, "price", "ad.creative.price"),
+      file_id: asOptionalString(
+        payload.creative,
+        "file_id",
+        "ad.creative.file_id",
+      ),
+      image_url: asOptionalNullableString(
+        payload.creative.image_url,
+        "ad.creative.image_url",
+      ),
+      image_crop: asImageCrop(payload.creative, "image_crop"),
+      target_url: asRequiredNullableString(
+        payload.creative,
+        "target_url",
+        "ad.creative.target_url",
+      ),
     },
-    created_at: asFiniteNumber(payload.created_at),
-    updated_at: asFiniteNumber(payload.updated_at),
-    serving_issues: Array.isArray(payload.serving_issues)
-      ? payload.serving_issues
-      : [],
+    landing_page_configuration: asLandingPageConfiguration(
+      payload.landing_page_configuration,
+      "ad.landing_page_configuration",
+    ),
+    created_at: asRequiredNonNegativeSafeInteger(
+      payload,
+      "created_at",
+      "ad.created_at",
+    ),
+    updated_at: asRequiredNonNegativeSafeInteger(
+      payload,
+      "updated_at",
+      "ad.updated_at",
+    ),
+    serving_issues: adServingIssues.values,
+    serving_issues_observed: adServingIssues.observed,
   };
 }
 
@@ -357,15 +1015,30 @@ function parseInsight(payload: unknown): OpenAIAdsInsight {
   return {
     ...payload,
     id: asString(payload.id, "insight.id"),
-    start_time: asFiniteNumber(payload.start_time),
-    end_time: asFiniteNumber(payload.end_time),
-    readable_time: asNullableString(payload.readable_time),
-    campaign_id: asNullableString(payload.campaign_id),
-    campaign_name: asNullableString(payload.campaign_name),
-    impressions:
-      typeof payload.impressions === "number" ? payload.impressions : null,
-    clicks: typeof payload.clicks === "number" ? payload.clicks : null,
-    spend: typeof payload.spend === "number" ? payload.spend : null,
+    start_time: asRequiredNonNegativeSafeInteger(
+      payload,
+      "start_time",
+      "insight.start_time",
+    ),
+    end_time: asRequiredNonNegativeSafeInteger(
+      payload,
+      "end_time",
+      "insight.end_time",
+    ),
+    readable_time: asString(payload.readable_time, "insight.readable_time"),
+    campaign_id: asString(payload.campaign_id, "insight.campaign_id"),
+    campaign_name: asString(payload.campaign_name, "insight.campaign_name"),
+    impressions: asRequiredNonNegativeSafeInteger(
+      payload,
+      "impressions",
+      "insight.impressions",
+    ),
+    clicks: asRequiredNonNegativeSafeInteger(
+      payload,
+      "clicks",
+      "insight.clicks",
+    ),
+    spend: asRequiredNonNegativeFiniteNumber(payload, "spend", "insight.spend"),
     conversions:
       typeof payload.conversions === "number" ? payload.conversions : null,
     data_status: asNullableString(payload.data_status),
@@ -387,8 +1060,22 @@ function parseGeoLocation(payload: unknown): OpenAIAdsGeoLocation {
     canonical_name: asString(payload.canonical_name, "geo.canonical_name"),
     country_code: asString(payload.country_code, "geo.country_code"),
     name: asString(payload.name, "geo.name"),
-    region_code: asNullableString(payload.region_code),
+    region_code: asOptionalNullableString(payload.region_code, "geo.region_code"),
   };
+}
+
+function requireServingIssuesObserved<T extends { serving_issues_observed: boolean }>(
+  items: T[],
+  field: string,
+): T[] {
+  if (items.some((item) => item.serving_issues_observed !== true)) {
+    throw new OpenAIAdsApiError({
+      message: `OpenAI Ads hat ${field} trotz ausdrücklicher Anforderung nicht zurückgegeben.`,
+      status: 502,
+      code: "invalid_provider_response",
+    });
+  }
+  return items;
 }
 
 function parseConversionInsight(
@@ -406,15 +1093,23 @@ function parseConversionInsight(
   return {
     entity_id: asString(payload.entity_id, "conversion.entity_id"),
     date,
-    conversions: asFiniteNumber(payload.conversions),
+    conversions: asRequiredNonNegativeSafeInteger(
+      payload,
+      "conversions",
+      "conversion.conversions",
+    ),
     click_through_conversions:
-      typeof payload.click_through_conversions === "number"
-        ? payload.click_through_conversions
-        : null,
+      asOptionalNonNegativeSafeInteger(
+        payload,
+        "click_through_conversions",
+        "conversion.click_through_conversions",
+      ),
     view_through_conversions:
-      typeof payload.view_through_conversions === "number"
-        ? payload.view_through_conversions
-        : null,
+      asOptionalNonNegativeSafeInteger(
+        payload,
+        "view_through_conversions",
+        "conversion.view_through_conversions",
+      ),
   };
 }
 
@@ -526,6 +1221,7 @@ export class OpenAIAdsClient {
     path: string,
     params: URLSearchParams,
     parser: (value: unknown) => T,
+    requireCount = false,
   ): Promise<T[]> {
     const items: T[] = [];
     let after: string | null = null;
@@ -538,7 +1234,7 @@ export class OpenAIAdsClient {
       }
 
       const payload = await this.request(`${path}?${query.toString()}`);
-      const response = parseList(payload, parser);
+      const response = parseList(payload, parser, requireCount);
       items.push(...response.data);
 
       if (!response.has_more) {
@@ -566,29 +1262,57 @@ export class OpenAIAdsClient {
   }
 
   async listCampaigns(): Promise<OpenAIAdsCampaign[]> {
-    return this.listAll("/campaigns", new URLSearchParams(), parseCampaign);
+    const query = new URLSearchParams();
+    query.append("include[]", "serving_issues");
+    return requireServingIssuesObserved(
+      await this.listAll("/campaigns", query, parseCampaign),
+      "campaign.serving_issues",
+    );
   }
 
   async getCampaign(id: string): Promise<OpenAIAdsCampaign> {
-    return parseCampaign(await this.request(`/campaigns/${encodeURIComponent(id)}`));
+    return requireServingIssuesObserved(
+      [parseCampaign(await this.request(
+        `/campaigns/${encodeURIComponent(id)}?include%5B%5D=serving_issues`,
+      ))],
+      "campaign.serving_issues",
+    )[0];
   }
 
   async listAdGroups(campaignId: string): Promise<OpenAIAdsAdGroup[]> {
     const query = new URLSearchParams({ campaign_id: campaignId });
-    return this.listAll("/ad_groups", query, parseAdGroup);
+    query.append("include[]", "serving_issues");
+    return requireServingIssuesObserved(
+      await this.listAll("/ad_groups", query, parseAdGroup),
+      "ad_group.serving_issues",
+    );
   }
 
   async getAdGroup(id: string): Promise<OpenAIAdsAdGroup> {
-    return parseAdGroup(await this.request(`/ad_groups/${encodeURIComponent(id)}`));
+    return requireServingIssuesObserved(
+      [parseAdGroup(await this.request(
+        `/ad_groups/${encodeURIComponent(id)}?include%5B%5D=serving_issues`,
+      ))],
+      "ad_group.serving_issues",
+    )[0];
   }
 
   async listAds(adGroupId: string): Promise<OpenAIAdsAd[]> {
     const query = new URLSearchParams({ ad_group_id: adGroupId });
-    return this.listAll("/ads", query, parseAd);
+    query.append("include[]", "serving_issues");
+    return requireServingIssuesObserved(
+      await this.listAll("/ads", query, parseAd),
+      "ad.serving_issues",
+    );
   }
 
   async getAd(id: string): Promise<OpenAIAdsAd> {
-    return parseAd(await this.request(`/ads/${encodeURIComponent(id)}`));
+    return requireServingIssuesObserved(
+      [parseAd(await this.request(
+        `/ads/${encodeURIComponent(id)}?include%5B%5D=serving_issues`,
+      ))],
+      "ad.serving_issues",
+    )[0];
   }
 
   async listDailyCampaignInsights(input: {
@@ -600,6 +1324,7 @@ export class OpenAIAdsClient {
       aggregation_level: "campaign",
       limit: "2000",
     });
+    query.append("includes[]", "zero_impression_items");
     for (const field of [
       "metadata.readable_time",
       "campaign.id",
@@ -623,6 +1348,7 @@ export class OpenAIAdsClient {
       "/ad_account/insights",
       query,
       parseInsight,
+      true,
     );
   }
 
@@ -660,16 +1386,42 @@ export class OpenAIAdsClient {
           }),
         ],
         entity_ids: input.campaignIds,
+        include_zero_rows: true,
       }),
     });
-    if (!isRecord(payload) || !Array.isArray(payload.data)) {
+    if (
+      !isRecord(payload) ||
+      typeof payload.object !== "string" ||
+      !Array.isArray(payload.data) ||
+      typeof payload.count !== "number" ||
+      !Number.isSafeInteger(payload.count) ||
+      payload.count < 0
+    ) {
       throw new OpenAIAdsApiError({
         message: "OpenAI Ads hat keine gültigen Conversiondaten geliefert.",
         status: 502,
         code: "invalid_provider_response",
       });
     }
-    return payload.data.map((item) => parseConversionInsight(item, input.date));
+    const rows = payload.data.map((item) =>
+      parseConversionInsight(item, input.date),
+    );
+    const expectedIds = new Set(input.campaignIds);
+    const returnedIds = new Set(rows.map((item) => item.entity_id));
+    if (
+      payload.count !== rows.length ||
+      rows.length !== expectedIds.size ||
+      returnedIds.size !== expectedIds.size ||
+      rows.some((item) => !expectedIds.has(item.entity_id)) ||
+      input.campaignIds.some((id) => !returnedIds.has(id))
+    ) {
+      throw new OpenAIAdsApiError({
+        message: "OpenAI Ads hat Conversiondaten nicht vollständig und eindeutig geliefert.",
+        status: 502,
+        code: "invalid_provider_response",
+      });
+    }
+    return rows;
   }
 
   async uploadImageUrl(imageUrl: string, idempotencyKey?: string): Promise<string> {
@@ -775,17 +1527,29 @@ export class OpenAIAdsClient {
     );
   }
 
-  async previewAd(id: string): Promise<Record<string, unknown>> {
+  async previewAd(id: string): Promise<OpenAIAdsAdPreview> {
     const payload = await this.request(`/ads/${encodeURIComponent(id)}/preview`, {
       method: "POST",
     });
-    if (!isRecord(payload)) {
+    if (
+      !isRecord(payload) ||
+      !Array.isArray(payload.data) ||
+      payload.data.length === 0 ||
+      payload.data.length > MAX_PREVIEW_ITEMS ||
+      payload.data.some(
+        (item) =>
+          !isRecord(item) ||
+          typeof item.body !== "string" ||
+          !item.body.trim() ||
+          item.body.length > MAX_PREVIEW_BODY_LENGTH,
+      )
+    ) {
       throw new OpenAIAdsApiError({
         message: "OpenAI Ads hat keine gültige Vorschau zurückgegeben.",
         status: 502,
         code: "invalid_provider_response",
       });
     }
-    return payload;
+    return { bodies: payload.data.map((item) => (item as { body: string }).body) };
   }
 }

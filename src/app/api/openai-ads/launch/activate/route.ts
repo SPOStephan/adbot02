@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     const result = await activateOpenAIAdsLaunch({
       userId: user.id,
       launchId: command.launchId,
+      previewToken: command.previewToken,
     });
 
     revalidatePath("/dashboard/chatgpt-ads", "page");

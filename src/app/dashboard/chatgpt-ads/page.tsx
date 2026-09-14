@@ -5,10 +5,7 @@ import { OpenAIAdsConnectionForm } from "@/components/OpenAIAdsConnectionForm";
 import { OpenAIAdsWorkspace } from "@/components/OpenAIAdsWorkspace";
 import { loadOpenAIAdsDashboard } from "@/lib/openai-ads/dashboard";
 import { getPublishedOpenAIAdsGuide } from "@/lib/openai-ads/guide";
-import {
-  hasOpenAIAdsEnv,
-  OPENAI_ADS_ACTIVE_LAUNCH_ENABLED,
-} from "@/lib/openai-ads/env";
+import { hasOpenAIAdsEnv } from "@/lib/openai-ads/env";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -80,7 +77,6 @@ export default async function ChatGPTAdsPage() {
               <div className="mt-8">
                 <OpenAIAdsWorkspace
                   accounts={accounts}
-                  activeLaunchEnabled={OPENAI_ADS_ACTIVE_LAUNCH_ENABLED}
                 />
               </div>
 

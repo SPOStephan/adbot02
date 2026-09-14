@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import {
   OpenAIAdsApiError,
   OpenAIAdsClient,
@@ -34,6 +36,8 @@ type EncryptedConnectionRow = {
   token_iv: string | null;
   token_auth_tag: string | null;
   revoked_at: string | null;
+  credential_generation: string;
+  provider_sync_claim_token: string | null;
 };
 
 function mapProviderError(error: OpenAIAdsApiError): OpenAIAdsServiceError {
@@ -68,6 +72,10 @@ function providerMetadata(account: OpenAIAdsAccount) {
     currency_code: account.currency_code,
     review_status: account.review.status,
     review_reason: account.review.reason ?? null,
+    account_integrity_review_observed:
+      account.account_integrity_review !== null,
+    account_integrity_review_status:
+      account.account_integrity_review?.review.status ?? null,
     api_version: "v1",
   };
 }
@@ -124,6 +132,9 @@ export async function connectOpenAIAdsAccount(input: {
         token_auth_tag: encrypted.authTag,
         token_version: 1,
         credential_kind: "api_key",
+        credential_generation: randomUUID(),
+        provider_sync_claim_token: null,
+        provider_sync_claimed_at: null,
         provider_metadata: providerMetadata(account),
         provider_sync_status: "idle",
         provider_sync_error_code: null,
@@ -161,6 +172,8 @@ export async function connectOpenAIAdsAccount(input: {
     timezone: account.timezone,
     accountStatus: account.status,
     reviewStatus: account.review.status,
+    accountIntegrityReviewStatus:
+      account.account_integrity_review?.review.status ?? null,
   };
 }
 
@@ -168,13 +181,15 @@ export async function loadOpenAIAdsClient(input: {
   platformAccountId: string;
   userId?: string;
   deadlineAtMs?: number;
+  credentialGeneration?: string;
+  syncClaimToken?: string;
 }) {
   const env = getOpenAIAdsEnv();
   const admin = createAdminClient();
   let query = admin
     .from("platform_accounts")
     .select(
-      "id,user_id,platform_account_id,access_token_encrypted,token_iv,token_auth_tag,revoked_at",
+      "id,user_id,platform_account_id,access_token_encrypted,token_iv,token_auth_tag,revoked_at,credential_generation,provider_sync_claim_token",
     )
     .eq("id", input.platformAccountId)
     .eq("platform", "openai_ads")
@@ -183,11 +198,24 @@ export async function loadOpenAIAdsClient(input: {
   if (input.userId) {
     query = query.eq("user_id", input.userId);
   }
+  if (input.credentialGeneration) {
+    query = query.eq("credential_generation", input.credentialGeneration);
+  }
+  if (input.syncClaimToken) {
+    query = query.eq("provider_sync_claim_token", input.syncClaimToken);
+  }
 
   const { data, error } = await query.maybeSingle();
   const connection = data as EncryptedConnectionRow | null;
 
   if (error || !connection) {
+    if (input.credentialGeneration || input.syncClaimToken) {
+      throw new OpenAIAdsServiceError(
+        "sync_claim_superseded",
+        409,
+        "Der OpenAI-Ads-Abruf wurde durch eine neuere Verbindung oder einen neueren Abruf ersetzt.",
+      );
+    }
     throw new OpenAIAdsServiceError(
       "connection_not_found",
       404,
@@ -249,6 +277,9 @@ export async function disconnectOpenAIAdsAccount(input: {
       token_iv: null,
       token_auth_tag: null,
       credential_kind: null,
+      credential_generation: randomUUID(),
+      provider_sync_claim_token: null,
+      provider_sync_claimed_at: null,
       provider_sync_status: "revoked",
       provider_sync_error_code: null,
       provider_backoff_until: null,
