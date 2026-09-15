@@ -168,16 +168,19 @@ export async function POST(request: Request) {
     }
 
     if (action === "discover") {
-      if (typeof body.xml !== "string" || body.xml.length < 20) {
-        return NextResponse.json(
-          { ok: false, error: "xml_required" },
-          { status: 400, headers: NO_STORE },
-        );
-      }
       const shard = Number(body.shard ?? 0);
+      const xmlFromIds = Array.isArray(body.ids)
+        ? body.ids
+            .map((id) => `https://www.chatgptadlibrary.com/ad/${String(id).trim()}`)
+            .join("\n")
+        : "";
+      const xml =
+        typeof body.xml === "string" && body.xml.trim()
+          ? body.xml
+          : xmlFromIds || "<urlset></urlset><!-- empty discover -->";
       const result = await discoverChatGPTAdLibraryIdsFromSitemapXml({
         shard: Number.isFinite(shard) ? shard : 0,
-        xml: body.xml,
+        xml,
       });
       return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
     }

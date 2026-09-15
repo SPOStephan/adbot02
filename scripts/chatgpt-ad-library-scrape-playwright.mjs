@@ -66,15 +66,43 @@ function extractIdsFromText(text) {
   ];
 }
 
+function attachIdSniffer(page, bucket) {
+  page.on("response", async (response) => {
+    try {
+      const url = response.url();
+      if (!/chatgptadlibrary\.com/i.test(url)) return;
+      const type = response.headers()["content-type"] || "";
+      if (
+        !/json|xml|javascript|text|html/i.test(type) &&
+        !/sitemap|library|ad\//i.test(url)
+      ) {
+        return;
+      }
+      const text = await response.text();
+      for (const id of extractIdsFromText(`${url}\n${text}`)) bucket.add(id);
+    } catch {
+      // Body may already be consumed; ignore.
+    }
+  });
+}
+
 async function collectPageIds(page) {
   const html = await page.content();
   const fromHtml = extractIdsFromText(html);
   const fromDom = await page
     .evaluate(() => {
-      const hrefs = [...document.querySelectorAll("a[href]")]
-        .map((el) => el.getAttribute("href") || el.href || "")
+      const hrefs = [...document.querySelectorAll("a[href], img[src]")]
+        .map(
+          (el) =>
+            el.getAttribute("href") ||
+            el.getAttribute("src") ||
+            el.href ||
+            el.src ||
+            "",
+        )
         .join("\n");
-      return `${hrefs}\n${document.body?.innerText || ""}`;
+      const next = document.getElementById("__NEXT_DATA__")?.textContent || "";
+      return `${hrefs}\n${next}\n${document.body?.innerText || ""}`;
     })
     .catch(() => "");
   return [...new Set([...fromHtml, ...extractIdsFromText(fromDom)])];
@@ -82,22 +110,72 @@ async function collectPageIds(page) {
 
 async function discoverLibraryIds(page) {
   await page.goto(`${ORIGIN}/library`, {
-    waitUntil: "domcontentloaded",
+    waitUntil: "networkidle",
     timeout: 60_000,
-  });
-  await page.waitForTimeout(1500);
-  for (let i = 0; i < 6; i += 1) {
-    await page.mouse.wheel(0, 1800);
-    await page.waitForTimeout(600);
+  }).catch(() =>
+    page.goto(`${ORIGIN}/library`, { waitUntil: "domcontentloaded", timeout: 60_000 }),
+  );
+  await page.waitForTimeout(2000);
+  for (let i = 0; i < 8; i += 1) {
+    await page.mouse.wheel(0, 2200);
+    await page.waitForTimeout(700);
   }
   return collectPageIds(page);
 }
 
-async function discoverShardIds(page, shard) {
-  const url = `${ORIGIN}/ad/sitemaps/${String(shard).padStart(3, "0")}.xml`;
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+async function discoverShardIds(page, context, shard) {
+  const indexUrl = `${ORIGIN}/ad/sitemap.xml`;
+  const shardUrl = `${ORIGIN}/ad/sitemaps/${String(shard).padStart(3, "0")}.xml`;
+  const ids = new Set();
+
+  await page.goto(indexUrl, { waitUntil: "domcontentloaded", timeout: 60_000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  for (const id of await collectPageIds(page)) ids.add(id);
+
+  // Browser-context HTTP often sees the same cookies as the index page.
+  for (const url of [indexUrl, shardUrl]) {
+    const res = await context.request.get(url, { timeout: 20_000 }).catch(() => null);
+    if (res) {
+      const text = await res.text().catch(() => "");
+      for (const id of extractIdsFromText(text)) ids.add(id);
+    }
+  }
+
+  await page.goto(shardUrl, { waitUntil: "domcontentloaded", timeout: 60_000 }).catch(() => {});
   await page.waitForTimeout(1000);
-  return collectPageIds(page);
+  for (const id of await collectPageIds(page)) ids.add(id);
+  return [...ids];
+}
+
+async function fetchAdvertiserUrls() {
+  const response = await fetch(`${ORIGIN}/sitemap.xml`, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; AdbotInternalCorpus/1.0)" },
+  });
+  const text = await response.text();
+  return [
+    ...new Set(
+      [...text.matchAll(/https:\/\/www\.chatgptadlibrary\.com\/advertiser\/[^<\s]+/g)].map(
+        (match) => match[0],
+      ),
+    ),
+  ];
+}
+
+async function discoverAdvertiserIds(page, shard) {
+  const urls = await fetchAdvertiserUrls().catch(() => []);
+  if (urls.length < 1) return [];
+  const start = Math.abs(Number(shard) || 0) % urls.length;
+  const batch = [];
+  for (let i = 0; i < 4; i += 1) {
+    batch.push(urls[(start + i) % urls.length]);
+  }
+  const ids = new Set();
+  for (const url of batch) {
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 }).catch(() => {});
+    await page.waitForTimeout(900);
+    for (const id of await collectPageIds(page)) ids.add(id);
+  }
+  return [...ids];
 }
 
 async function extractAd(page, id) {
@@ -221,14 +299,16 @@ async function main() {
     locale: "en-US",
   });
   const page = await context.newPage();
+  const sniffed = new Set();
+  attachIdSniffer(page, sniffed);
 
   try {
     const libraryIds = await discoverLibraryIds(page);
-    const shardIds = await discoverShardIds(page, discoverShardIndex);
-    const discoveredIds = [...new Set([...libraryIds, ...shardIds])];
-    const discoverXml = discoveredIds
-      .map((id) => `${ORIGIN}/ad/${id}`)
-      .join("\n");
+    const shardIds = await discoverShardIds(page, context, discoverShardIndex);
+    const advertiserIds = await discoverAdvertiserIds(page, discoverShardIndex);
+    const discoveredIds = [
+      ...new Set([...libraryIds, ...shardIds, ...advertiserIds, ...sniffed]),
+    ];
 
     console.log(
       JSON.stringify({
@@ -236,6 +316,8 @@ async function main() {
         shard: discoverShardIndex,
         libraryIds: libraryIds.length,
         shardIds: shardIds.length,
+        advertiserIds: advertiserIds.length,
+        sniffed: sniffed.size,
         uniqueIds: discoveredIds.length,
       }),
     );
@@ -244,7 +326,10 @@ async function main() {
       const discoverResult = await cronPost({
         action: "discover",
         shard: discoverShardIndex,
-        xml: discoverXml || "<urlset></urlset>",
+        ids: discoveredIds,
+        xml:
+          discoveredIds.map((id) => `${ORIGIN}/ad/${id}`).join("\n") ||
+          "<urlset></urlset><!-- empty discover -->",
       });
       console.log("discover", {
         shard: discoverShardIndex,

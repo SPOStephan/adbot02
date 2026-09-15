@@ -54,6 +54,7 @@ assert.match(panel, /automatisch Ad-IDs/);
 assert.match(vercel, /chatgpt-ad-library-scrape/);
 assert.match(migration, /chatgpt_ad_library_crawl_state/);
 assert.match(docs, /GitHub Action/);
+assert.match(docs, /vollautomatisch/);
 assert.match(docs, /max\. 5/);
 
 console.log("test-chatgpt-ad-library-scrape: ok");
