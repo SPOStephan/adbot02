@@ -251,12 +251,21 @@ export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: Ad
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-extrabold">Offizielle Recherchequellen</h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          OpenAI bietet derzeit keine öffentliche Bibliothek für fremde ChatGPT-Anzeigen.
-          Dafür sind ein rechtmäßig bereitgestellter Screenshot oder Link nötig. Für andere
-          Plattformen können diese offiziellen Oberflächen als Ausgangspunkt dienen:
+          Für ChatGPT Ads nutzen wir zusätzlich die öffentliche Inspirationsquelle{" "}
+          <a
+            className="font-semibold text-blue-700 hover:underline"
+            href="https://www.chatgptadlibrary.com/library"
+            rel="noreferrer"
+            target="_blank"
+          >
+            chatgptadlibrary.com
+          </a>{" "}
+          — ausschließlich intern, nie kundensichtbar. Für andere Plattformen dienen diese
+          offiziellen Oberflächen als Ausgangspunkt:
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {[
+            ["ChatGPT Ad Library", "https://www.chatgptadlibrary.com/library"],
             ["Meta Ad Library", "https://www.facebook.com/ads/library/"],
             ["Google Ads Transparency", "https://adstransparency.google.com/"],
             ["TikTok Commercial Content Library", "https://library.tiktok.com/"],

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AdExampleLibraryAdmin } from "@/components/AdExampleLibraryAdmin";
+import { ChatGPTAdLibraryImportPanel } from "@/components/ChatGPTAdLibraryImportPanel";
 import { loadAdIntelligenceCorpusSummary } from "@/lib/ad-intelligence/corpus";
 import { loadAdExamples } from "@/lib/ad-examples/service";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
@@ -68,7 +69,8 @@ export default async function AdExampleLibraryPage() {
         </section>
       ) : null}
 
-      <div className="mt-8">
+      <div className="mt-8 space-y-8">
+        <ChatGPTAdLibraryImportPanel />
         <AdExampleLibraryAdmin initialExamples={examples} />
       </div>
     </>

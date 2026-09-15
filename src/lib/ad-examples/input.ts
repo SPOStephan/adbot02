@@ -89,11 +89,13 @@ export function parseAdExampleInput(source: Record<string, unknown>): AdExampleI
   const sourceKind = enumValue(source.sourceKind, "Quellentyp", AD_EXAMPLE_SOURCE_KINDS);
   const sourceUrl = optionalPublicUrl(source.sourceUrl, "Quelllink");
   if (
-    (sourceKind === "official_library" || sourceKind === "advertiser_page") &&
+    (sourceKind === "official_library" ||
+      sourceKind === "advertiser_page" ||
+      sourceKind === "chatgpt_ad_library") &&
     !sourceUrl
   ) {
     throw new AdExampleInputError(
-      "Für eine offizielle Bibliothek oder Werbetreibendenseite ist ein Quelllink erforderlich.",
+      "Für eine offizielle Bibliothek, ChatGPT Ad Library oder Werbetreibendenseite ist ein Quelllink erforderlich.",
     );
   }
   const evidenceLevel = enumValue(

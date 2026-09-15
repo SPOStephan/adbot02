@@ -54,11 +54,14 @@ assert.match(client, /Nur die abstrahierten Muster/);
 assert.match(client, /method: "PATCH"/);
 assert.match(client, /method: "DELETE"/);
 
-assert.match(sourceStrategy, /keine öffentliche, durchsuchbare Bibliothek/);
+assert.match(sourceStrategy, /keine eigene öffentliche, durchsuchbare Bibliothek/);
+assert.match(sourceStrategy, /chatgptadlibrary.com/);
 assert.match(sourceStrategy, /Scraping der öffentlichen Oberflächen ist kein Ersatz/);
 assert.match(sourceStrategy, /first_party_performance/);
 assert.match(sourceStrategy, /Meta Ad Library/);
 assert.match(sourceStrategy, /Google Ads Transparency Center/);
 assert.match(sourceStrategy, /TikTok Commercial Content Library/);
-
+assert.match(types, /chatgpt_ad_library/);
+assert.match(client, /chatgptadlibrary.com/);
+assert.match(page, /ChatGPTAdLibraryImportPanel/);
 console.log("test-ad-example-library: ok");
