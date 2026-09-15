@@ -41,19 +41,39 @@ async function fetchText(url: string): Promise<{ ok: boolean; status: number; te
   }
 }
 
+function isCheckpoint(status: number, text: string): boolean {
+  return status === 429 || /vercel security checkpoint/i.test(text);
+}
+
 /**
  * Best-effort direct HTTP scrape. Usually blocked by Vercel bot checkpoint (429).
  * Primary path is the Playwright GitHub Action → ingest endpoint.
+ * When blocked, do NOT consume the crawl queue — that would starve the worker.
  */
 export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
   ids?: string[];
 }): Promise<{
   mode: "http";
   blocked: boolean;
+  skippedPlan?: boolean;
   plannedIds: string[];
   summary: Awaited<ReturnType<typeof importChatGPTAdLibraryBatch>> | null;
   failures: Array<{ id: string; error: string }>;
 }> {
+  if (!input?.ids || input.ids.length < 1) {
+    const probe = await fetchText(`${CHATGPT_AD_LIBRARY_ORIGIN}/ad/7341`);
+    if (isCheckpoint(probe.status, probe.text)) {
+      return {
+        mode: "http",
+        blocked: true,
+        skippedPlan: true,
+        plannedIds: [],
+        summary: null,
+        failures: [],
+      };
+    }
+  }
+
   const plan =
     input?.ids && input.ids.length > 0
       ? {
@@ -81,7 +101,7 @@ export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
   for (const id of plan.ids) {
     const url = `${CHATGPT_AD_LIBRARY_ORIGIN}/ad/${id}`;
     const fetched = await fetchText(url);
-    if (fetched.status === 429 || /vercel security checkpoint/i.test(fetched.text)) {
+    if (isCheckpoint(fetched.status, fetched.text)) {
       blocked = true;
       failures.push({ id, error: "bot_checkpoint_429" });
       // Re-queue remaining + current for the Playwright worker.
@@ -154,15 +174,27 @@ export async function ingestChatGPTAdLibraryScrapeRecords(input: {
   return summary;
 }
 
-export async function discoverChatGPTAdLibraryIdsFromSitemapXml(input: {
+export async function discoverChatGPTAdLibraryIds(input: {
   shard: number;
-  xml: string;
+  xml?: string;
+  ids?: Array<number | string>;
 }): Promise<{ added: number; pendingCount: number; ids: string[] }> {
-  const ids = extractAdIdsFromSitemapXml(input.xml);
+  const fromXml = extractAdIdsFromSitemapXml(input.xml ?? "");
+  const fromIds = (input.ids ?? [])
+    .map((id) => String(id ?? "").trim())
+    .filter((id) => /^\d{1,12}$/.test(id));
+  const ids = [...new Set([...fromXml, ...fromIds])];
   const enqueued = await enqueueChatGPTAdLibraryIds(ids);
   await markChatGPTAdLibraryDiscoverDone({
     shard: input.shard,
     enqueuedIds: ids,
   });
   return { ...enqueued, ids };
+}
+
+export async function discoverChatGPTAdLibraryIdsFromSitemapXml(input: {
+  shard: number;
+  xml: string;
+}): Promise<{ added: number; pendingCount: number; ids: string[] }> {
+  return discoverChatGPTAdLibraryIds(input);
 }

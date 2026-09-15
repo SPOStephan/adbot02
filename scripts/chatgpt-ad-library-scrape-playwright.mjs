@@ -2,15 +2,19 @@
 /**
  * Small-batch Playwright scraper for chatgptadlibrary.com.
  *
- * Every run:
- *   1. Discover ad IDs from /library + current sitemap shard (no manual IDs)
- *   2. Enqueue them on Adbot
- *   3. Plan ≤5 unseen IDs
- *   4. Scrape those pages and ingest
+ * Every run is self-contained — no admin-typed IDs:
+ *   1. HTTP-discover IDs (public sitemap + system catalog). Never burn the
+ *      5-page guest quota on /library or shards.
+ *   2. POST discover (empty payloads are OK).
+ *   3. GET plan — server bootstraps catalog / sequential probe if needed.
+ *   4. Fresh browser: scrape only those ≤5 ad pages, ingest, enqueue related IDs.
  *
  * Usage (CI):
  *   ADBOT_APP_URL=https://… CRON_SECRET=… node scripts/chatgpt-ad-library-scrape-playwright.mjs
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const ORIGIN = "https://www.chatgptadlibrary.com";
@@ -53,6 +57,19 @@ async function cronPost(body) {
   return json;
 }
 
+function loadSystemIds() {
+  try {
+    const path = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../fixtures/chatgpt-ad-library/system-ids.json",
+    );
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 function extractIdsFromText(text) {
   if (!text || /vercel security checkpoint/i.test(text)) return [];
   const decoded = String(text)
@@ -66,44 +83,69 @@ function extractIdsFromText(text) {
   ];
 }
 
-async function collectPageIds(page) {
-  const html = await page.content();
-  const fromHtml = extractIdsFromText(html);
-  const fromDom = await page
-    .evaluate(() => {
-      const hrefs = [...document.querySelectorAll("a[href]")]
-        .map((el) => el.getAttribute("href") || el.href || "")
-        .join("\n");
-      return `${hrefs}\n${document.body?.innerText || ""}`;
-    })
-    .catch(() => "");
-  return [...new Set([...fromHtml, ...extractIdsFromText(fromDom)])];
+async function fetchText(url) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/xml,text/xml,text/html;q=0.9,*/*;q=0.8",
+      "User-Agent": "Mozilla/5.0 (compatible; AdbotInternalCorpus/1.0)",
+    },
+    redirect: "follow",
+  }).catch(() => null);
+  if (!response) return { status: 0, text: "" };
+  const text = await response.text().catch(() => "");
+  return { status: response.status, text };
 }
 
-async function discoverLibraryIds(page) {
-  await page.goto(`${ORIGIN}/library`, {
-    waitUntil: "domcontentloaded",
-    timeout: 60_000,
-  });
-  await page.waitForTimeout(1500);
-  for (let i = 0; i < 6; i += 1) {
-    await page.mouse.wheel(0, 1800);
-    await page.waitForTimeout(600);
+async function discoverIdsHttp(shard) {
+  const ids = new Set(loadSystemIds());
+  const shardUrl = `${ORIGIN}/ad/sitemaps/${String(shard).padStart(3, "0")}.xml`;
+  const urls = [`${ORIGIN}/sitemap.xml`, `${ORIGIN}/ad/sitemap.xml`, shardUrl];
+  const stats = { sitemap: 0, adIndex: 0, shard: 0, system: ids.size };
+
+  for (const url of urls) {
+    const fetched = await fetchText(url);
+    const found = extractIdsFromText(fetched.text);
+    for (const id of found) ids.add(id);
+    if (url.endsWith("/sitemap.xml") && !url.includes("/ad/")) stats.sitemap = found.length;
+    else if (url.endsWith("/ad/sitemap.xml")) stats.adIndex = found.length;
+    else stats.shard = found.length;
   }
-  return collectPageIds(page);
+
+  return { ids: [...ids], stats };
 }
 
-async function discoverShardIds(page, shard) {
-  const url = `${ORIGIN}/ad/sitemaps/${String(shard).padStart(3, "0")}.xml`;
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.waitForTimeout(1000);
-  return collectPageIds(page);
+function attachIdSniffer(page, bucket) {
+  page.on("response", async (response) => {
+    try {
+      const url = response.url();
+      if (!/chatgptadlibrary\.com/i.test(url)) return;
+      const type = response.headers()["content-type"] || "";
+      if (
+        !/json|xml|javascript|text|html/i.test(type) &&
+        !/sitemap|library|ad\//i.test(url)
+      ) {
+        return;
+      }
+      const text = await response.text();
+      for (const id of extractIdsFromText(`${url}\n${text}`)) bucket.add(id);
+    } catch {
+      // Body may already be consumed; ignore.
+    }
+  });
 }
 
 async function extractAd(page, id) {
   const url = `${ORIGIN}/ad/${id}`;
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForTimeout(1200);
+
+  const html = await page.content();
+  if (/vercel security checkpoint/i.test(html)) {
+    return { blocked: true, record: null };
+  }
+  if (/page not found|404|ad not found/i.test(html) && !/img\.chatgptadlibrary\.com/i.test(html)) {
+    return { missing: true, record: null };
+  }
 
   for (const label of ["Accept", "Got it", "Close", "Not now", "Maybe later"]) {
     const button = page.getByRole("button", { name: label });
@@ -112,7 +154,7 @@ async function extractAd(page, id) {
     }
   }
 
-  return page.evaluate(
+  const record = await page.evaluate(
     ({ adId, origin, host }) => {
       const abs = (value) => {
         try {
@@ -198,6 +240,12 @@ async function extractAd(page, id) {
     },
     { adId: id, origin: ORIGIN, host: "img.chatgptadlibrary.com" },
   );
+
+  return { record };
+}
+
+function isTransientFailure(error) {
+  return /blocked|checkpoint|timeout|net::|429|target closed/i.test(String(error));
 }
 
 async function main() {
@@ -214,6 +262,47 @@ async function main() {
   }
   const discoverShardIndex = Number(statusPayload.status?.nextDiscoverShard ?? 0);
 
+  const discovered = await discoverIdsHttp(discoverShardIndex);
+  console.log(
+    JSON.stringify({
+      phase: "discover",
+      shard: discoverShardIndex,
+      ...discovered.stats,
+      uniqueIds: discovered.ids.length,
+    }),
+  );
+
+  if (!DRY_RUN) {
+    const discoverResult = await cronPost({
+      action: "discover",
+      shard: discoverShardIndex,
+      ids: discovered.ids,
+      xml: discovered.ids.map((id) => `${ORIGIN}/ad/${id}`).join("\n"),
+    });
+    console.log("discover", {
+      shard: discoverShardIndex,
+      added: discoverResult.added,
+      pendingCount: discoverResult.pendingCount,
+    });
+  }
+
+  const planPayload = DRY_RUN
+    ? { plan: { enabled: true, ids: discovered.ids.slice(0, BATCH_MAX) } }
+    : await cronGet("/api/cron/chatgpt-ad-library-scrape?mode=plan");
+
+  if (!planPayload.plan?.enabled) {
+    console.log("crawl disabled after discover — exit");
+    return;
+  }
+
+  const ids = (planPayload.plan.ids || []).slice(0, BATCH_MAX);
+  console.log(JSON.stringify({ phase: "plan", planned: ids, dryRun: DRY_RUN }));
+
+  if (ids.length < 1) {
+    console.log("plan returned no ids — catalog exhausted and probe capped");
+    return;
+  }
+
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     userAgent:
@@ -221,78 +310,50 @@ async function main() {
     locale: "en-US",
   });
   const page = await context.newPage();
+  const sniffed = new Set();
+  attachIdSniffer(page, sniffed);
 
+  const records = [];
+  const transient = [];
   try {
-    const libraryIds = await discoverLibraryIds(page);
-    const shardIds = await discoverShardIds(page, discoverShardIndex);
-    const discoveredIds = [...new Set([...libraryIds, ...shardIds])];
-    const discoverXml = discoveredIds
-      .map((id) => `${ORIGIN}/ad/${id}`)
-      .join("\n");
-
-    console.log(
-      JSON.stringify({
-        phase: "discover",
-        shard: discoverShardIndex,
-        libraryIds: libraryIds.length,
-        shardIds: shardIds.length,
-        uniqueIds: discoveredIds.length,
-      }),
-    );
-
-    if (!DRY_RUN) {
-      const discoverResult = await cronPost({
-        action: "discover",
-        shard: discoverShardIndex,
-        xml: discoverXml || "<urlset></urlset>",
-      });
-      console.log("discover", {
-        shard: discoverShardIndex,
-        added: discoverResult.added,
-        pendingCount: discoverResult.pendingCount,
-      });
-    }
-
-    const planPayload = DRY_RUN
-      ? { plan: { enabled: true, ids: discoveredIds.slice(0, BATCH_MAX) } }
-      : await cronGet("/api/cron/chatgpt-ad-library-scrape?mode=plan");
-
-    if (!planPayload.plan?.enabled) {
-      console.log("crawl disabled after discover — exit");
-      return;
-    }
-
-    const ids = (planPayload.plan.ids || []).slice(0, BATCH_MAX);
-    console.log(JSON.stringify({ phase: "plan", planned: ids, dryRun: DRY_RUN }));
-
-    const records = [];
-    const failed = [];
     for (const id of ids) {
       try {
-        const record = await extractAd(page, id);
-        if (!record?.imageUrl) {
-          failed.push({ id, error: "extract_failed" });
+        const extracted = await extractAd(page, id);
+        if (extracted.blocked) {
+          transient.push({ id, error: "bot_checkpoint" });
           continue;
         }
-        records.push(record);
-        console.log("scraped", record.id, record.advertiserName, record.title);
+        if (extracted.missing || !extracted.record?.imageUrl) {
+          console.log("skip permanent", id, extracted.missing ? "missing" : "extract_failed");
+          continue;
+        }
+        records.push(extracted.record);
+        console.log("scraped", extracted.record.id, extracted.record.advertiserName, extracted.record.title);
       } catch (error) {
-        failed.push({
-          id,
-          error: error instanceof Error ? error.message : "scrape_failed",
-        });
+        const message = error instanceof Error ? error.message : "scrape_failed";
+        if (isTransientFailure(message)) {
+          transient.push({ id, error: message });
+        } else {
+          console.log("skip permanent", id, message);
+        }
       }
     }
 
-    if (failed.length > 0 && !DRY_RUN) {
+    const related = [...sniffed].filter((id) => !ids.includes(id));
+    if (related.length > 0 && !DRY_RUN) {
+      await cronPost({ action: "enqueue", ids: related });
+      console.log("related enqueue", { added: related.length });
+    }
+
+    if (transient.length > 0 && !DRY_RUN) {
       await cronPost({
         action: "requeue",
-        ids: failed.map((item) => item.id),
+        ids: transient.map((item) => item.id),
       });
     }
 
     if (records.length < 1) {
-      console.log("no records scraped", { failed, planned: ids });
+      console.log("no records scraped", { transient, planned: ids });
       return;
     }
 

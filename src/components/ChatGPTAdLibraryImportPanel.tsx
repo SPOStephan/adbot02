@@ -22,6 +22,8 @@ type CrawlStatus = {
   enabled: boolean;
   pendingCount: number;
   nextDiscoverShard: number;
+  nextProbeId?: number;
+  catalogSize?: number;
   lastPlanAt: string | null;
   lastIngestAt: string | null;
   lastDiscoverAt: string | null;
@@ -60,7 +62,7 @@ export function ChatGPTAdLibraryImportPanel() {
   const [pending, setPending] = useState(false);
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const [raw, setRaw] = useState("");
-  const [queueRaw, setQueueRaw] = useState("7341");
+  const [queueRaw, setQueueRaw] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastSummary, setLastSummary] = useState<ImportSummary | null>(null);
@@ -247,10 +249,11 @@ export function ChatGPTAdLibraryImportPanel() {
               Wiederkehrender Scrape (max. {crawl?.scrapeBatchMax ?? 5}/Lauf)
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-950/80">
-              Die GitHub Action sammelt <strong>automatisch Ad-IDs</strong> aus der Library-Übersicht
-              und den Sitemap-Shards, legt sie in die Queue und importiert pro Lauf höchstens{" "}
-              {crawl?.scrapeBatchMax ?? 5} neue Anzeigen. Du musst keine IDs eintippen — nur Auto-Scrape
-              anlassen.
+              IDs kommen aus dem <strong>Systemkatalog</strong>
+              {crawl?.catalogSize ? ` (${crawl.catalogSize} verifizierte Ads)` : ""}, der öffentlichen
+              Sitemap und einem sequenziellen Probe, wenn Live-HTML blockiert ist. Der Browser öffnet
+              nur die Ad-Seiten und importiert pro Lauf höchstens {crawl?.scrapeBatchMax ?? 5} neue
+              Anzeigen. Du musst nichts eintippen — Auto-Scrape anlassen.
             </p>
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
           </div>
@@ -276,7 +279,8 @@ export function ChatGPTAdLibraryImportPanel() {
         </div>
         <p className="mt-3 text-xs text-emerald-900/70">
           Letzter Ingest: {crawl?.lastIngestAt ?? "noch nie"} · Discover-Shard:{" "}
-          {crawl?.nextDiscoverShard ?? "–"} · Geplant gesamt: {crawl?.totalPlanned ?? "–"}
+          {crawl?.nextDiscoverShard ?? "–"} · Probe ab #{crawl?.nextProbeId ?? "–"} · Geplant gesamt:{" "}
+          {crawl?.totalPlanned ?? "–"}
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -307,7 +311,7 @@ export function ChatGPTAdLibraryImportPanel() {
           </summary>
         <label className="mt-3 grid gap-2">
           <span className="text-xs font-semibold text-emerald-900">
-            Nur wenn Discover nichts findet. Normalweg: IDs kommen automatisch.
+            Nur Notfall. Normalweg: Systemkatalog, Sitemap und Probe füllen die Queue.
           </span>
           <div className="flex flex-wrap gap-2">
             <input

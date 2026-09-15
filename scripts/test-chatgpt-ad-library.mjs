@@ -54,6 +54,7 @@ assert.match(client, /chatgptadlibrary.com/);
 assert.match(docs, /Niemals kunden/);
 assert.match(docs, /chatgptadlibrary.com/);
 assert.match(docs, /GitHub Action/);
+assert.match(docs, /Systemkatalog/);
 assert.match(client, /chatgptadlibrary\.com/);
 assert.match(page, /ChatGPTAdLibraryImportPanel/);
 assert.match(sourceStrategy, /chatgptadlibrary\.com/);
