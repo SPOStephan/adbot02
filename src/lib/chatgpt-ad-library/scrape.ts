@@ -15,6 +15,7 @@ import {
 import {
   CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
+  CHATGPT_AD_LIBRARY_UNLOCKER_PROBE_AD_ID,
 } from "@/lib/chatgpt-ad-library/scrape-constants";
 import { CHATGPT_AD_LIBRARY_SEED_RECORDS } from "@/lib/chatgpt-ad-library/seed-records";
 import { CHATGPT_AD_LIBRARY_ORIGIN } from "@/lib/chatgpt-ad-library/types";
@@ -373,5 +374,100 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
     plannedIds: plan.ids,
     summary,
     failures,
+  };
+}
+
+export type ChatGPTAdLibraryUnlockerProbe = {
+  ok: boolean;
+  configured: boolean;
+  ingested: false;
+  adId: string;
+  pageUrl: string;
+  checkpoint: boolean;
+  httpStatus: number;
+  hasImage: boolean;
+  parseOk: boolean;
+  title: string | null;
+  imageUrl: string | null;
+  credits: string | null;
+  message: string;
+};
+
+/**
+ * One-page unlocker smoke test. Never imports. Use the ScrapingBee trial
+ * before buying Freelance — a red probe means more credits will not help.
+ */
+export async function probeChatGPTAdLibraryUnlocker(input?: {
+  adId?: string | number;
+}): Promise<ChatGPTAdLibraryUnlockerProbe> {
+  const rawId = String(input?.adId ?? CHATGPT_AD_LIBRARY_UNLOCKER_PROBE_AD_ID).trim();
+  const adId = /^\d{1,12}$/.test(rawId) ? rawId : CHATGPT_AD_LIBRARY_UNLOCKER_PROBE_AD_ID;
+  const pageUrl = `${CHATGPT_AD_LIBRARY_ORIGIN}/ad/${adId}`;
+
+  if (!isChatGPTAdLibraryUnlockerConfigured()) {
+    return {
+      ok: false,
+      configured: false,
+      ingested: false,
+      adId,
+      pageUrl,
+      checkpoint: false,
+      httpStatus: 0,
+      hasImage: false,
+      parseOk: false,
+      title: null,
+      imageUrl: null,
+      credits: null,
+      message:
+        "SCRAPINGBEE_API_KEY fehlt. Trial-Key (1000 Credits, keine Karte) in Vercel Production setzen, neu deployen, dann erneut prüfen. Freelance noch nicht kaufen.",
+    };
+  }
+
+  const unlocked = await unlockChatGPTAdLibraryUrl(pageUrl);
+  const checkpoint =
+    unlocked.status === 429 || /vercel security checkpoint/i.test(unlocked.text);
+  const parsed =
+    unlocked.ok && !checkpoint
+      ? parseChatGPTAdLibraryHtml({ html: unlocked.text, adId, pageUrl })
+      : null;
+  const imageUrl =
+    parsed && typeof parsed.imageUrl === "string" && parsed.imageUrl.length > 8
+      ? parsed.imageUrl
+      : null;
+  const title =
+    parsed && typeof parsed.title === "string" && parsed.title.length > 0
+      ? parsed.title
+      : null;
+  const parseOk = parsed != null;
+  const ok = Boolean(unlocked.ok && !checkpoint && parseOk && imageUrl);
+
+  let message: string;
+  if (ok) {
+    message =
+      "Probe grün: Unlocker hat die Ad-Seite gelesen und eine CDN-Bild-URL gefunden. Kein Import. Freelance ist erst jetzt sinnvoll.";
+  } else if (checkpoint) {
+    message =
+      "Probe rot: ScrapingBee sieht denselben Vercel-Checkpoint. Freelance kaufen ändert das nicht — nur mehr Credits.";
+  } else if (!unlocked.ok) {
+    message = `Probe rot: Unlocker-HTTP ${unlocked.status || "failed"}. Freelance noch nicht kaufen.`;
+  } else {
+    message =
+      "Probe rot: HTML ohne CDN-Bild-URL. Parser findet nichts. Freelance noch nicht kaufen.";
+  }
+
+  return {
+    ok,
+    configured: true,
+    ingested: false,
+    adId,
+    pageUrl,
+    checkpoint,
+    httpStatus: unlocked.status,
+    hasImage: Boolean(imageUrl),
+    parseOk,
+    title,
+    imageUrl,
+    credits: unlocked.cost,
+    message,
   };
 }

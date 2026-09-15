@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, LoaderCircle, RefreshCw, Upload } from "lucide-react";
+import { ExternalLink, FlaskConical, LoaderCircle, RefreshCw, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/import-constants";
@@ -44,6 +44,22 @@ export type ChatGPTAdLibraryHitCard = {
   advertiserName: string;
   previewUrl: string;
   sourceUrl: string | null;
+};
+
+type UnlockerProbe = {
+  ok: boolean;
+  configured: boolean;
+  ingested: false;
+  adId: string;
+  pageUrl: string;
+  checkpoint: boolean;
+  httpStatus: number;
+  hasImage: boolean;
+  parseOk: boolean;
+  title: string | null;
+  imageUrl: string | null;
+  credits: string | null;
+  message: string;
 };
 
 type PanelProps = {
@@ -93,6 +109,7 @@ export function ChatGPTAdLibraryImportPanel({
   const [crawl, setCrawl] = useState<CrawlStatus | null>(initialCrawl);
   const [hits, setHits] = useState<ChatGPTAdLibraryHitCard[]>(initialHits);
   const [workerHint, setWorkerHint] = useState<string | null>(null);
+  const [probe, setProbe] = useState<UnlockerProbe | null>(null);
 
   const refreshCrawl = useCallback(async () => {
     const [crawlRes, importRes, hitsRes] = await Promise.all([
@@ -252,6 +269,36 @@ export function ChatGPTAdLibraryImportPanel({
     }
   }
 
+  async function probeUnlocker() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    setProbe(null);
+    try {
+      const response = await fetch("/api/admin/chatgpt-ad-library/crawl", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "probe_unlocker", adId: "7341" }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        probe?: UnlockerProbe;
+      };
+      if (!response.ok || !payload.ok || !payload.probe) {
+        throw new Error(payload.message ?? "Unlocker-Probe fehlgeschlagen.");
+      }
+      setProbe(payload.probe);
+      setNotice(payload.probe.message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unlocker-Probe fehlgeschlagen.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function enqueueIds() {
     if (pending) return;
     setPending(true);
@@ -312,13 +359,14 @@ export function ChatGPTAdLibraryImportPanel({
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
             {crawl?.unlockerConfigured ? (
               <p className="mt-2 text-sm font-semibold text-emerald-800">
-                Unlocker aktiv ({crawl.unlockerProvider ?? "scrapingbee"}) — Ad-Seiten kommen über
-                ScrapingBee, nicht über GitHub-IPs.
+                Unlocker-Key gesetzt ({crawl.unlockerProvider ?? "scrapingbee"}). Zuerst Probe
+                #7341 — Freelance (~50 USD) erst nach Grün.
               </p>
             ) : (
               <p className="mt-2 text-sm font-semibold text-amber-900">
-                Unlocker fehlt. In Vercel Production <code>SCRAPINGBEE_API_KEY</code> setzen,
-                Production neu deployen, dann Action erneut laufen lassen.
+                Unlocker fehlt. Trial auf scrapingbee.com (1000 Credits, keine Karte) → Key als{" "}
+                <code>SCRAPINGBEE_API_KEY</code> in Vercel Production → neu deployen → Probe.
+                Freelance noch nicht kaufen.
               </p>
             )}
           </div>
@@ -452,10 +500,25 @@ export function ChatGPTAdLibraryImportPanel({
           >
             Pausieren
           </button>
+          <button
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+            disabled={pending}
+            onClick={() => void probeUnlocker()}
+            type="button"
+          >
+            {pending ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <FlaskConical className="size-4" />
+            )}
+            Unlocker-Probe #7341
+          </button>
           <span className="text-sm font-semibold text-emerald-900">
             Status: {crawl ? (crawl.enabled ? "aktiv" : "pausiert") : "…"}
           </span>
         </div>
+
+        {probe ? <UnlockerProbeBox probe={probe} /> : null}
 
         <details className="mt-4 rounded-xl border border-emerald-200 bg-white/70 p-3">
           <summary className="cursor-pointer text-xs font-extrabold uppercase tracking-wide text-emerald-800">
@@ -590,6 +653,37 @@ function formatWhen(value: string | null | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return `${date.toISOString().replace("T", " ").slice(0, 16)} UTC`;
+}
+
+function UnlockerProbeBox({ probe }: { probe: UnlockerProbe }) {
+  const tone = probe.ok
+    ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+    : "border-rose-200 bg-rose-50 text-rose-950";
+  return (
+    <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${tone}`} role="status">
+      <p className="text-[11px] font-extrabold uppercase tracking-wide">
+        Unlocker-Probe · kein Import
+      </p>
+      <p className="mt-1 font-semibold">{probe.message}</p>
+      <p className="mt-2 text-xs">
+        #{probe.adId}
+        {` · HTTP ${probe.httpStatus || "–"}`}
+        {` · Checkpoint ${probe.checkpoint ? "ja" : "nein"}`}
+        {` · Bild ${probe.hasImage ? "ja" : "nein"}`}
+        {probe.credits ? ` · Credits ${probe.credits}` : ""}
+        {probe.title ? ` · ${probe.title}` : ""}
+      </p>
+      {probe.ok ? (
+        <p className="mt-2 text-xs font-semibold">
+          Freelance (~50 USD) ist erst jetzt sinnvoll. Rot wäre gewesen: nicht kaufen.
+        </p>
+      ) : (
+        <p className="mt-2 text-xs font-semibold">
+          Die 50 Dollar nicht ausgeben. Derselbe Block bleibt mit mehr Credits.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function LastRunBox({

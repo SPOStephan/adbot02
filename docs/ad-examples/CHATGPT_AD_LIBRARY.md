@@ -25,9 +25,9 @@ Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Die GitHub Acti
 | Tabelle `chatgpt_ad_library_crawl_state` | Queue, Cursor, Zähler, `next_probe_id` |
 | `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover (CRON_SECRET) |
 | GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h: Unlocker-Batch oder Playwright-Fallback |
-| Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Status, Seed-Knopf |
+| Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Probe #7341, Seed-Knopf |
 | Vercel Cron (6h) | Mit Unlocker: dieselben ≤5 Ads. Ohne Key: Seed-Fallback, keine Queue-Entnahme. |
-| ScrapingBee | Bezahlter Unlocker. Key nur in **Vercel Production**. |
+| ScrapingBee | Unlocker. Trial zuerst (1000 Credits, keine Karte). Freelance erst nach grüner Probe. Key nur in **Vercel Production**. |
 
 Secrets für die Action (GitHub → Settings → Secrets and variables → Actions — **nicht** nur Vercel):
 
@@ -36,14 +36,20 @@ Secrets für die Action (GitHub → Settings → Secrets and variables → Actio
 | `CRON_SECRET` | Repository **Secret** | gleicher Wert wie Vercel `CRON_SECRET` |
 | `ADBOT_APP_URL` | Repository Secret **oder** Variable | `https://app.adbot.one` |
 
-**Live-HTML braucht ScrapingBee** (GitHub-IPs lösen den Vercel-Checkpoint nicht):
+**ScrapingBee ist gegen diesen Checkpoint nicht bewiesen.** Headless Chrome, Jina und Crawler-UAs scheitern. FlareSolverr scheitert oft an „Failed to verify your browser.“ Auto-Mode *kann* klappen — oder dieselbe Challenge sehen. Freelance ändert nur das Credit-Kontingent, nicht den Schutz.
 
-1. Account auf https://www.scrapingbee.com/ — Plan **Freelance (~50 USD/Monat, 250k Credits)**.
-2. Stealth/Auto kostet bis 75 Credits/Seite. 5 Ads alle 2h plus ein Sitemap-Shard ≈ 70 Requests/Tag ≈ 160k Credits/Monat. Freelance reicht.
-3. API-Key nach **Vercel → Project → Settings → Environment Variables → Production** als `SCRAPINGBEE_API_KEY`.
-4. Production **neu deployen**.
-5. Unter `/dashboard/inspiration` muss „Unlocker aktiv“ stehen.
-6. GitHub Action **Run workflow** (nicht denselben alten Job).
+Deshalb: **keine 50 USD, bevor die Admin-Probe grün ist.**
+
+1. Account auf https://www.scrapingbee.com/ — **Trial, 1000 Credits, keine Kreditkarte**.
+2. API-Key nach **Vercel → Project → Settings → Environment Variables → Production** als `SCRAPINGBEE_API_KEY`.
+3. Production **neu deployen**.
+4. Unter `/dashboard/inspiration` **Unlocker-Probe #7341** (kein Import, eine Seite, Stealth bis ~75 Credits).
+5. **Grün** (kein Checkpoint, CDN-Bild-URL da) → erst dann Freelance (~50 USD/Monat, 250k Credits). 5 Ads/2h + Shard ≈ 160k Credits/Monat.
+6. **Rot** (Checkpoint oder kein Bild) → Freelance nicht kaufen. Mehr Credits lösen denselben Block nicht.
+
+Die Probe prüft den unbekannten Teil: Unlocker schafft `/ad/7341` und der Parser findet `img.chatgptadlibrary.com/c/…webp`. Schon grün ohne Unlocker: Crawl-Tabelle, Cron-Auth, Plan-IDs, öffentliches CDN, Seed-Import, Admin-Uploader-Fallback.
+
+Was nach einer grünen Probe noch knirschen *kann* (kein 50-Dollar-Risiko): fünf Seiten vs. 300s Cron-Timeout, Sitemap-Shards, HTML-Varianten anderer Ads, Trial-Credits (≈13 Stealth-Seiten).
 
 Optional Vercel: `CHATGPT_AD_LIBRARY_UPLOADER_USER_ID` (Site-Admin-UUID).
 
@@ -75,8 +81,9 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 ## Admin-Oberfläche
 
 - Seite: `/dashboard/inspiration` — Status, letzter Lauf und importierte Ads stehen **in der Scrape-Karte** (serverseitig geladen, kein Toast).
+- **Unlocker-Probe #7341** (kein Import): Trial-Key prüfen, bevor Freelance gekauft wird.
 - Auto-Scrape-Panel + optionaler JSON-Import
-- Status: `GET /api/admin/chatgpt-ad-library/crawl`
+- Status: `GET /api/admin/chatgpt-ad-library/crawl` · `POST { action: "probe_unlocker" }`
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`
 
 ## KI-Nutzung
