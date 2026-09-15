@@ -129,9 +129,15 @@ export function parseChatGPTAdLibraryHtml(input: {
 
 export function extractAdIdsFromSitemapXml(xml: string): string[] {
   if (!xml || /vercel security checkpoint/i.test(xml)) return [];
+  const decoded = xml
+    .replace(/&amp;/g, "&")
+    .replace(/\\u002f/gi, "/")
+    .replace(/\\\//g, "/");
   return [
     ...new Set(
-      [...xml.matchAll(/https?:\/\/[^<\s]+\/ad\/(\d{1,12})/gi)].map((m) => m[1] ?? ""),
+      [...decoded.matchAll(/\/ad\/(\d{1,12})(?!\d)/gi)]
+        .map((m) => m[1] ?? "")
+        .filter((id) => id && !decoded.includes(`/ad/sitemaps/${id}`)),
     ),
   ].filter(Boolean);
 }
