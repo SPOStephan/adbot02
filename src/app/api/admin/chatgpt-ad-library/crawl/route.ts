@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       customerVisible: false,
       status,
       workerHint:
-        "Live-HTML von GitHub-Runnern ist checkpoint-blockiert. Öffentliche Seed-Bilder werden automatisch nachgelegt, sobald ein Lauf nichts scrapen kann.",
+        "Live-HTML läuft über ScrapingBee (SCRAPINGBEE_API_KEY in Vercel Production). Ohne Key bleiben GitHub-Runner am Checkpoint hängen.",
     });
   } catch (error) {
     console.error("chatgpt_ad_library_crawl_admin_get_failed", {

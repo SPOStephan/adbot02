@@ -33,6 +33,8 @@ type CrawlStatus = {
   totalSkippedDuplicate: number;
   totalFailed: number;
   scrapeBatchMax: number;
+  unlockerConfigured?: boolean;
+  unlockerProvider?: string;
 };
 
 export type ChatGPTAdLibraryHitCard = {
@@ -308,6 +310,17 @@ export function ChatGPTAdLibraryImportPanel({
               Anzeigen. Du musst nichts eintippen — Auto-Scrape anlassen.
             </p>
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
+            {crawl?.unlockerConfigured ? (
+              <p className="mt-2 text-sm font-semibold text-emerald-800">
+                Unlocker aktiv ({crawl.unlockerProvider ?? "scrapingbee"}) — Ad-Seiten kommen über
+                ScrapingBee, nicht über GitHub-IPs.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-amber-900">
+                Unlocker fehlt. In Vercel Production <code>SCRAPINGBEE_API_KEY</code> setzen,
+                Production neu deployen, dann Action erneut laufen lassen.
+              </p>
+            )}
           </div>
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm font-extrabold text-emerald-800 hover:bg-emerald-50 disabled:opacity-50"

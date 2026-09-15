@@ -24,9 +24,10 @@ Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Die GitHub Acti
 | Sequenz-Probe bis 30 000 | Wenn Katalog + Live-Discover leer sind, liefert `mode=plan` die nächsten unimportierten IDs. |
 | Tabelle `chatgpt_ad_library_crawl_state` | Queue, Cursor, Zähler, `next_probe_id` |
 | `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover (CRON_SECRET) |
-| GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h Playwright ≤5 Ads |
-| Admin `/dashboard/inspiration` | Auto an/aus, Status. Manuelle IDs nur Notfall. |
-| Vercel Cron (6h) | HTTP-Probe. Bei 429 **keine** Queue-Entnahme — sonst verhungert der Worker. |
+| GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h: Unlocker-Batch oder Playwright-Fallback |
+| Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Status, Seed-Knopf |
+| Vercel Cron (6h) | Mit Unlocker: dieselben ≤5 Ads. Ohne Key: Seed-Fallback, keine Queue-Entnahme. |
+| ScrapingBee | Bezahlter Unlocker. Key nur in **Vercel Production**. |
 
 Secrets für die Action (GitHub → Settings → Secrets and variables → Actions — **nicht** nur Vercel):
 
@@ -35,19 +36,24 @@ Secrets für die Action (GitHub → Settings → Secrets and variables → Actio
 | `CRON_SECRET` | Repository **Secret** | gleicher Wert wie Vercel `CRON_SECRET` |
 | `ADBOT_APP_URL` | Repository Secret **oder** Variable | `https://app.adbot.one` |
 
+**Live-HTML braucht ScrapingBee** (GitHub-IPs lösen den Vercel-Checkpoint nicht):
+
+1. Account auf https://www.scrapingbee.com/ — Plan **Freelance (~50 USD/Monat, 250k Credits)**.
+2. Stealth/Auto kostet bis 75 Credits/Seite. 5 Ads alle 2h plus ein Sitemap-Shard ≈ 70 Requests/Tag ≈ 160k Credits/Monat. Freelance reicht.
+3. API-Key nach **Vercel → Project → Settings → Environment Variables → Production** als `SCRAPINGBEE_API_KEY`.
+4. Production **neu deployen**.
+5. Unter `/dashboard/inspiration` muss „Unlocker aktiv“ stehen.
+6. GitHub Action **Run workflow** (nicht denselben alten Job).
+
 Optional Vercel: `CHATGPT_AD_LIBRARY_UPLOADER_USER_ID` (Site-Admin-UUID).
 
 Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql`
 
-Ablauf pro Lauf (vollautomatisch):
+Ablauf pro Lauf mit Unlocker:
 
-1. Worker lädt Systemkatalog + HTTP-Sitemap (Shards oft 429 — das ist egal).
-2. `POST action=discover` akzeptiert `ids[]` und leeres XML (kein `xml_required`).
-3. `GET ?mode=plan` mischt Katalog + Queue, überspringt schon Importiertes, sonst sequenzieller Probe.
-4. Frischer Browser öffnet nur diese ≤5 Ad-Seiten. Related-IDs aus der Seite gehen zurück in die Queue.
-5. Checkpoint/Timeout wird requeued. 404 / ohne Bild wird verworfen (kein Endlos-Loop).
-6. Wenn alle Ad-Seiten checkpoint-blockiert sind (typisch auf GitHub-Runnern): `ingest_seed` legt den mitgebrachten GlossGenius-Datensatz an. Das CDN-Bild ist öffentlich.
-7. `action=ingest` → WebP→JPEG → Inspiration Vault.
+1. `GET ?mode=unlock_discover` holt den aktuellen Sitemap-Shard über ScrapingBee.
+2. `GET ?mode=unlock` plant ≤5 IDs, unlockt die Ad-Seiten, parsed HTML, ingest (WebP→JPEG).
+3. Ohne Key: Playwright auf dem Runner (meist Checkpoint) und Seed-Fallback.
 
 Admin kann denselben Seed jederzeit unter `/dashboard/inspiration` mit **GlossGenius-Seed jetzt importieren** nachziehen.
 

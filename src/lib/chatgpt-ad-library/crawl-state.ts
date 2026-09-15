@@ -9,6 +9,7 @@ import {
 } from "@/lib/chatgpt-ad-library/scrape-constants";
 import { CHATGPT_AD_LIBRARY_SYSTEM_IDS } from "@/lib/chatgpt-ad-library/system-ids";
 import { CHATGPT_AD_LIBRARY_PROVIDER } from "@/lib/chatgpt-ad-library/types";
+import { isChatGPTAdLibraryUnlockerConfigured } from "@/lib/chatgpt-ad-library/unlocker";
 
 export type ChatGPTAdLibraryCrawlStatus = {
   enabled: boolean;
@@ -27,6 +28,8 @@ export type ChatGPTAdLibraryCrawlStatus = {
   totalFailed: number;
   scrapeBatchMax: number;
   sitemapShardCount: number;
+  unlockerConfigured: boolean;
+  unlockerProvider: "scrapingbee";
 };
 
 type CrawlRow = {
@@ -118,6 +121,8 @@ export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibrary
     totalFailed: Number(row.total_failed) || 0,
     scrapeBatchMax: CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
     sitemapShardCount: CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
+    unlockerConfigured: isChatGPTAdLibraryUnlockerConfigured(),
+    unlockerProvider: "scrapingbee",
   };
 }
 

@@ -57,6 +57,7 @@ assert.match(panel, /Auto-Scrape an/);
 assert.match(panel, /Importierte ChatGPT-Ads/);
 assert.match(panel, /Letzter Lauf/);
 assert.match(panel, /GlossGenius-Seed jetzt importieren/);
+assert.match(panel, /SCRAPINGBEE_API_KEY/);
 const seedTs = read("src/lib/chatgpt-ad-library/seed-records.ts");
 assert.match(seedTs, /14fdb811b3d1c4b284228434b2635206f04c8e55b21db949e0ccb3b82afd5cf9/);
 assert.match(seedTs, /7341/);
