@@ -216,6 +216,40 @@ export function ChatGPTAdLibraryImportPanel({
     }
   }
 
+  async function importSeed() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/admin/chatgpt-ad-library/crawl", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "import_seed" }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        status?: CrawlStatus;
+        summary?: ImportSummary;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message ?? "Seed-Import fehlgeschlagen.");
+      }
+      if (payload.status) setCrawl(payload.status);
+      if (payload.summary) setLastSummary(payload.summary);
+      setNotice(
+        `Seed-Import: ${payload.summary?.imported ?? 0} neu · ${payload.summary?.skippedDuplicate ?? 0} schon vorhanden.`,
+      );
+      await refreshCrawl();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Seed-Import fehlgeschlagen.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function enqueueIds() {
     if (pending) return;
     setPending(true);
@@ -370,11 +404,21 @@ export function ChatGPTAdLibraryImportPanel({
               ))}
             </div>
           ) : (
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-950">
-              Noch keine ChatGPT-Ads im Vault. Der letzte Action-Lauf war nur technisch grün: die
-              Ad-Seiten waren hinter dem Vercel-Checkpoint. Sobald ein Ingest klappt, erscheinen
-              die Bilder hier — nicht als Toast.
-            </p>
+            <div className="mt-3 space-y-3 rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-950">
+              <p className="font-semibold">
+                Noch keine ChatGPT-Ads im Vault. GitHub-Runner sehen die Ad-Seiten nicht (Vercel-
+                Checkpoint). Das CDN-Bild des mitgebrachten Seeds ist öffentlich — den können wir
+                sofort legen.
+              </p>
+              <button
+                className="inline-flex min-h-11 items-center rounded-xl bg-emerald-700 px-4 py-3 text-sm font-extrabold text-white hover:bg-emerald-800 disabled:opacity-50"
+                disabled={pending}
+                onClick={() => void importSeed()}
+                type="button"
+              >
+                GlossGenius-Seed jetzt importieren
+              </button>
+            </div>
           )}
         </section>
 

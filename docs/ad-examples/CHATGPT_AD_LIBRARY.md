@@ -46,7 +46,10 @@ Ablauf pro Lauf (vollautomatisch):
 3. `GET ?mode=plan` mischt Katalog + Queue, überspringt schon Importiertes, sonst sequenzieller Probe.
 4. Frischer Browser öffnet nur diese ≤5 Ad-Seiten. Related-IDs aus der Seite gehen zurück in die Queue.
 5. Checkpoint/Timeout wird requeued. 404 / ohne Bild wird verworfen (kein Endlos-Loop).
-6. `action=ingest` → WebP→JPEG → Inspiration Vault.
+6. Wenn alle Ad-Seiten checkpoint-blockiert sind (typisch auf GitHub-Runnern): `ingest_seed` legt den mitgebrachten GlossGenius-Datensatz an. Das CDN-Bild ist öffentlich.
+7. `action=ingest` → WebP→JPEG → Inspiration Vault.
+
+Admin kann denselben Seed jederzeit unter `/dashboard/inspiration` mit **GlossGenius-Seed jetzt importieren** nachziehen.
 
 Manuelles JSONL bleibt nur als Notfall-Fallback.
 
