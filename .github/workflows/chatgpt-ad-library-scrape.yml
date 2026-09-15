@@ -1,12 +1,14 @@
 # Small recurring ChatGPT Ad Library scrape (internal inspiration vault only).
 # Max 5 ads per run — matches the site's guest page limit in a fresh browser.
 #
-# Required repo secrets:
-#   ADBOT_APP_URL   e.g. https://adbot.one
-#   CRON_SECRET     same as Vercel CRON_SECRET (>= 32 chars)
+# Required in GitHub → Settings → Secrets and variables → Actions:
+#   Secret CRON_SECRET     (= same value as Vercel CRON_SECRET, ≥32 chars)
+#   Secret or Variable ADBOT_APP_URL  e.g. https://app.adbot.one  (no trailing slash)
 #
-# Also on Vercel:
-#   CHATGPT_AD_LIBRARY_UPLOADER_USER_ID  (site admin UUID) — optional if exactly one admin exists
+# Vercel env vars alone are NOT visible to this workflow.
+#
+# Optional on Vercel:
+#   CHATGPT_AD_LIBRARY_UPLOADER_USER_ID  (site admin UUID)
 # Apply migration 20260915140000_chatgpt_ad_library_crawl_state.sql
 
 name: ChatGPT Ad Library scrape
@@ -37,21 +39,31 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Require secrets
+      - name: Require GitHub Actions secrets/vars
         env:
-          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL }}
+          # URL may be a Variable (preferred) or a Secret.
+          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          if [ -z "${ADBOT_APP_URL}" ] || [ -z "${CRON_SECRET}" ]; then
-            echo "::error::Secrets ADBOT_APP_URL und CRON_SECRET sind erforderlich."
+          missing=0
+          if [ -z "${ADBOT_APP_URL}" ]; then
+            echo "::error::ADBOT_APP_URL fehlt in GitHub Actions. Anlegen unter: Repo → Settings → Secrets and variables → Actions → New repository secret (oder Variable) mit Name ADBOT_APP_URL, Wert z.B. https://app.adbot.one (ohne Slash). Vercel-Env reicht nicht."
+            missing=1
+          fi
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::CRON_SECRET fehlt in GitHub Actions. Denselben Wert wie in Vercel hier anlegen: Repo → Settings → Secrets and variables → Actions → New repository secret → Name CRON_SECRET. Vercel-Env ist für diese Action unsichtbar."
+            missing=1
+          elif [ "${#CRON_SECRET}" -lt 32 ]; then
+            echo "::error::CRON_SECRET muss mindestens 32 Zeichen haben (aktuell ${#CRON_SECRET})."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
             exit 1
           fi
-          if [ "${#CRON_SECRET}" -lt 32 ]; then
-            echo "::error::CRON_SECRET muss mindestens 32 Zeichen haben."
-            exit 1
-          fi
+          echo "ADBOT_APP_URL is set (length ${#ADBOT_APP_URL})"
+          echo "CRON_SECRET is set (length ${#CRON_SECRET})"
 
       - name: Install Playwright Chromium
         run: |
@@ -59,6 +71,6 @@ jobs:
 
       - name: Scrape batch (≤5) and ingest
         env:
-          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL }}
+          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: node scripts/chatgpt-ad-library-scrape-playwright.mjs
