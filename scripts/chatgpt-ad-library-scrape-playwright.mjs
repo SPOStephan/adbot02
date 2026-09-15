@@ -354,6 +354,10 @@ async function main() {
 
     if (records.length < 1) {
       console.log("no records scraped", { transient, planned: ids });
+      if (!DRY_RUN) {
+        const seed = await cronPost({ action: "ingest_seed" });
+        console.log("seed_fallback", seed.summary || seed);
+      }
       return;
     }
 

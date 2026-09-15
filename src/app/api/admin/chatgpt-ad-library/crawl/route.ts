@@ -5,6 +5,7 @@ import {
   getChatGPTAdLibraryCrawlStatus,
   setChatGPTAdLibraryCrawlEnabled,
 } from "@/lib/chatgpt-ad-library/crawl-state";
+import { ingestChatGPTAdLibrarySeedFallback } from "@/lib/chatgpt-ad-library/scrape";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import {
   isDashboardSameOriginReadRequest,
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
       customerVisible: false,
       status,
       workerHint:
-        "Alle ~2 Stunden: Systemkatalog + öffentliche Sitemap + Probe liefern IDs. Browser öffnet nur die ≤5 Ad-Seiten.",
+        "Live-HTML von GitHub-Runnern ist checkpoint-blockiert. Öffentliche Seed-Bilder werden automatisch nachgelegt, sobald ein Lauf nichts scrapen kann.",
     });
   } catch (error) {
     console.error("chatgpt_ad_library_crawl_admin_get_failed", {
@@ -82,6 +83,14 @@ export async function POST(request: NextRequest) {
       await setChatGPTAdLibraryCrawlEnabled(body.enabled === true);
       const status = await getChatGPTAdLibraryCrawlStatus();
       return json({ ok: true, status });
+    }
+
+    if (action === "import_seed") {
+      const summary = await ingestChatGPTAdLibrarySeedFallback({
+        reason: "admin_import_seed",
+      });
+      const status = await getChatGPTAdLibraryCrawlStatus();
+      return json({ ok: true, fallback: "seed", summary, status });
     }
 
     if (action === "enqueue") {

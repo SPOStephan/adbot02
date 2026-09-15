@@ -12,6 +12,7 @@ import {
   parseChatGPTAdLibraryHtml,
 } from "@/lib/chatgpt-ad-library/parse-html";
 import { CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX } from "@/lib/chatgpt-ad-library/scrape-constants";
+import { CHATGPT_AD_LIBRARY_SEED_RECORDS } from "@/lib/chatgpt-ad-library/seed-records";
 import { CHATGPT_AD_LIBRARY_ORIGIN } from "@/lib/chatgpt-ad-library/types";
 import { resolveChatGPTAdLibraryUploaderUserId } from "@/lib/chatgpt-ad-library/uploader";
 
@@ -63,12 +64,15 @@ export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
   if (!input?.ids || input.ids.length < 1) {
     const probe = await fetchText(`${CHATGPT_AD_LIBRARY_ORIGIN}/ad/7341`);
     if (isCheckpoint(probe.status, probe.text)) {
+      const seed = await ingestChatGPTAdLibrarySeedFallback({
+        reason: "http_checkpoint",
+      });
       return {
         mode: "http",
         blocked: true,
         skippedPlan: true,
         plannedIds: [],
-        summary: null,
+        summary: seed,
         failures: [],
       };
     }
@@ -170,6 +174,28 @@ export async function ingestChatGPTAdLibraryScrapeRecords(input: {
     skippedDuplicate: summary.skippedDuplicate,
     failed: summary.failed,
     details: { mode: "playwright_or_external" },
+  });
+  return summary;
+}
+
+export async function ingestChatGPTAdLibrarySeedFallback(input?: {
+  reason?: string;
+}): Promise<Awaited<ReturnType<typeof importChatGPTAdLibraryBatch>>> {
+  const records = [...CHATGPT_AD_LIBRARY_SEED_RECORDS];
+  const uploaderUserId = await resolveChatGPTAdLibraryUploaderUserId();
+  const summary = await importChatGPTAdLibraryBatch({
+    uploaderUserId,
+    records,
+  });
+  await recordChatGPTAdLibraryIngestSummary({
+    imported: summary.imported,
+    skippedDuplicate: summary.skippedDuplicate,
+    failed: summary.failed,
+    details: {
+      mode: "seed_fallback",
+      reason: input?.reason ?? "seed_fallback",
+      seedIds: records.map((row) => String(row.id)),
+    },
   });
   return summary;
 }

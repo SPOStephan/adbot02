@@ -8,6 +8,7 @@ import {
 import {
   discoverChatGPTAdLibraryIds,
   ingestChatGPTAdLibraryScrapeRecords,
+  ingestChatGPTAdLibrarySeedFallback,
   scrapeChatGPTAdLibraryHttpBatch,
 } from "@/lib/chatgpt-ad-library/scrape";
 import { CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX } from "@/lib/chatgpt-ad-library/scrape-constants";
@@ -152,6 +153,16 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(
         { ok: true, customerVisible: false, summary },
+        { headers: NO_STORE },
+      );
+    }
+
+    if (action === "ingest_seed") {
+      const summary = await ingestChatGPTAdLibrarySeedFallback({
+        reason: "worker_or_admin",
+      });
+      return NextResponse.json(
+        { ok: true, customerVisible: false, fallback: "seed", summary },
         { headers: NO_STORE },
       );
     }
