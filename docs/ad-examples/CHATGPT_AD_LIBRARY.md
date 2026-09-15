@@ -8,6 +8,31 @@
 
 Fremde ChatGPT-Ads als **interne Inspirations- und Wissensquelle** speichern. Adbot-Kunden sehen diese Assets nicht. Creative-Generation bleibt standardmäßig aus (`use_for_generation=false`); Admins können einzelne Beispiele später bewusst freigeben.
 
+## Automatischer Klein-Scrape (empfohlen)
+
+Die Library-HTML ist hinter einem **Vercel Security Checkpoint** (oft HTTP 429). CDN-Bilder (`img.chatgptadlibrary.com`) sind öffentlich. Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus, sondern in **kleinen Batches (max. 5 Ads)** mit einem echten Browser:
+
+| Komponente | Rolle |
+| --- | --- |
+| Tabelle `chatgpt_ad_library_crawl_state` | Queue, Cursor, Zähler |
+| `GET/POST /api/cron/chatgpt-ad-library-scrape` | Plan / Ingest / Discover (CRON_SECRET) |
+| GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h Playwright ≤5 Ads |
+| Admin `/dashboard/inspiration` | Auto an/aus, IDs in Queue, Status |
+| Vercel Cron (6h) | Best-Effort HTTP; bei 429 no-op |
+
+Secrets für die Action: `ADBOT_APP_URL`, `CRON_SECRET` (gleich wie Vercel). Optional Vercel: `CHATGPT_AD_LIBRARY_UPLOADER_USER_ID` (Site-Admin-UUID).
+
+Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql`
+
+Ablauf pro Lauf:
+
+1. Action holt `?mode=plan` → bis zu 5 IDs aus der Queue (bereits importierte werden übersprungen).
+2. Bei Bedarf: ein Sitemap-Shard im Browser öffnen → IDs enqueuen (`action=discover`).
+3. Bis zu 5 Ad-Seiten im frischen Browser lesen (passt zum ~5-Seiten-Gastlimit).
+4. `action=ingest` → WebP→JPEG → Inspiration Vault.
+
+Manuelles JSONL bleibt als Fallback.
+
 ## Datenvertrag
 
 | Feld | Wert |
@@ -21,31 +46,16 @@ Fremde ChatGPT-Ads als **interne Inspirations- und Wissensquelle** speichern. Ad
 | `external_source.use_for_internal_intelligence` | `true` |
 | `never_launch` | `true` |
 
-Bilder werden vom CDN `img.chatgptadlibrary.com` geladen, per **sharp** von WebP nach JPEG konvertiert und über `uploadInspirationVaultImage` registriert. Placeholder-URLs werden abgelehnt.
-
 ## Admin-Oberfläche
 
 - Seite: `/dashboard/inspiration`
-- Import-Panel: JSON oder JSONL einfügen → `POST /api/admin/chatgpt-ad-library/import`
-- Status: `GET /api/admin/chatgpt-ad-library/import`
+- Auto-Scrape-Panel + optionaler JSON-Import
+- Status: `GET /api/admin/chatgpt-ad-library/crawl`
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`
-
-Batch-Limit: 25 Datensätze pro Request. Duplikate werden über `external_source.external_id` übersprungen.
-
-## Crawl / Bulk außerhalb der Cloud
-
-Die Website setzt einen Vercel-Bot-Checkpoint; Server-side HTML-Fetch liefert oft HTTP 429. CDN-Bilder sind dagegen öffentlich. Für Massenextraktion lokal:
-
-```bash
-# Playwright o. ä. im Browser-Kontext, dann:
-node scripts/chatgpt-ad-library-normalize-fixture.mjs path/to/raw.jsonl > fixtures/chatgpt-ad-library/seed.jsonl
-```
-
-Fixture-Beispiel: `fixtures/chatgpt-ad-library/seed.jsonl`
 
 ## KI-Nutzung
 
-`loadChatGPTAdLibraryForInternalIntelligence()` liefert Treffer nur aus dem Inspiration Vault mit `use_for_internal_intelligence=true`. Style-Referenzen für Kundengenerierung brauchen weiterhin explizites `use_for_generation=true` (siehe `style-reference-load.ts`).
+`loadChatGPTAdLibraryForInternalIntelligence()` liefert Treffer nur aus dem Inspiration Vault mit `use_for_internal_intelligence=true`. Style-Referenzen für Kundengenerierung brauchen weiterhin explizites `use_for_generation=true`.
 
 ## Abgrenzung
 

@@ -1,0 +1,64 @@
+# Small recurring ChatGPT Ad Library scrape (internal inspiration vault only).
+# Max 5 ads per run — matches the site's guest page limit in a fresh browser.
+#
+# Required repo secrets:
+#   ADBOT_APP_URL   e.g. https://adbot.one
+#   CRON_SECRET     same as Vercel CRON_SECRET (>= 32 chars)
+#
+# Also on Vercel:
+#   CHATGPT_AD_LIBRARY_UPLOADER_USER_ID  (site admin UUID) — optional if exactly one admin exists
+# Apply migration 20260915140000_chatgpt_ad_library_crawl_state.sql
+
+name: ChatGPT Ad Library scrape
+
+on:
+  schedule:
+    # Every 2 hours
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-ad-library-scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Require secrets
+        env:
+          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "${ADBOT_APP_URL}" ] || [ -z "${CRON_SECRET}" ]; then
+            echo "::error::Secrets ADBOT_APP_URL und CRON_SECRET sind erforderlich."
+            exit 1
+          fi
+          if [ "${#CRON_SECRET}" -lt 32 ]; then
+            echo "::error::CRON_SECRET muss mindestens 32 Zeichen haben."
+            exit 1
+          fi
+
+      - name: Install Playwright Chromium
+        run: |
+          npx --yes playwright@1.55.0 install --with-deps chromium
+
+      - name: Scrape batch (≤5) and ingest
+        env:
+          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: node scripts/chatgpt-ad-library-scrape-playwright.mjs
