@@ -247,10 +247,10 @@ export function ChatGPTAdLibraryImportPanel() {
               Wiederkehrender Scrape (max. {crawl?.scrapeBatchMax ?? 5}/Lauf)
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-950/80">
-              Die Website blockiert Server-HTML (Vercel-Checkpoint). Deshalb holt eine{" "}
-              <strong>GitHub Action alle 2 Stunden</strong> mit echtem Browser höchstens 5 Ads,
-              entdeckt per Sitemap-Shard neue IDs und schreibt sie in den Inspiration Vault — ohne
-              manuelles Schaufeln. Optional: IDs hier in die Queue legen.
+              Die GitHub Action sammelt <strong>automatisch Ad-IDs</strong> aus der Library-Übersicht
+              und den Sitemap-Shards, legt sie in die Queue und importiert pro Lauf höchstens{" "}
+              {crawl?.scrapeBatchMax ?? 5} neue Anzeigen. Du musst keine IDs eintippen — nur Auto-Scrape
+              anlassen.
             </p>
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
           </div>
@@ -301,9 +301,13 @@ export function ChatGPTAdLibraryImportPanel() {
           </span>
         </div>
 
-        <label className="mt-4 grid gap-2">
-          <span className="text-xs font-extrabold uppercase tracking-wide text-emerald-800">
-            Ad-IDs in Queue (Komma/Leerzeichen)
+        <details className="mt-4 rounded-xl border border-emerald-200 bg-white/70 p-3">
+          <summary className="cursor-pointer text-xs font-extrabold uppercase tracking-wide text-emerald-800">
+            Notfall: IDs manuell nachreichen
+          </summary>
+        <label className="mt-3 grid gap-2">
+          <span className="text-xs font-semibold text-emerald-900">
+            Nur wenn Discover nichts findet. Normalweg: IDs kommen automatisch.
           </span>
           <div className="flex flex-wrap gap-2">
             <input
@@ -322,6 +326,7 @@ export function ChatGPTAdLibraryImportPanel() {
             </button>
           </div>
         </label>
+        </details>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

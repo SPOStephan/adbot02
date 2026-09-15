@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       customerVisible: false,
       status,
       workerHint:
-        "Alle ~2 Stunden holt die GitHub Action max. 5 Ads (Browser). HTML-Fetch von Vercel ist oft 429.",
+        "Alle ~2 Stunden: Browser entdeckt IDs aus Library + Sitemap, dann max. 5 neue Ads importieren.",
     });
   } catch (error) {
     console.error("chatgpt_ad_library_crawl_admin_get_failed", {

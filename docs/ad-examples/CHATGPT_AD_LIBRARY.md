@@ -32,14 +32,14 @@ Optional Vercel: `CHATGPT_AD_LIBRARY_UPLOADER_USER_ID` (Site-Admin-UUID).
 
 Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql`
 
-Ablauf pro Lauf:
+Ablauf pro Lauf (vollautomatisch, keine manuellen IDs):
 
-1. Action holt `?mode=plan` → bis zu 5 IDs aus der Queue (bereits importierte werden übersprungen).
-2. Bei Bedarf: ein Sitemap-Shard im Browser öffnen → IDs enqueuen (`action=discover`).
-3. Bis zu 5 Ad-Seiten im frischen Browser lesen (passt zum ~5-Seiten-Gastlimit).
-4. `action=ingest` → WebP→JPEG → Inspiration Vault.
+1. Browser öffnet `/library` + aktuellen Sitemap-Shard und extrahiert Ad-IDs.
+2. IDs werden in `chatgpt_ad_library_crawl_state.pending_ids` gelegt (`action=discover`).
+3. `?mode=plan` nimmt bis zu 5 noch nicht importierte IDs.
+4. Diese 5 Ad-Seiten werden gelesen → `action=ingest` (WebP→JPEG → Vault).
 
-Manuelles JSONL bleibt als Fallback.
+Manuelles JSONL bleibt nur als Notfall-Fallback.
 
 ## Datenvertrag
 
