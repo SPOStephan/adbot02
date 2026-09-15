@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { loadChatGPTAdLibraryForInternalIntelligence } from "@/lib/chatgpt-ad-library/retrieval";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
-import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
+import { isDashboardSameOriginReadRequest } from "@/lib/meta/customer-control-route";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ function json(body: Record<string, unknown>, status = 200) {
 
 export async function GET(request: NextRequest) {
   try {
-    if (!isDashboardSameOriginRequest(request)) {
+    if (!isDashboardSameOriginReadRequest(request)) {
       return json({ ok: false, message: "Ungültige Herkunft." }, 403);
     }
     const supabase = await createClient();

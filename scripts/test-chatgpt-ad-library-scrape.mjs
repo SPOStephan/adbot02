@@ -49,6 +49,8 @@ assert.match(panel, /Auto-Scrape an/);
 assert.match(panel, /In Queue legen/);
 assert.match(panel, /nie kundensichtbar/);
 assert.match(panel, /Systemkatalog/);
+assert.match(panel, /Importierte ChatGPT-Ads/);
+assert.match(adminCrawl, /isDashboardSameOriginReadRequest/);
 assert.match(workflow, /17 \*\/2 \* \* \*/);
 assert.match(workflow, /chatgpt-ad-library-scrape-playwright/);
 assert.match(workflow, /ADBOT_APP_URL/);
