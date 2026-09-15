@@ -65,9 +65,10 @@ jobs:
           echo "ADBOT_APP_URL is set (length ${#ADBOT_APP_URL})"
           echo "CRON_SECRET is set (length ${#CRON_SECRET})"
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright
         run: |
-          npx --yes playwright@1.55.0 install --with-deps chromium
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
 
       - name: Scrape batch (≤5) and ingest
         env:
