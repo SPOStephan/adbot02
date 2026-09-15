@@ -13,8 +13,10 @@ import { chromium } from "playwright";
 
 const ORIGIN = "https://www.chatgptadlibrary.com";
 const BATCH_MAX = 5;
-const APP_URL = (process.env.ADBOT_APP_URL || process.env.APP_URL || "").replace(/\/$/, "");
-const CRON_SECRET = process.env.CRON_SECRET || "";
+const APP_URL = (process.env.ADBOT_APP_URL || process.env.APP_URL || "")
+  .trim()
+  .replace(/\/$/, "");
+const CRON_SECRET = (process.env.CRON_SECRET || "").trim();
 const DRY_RUN = process.env.DRY_RUN === "1";
 
 function authHeaders() {
@@ -25,13 +27,27 @@ function authHeaders() {
   };
 }
 
+function explainHttpError(status, json) {
+  if (status === 401 || json?.error === "unauthorized") {
+    return (
+      "401 unauthorized: GitHub-Secret CRON_SECRET stimmt nicht mit Vercel CRON_SECRET überein " +
+      `(oder ADBOT_APP_URL zeigt auf die falsche App). Wert 1:1 aus Vercel → Production kopieren, ` +
+      `keine Anführungszeichen, kein Leerzeichen/Zeilenumbruch. Aktuell: url=${APP_URL} secretLen=${CRON_SECRET.length}`
+    );
+  }
+  if (status === 503 || json?.error === "cron_not_configured") {
+    return "503: Auf der Ziel-App fehlt CRON_SECRET in Vercel Environment Variables (Production).";
+  }
+  return `${status} ${JSON.stringify(json)}`;
+}
+
 async function cronGet(path) {
   const response = await fetch(`${APP_URL}${path}`, {
     headers: authHeaders(),
   });
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`GET ${path} → ${response.status} ${JSON.stringify(json)}`);
+    throw new Error(`GET ${path} → ${explainHttpError(response.status, json)}`);
   }
   return json;
 }
@@ -44,7 +60,7 @@ async function cronPost(body) {
   });
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`POST scrape → ${response.status} ${JSON.stringify(json)}`);
+    throw new Error(`POST scrape → ${explainHttpError(response.status, json)}`);
   }
   return json;
 }
@@ -160,7 +176,18 @@ async function discoverShard(page, shard) {
 
 async function main() {
   if (!DRY_RUN && (!APP_URL || CRON_SECRET.length < 32)) {
-    throw new Error("ADBOT_APP_URL und CRON_SECRET (>=32) sind erforderlich.");
+    throw new Error(
+      `ADBOT_APP_URL und CRON_SECRET (>=32) sind erforderlich (urlLen=${APP_URL.length}, secretLen=${CRON_SECRET.length}).`,
+    );
+  }
+  if (!DRY_RUN) {
+    console.log(
+      JSON.stringify({
+        phase: "auth_check",
+        appUrl: APP_URL,
+        secretLength: CRON_SECRET.length,
+      }),
+    );
   }
 
   const planPayload = DRY_RUN

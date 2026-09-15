@@ -74,4 +74,8 @@ jobs:
         env:
           ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: node scripts/chatgpt-ad-library-scrape-playwright.mjs
+        run: |
+          # Trim accidental whitespace/newlines from pasted secrets.
+          export ADBOT_APP_URL="$(printf '%s' "$ADBOT_APP_URL" | tr -d '\r\n' | sed 's/[[:space:]]*$//')"
+          export CRON_SECRET="$(printf '%s' "$CRON_SECRET" | tr -d '\r\n' | sed 's/[[:space:]]*$//')"
+          node scripts/chatgpt-ad-library-scrape-playwright.mjs
