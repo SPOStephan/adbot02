@@ -28,6 +28,7 @@ export const AD_EXAMPLE_FUNNEL_STAGES = [
 export const AD_EXAMPLE_SOURCE_KINDS = [
   { value: "own_account", label: "Eigenes Werbekonto" },
   { value: "official_library", label: "Offizielle Anzeigenbibliothek" },
+  { value: "chatgpt_ad_library", label: "ChatGPT Ad Library (chatgptadlibrary.com)" },
   { value: "advertiser_page", label: "Werbetreibender / Landingpage" },
   { value: "user_upload", label: "Manuell bereitgestellter Screenshot" },
   { value: "other", label: "Andere dokumentierte Quelle" },

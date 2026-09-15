@@ -7,7 +7,9 @@
 
 Adbot sollte die Bibliothek zunächst **kuratiert und quellenbewusst** befüllen. Der Site-Admin lädt einen Screenshot hoch und klassifiziert ihn nach Plattform, Branche, Ziel, Funnel-Stufe, Markt, Format, Quelle, Rechtebasis und Evidenzniveau. Links sind hilfreich und bei offiziellen Anzeigenbibliotheken oder Werbetreibendenseiten verpflichtend. Ein Link allein ersetzt den Screenshot nicht, weil Adbot keine fremden Plattformoberflächen automatisiert scrapen soll.
 
-OpenAI bietet derzeit **keine öffentliche, durchsuchbare Bibliothek fremder ChatGPT-Anzeigen**. Die dokumentierte Advertiser API ist an ein einzelnes autorisiertes Werbekonto gebunden. Sie dient dem Erstellen, Verwalten und Auswerten eigener Anzeigen.[1] [2] Fremde ChatGPT-Anzeigen können deshalb nur über rechtmäßig bereitgestellte Links oder Screenshots in die Bibliothek gelangen.
+OpenAI bietet derzeit **keine eigene öffentliche, durchsuchbare Bibliothek fremder ChatGPT-Anzeigen**. Die dokumentierte Advertiser API ist an ein einzelnes autorisiertes Werbekonto gebunden. Sie dient dem Erstellen, Verwalten und Auswerten eigener Anzeigen.[1] [2]
+
+Für **interne** Inspiration akzeptiert Adbot zusätzlich die kuratierte Drittquelle [chatgptadlibrary.com](https://www.chatgptadlibrary.com/library). Import nur in den Admin-Inspiration-Vault (`reference_only`, nie kundensichtbar). Details: `docs/ad-examples/CHATGPT_AD_LIBRARY.md`.
 
 > **Evidenzregel:** Eine sichtbare Anzeige belegt nur, dass das Creative existiert oder ausgeliefert wurde. Sie belegt nicht, dass die Anzeige wirtschaftlich erfolgreich war.
 
@@ -15,7 +17,7 @@ OpenAI bietet derzeit **keine öffentliche, durchsuchbare Bibliothek fremder Cha
 
 | Plattform | Öffentliche Bibliothek | Automatischer Fremdanzeigenzugriff | Empfohlener Adbot-Weg |
 | --- | --- | --- | --- |
-| OpenAI / ChatGPT Ads | **Nein.** Es ist keine öffentliche Fremdanzeigenbibliothek dokumentiert. | Die Advertiser API liefert Ressourcen des autorisierten eigenen Werbekontos.[1] [2] | Eigene Anzeigen später über die bestehende Kontoverbindung importieren. Fremde Beispiele nur über rechtmäßig bereitgestellte Links und Screenshots erfassen. |
+| OpenAI / ChatGPT Ads | **Keine offizielle OpenAI-Fremdbibliothek.** Interne Drittquelle: chatgptadlibrary.com (Admin-only). | Die Advertiser API liefert Ressourcen des autorisierten eigenen Werbekontos.[1] [2] | Eigene Anzeigen über die Kontoverbindung syncen. Fremde ChatGPT-Beispiele nur intern über ChatGPT-Ad-Library-Import oder Screenshots; nie kundensichtbar. |
 | Meta | **Ja:** Meta Ad Library.[5] | Eine offizielle read-only Ads-Archive-Schnittstelle existiert. Ihr Umfang ist nach Anzeigenart, Region, Feldern und Zugangsberechtigung begrenzt.[6] [7] | Zunächst offizielle Library-Links und Screenshots kuratieren. Später kann eine autorisierte API-Suche für den dokumentierten Umfang ergänzt werden. |
 | Google | **Ja:** Google Ads Transparency Center.[8] | Google beschreibt eingeschränkten API-Zugang für Transparenzdaten im Europäischen Wirtschaftsraum. Eine frei nutzbare Universal-API für alle fremden kommerziellen Anzeigen ist nicht belegt.[9] [10] | Manuelle Recherche nach Werbetreibendem oder Website. Quelllink und Screenshot speichern. Einen API-Import erst nach konkreter Zugangs- und Rechteklärung ergänzen. |
 | TikTok | **Ja:** Commercial Content Library. Zusätzlich existiert Creative Center / Top Ads.[11] [12] | Die Commercial Content API setzt einen genehmigten Research-Zugang voraus und ist zweckgebunden.[13] [14] | Links und Screenshots kuratieren. Einen API-Import nur mit genehmigtem Zugang und innerhalb des dokumentierten Zwecks umsetzen. |

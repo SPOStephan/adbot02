@@ -162,8 +162,30 @@ export async function updateAdExample(input: {
     throw new AdExampleServiceError("invalid_id", 400, "Ungültige Beispiel-ID.");
   }
   const parsed = parseAdExampleInput(input.values);
-  const metadata = sanitizeAssetMetadata(adExampleMetadata(parsed));
   const admin = createAdminClient();
+  const { data: existing, error: existingError } = await admin
+    .from("brand_assets")
+    .select("metadata")
+    .eq("id", input.assetId)
+    .eq("library_scope", "INSPIRATION")
+    .neq("status", "REVOKED")
+    .maybeSingle();
+  if (existingError || !existing) {
+    throw new AdExampleServiceError(
+      "update_failed",
+      404,
+      "Das Werbebeispiel konnte nicht aktualisiert werden.",
+    );
+  }
+  const previous = record(existing.metadata);
+  const nextMetadata = {
+    ...adExampleMetadata(parsed),
+    // Preserve external crawl provenance (e.g. chatgptadlibrary.com) across edits.
+    ...(previous.external_source && typeof previous.external_source === "object"
+      ? { external_source: previous.external_source }
+      : {}),
+  };
+  const metadata = sanitizeAssetMetadata(nextMetadata);
   const { data, error } = await admin
     .from("brand_assets")
     .update({ metadata, updated_at: new Date().toISOString() })
