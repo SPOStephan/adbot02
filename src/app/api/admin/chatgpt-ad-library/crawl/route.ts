@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       customerVisible: false,
       status,
       workerHint:
-        "Alle ~2 Stunden: Browser entdeckt IDs aus Library + Sitemap, dann max. 5 neue Ads importieren.",
+        "Alle ~2 Stunden: Systemkatalog + öffentliche Sitemap + Probe liefern IDs. Browser öffnet nur die ≤5 Ad-Seiten.",
     });
   } catch (error) {
     console.error("chatgpt_ad_library_crawl_admin_get_failed", {

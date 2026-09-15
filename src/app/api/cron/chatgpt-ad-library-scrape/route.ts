@@ -6,7 +6,7 @@ import {
   planChatGPTAdLibraryScrapeBatch,
 } from "@/lib/chatgpt-ad-library/crawl-state";
 import {
-  discoverChatGPTAdLibraryIdsFromSitemapXml,
+  discoverChatGPTAdLibraryIds,
   ingestChatGPTAdLibraryScrapeRecords,
   scrapeChatGPTAdLibraryHttpBatch,
 } from "@/lib/chatgpt-ad-library/scrape";
@@ -114,7 +114,7 @@ export async function GET(request: Request) {
  * POST actions:
  * - { action: "ingest", records: [...] }
  * - { action: "enqueue", ids: [...] }
- * - { action: "discover", shard, xml }
+ * - { action: "discover", shard, xml?, ids? }
  * - { action: "requeue", ids: [...] }
  */
 export async function POST(request: Request) {
@@ -168,16 +168,11 @@ export async function POST(request: Request) {
     }
 
     if (action === "discover") {
-      if (typeof body.xml !== "string" || body.xml.length < 20) {
-        return NextResponse.json(
-          { ok: false, error: "xml_required" },
-          { status: 400, headers: NO_STORE },
-        );
-      }
       const shard = Number(body.shard ?? 0);
-      const result = await discoverChatGPTAdLibraryIdsFromSitemapXml({
+      const result = await discoverChatGPTAdLibraryIds({
         shard: Number.isFinite(shard) ? shard : 0,
-        xml: body.xml,
+        xml: typeof body.xml === "string" ? body.xml : "",
+        ids: Array.isArray(body.ids) ? body.ids : [],
       });
       return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
     }

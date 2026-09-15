@@ -2,15 +2,21 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  CHATGPT_AD_LIBRARY_PROBE_MAX_ID,
+  CHATGPT_AD_LIBRARY_PROBE_WINDOW,
   CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
 } from "@/lib/chatgpt-ad-library/scrape-constants";
+import { CHATGPT_AD_LIBRARY_SYSTEM_IDS } from "@/lib/chatgpt-ad-library/system-ids";
 import { CHATGPT_AD_LIBRARY_PROVIDER } from "@/lib/chatgpt-ad-library/types";
 
 export type ChatGPTAdLibraryCrawlStatus = {
   enabled: boolean;
   pendingCount: number;
   nextDiscoverShard: number;
+  nextProbeId: number;
+  catalogSize: number;
+  probeMaxId: number;
   lastPlanAt: string | null;
   lastIngestAt: string | null;
   lastDiscoverAt: string | null;
@@ -49,10 +55,20 @@ function asIdList(value: unknown): string[] {
   ];
 }
 
+function uniqueIds(...groups: string[][]): string[] {
+  return [...new Set(groups.flat().filter((id) => /^\d{1,12}$/.test(id)))];
+}
+
 function summary(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function probeCursor(value: Record<string, unknown>): number {
+  const raw = Number(value.next_probe_id);
+  if (!Number.isFinite(raw) || raw < 1) return 1;
+  return Math.min(Math.floor(raw), CHATGPT_AD_LIBRARY_PROBE_MAX_ID + 1);
 }
 
 async function loadRow(): Promise<CrawlRow> {
@@ -89,6 +105,9 @@ export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibrary
     enabled: row.enabled === true,
     pendingCount: asIdList(row.pending_ids).length,
     nextDiscoverShard: Number(row.next_discover_shard) || 0,
+    nextProbeId: probeCursor(summary(row.last_run_summary)),
+    catalogSize: CHATGPT_AD_LIBRARY_SYSTEM_IDS.length,
+    probeMaxId: CHATGPT_AD_LIBRARY_PROBE_MAX_ID,
     lastPlanAt: row.last_plan_at,
     lastIngestAt: row.last_ingest_at,
     lastDiscoverAt: row.last_discover_at,
@@ -109,6 +128,9 @@ export async function setChatGPTAdLibraryCrawlEnabled(enabled: boolean): Promise
     .update({ enabled, updated_at: new Date().toISOString() })
     .eq("id", "default");
   if (error) throw new Error(`crawl_state_enable_failed: ${error.message}`);
+  if (enabled) {
+    await enqueueChatGPTAdLibraryIds(CHATGPT_AD_LIBRARY_SYSTEM_IDS);
+  }
 }
 
 export async function enqueueChatGPTAdLibraryIds(ids: Array<number | string>): Promise<{
@@ -137,36 +159,57 @@ export async function enqueueChatGPTAdLibraryIds(ids: Array<number | string>): P
   };
 }
 
+function externalIdFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const external =
+    "external_source" in metadata &&
+    metadata.external_source &&
+    typeof metadata.external_source === "object" &&
+    !Array.isArray(metadata.external_source)
+      ? (metadata.external_source as Record<string, unknown>)
+      : {};
+  if (external.provider !== CHATGPT_AD_LIBRARY_PROVIDER) return null;
+  const externalId = String(external.external_id ?? "").trim();
+  return /^\d{1,12}$/.test(externalId) ? externalId : null;
+}
+
 async function alreadyImportedExternalIds(ids: string[]): Promise<Set<string>> {
-  if (ids.length < 1) return new Set();
-  const admin = createAdminClient();
+  const wanted = new Set(ids.filter((id) => /^\d{1,12}$/.test(id)));
   const found = new Set<string>();
-  // Bounded scan — inspiration library stays admin-scale for now.
-  const { data, error } = await admin
-    .from("brand_assets")
-    .select("metadata")
-    .eq("library_scope", "INSPIRATION")
-    .neq("status", "REVOKED")
-    .filter("metadata->>library", "eq", "ad_example_library")
-    .limit(500);
-  if (error || !Array.isArray(data)) return found;
-  const wanted = new Set(ids);
-  for (const row of data) {
-    const metadata =
-      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-        ? (row.metadata as Record<string, unknown>)
-        : {};
-    const external =
-      metadata.external_source &&
-      typeof metadata.external_source === "object" &&
-      !Array.isArray(metadata.external_source)
-        ? (metadata.external_source as Record<string, unknown>)
-        : {};
-    if (external.provider !== CHATGPT_AD_LIBRARY_PROVIDER) continue;
-    const externalId = String(external.external_id ?? "");
-    if (wanted.has(externalId)) found.add(externalId);
+  if (wanted.size < 1) return found;
+
+  const admin = createAdminClient();
+  const page = 200;
+  for (let from = 0; from < 10_000; from += page) {
+    const { data, error } = await admin
+      .from("brand_assets")
+      .select("metadata")
+      .eq("library_scope", "INSPIRATION")
+      .neq("status", "REVOKED")
+      .filter("metadata->external_source->>provider", "eq", CHATGPT_AD_LIBRARY_PROVIDER)
+      .range(from, from + page - 1);
+    if (error || !Array.isArray(data) || data.length < 1) break;
+    for (const row of data) {
+      const externalId = externalIdFromMetadata(row.metadata);
+      if (externalId && wanted.has(externalId)) found.add(externalId);
+    }
+    if (data.length < page || found.size >= wanted.size) break;
   }
   return found;
+}
+
+function nextProbeWindow(
+  start: number,
+  exclude: Set<string>,
+): { ids: string[]; nextProbeId: number } {
+  const ids: string[] = [];
+  let cursor = start;
+  while (cursor <= CHATGPT_AD_LIBRARY_PROBE_MAX_ID && ids.length < CHATGPT_AD_LIBRARY_PROBE_WINDOW) {
+    const id = String(cursor);
+    cursor += 1;
+    if (!exclude.has(id)) ids.push(id);
+  }
+  return { ids, nextProbeId: cursor };
 }
 
 export async function planChatGPTAdLibraryScrapeBatch(input?: {
@@ -191,28 +234,45 @@ export async function planChatGPTAdLibraryScrapeBatch(input?: {
     Math.max(input?.limit ?? CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX, 1),
     CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
   );
+  const runSummary = summary(row.last_run_summary);
+  let nextProbeId = probeCursor(runSummary);
+
   const pending = asIdList(row.pending_ids);
-  const imported = await alreadyImportedExternalIds(pending.slice(0, 200));
-  const fresh = pending.filter((id) => !imported.has(id));
+  let merged = uniqueIds([...CHATGPT_AD_LIBRARY_SYSTEM_IDS], pending);
+  let imported = await alreadyImportedExternalIds(merged);
+  let fresh = merged.filter((id) => !imported.has(id));
+
+  if (fresh.length < limit && nextProbeId <= CHATGPT_AD_LIBRARY_PROBE_MAX_ID) {
+    const exclude = new Set([...merged, ...fresh]);
+    const window = nextProbeWindow(nextProbeId, exclude);
+    nextProbeId = window.nextProbeId;
+    if (window.ids.length > 0) {
+      const windowImported = await alreadyImportedExternalIds(window.ids);
+      imported = new Set([...imported, ...windowImported]);
+      fresh = uniqueIds(
+        fresh,
+        window.ids.filter((id) => !imported.has(id)),
+      );
+    }
+  }
+
   const ids = fresh.slice(0, limit);
   const remaining = fresh.slice(ids.length);
-
-  const shouldDiscover = ids.length < limit || remaining.length < 20;
-  const discoverShard = shouldDiscover
-    ? Number(row.next_discover_shard) % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT
-    : null;
+  const discoverShard = Number(row.next_discover_shard) % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
 
   const admin = createAdminClient();
   const { error } = await admin
     .from("chatgpt_ad_library_crawl_state")
     .update({
-      pending_ids: remaining,
+      pending_ids: remaining.slice(0, 50_000),
       last_plan_at: new Date().toISOString(),
       total_planned: Number(row.total_planned || 0) + ids.length,
       last_run_summary: {
-        ...summary(row.last_run_summary),
+        ...runSummary,
         last_plan_ids: ids,
         last_plan_at: new Date().toISOString(),
+        next_probe_id: nextProbeId,
+        catalog_size: CHATGPT_AD_LIBRARY_SYSTEM_IDS.length,
       },
       updated_at: new Date().toISOString(),
     })
