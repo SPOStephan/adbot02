@@ -20,7 +20,15 @@ Die Library-HTML ist hinter einem **Vercel Security Checkpoint** (oft HTTP 429).
 | Admin `/dashboard/inspiration` | Auto an/aus, IDs in Queue, Status |
 | Vercel Cron (6h) | Best-Effort HTTP; bei 429 no-op |
 
-Secrets für die Action: `ADBOT_APP_URL`, `CRON_SECRET` (gleich wie Vercel). Optional Vercel: `CHATGPT_AD_LIBRARY_UPLOADER_USER_ID` (Site-Admin-UUID).
+Secrets für die Action (GitHub → Settings → Secrets and variables → Actions — **nicht** nur Vercel):
+
+| Name | Wo | Beispiel |
+| --- | --- | --- |
+| `CRON_SECRET` | Repository **Secret** | gleicher Wert wie Vercel `CRON_SECRET` |
+| `ADBOT_APP_URL` | Repository Secret **oder** Variable | `https://app.adbot.one` |
+
+Optional Vercel: `CHATGPT_AD_LIBRARY_UPLOADER_USER_ID` (Site-Admin-UUID).
+
 
 Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql`
 
