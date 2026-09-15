@@ -86,7 +86,7 @@ export function parseChatGPTAdLibraryHtml(input: {
     ]) || null;
 
   const promptMatches = [
-    ...html.matchAll(/"triggeringPrompts"\s*:\s*\[(.*?)\]/gs),
+    ...html.matchAll(/"triggeringPrompts"\s*:\s*\[([\s\S]*?)\]/g),
   ];
   let triggeringPrompts: string[] = [];
   if (promptMatches[0]?.[1]) {
