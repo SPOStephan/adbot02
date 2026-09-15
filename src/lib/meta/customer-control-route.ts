@@ -31,6 +31,23 @@ export function isDashboardSameOriginRequest(request: NextRequest): boolean {
   );
 }
 
+/**
+ * GET fetches often omit Origin. Same-origin dashboard reads still send
+ * Sec-Fetch-Site: same-origin (or a same-origin Referer).
+ */
+export function isDashboardSameOriginReadRequest(request: NextRequest): boolean {
+  if (isDashboardSameOriginRequest(request)) return true;
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite === "same-origin") return true;
+  const referer = request.headers.get("referer");
+  if (!referer) return false;
+  try {
+    return new URL(referer).origin === request.nextUrl.origin;
+  } catch {
+    return false;
+  }
+}
+
 export async function readControlJson(request: NextRequest): Promise<unknown> {
   if (!isDashboardSameOriginRequest(request)) {
     throw new CustomerControlServiceError(

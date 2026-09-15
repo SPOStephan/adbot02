@@ -2,6 +2,11 @@ import { redirect } from "next/navigation";
 
 import { AdExampleLibraryAdmin } from "@/components/AdExampleLibraryAdmin";
 import { ChatGPTAdLibraryImportPanel } from "@/components/ChatGPTAdLibraryImportPanel";
+import { getChatGPTAdLibraryCrawlStatus } from "@/lib/chatgpt-ad-library/crawl-state";
+import {
+  countChatGPTAdLibraryImports,
+  loadChatGPTAdLibraryForInternalIntelligence,
+} from "@/lib/chatgpt-ad-library/retrieval";
 import { loadAdIntelligenceCorpusSummary } from "@/lib/ad-intelligence/corpus";
 import { loadAdExamples } from "@/lib/ad-examples/service";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
@@ -24,9 +29,18 @@ export default async function AdExampleLibraryPage() {
     redirect("/dashboard");
   }
 
-  const [examples, corpus] = await Promise.all([
+  const [examples, corpus, crawlResult, hits, importedCount] = await Promise.all([
     loadAdExamples(),
     loadAdIntelligenceCorpusSummary(),
+    getChatGPTAdLibraryCrawlStatus()
+      .then((status) => ({ status, error: null as string | null }))
+      .catch((error: unknown) => ({
+        status: null,
+        error:
+          error instanceof Error ? error.message : "Crawl-Status nicht verfügbar.",
+      })),
+    loadChatGPTAdLibraryForInternalIntelligence({ limit: 48 }).catch(() => []),
+    countChatGPTAdLibraryImports().catch(() => 0),
   ]);
 
   return (
@@ -70,7 +84,12 @@ export default async function AdExampleLibraryPage() {
       ) : null}
 
       <div className="mt-8 space-y-8">
-        <ChatGPTAdLibraryImportPanel />
+        <ChatGPTAdLibraryImportPanel
+          initialCrawl={crawlResult.status}
+          initialCrawlError={crawlResult.error}
+          initialHits={hits}
+          initialImportedCount={importedCount}
+        />
         <AdExampleLibraryAdmin initialExamples={examples} />
       </div>
     </>

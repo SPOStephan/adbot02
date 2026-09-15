@@ -8,6 +8,7 @@ const read = (path) => readFile(join(root, path), "utf8");
 
 const helper = await read("src/lib/meta/customer-control-route.ts");
 assert.match(helper, /export function isDashboardSameOriginRequest/);
+assert.match(helper, /export function isDashboardSameOriginReadRequest/);
 assert.match(helper, /origin === request\.nextUrl\.origin/);
 assert.match(helper, /fetchSite === "same-origin"/);
 assert.match(helper, /if \(!isDashboardSameOriginRequest\(request\)\)/);

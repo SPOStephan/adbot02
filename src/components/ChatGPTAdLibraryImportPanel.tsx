@@ -27,11 +27,28 @@ type CrawlStatus = {
   lastPlanAt: string | null;
   lastIngestAt: string | null;
   lastDiscoverAt: string | null;
+  lastRunSummary?: Record<string, unknown>;
   totalPlanned: number;
   totalImported: number;
   totalSkippedDuplicate: number;
   totalFailed: number;
   scrapeBatchMax: number;
+};
+
+export type ChatGPTAdLibraryHitCard = {
+  brandAssetId: string;
+  externalId: string;
+  title: string;
+  advertiserName: string;
+  previewUrl: string;
+  sourceUrl: string | null;
+};
+
+type PanelProps = {
+  initialCrawl?: CrawlStatus | null;
+  initialCrawlError?: string | null;
+  initialHits?: ChatGPTAdLibraryHitCard[];
+  initialImportedCount?: number | null;
 };
 
 function parseJsonlOrJson(raw: string): unknown[] {
@@ -58,66 +75,67 @@ function parseJsonlOrJson(raw: string): unknown[] {
     .map((line) => JSON.parse(line) as unknown);
 }
 
-export function ChatGPTAdLibraryImportPanel() {
+export function ChatGPTAdLibraryImportPanel({
+  initialCrawl = null,
+  initialCrawlError = null,
+  initialHits = [],
+  initialImportedCount = null,
+}: PanelProps) {
   const [pending, setPending] = useState(false);
-  const [importedCount, setImportedCount] = useState<number | null>(null);
+  const [importedCount, setImportedCount] = useState<number | null>(initialImportedCount);
   const [raw, setRaw] = useState("");
   const [queueRaw, setQueueRaw] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialCrawlError);
   const [lastSummary, setLastSummary] = useState<ImportSummary | null>(null);
-  const [crawl, setCrawl] = useState<CrawlStatus | null>(null);
+  const [crawl, setCrawl] = useState<CrawlStatus | null>(initialCrawl);
+  const [hits, setHits] = useState<ChatGPTAdLibraryHitCard[]>(initialHits);
   const [workerHint, setWorkerHint] = useState<string | null>(null);
 
   const refreshCrawl = useCallback(async () => {
-    const response = await fetch("/api/admin/chatgpt-ad-library/crawl", {
-      credentials: "same-origin",
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
+    const [crawlRes, importRes, hitsRes] = await Promise.all([
+      fetch("/api/admin/chatgpt-ad-library/crawl", { credentials: "same-origin" }),
+      fetch("/api/admin/chatgpt-ad-library/import", { credentials: "same-origin" }),
+      fetch("/api/admin/chatgpt-ad-library/intelligence?limit=48", {
+        credentials: "same-origin",
+      }),
+    ]);
+    const crawlPayload = (await crawlRes.json().catch(() => ({}))) as {
       ok?: boolean;
       status?: CrawlStatus;
       workerHint?: string;
-      imported?: number;
+      message?: string;
     };
-    if (response.ok && payload.ok && payload.status) {
-      setCrawl(payload.status);
-      setWorkerHint(payload.workerHint ?? null);
+    const importPayload = (await importRes.json().catch(() => ({}))) as {
+      ok?: boolean;
+      imported?: number;
+      message?: string;
+    };
+    const hitsPayload = (await hitsRes.json().catch(() => ({}))) as {
+      ok?: boolean;
+      hits?: ChatGPTAdLibraryHitCard[];
+      message?: string;
+    };
+    if (crawlRes.ok && crawlPayload.ok && crawlPayload.status) {
+      setCrawl(crawlPayload.status);
+      setWorkerHint(crawlPayload.workerHint ?? null);
+    } else {
+      setError(crawlPayload.message ?? "Crawl-Status konnte nicht geladen werden.");
+    }
+    if (importRes.ok && importPayload.ok && typeof importPayload.imported === "number") {
+      setImportedCount(importPayload.imported);
+    }
+    if (hitsRes.ok && hitsPayload.ok && Array.isArray(hitsPayload.hits)) {
+      setHits(hitsPayload.hits);
     }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [importRes, crawlRes] = await Promise.all([
-          fetch("/api/admin/chatgpt-ad-library/import", { credentials: "same-origin" }),
-          fetch("/api/admin/chatgpt-ad-library/crawl", { credentials: "same-origin" }),
-        ]);
-        const importPayload = (await importRes.json().catch(() => ({}))) as {
-          ok?: boolean;
-          imported?: number;
-        };
-        const crawlPayload = (await crawlRes.json().catch(() => ({}))) as {
-          ok?: boolean;
-          status?: CrawlStatus;
-          workerHint?: string;
-        };
-        if (cancelled) return;
-        if (importRes.ok && importPayload.ok && typeof importPayload.imported === "number") {
-          setImportedCount(importPayload.imported);
-        }
-        if (crawlRes.ok && crawlPayload.ok && crawlPayload.status) {
-          setCrawl(crawlPayload.status);
-          setWorkerHint(crawlPayload.workerHint ?? null);
-        }
-      } catch {
-        // Status is optional.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (initialCrawl) return;
+    void refreshCrawl().catch(() => {
+      setError("Crawl-Status konnte nicht geladen werden.");
+    });
+  }, [initialCrawl, refreshCrawl]);
 
   async function runImport() {
     if (pending) return;
@@ -268,6 +286,15 @@ export function ChatGPTAdLibraryImportPanel() {
           </button>
         </div>
 
+        {error ? (
+          <p
+            className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800"
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <CrawlMetric label="Queue" value={crawl ? String(crawl.pendingCount) : "…"} />
           <CrawlMetric label="Importiert (Crawl)" value={crawl ? String(crawl.totalImported) : "…"} />
@@ -278,10 +305,78 @@ export function ChatGPTAdLibraryImportPanel() {
           <CrawlMetric label="Fehler" value={crawl ? String(crawl.totalFailed) : "…"} />
         </div>
         <p className="mt-3 text-xs text-emerald-900/70">
-          Letzter Ingest: {crawl?.lastIngestAt ?? "noch nie"} · Discover-Shard:{" "}
-          {crawl?.nextDiscoverShard ?? "–"} · Probe ab #{crawl?.nextProbeId ?? "–"} · Geplant gesamt:{" "}
-          {crawl?.totalPlanned ?? "–"}
+          Letzter Ingest: {formatWhen(crawl?.lastIngestAt)} · Discover:{" "}
+          {formatWhen(crawl?.lastDiscoverAt)} · Probe ab #{crawl?.nextProbeId ?? "–"} · Geplant
+          gesamt: {crawl?.totalPlanned ?? "–"}
         </p>
+        <LastRunBox summary={crawl?.lastRunSummary} imported={crawl?.totalImported ?? 0} />
+
+        <section className="mt-5 rounded-xl border border-emerald-200 bg-white p-4">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">
+                Importierte ChatGPT-Ads
+              </p>
+              <h3 className="mt-1 text-base font-extrabold text-emerald-950">
+                Interner Korpus · nie kundensichtbar
+              </h3>
+            </div>
+            <p className="text-sm font-semibold text-emerald-900">
+              {importedCount ?? hits.length} im Vault
+            </p>
+          </div>
+          {hits.length > 0 ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {hits.map((hit) => (
+                <article
+                  className="overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50/40"
+                  key={hit.brandAssetId}
+                >
+                  <a
+                    className="flex min-h-40 items-center justify-center bg-white"
+                    href={hit.previewUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {/* Private signed previews cannot use next/image. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      alt={hit.title}
+                      className="max-h-48 w-full object-contain"
+                      src={hit.previewUrl}
+                    />
+                  </a>
+                  <div className="p-3">
+                    <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">
+                      #{hit.externalId}
+                    </p>
+                    <h4 className="mt-1 text-sm font-extrabold text-emerald-950">{hit.title}</h4>
+                    <p className="mt-1 text-xs font-semibold text-emerald-900/80">
+                      {hit.advertiserName}
+                    </p>
+                    {hit.sourceUrl ? (
+                      <a
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                        href={hit.sourceUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Quelle
+                        <ExternalLink className="size-3" />
+                      </a>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-950">
+              Noch keine ChatGPT-Ads im Vault. Der letzte Action-Lauf war nur technisch grün: die
+              Ad-Seiten waren hinter dem Vercel-Checkpoint. Sobald ein Ingest klappt, erscheinen
+              die Bilder hier — nicht als Toast.
+            </p>
+          )}
+        </section>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
@@ -429,6 +524,43 @@ function CrawlMetric({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-emerald-100 bg-white px-4 py-3">
       <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">{label}</p>
       <p className="mt-1 text-xl font-extrabold text-emerald-950">{value}</p>
+    </div>
+  );
+}
+
+function formatWhen(value: string | null | undefined): string {
+  if (!value) return "noch nie";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.toISOString().replace("T", " ").slice(0, 16)} UTC`;
+}
+
+function LastRunBox({
+  summary,
+  imported,
+}: {
+  summary?: Record<string, unknown>;
+  imported: number;
+}) {
+  const planIds = Array.isArray(summary?.last_plan_ids)
+    ? summary.last_plan_ids.map(String).join(", ")
+    : "";
+  const discoverCount =
+    typeof summary?.last_discover_count === "number" ? summary.last_discover_count : null;
+  const lastImported =
+    typeof summary?.last_imported === "number" ? summary.last_imported : null;
+
+  return (
+    <div className="mt-4 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-emerald-950">
+      <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">
+        Letzter Lauf
+      </p>
+      <p className="mt-1 font-semibold">
+        {planIds ? `Geplant: ${planIds}` : "Noch kein Plan gespeichert."}
+        {discoverCount != null ? ` · Discover ${discoverCount} IDs` : ""}
+        {lastImported != null ? ` · zuletzt importiert ${lastImported}` : ""}
+        {` · Vault gesamt ${imported}`}
+      </p>
     </div>
   );
 }

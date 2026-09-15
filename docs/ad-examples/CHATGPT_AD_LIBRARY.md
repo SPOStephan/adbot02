@@ -65,7 +65,7 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 
 ## Admin-Oberfläche
 
-- Seite: `/dashboard/inspiration`
+- Seite: `/dashboard/inspiration` — Status, letzter Lauf und importierte Ads stehen **in der Scrape-Karte** (serverseitig geladen, kein Toast).
 - Auto-Scrape-Panel + optionaler JSON-Import
 - Status: `GET /api/admin/chatgpt-ad-library/crawl`
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`

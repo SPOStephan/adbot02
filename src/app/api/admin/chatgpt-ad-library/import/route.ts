@@ -7,7 +7,10 @@ import {
 } from "@/lib/chatgpt-ad-library/import";
 import { countChatGPTAdLibraryImports } from "@/lib/chatgpt-ad-library/retrieval";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
-import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
+import {
+  isDashboardSameOriginReadRequest,
+  isDashboardSameOriginRequest,
+} from "@/lib/meta/customer-control-route";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -23,8 +26,12 @@ function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE });
 }
 
-async function requireAdmin(request: NextRequest) {
-  if (!isDashboardSameOriginRequest(request)) {
+async function requireAdmin(request: NextRequest, mode: "read" | "write" = "write") {
+  const sameOrigin =
+    mode === "read"
+      ? isDashboardSameOriginReadRequest(request)
+      : isDashboardSameOriginRequest(request);
+  if (!sameOrigin) {
     return { error: json({ ok: false, message: "Ungültige Herkunft." }, 403) };
   }
   const supabase = await createClient();
@@ -45,7 +52,7 @@ async function requireAdmin(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAdmin(request);
+    const auth = await requireAdmin(request, "read");
     if ("error" in auth && auth.error) return auth.error;
     const imported = await countChatGPTAdLibraryImports();
     return json({
