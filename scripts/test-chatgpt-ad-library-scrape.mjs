@@ -108,6 +108,8 @@ assert.match(parseHtml, /hasUsableChatGPTAdLibraryCopy/);
 assert.match(parseHtml, /triggeringPrompts/);
 assert.match(parseHtml, /isChatGPTAdLibraryChromeText/);
 assert.match(parseHtml, /gads-theme/);
+assert.match(parseHtml, /stripChatGPTAdLibrarySeoBlurb/);
+assert.match(parseHtml, /a sponsored chatgpt ad by/);
 assert.match(scrape, /chatGPTAdLibrarySeedRecordForId/);
 assert.match(panel, /Systemkatalog/);
 assert.match(vercel, /chatgpt-ad-library-scrape/);

@@ -8,7 +8,7 @@ const HASH_IMG_RE = new RegExp(
 );
 
 const CHROME_RE =
-  /we couldn't find that|want us to go get it|tell us the advertiser|probe chatgpt for the ads|keep it updated|gads-theme|localstorage\.getItem|document\.documentElement|document\.document/i;
+  /we couldn't find that|want us to go get it|tell us the advertiser|probe chatgpt for the ads|keep it updated|a sponsored chatgpt ad by|gads-theme|localstorage\.getItem|document\.documentElement|document\.document/i;
 const CODE_RE =
   /\(function\s*\(|try\s*\{|localStorage|document\.|=>\s*\{|colorScheme|data-theme/;
 
@@ -55,6 +55,14 @@ export function isChatGPTAdLibraryChromeText(value: string): boolean {
   return CHROME_RE.test(text) || CODE_RE.test(text);
 }
 
+/** Drop library SEO that og:description appends after the real ad body. */
+export function stripChatGPTAdLibrarySeoBlurb(value: string): string {
+  return value
+    .replace(/\s*A sponsored ChatGPT ad by[\s\S]*$/i, "")
+    .replace(/\s*,?\s*and the \d+ prompts that trigger it\.?\s*$/i, "")
+    .trim();
+}
+
 export function isLikelyChatGPTAdTriggerPrompt(value: string): boolean {
   const text = value.trim();
   if (text.length < 12 || text.length > 400) return false;
@@ -73,7 +81,8 @@ export function sanitizeChatGPTAdLibraryCopy(
   const advertiserName = isChatGPTAdLibraryChromeText(input.advertiserName)
     ? ""
     : input.advertiserName.trim();
-  const body = isChatGPTAdLibraryChromeText(input.body) ? "" : input.body.trim();
+  const strippedBody = stripChatGPTAdLibrarySeoBlurb(input.body);
+  const body = isChatGPTAdLibraryChromeText(strippedBody) ? "" : strippedBody;
   return {
     title,
     advertiserName,
@@ -115,11 +124,17 @@ export function mergeChatGPTAdLibraryCopy(
     [...currentClean.triggeringPrompts, ...incomingClean.triggeringPrompts],
     40,
   );
+  const currentBodyIsSeo = /a sponsored chatgpt ad by|prompts that trigger it/i.test(
+    current.body,
+  );
   const nextBody =
     incomingClean.body &&
     (isChatGPTAdLibraryChromeText(current.body) ||
+      currentBodyIsSeo ||
       currentClean.body.length < 8 ||
-      (incomingScore > currentScore && incomingClean.body.length >= 8))
+      (incomingScore > currentScore &&
+        incomingClean.body.length >= 8 &&
+        incomingClean.body.length <= currentClean.body.length + 20))
       ? incomingClean.body
       : currentClean.body;
   const nextTitle =
@@ -254,6 +269,21 @@ function pickStringArray(row: Record<string, unknown>, keys: string[]): string[]
   return [];
 }
 
+function pickQuestionLikeArray(row: Record<string, unknown>): string[] {
+  for (const value of Object.values(row)) {
+    if (!Array.isArray(value) || value.length < 2) continue;
+    const items = uniqueStrings(
+      value
+        .filter((item): item is string => typeof item === "string")
+        .filter(isLikelyChatGPTAdTriggerPrompt)
+        .filter((item) => /\?$/.test(item) || /^(best|how|what|can|free)\b/i.test(item)),
+      40,
+    );
+    if (items.length >= 2) return items;
+  }
+  return [];
+}
+
 function isAdLikeObject(row: Record<string, unknown>, adId: string): boolean {
   const id = row.id ?? row.adId ?? row.external_id;
   if (id != null && String(id) === adId) return true;
@@ -281,13 +311,13 @@ function splitOgTitle(raw: string): { advertiser: string; title: string } {
 
 function visiblePromptList(html: string): string[] {
   const labeled = html.match(
-    /(?:triggering\s+prompts|prompts?\s+that\s+triggered|associated\s+prompts)[\s\S]{0,4000}?(?:<\/(?:ul|ol|section)>)/i,
+    /(?:triggering\s+prompts|prompts?\s+that\s+trigger(?:ed)?|\d+\s+prompts)[\s\S]{0,12000}?(?:<\/(?:ul|ol|section|div)>)/i,
   )?.[0];
   if (!labeled) return [];
   return uniqueStrings(
     [
       ...labeled.matchAll(/data-prompt=["']([^"']{3,400})["']/gi),
-      ...labeled.matchAll(/<li[^>]*>\s*(?:<[^>]+>\s*)*([^<]{8,400})/gi),
+      ...labeled.matchAll(/<(?:li|p|blockquote|button)[^>]*>\s*(?:<[^>]+>\s*)*([^<]{8,400})/gi),
     ]
       .map((match) => decodeHtml(match[1] ?? ""))
       .filter(isLikelyChatGPTAdTriggerPrompt),
@@ -359,7 +389,16 @@ export function parseChatGPTAdLibraryHtml(input: {
       }
     }
     if (embeddedPrompts.length < 1) {
-      embeddedPrompts = pickStringArray(row, ["triggeringPrompts", "associatedPrompts"]);
+      embeddedPrompts = pickStringArray(row, [
+        "triggeringPrompts",
+        "associatedPrompts",
+        "triggerPrompts",
+        "observedPrompts",
+        "promptTexts",
+      ]);
+    }
+    if (embeddedPrompts.length < 1) {
+      embeddedPrompts = pickQuestionLikeArray(row);
     }
     if (embeddedCategory.length < 1) {
       embeddedCategory = uniqueStrings(
@@ -396,7 +435,11 @@ export function parseChatGPTAdLibraryHtml(input: {
       ]),
     triggeringPrompts: [
       ...embeddedPrompts,
-      ...jsonStringArray(html, ["triggeringPrompts", "associatedPrompts"], 40),
+      ...jsonStringArray(
+        html,
+        ["triggeringPrompts", "associatedPrompts", "triggerPrompts", "observedPrompts"],
+        40,
+      ),
       ...visiblePromptList(html),
     ],
   });

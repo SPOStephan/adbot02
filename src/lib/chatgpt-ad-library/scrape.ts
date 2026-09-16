@@ -11,7 +11,9 @@ import { importChatGPTAdLibraryBatch } from "@/lib/chatgpt-ad-library/import";
 import {
   extractAdIdsFromSitemapXml,
   hasUsableChatGPTAdLibraryCopy,
+  mergeChatGPTAdLibraryCopy,
   parseChatGPTAdLibraryHtml,
+  sanitizeChatGPTAdLibraryCopy,
 } from "@/lib/chatgpt-ad-library/parse-html";
 import {
   CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
@@ -538,7 +540,43 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
     });
   }
   const seed = chatGPTAdLibrarySeedRecordForId(adId);
-  const importRecord = parsed && hasCopy ? parsed : seed;
+  const parsedCopy =
+    parsed && hasCopy
+      ? sanitizeChatGPTAdLibraryCopy({
+          title: typeof parsed.title === "string" ? parsed.title : "",
+          advertiserName:
+            typeof parsed.advertiserName === "string" ? parsed.advertiserName : "",
+          body: typeof parsed.body === "string" ? parsed.body : "",
+          triggeringPrompts: Array.isArray(parsed.triggeringPrompts)
+            ? parsed.triggeringPrompts.filter((item): item is string => typeof item === "string")
+            : [],
+        })
+      : null;
+  const seedCopy = seed
+    ? sanitizeChatGPTAdLibraryCopy({
+        title: seed.title,
+        advertiserName: seed.advertiserName,
+        body: seed.body,
+        triggeringPrompts: [...seed.triggeringPrompts],
+      })
+    : null;
+  const mergedCopy =
+    parsedCopy && seedCopy
+      ? mergeChatGPTAdLibraryCopy(parsedCopy, seedCopy) ?? {
+          ...parsedCopy,
+          body: parsedCopy.body || seedCopy.body,
+          triggeringPrompts:
+            parsedCopy.triggeringPrompts.length > 0
+              ? parsedCopy.triggeringPrompts
+              : seedCopy.triggeringPrompts,
+        }
+      : parsedCopy ?? seedCopy;
+  const importRecord =
+    mergedCopy && parsed
+      ? { ...parsed, ...mergedCopy }
+      : mergedCopy
+        ? { ...seed, ...mergedCopy }
+        : seed;
   if (!importRecord) {
     return emptyUnlockerProbe(adId, pageUrl, {
       ...base,

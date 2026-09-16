@@ -169,11 +169,14 @@ async function refreshExistingLibraryCopy(input: {
         triggeringPrompts: [...seed.triggeringPrompts],
       })
     : null;
-  const merged =
+  let merged =
     mergeChatGPTAdLibraryCopy(current, incoming) ??
     (scoreChatGPTAdLibraryCopy(current) < 0 && seedCopy
       ? mergeChatGPTAdLibraryCopy(current, seedCopy)
       : null);
+  if (seedCopy) {
+    merged = mergeChatGPTAdLibraryCopy(merged ?? current, seedCopy) ?? merged;
+  }
   if (!merged) return false;
 
   const nextRecord = {
