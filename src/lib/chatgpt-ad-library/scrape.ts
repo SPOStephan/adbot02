@@ -10,6 +10,7 @@ import {
 import { importChatGPTAdLibraryBatch } from "@/lib/chatgpt-ad-library/import";
 import {
   extractAdIdsFromSitemapXml,
+  hasUsableChatGPTAdLibraryCopy,
   parseChatGPTAdLibraryHtml,
 } from "@/lib/chatgpt-ad-library/parse-html";
 import {
@@ -132,6 +133,10 @@ export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
     const parsed = parseChatGPTAdLibraryHtml({ html: fetched.text, adId: id, pageUrl: url });
     if (!parsed) {
       failures.push({ id, error: "parse_failed" });
+      continue;
+    }
+    if (!hasUsableChatGPTAdLibraryCopy(parsed)) {
+      failures.push({ id, error: "parse_copy_missing" });
       continue;
     }
     records.push(parsed);
@@ -340,6 +345,10 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
       failures.push({ id, error: "parse_failed" });
       continue;
     }
+    if (!hasUsableChatGPTAdLibraryCopy(parsed)) {
+      failures.push({ id, error: "parse_copy_missing" });
+      continue;
+    }
     records.push(parsed);
   }
 
@@ -380,14 +389,19 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
 export type ChatGPTAdLibraryUnlockerProbe = {
   ok: boolean;
   configured: boolean;
-  ingested: false;
+  ingested: boolean;
+  importStatus: "imported" | "refreshed" | "skipped_duplicate" | "failed" | "skipped_no_copy" | null;
   adId: string;
   pageUrl: string;
   checkpoint: boolean;
   httpStatus: number;
   hasImage: boolean;
+  hasCopy: boolean;
   parseOk: boolean;
   title: string | null;
+  body: string | null;
+  promptCount: number;
+  triggeringPrompts: string[];
   imageUrl: string | null;
   credits: string | null;
   providerError: string | null;
@@ -395,9 +409,36 @@ export type ChatGPTAdLibraryUnlockerProbe = {
   message: string;
 };
 
+function emptyUnlockerProbe(
+  adId: string,
+  pageUrl: string,
+  extras: Partial<ChatGPTAdLibraryUnlockerProbe> & Pick<ChatGPTAdLibraryUnlockerProbe, "ok" | "message">,
+): ChatGPTAdLibraryUnlockerProbe {
+  return {
+    configured: true,
+    ingested: false,
+    importStatus: null,
+    adId,
+    pageUrl,
+    checkpoint: false,
+    httpStatus: 0,
+    hasImage: false,
+    hasCopy: false,
+    parseOk: false,
+    title: null,
+    body: null,
+    promptCount: 0,
+    triggeringPrompts: [],
+    imageUrl: null,
+    credits: null,
+    providerError: null,
+    attempt: "none",
+    ...extras,
+  };
+}
+
 /**
- * One-page unlocker smoke test. Never imports. Use the ScrapingBee trial
- * before buying Freelance — a red probe means more credits will not help.
+ * Unlock one ad page, require image + copy, then import (or refresh thin metadata).
  */
 export async function probeChatGPTAdLibraryUnlocker(input?: {
   adId?: string | number;
@@ -407,24 +448,13 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
   const pageUrl = `${CHATGPT_AD_LIBRARY_ORIGIN}/ad/${adId}`;
 
   if (!isChatGPTAdLibraryUnlockerConfigured()) {
-    return {
+    return emptyUnlockerProbe(adId, pageUrl, {
       ok: false,
       configured: false,
-      ingested: false,
-      adId,
-      pageUrl,
-      checkpoint: false,
-      httpStatus: 0,
-      hasImage: false,
-      parseOk: false,
-      title: null,
-      imageUrl: null,
-      credits: null,
       providerError: "SCRAPINGBEE_API_KEY fehlt",
-      attempt: "none",
       message:
         "SCRAPINGBEE_API_KEY fehlt. Trial-Key (1000 Credits, keine Karte) in Vercel Production setzen, neu deployen, dann erneut prüfen. Freelance noch nicht kaufen.",
-    };
+    });
   }
 
   const unlocked = await unlockChatGPTAdLibraryUrl(pageUrl);
@@ -442,44 +472,109 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
     parsed && typeof parsed.title === "string" && parsed.title.length > 0
       ? parsed.title
       : null;
+  const body =
+    parsed && typeof parsed.body === "string" && parsed.body.trim().length > 0
+      ? parsed.body.trim()
+      : null;
+  const triggeringPrompts = Array.isArray(parsed?.triggeringPrompts)
+    ? parsed.triggeringPrompts.filter((item): item is string => typeof item === "string")
+    : [];
+  const hasCopy = parsed ? hasUsableChatGPTAdLibraryCopy(parsed) : false;
   const parseOk = parsed != null;
-  const ok = Boolean(unlocked.ok && !checkpoint && parseOk && imageUrl);
 
-  let message: string;
-  if (ok) {
-    message =
-      "Probe grün: Unlocker hat die Ad-Seite gelesen und eine CDN-Bild-URL gefunden. Kein Import. Freelance ist erst jetzt sinnvoll.";
-  } else if (checkpoint) {
-    message =
-      "Probe rot: ScrapingBee sieht denselben Vercel-Checkpoint. Freelance kaufen ändert das nicht — nur mehr Credits.";
-  } else if (unlocked.status === 400) {
-    message = unlocked.providerError
-      ? `Probe rot: ScrapingBee hat die Anfrage abgelehnt (400): ${unlocked.providerError}. Das ist kein Checkpoint — Parameter/Key, nicht der 50-Dollar-Plan.`
-      : "Probe rot: ScrapingBee hat die Anfrage abgelehnt (400). Das ist kein Checkpoint — Parameter/Key, nicht der 50-Dollar-Plan.";
-  } else if (!unlocked.ok) {
-    message = unlocked.providerError
-      ? `Probe rot: Unlocker-HTTP ${unlocked.status || "failed"}: ${unlocked.providerError}. Freelance noch nicht kaufen.`
-      : `Probe rot: Unlocker-HTTP ${unlocked.status || "failed"}. Freelance noch nicht kaufen.`;
-  } else {
-    message =
-      "Probe rot: HTML ohne CDN-Bild-URL. Parser findet nichts. Freelance noch nicht kaufen.";
-  }
-
-  return {
-    ok,
-    configured: true,
-    ingested: false,
+  const base = {
     adId,
     pageUrl,
     checkpoint,
     httpStatus: unlocked.status,
     hasImage: Boolean(imageUrl),
+    hasCopy,
     parseOk,
     title,
+    body,
+    promptCount: triggeringPrompts.length,
+    triggeringPrompts: triggeringPrompts.slice(0, 8),
     imageUrl,
     credits: unlocked.cost,
     providerError: unlocked.providerError,
     attempt: unlocked.attempt,
+  };
+
+  if (checkpoint) {
+    return emptyUnlockerProbe(adId, pageUrl, {
+      ...base,
+      ok: false,
+      message:
+        "Probe rot: ScrapingBee sieht denselben Vercel-Checkpoint. Freelance kaufen ändert das nicht — nur mehr Credits.",
+    });
+  }
+  if (unlocked.status === 400) {
+    return emptyUnlockerProbe(adId, pageUrl, {
+      ...base,
+      ok: false,
+      message: unlocked.providerError
+        ? `Probe rot: ScrapingBee hat die Anfrage abgelehnt (400): ${unlocked.providerError}. Das ist kein Checkpoint — Parameter/Key, nicht der 50-Dollar-Plan.`
+        : "Probe rot: ScrapingBee hat die Anfrage abgelehnt (400). Das ist kein Checkpoint — Parameter/Key, nicht der 50-Dollar-Plan.",
+    });
+  }
+  if (!unlocked.ok) {
+    return emptyUnlockerProbe(adId, pageUrl, {
+      ...base,
+      ok: false,
+      message: unlocked.providerError
+        ? `Probe rot: Unlocker-HTTP ${unlocked.status || "failed"}: ${unlocked.providerError}. Freelance noch nicht kaufen.`
+        : `Probe rot: Unlocker-HTTP ${unlocked.status || "failed"}. Freelance noch nicht kaufen.`,
+    });
+  }
+  if (!parseOk || !imageUrl) {
+    return emptyUnlockerProbe(adId, pageUrl, {
+      ...base,
+      ok: false,
+      message:
+        "Probe rot: HTML ohne CDN-Bild-URL. Parser findet nichts. Freelance noch nicht kaufen.",
+    });
+  }
+  if (!parsed || !hasCopy) {
+    return emptyUnlockerProbe(adId, pageUrl, {
+      ...base,
+      ok: false,
+      importStatus: "skipped_no_copy",
+      message:
+        "Bild ist da, aber Anzeigentext und Trigger-Prompts fehlen. Ohne Copy importieren wir nicht — Bild allein nützt dem Korpus nichts.",
+    });
+  }
+
+  const uploaderUserId = await resolveChatGPTAdLibraryUploaderUserId();
+  const summary = await importChatGPTAdLibraryBatch({
+    uploaderUserId,
+    records: [parsed],
+  });
+  await recordChatGPTAdLibraryIngestSummary({
+    imported: summary.imported,
+    skippedDuplicate: summary.skippedDuplicate + summary.refreshed,
+    failed: summary.failed,
+    details: { mode: "unlocker_probe", adId, plannedIds: [adId] },
+  });
+  const result = summary.results[0];
+  const importStatus = result?.status ?? "failed";
+  const ingested = importStatus === "imported" || importStatus === "refreshed";
+  let message: string;
+  if (importStatus === "imported") {
+    message = `Bild + Text importiert: ${title ?? `#${adId}`} · ${triggeringPrompts.length} Trigger-Prompts.`;
+  } else if (importStatus === "refreshed") {
+    message = `Schon im Vault — Copy/Prompts wurden angereichert. ${triggeringPrompts.length} Trigger-Prompts.`;
+  } else if (importStatus === "skipped_duplicate") {
+    message = `Schon im Vault mit Bild + Text. ${body ? "Anzeigentext" : "Titel"} und ${triggeringPrompts.length} Prompts sind gespeichert.`;
+  } else {
+    message = `Parser hatte Bild + Text, Import fehlgeschlagen: ${result?.error ?? "unbekannt"}.`;
+  }
+
+  return {
+    ok: importStatus !== "failed",
+    configured: true,
+    ingested,
+    importStatus,
+    ...base,
     message,
   };
 }

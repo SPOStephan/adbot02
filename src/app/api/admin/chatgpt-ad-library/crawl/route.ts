@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       customerVisible: false,
       status,
       workerHint:
-        "Unlocker zuerst mit der kostenlosen Probe (#7341, kein Import) prüfen. Freelance (~50 USD) erst nach grüner Probe. Ohne Key bleiben Runner am Checkpoint hängen.",
+        "Unlocker-Probe #7341 importiert Bild + Copy. Image-only gilt nicht als Erfolg. Freelance erst wenn Copy mitkommt.",
     });
   } catch (error) {
     console.error("chatgpt_ad_library_crawl_admin_get_failed", {
@@ -108,8 +108,8 @@ export async function POST(request: NextRequest) {
       });
       return json({
         ok: true,
-        ingested: false,
-        buyFreelance: probe.ok,
+        ingested: probe.ingested,
+        buyFreelance: probe.ok && probe.hasCopy,
         probe,
       });
     }
