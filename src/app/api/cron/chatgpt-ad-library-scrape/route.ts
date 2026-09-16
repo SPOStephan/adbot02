@@ -10,6 +10,8 @@ import {
   ingestChatGPTAdLibraryScrapeRecords,
   ingestChatGPTAdLibrarySeedFallback,
   scrapeChatGPTAdLibraryHttpBatch,
+  scrapeChatGPTAdLibraryUnlockBatch,
+  scrapeChatGPTAdLibraryUnlockDiscover,
 } from "@/lib/chatgpt-ad-library/scrape";
 import { CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX } from "@/lib/chatgpt-ad-library/scrape-constants";
 import { ChatGPTAdLibraryImportError } from "@/lib/chatgpt-ad-library/import";
@@ -17,7 +19,7 @@ import { constantTimeEqual } from "@/lib/meta/crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const NO_STORE = {
   "Cache-Control": "private, no-store, max-age=0",
@@ -71,6 +73,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, status }, { headers: NO_STORE });
     }
 
+    if (mode === "unlock_discover") {
+      const result = await scrapeChatGPTAdLibraryUnlockDiscover();
+      return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
+    }
+
+    if (mode === "unlock") {
+      const result = await scrapeChatGPTAdLibraryUnlockBatch();
+      return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
+    }
+
     if (mode === "http") {
       const result = await scrapeChatGPTAdLibraryHttpBatch();
       return NextResponse.json(
@@ -78,7 +90,7 @@ export async function GET(request: Request) {
           ok: true,
           ...result,
           note: result.blocked
-            ? "HTML ist bot-geschützt. Playwright-Worker (GitHub Action) nutzen."
+            ? "HTML ist bot-geschützt. ScrapingBee-Unlocker (SCRAPINGBEE_API_KEY) setzen."
             : undefined,
         },
         { headers: NO_STORE },

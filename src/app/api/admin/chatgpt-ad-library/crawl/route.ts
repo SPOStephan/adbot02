@@ -5,7 +5,10 @@ import {
   getChatGPTAdLibraryCrawlStatus,
   setChatGPTAdLibraryCrawlEnabled,
 } from "@/lib/chatgpt-ad-library/crawl-state";
-import { ingestChatGPTAdLibrarySeedFallback } from "@/lib/chatgpt-ad-library/scrape";
+import {
+  ingestChatGPTAdLibrarySeedFallback,
+  probeChatGPTAdLibraryUnlocker,
+} from "@/lib/chatgpt-ad-library/scrape";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import {
   isDashboardSameOriginReadRequest,
@@ -15,6 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 const NO_STORE = {
   "Cache-Control": "private, no-store, max-age=0",
@@ -56,7 +60,7 @@ export async function GET(request: NextRequest) {
       customerVisible: false,
       status,
       workerHint:
-        "Live-HTML von GitHub-Runnern ist checkpoint-blockiert. Öffentliche Seed-Bilder werden automatisch nachgelegt, sobald ein Lauf nichts scrapen kann.",
+        "Unlocker zuerst mit der kostenlosen Probe (#7341, kein Import) prüfen. Freelance (~50 USD) erst nach grüner Probe. Ohne Key bleiben Runner am Checkpoint hängen.",
     });
   } catch (error) {
     console.error("chatgpt_ad_library_crawl_admin_get_failed", {
@@ -72,7 +76,12 @@ export async function POST(request: NextRequest) {
     if ("error" in auth && auth.error) return auth.error;
 
     const body = (await request.json().catch(() => null)) as
-      | { action?: string; enabled?: boolean; ids?: Array<number | string> }
+      | {
+          action?: string;
+          enabled?: boolean;
+          ids?: Array<number | string>;
+          adId?: string | number;
+        }
       | null;
     if (!body || typeof body !== "object") {
       return json({ ok: false, message: "JSON-Body erforderlich." }, 400);
@@ -91,6 +100,18 @@ export async function POST(request: NextRequest) {
       });
       const status = await getChatGPTAdLibraryCrawlStatus();
       return json({ ok: true, fallback: "seed", summary, status });
+    }
+
+    if (action === "probe_unlocker") {
+      const probe = await probeChatGPTAdLibraryUnlocker({
+        adId: body.adId,
+      });
+      return json({
+        ok: true,
+        ingested: false,
+        buyFreelance: probe.ok,
+        probe,
+      });
     }
 
     if (action === "enqueue") {

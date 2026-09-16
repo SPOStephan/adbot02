@@ -7,6 +7,8 @@
 #
 # Vercel env vars alone are NOT visible to this workflow.
 #
+# Required on Vercel Production for live HTML (GitHub runners hit the checkpoint):
+#   SCRAPINGBEE_API_KEY   from https://www.scrapingbee.com/ (Freelance ~$50/mo)
 # Optional on Vercel:
 #   CHATGPT_AD_LIBRARY_UPLOADER_USER_ID  (site admin UUID)
 # Apply migration 20260915140000_chatgpt_ad_library_crawl_state.sql
@@ -65,7 +67,23 @@ jobs:
           echo "ADBOT_APP_URL is set (length ${#ADBOT_APP_URL})"
           echo "CRON_SECRET is set (length ${#CRON_SECRET})"
 
+      - name: Check unlocker
+        id: unlocker
+        env:
+          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          json=$(curl -sS -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${ADBOT_APP_URL}/api/cron/chatgpt-ad-library-scrape?mode=status")
+          echo "$json"
+          if echo "$json" | grep -q '"unlockerConfigured":true'; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Playwright
+        if: steps.unlocker.outputs.configured != 'true'
         run: |
           npm install --no-save --no-package-lock playwright@1.55.0
           npx playwright install --with-deps chromium
