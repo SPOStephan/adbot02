@@ -48,7 +48,7 @@ Deshalb: **keine 50 USD, bevor die Admin-Probe grün ist.**
 6. **Rot + Checkpoint** → Freelance nicht kaufen. Mehr Credits lösen denselben Block nicht.
 7. **HTTP 400 / Credits 0** ist kein Checkpoint — ungültige ScrapingBee-Parameter (früher `wait_browser=networkidle`). Nach dem Fix erneut probe, nicht kaufen.
 
-Die Probe prüft den unbekannten Teil: Unlocker schafft `/ad/7341` und der Parser findet `img.chatgptadlibrary.com/c/…webp`. Schon grün ohne Unlocker: Crawl-Tabelle, Cron-Auth, Plan-IDs, öffentliches CDN, Seed-Import, Admin-Uploader-Fallback.
+Die Probe prüft den unbekannten Teil: Unlocker schafft `/ad/7341` und der Parser findet **Bild + echte Copy**. Such-Chrome („We couldn't find that“), Theme-Scripts und og-Titel zählen nicht als Anzeigentext. Refresh überschreibt gute Copy nicht mehr nur weil mehr Prompts da sind; vermüllte #7341-Zeilen werden aus dem Seed repariert.
 
 Was nach einer grünen Probe noch knirschen *kann* (kein 50-Dollar-Risiko): fünf Seiten vs. 300s Cron-Timeout, Sitemap-Shards, HTML-Varianten anderer Ads, Trial-Credits (≈13 Stealth-Seiten).
 

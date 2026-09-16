@@ -17,6 +17,12 @@ import {
   type ChatGPTAdLibraryRecord,
 } from "@/lib/chatgpt-ad-library/types";
 import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/import-constants";
+import {
+  mergeChatGPTAdLibraryCopy,
+  sanitizeChatGPTAdLibraryCopy,
+  scoreChatGPTAdLibraryCopy,
+} from "@/lib/chatgpt-ad-library/parse-html";
+import { chatGPTAdLibrarySeedRecordForId } from "@/lib/chatgpt-ad-library/seed-records";
 import { sanitizeAssetMetadata } from "@/lib/creative-assets/image";
 import { MediaLibraryError, uploadInspirationVaultImage } from "@/lib/media-library/upload";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -142,21 +148,53 @@ async function refreshExistingLibraryCopy(input: {
   const metadata = asRecord(data.metadata);
   const example = asRecord(metadata.ad_example);
   const external = asRecord(metadata.external_source);
-  const currentBody = asText(example.body_text);
-  const currentPrompts = asStringArray(external.triggering_prompts);
-  const incomingRicher =
-    input.record.body.trim().length > currentBody.length ||
-    input.record.triggeringPrompts.length > currentPrompts.length ||
-    (Boolean(input.record.landingPageUrl) && !asText(example.landing_page_url));
-  if (!incomingRicher) return false;
+  const current = {
+    title: asText(example.title),
+    advertiserName: asText(example.advertiser_name),
+    body: asText(example.body_text),
+    triggeringPrompts: asStringArray(external.triggering_prompts),
+  };
+  const incoming = sanitizeChatGPTAdLibraryCopy({
+    title: input.record.title,
+    advertiserName: input.record.advertiserName,
+    body: input.record.body,
+    triggeringPrompts: input.record.triggeringPrompts,
+  });
+  const seed = chatGPTAdLibrarySeedRecordForId(input.record.id);
+  const seedCopy = seed
+    ? sanitizeChatGPTAdLibraryCopy({
+        title: seed.title,
+        advertiserName: seed.advertiserName,
+        body: seed.body,
+        triggeringPrompts: [...seed.triggeringPrompts],
+      })
+    : null;
+  const merged =
+    mergeChatGPTAdLibraryCopy(current, incoming) ??
+    (scoreChatGPTAdLibraryCopy(current) < 0 && seedCopy
+      ? mergeChatGPTAdLibraryCopy(current, seedCopy)
+      : null);
+  if (!merged) return false;
+
+  const nextRecord = {
+    ...input.record,
+    title: merged.title || input.record.title,
+    advertiserName: merged.advertiserName || input.record.advertiserName,
+    body: merged.body,
+    triggeringPrompts: merged.triggeringPrompts,
+    landingPageUrl:
+      input.record.landingPageUrl ??
+      seed?.landingPageUrl ??
+      (asText(example.landing_page_url) || null),
+  };
 
   const nextMetadata = sanitizeAssetMetadata({
     ...metadata,
-    ...adExampleMetadata(toAdExampleInput(input.record)),
+    ...adExampleMetadata(toAdExampleInput(nextRecord)),
     never_launch: true,
     external_source: {
       ...external,
-      ...externalSourceMetadata(input.record),
+      ...externalSourceMetadata(nextRecord),
     },
   });
 
