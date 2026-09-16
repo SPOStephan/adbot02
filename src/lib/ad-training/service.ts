@@ -18,6 +18,8 @@ export class TrainingServiceError extends Error {
   constructor(code: string, status: number, message: string) {
     super(message);
     this.name = "TrainingServiceError";
+    this.code = code;
+    this.status = status;
   }
 }
 

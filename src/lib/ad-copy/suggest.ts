@@ -158,7 +158,7 @@ export async function suggestAdCopyForDestination(input: {
       }
     } catch (releaseError) {
       console.error("ad_copy_credit_release_failed", {
-        reservationId: reservation.reservationId,
+        reservationId: reservation?.reservationId ?? null,
         message:
           releaseError instanceof Error
             ? releaseError.message
