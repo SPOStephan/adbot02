@@ -141,8 +141,9 @@ export function formatOrganicBoostFailureDetail(input: {
   }
   if (reason === "organic_preflight_kill_switch" || reason === "writes_frozen") {
     // Never claim Meta is writing while the kill-switch soft-block is still set.
+    // Do not promise "wird nachgezogen" here — that only happens after DB sync/drain.
     if (input.writesAllowed) {
-      return "Freigeben ist aktiv — Warteschlange wird automatisch nachgezogen";
+      return "Freigeben aktiv, Versand aber noch lokal gestoppt — noch kein Meta-Kontakt";
     }
     return "Schreiben gestoppt (Sicherheitsschranke). Freigabe wurde ggf. systemseitig widerrufen — z. B. durch Traffic/Lead-Vorbereitung.";
   }
