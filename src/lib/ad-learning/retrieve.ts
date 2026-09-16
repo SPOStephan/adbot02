@@ -5,11 +5,13 @@ import {
   type AdLearningContext,
   type CustomerCreativeSignal,
   type InspirationPattern,
+  type TrainingGroundSignal,
 } from "@/lib/ad-learning/types";
 import {
   customerSignalFromAsset,
   inspirationPatternFromMetadata,
   scoreInspirationMatch,
+  scoreTrainingGroundMatch,
 } from "@/lib/ad-learning/context";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -19,8 +21,10 @@ export type LoadAdLearningContextInput = {
   platform?: string;
   objective?: string;
   industry?: string;
+  landingHostname?: string;
   inspirationLimit?: number;
   customerLimit?: number;
+  trainingLimit?: number;
 };
 
 function mapObjective(value?: string): string | undefined {
@@ -112,6 +116,56 @@ async function loadCustomerSignals(input: {
   return signals;
 }
 
+async function loadTrainingGroundSignals(input: {
+  platform?: string;
+  objective?: string;
+  industry?: string;
+  landingHostname?: string;
+  limit: number;
+}): Promise<TrainingGroundSignal[]> {
+  if (input.limit < 1) return [];
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("adbot_training_runs")
+    .select(
+      "id,platform,objective,industry,landing_hostname,headline,primary_text,verdict,verdict_note,rated_at",
+    )
+    .in("verdict", ["keep", "reject"])
+    .order("rated_at", { ascending: false })
+    .limit(80);
+  if (error || !Array.isArray(data)) return [];
+
+  return data
+    .map((row) => {
+      const verdict = row.verdict === "reject" ? "reject" : row.verdict === "keep" ? "keep" : null;
+      if (!verdict) return null;
+      const signal: TrainingGroundSignal = {
+        runId: String(row.id),
+        verdict,
+        platform: String(row.platform ?? "other"),
+        objective: String(row.objective ?? "other"),
+        industry: String(row.industry ?? ""),
+        landingHostname: String(row.landing_hostname ?? ""),
+        headline: String(row.headline ?? ""),
+        primaryText: String(row.primary_text ?? ""),
+        note: String(row.verdict_note ?? ""),
+      };
+      return {
+        signal,
+        score: scoreTrainingGroundMatch(signal, {
+          platform: input.platform,
+          objective: input.objective,
+          industry: input.industry,
+          landingHostname: input.landingHostname,
+        }),
+      };
+    })
+    .filter((item): item is { signal: TrainingGroundSignal; score: number } => Boolean(item))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, input.limit)
+    .map((item) => item.signal);
+}
+
 export async function loadInspirationLearningPreview(input: {
   platform?: string;
   objective?: string;
@@ -131,8 +185,9 @@ export async function loadAdLearningContext(
 ): Promise<AdLearningContext> {
   const inspirationLimit = Math.min(Math.max(input.inspirationLimit ?? 5, 0), 8);
   const customerLimit = Math.min(Math.max(input.customerLimit ?? 5, 0), 8);
+  const trainingLimit = Math.min(Math.max(input.trainingLimit ?? 6, 0), 8);
   try {
-    const [inspirationPatterns, customerSignals] = await Promise.all([
+    const [inspirationPatterns, customerSignals, trainingSignals] = await Promise.all([
       loadInspirationPatterns({
         platform: input.platform,
         objective: mapObjective(input.objective),
@@ -144,8 +199,15 @@ export async function loadAdLearningContext(
         platformAccountId: input.platformAccountId,
         limit: customerLimit,
       }),
+      loadTrainingGroundSignals({
+        platform: input.platform,
+        objective: mapObjective(input.objective),
+        industry: input.industry,
+        landingHostname: input.landingHostname,
+        limit: trainingLimit,
+      }),
     ]);
-    return { inspirationPatterns, customerSignals };
+    return { inspirationPatterns, customerSignals, trainingSignals };
   } catch (error) {
     console.error("ad_learning_context_failed", {
       message: error instanceof Error ? error.message : "unknown",

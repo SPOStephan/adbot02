@@ -74,6 +74,7 @@ export function createOpenAiAdCopyProvider(
       const learning = formatAdLearningPromptBlock(input.learning ?? {
         inspirationPatterns: [],
         customerSignals: [],
+        trainingSignals: [],
       });
       const user = [
         `Werbeziel: ${input.objective}`,

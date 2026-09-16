@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -134,6 +135,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       icon: Scale,
       href: "/dashboard/rechtliches",
       match: "/dashboard/rechtliches",
+    },
+    {
+      label: "KI-Training",
+      icon: GraduationCap,
+      href: "/dashboard/training",
+      match: "/dashboard/training",
     },
     {
       label: "Werbebeispiele",

@@ -35,12 +35,26 @@ export type CustomerCreativeSignal = {
   label: string;
 };
 
+export type TrainingGroundSignal = {
+  runId: string;
+  verdict: "keep" | "reject";
+  platform: string;
+  objective: string;
+  industry: string;
+  landingHostname: string;
+  headline: string;
+  primaryText: string;
+  note: string;
+};
+
 export type AdLearningContext = {
   inspirationPatterns: InspirationPattern[];
   customerSignals: CustomerCreativeSignal[];
+  trainingSignals: TrainingGroundSignal[];
 };
 
 export const EMPTY_AD_LEARNING_CONTEXT: AdLearningContext = {
   inspirationPatterns: [],
   customerSignals: [],
+  trainingSignals: [],
 };

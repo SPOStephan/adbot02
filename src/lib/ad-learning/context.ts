@@ -3,6 +3,7 @@ import {
   type AdLearningContext,
   type CustomerCreativeSignal,
   type InspirationPattern,
+  type TrainingGroundSignal,
 } from "./types";
 
 export { EMPTY_AD_LEARNING_CONTEXT };
@@ -102,10 +103,33 @@ export function inspirationPatternFromMetadata(input: {
   };
 }
 
+export function scoreTrainingGroundMatch(
+  signal: Pick<
+    TrainingGroundSignal,
+    "platform" | "objective" | "industry" | "landingHostname"
+  >,
+  query: {
+    platform?: string;
+    objective?: string;
+    industry?: string;
+    landingHostname?: string;
+  },
+): number {
+  let score = 1;
+  if (query.platform && signal.platform === query.platform) score += 10;
+  if (query.objective && signal.objective === query.objective) score += 8;
+  const industry = (query.industry ?? "").trim().toLowerCase();
+  if (industry && signal.industry.toLowerCase().includes(industry)) score += 5;
+  const host = (query.landingHostname ?? "").trim().toLowerCase();
+  if (host && signal.landingHostname.toLowerCase() === host) score += 12;
+  return score;
+}
+
 export function formatAdLearningPromptBlock(context: AdLearningContext): string {
   const inspiration = context.inspirationPatterns.slice(0, 5);
   const signals = context.customerSignals.slice(0, 5);
-  if (inspiration.length < 1 && signals.length < 1) return "";
+  const training = (context.trainingSignals ?? []).slice(0, 6);
+  if (inspiration.length < 1 && signals.length < 1 && training.length < 1) return "";
 
   const lines = [
     "LERNKONTEXT (intern, nicht ausgeben):",
@@ -128,6 +152,39 @@ export function formatAdLearningPromptBlock(context: AdLearningContext): string 
           : "",
       ].filter(Boolean);
       lines.push(parts.join(" | "));
+    });
+  }
+
+  const kept = training.filter((item) => item.verdict === "keep");
+  const rejected = training.filter((item) => item.verdict === "reject");
+  if (kept.length > 0) {
+    lines.push("Adbot-Training: diese bewerteten Varianten waren gut — Muster behalten:");
+    kept.forEach((item, index) => {
+      lines.push(
+        [
+          `${index + 1}. [${item.platform}/${item.objective}]`,
+          item.headline ? `Headline: ${item.headline.slice(0, 160)}` : "",
+          item.primaryText ? `Text: ${item.primaryText.slice(0, 240)}` : "",
+          item.note ? `Warum gut: ${item.note.slice(0, 160)}` : "",
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      );
+    });
+  }
+  if (rejected.length > 0) {
+    lines.push("Adbot-Training: diese Varianten waren schlecht — so nicht:");
+    rejected.forEach((item, index) => {
+      lines.push(
+        [
+          `${index + 1}. [${item.platform}/${item.objective}]`,
+          item.headline ? `Headline: ${item.headline.slice(0, 160)}` : "",
+          item.primaryText ? `Text: ${item.primaryText.slice(0, 240)}` : "",
+          item.note ? `Warum schlecht: ${item.note.slice(0, 160)}` : "",
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      );
     });
   }
 

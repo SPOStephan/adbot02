@@ -44,6 +44,10 @@ Success-Control (Pausen, Budget-Umschichtung) bleibt die **operative** Auswertun
 - Regelmäßiger Export → Train → Eval → Deploy.
 - Claim „Hunderttausende“ erst mit belegbarer Korpusgröße plus bestandener Evaluation.
 
+## Tägliches Lernen: KI-Training (URL → Ad → Bewertung)
+
+Das ist **nicht** der Collector-Upload fremder Anzeigen. Site-Admin unter `/dashboard/training`: beliebige HTTPS-URL, Adbot erzeugt Text und Bild, Bewertung gut/schlecht. Jede Bewertung landet in `adbot_training_runs` und fließt **sofort** in `formatAdLearningPromptBlock` — auch in Kunden-Copy. Gewichte werden nicht stündlich neu trainiert; schlauer wird das System mit jedem Rating über Retrieval. Fine-Tune (Together) exportiert später genau diese Paare.
+
 ## Nächste Schritte (konkret, nach Vault + Sandbox)
 
 Kein paralleles „alles auf einmal“. Zuerst den Retrieval-Loop füttern und messbar machen. Das eigene Modell kommt **danach**, und nur hinter Gates. Vektorsuche ist kein Schritt auf diesem Pfad, solange ein Scan den Vault noch vollständig sieht.
@@ -131,4 +135,5 @@ Gate C: Eval bestanden **und** interner Canary ohne Policy-/Faktenbruch. Erst da
 | Creative Style-Refs | `enqueueCreativeAssetGenerationJob` → `attachCustomerWinnerStyleRefs` |
 | Winner-Label | `apply_brand_asset_performance_winners` nach Meta-Sync |
 | Sandbox / Staging | `ad_library_collector_items` → Admin `/dashboard/inspiration` |
+| KI-Training (URL → Ad → Rating) | `adbot_training_runs` → Admin `/dashboard/training` |
 | Live-Korpus (zentrales Gedächtnis) | `brand_assets` mit `library_scope=INSPIRATION` + `metadata.library=ad_example_library` |
