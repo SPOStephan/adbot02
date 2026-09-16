@@ -87,6 +87,7 @@ export async function loadChatGPTAdLibraryForInternalIntelligence(input?: {
       const haystack = [
         title,
         advertiserName,
+        String(external.external_id ?? ""),
         industry,
         hookText,
         bodyText,

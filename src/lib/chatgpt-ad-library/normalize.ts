@@ -5,6 +5,10 @@ import {
   type ChatGPTAdLibraryRecord,
 } from "@/lib/chatgpt-ad-library/types";
 import type { AdExampleInput } from "@/lib/ad-examples/types";
+import {
+  isLikelyChatGPTAdTriggerPrompt,
+  stripChatGPTAdLibrarySeoBlurb,
+} from "@/lib/chatgpt-ad-library/parse-html";
 
 export class ChatGPTAdLibraryParseError extends Error {
   constructor(message: string) {
@@ -108,10 +112,12 @@ export function normalizeChatGPTAdLibraryRecord(
     sourceUrl,
     advertiserName: text(row.advertiserName, "advertiserName", 120),
     title: text(row.title, "title", 120),
-    body: optionalText(row.body, 2000),
+    body: stripChatGPTAdLibrarySeoBlurb(optionalText(row.body, 2000)),
     imageUrl,
     landingPageUrl: optionalHttpsUrl(row.landingPageUrl, "landingPageUrl"),
-    triggeringPrompts: stringArray(row.triggeringPrompts, 40, 400),
+    triggeringPrompts: stringArray(row.triggeringPrompts, 40, 400).filter(
+      isLikelyChatGPTAdTriggerPrompt,
+    ),
     category: stringArray(row.category, 12, 100),
   };
 }

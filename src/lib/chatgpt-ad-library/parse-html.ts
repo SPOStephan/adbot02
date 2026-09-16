@@ -74,6 +74,37 @@ export function isLikelyChatGPTAdTriggerPrompt(value: string): boolean {
   return /[a-z]/i.test(text);
 }
 
+export function isDirtyChatGPTAdLibraryCopy(input: ChatGPTAdLibraryCopyFields): boolean {
+  const clean = sanitizeChatGPTAdLibraryCopy(input);
+  if (input.body.trim() !== clean.body) return true;
+  if (isChatGPTAdLibraryChromeText(input.title) || isChatGPTAdLibraryChromeText(input.body)) {
+    return true;
+  }
+  if (input.triggeringPrompts.some((item) => !isLikelyChatGPTAdTriggerPrompt(item))) return true;
+  return clean.triggeringPrompts.length === 0;
+}
+
+export function resolveChatGPTAdLibraryCopy(input: {
+  current: ChatGPTAdLibraryCopyFields;
+  incoming: ChatGPTAdLibraryCopyFields;
+  seed?: ChatGPTAdLibraryCopyFields | null;
+}): ChatGPTAdLibraryCopyFields {
+  const current = sanitizeChatGPTAdLibraryCopy(input.current);
+  const incoming = sanitizeChatGPTAdLibraryCopy(input.incoming);
+  const seed = input.seed ? sanitizeChatGPTAdLibraryCopy(input.seed) : null;
+  const prompts = uniqueStrings(
+    [...incoming.triggeringPrompts, ...current.triggeringPrompts],
+    40,
+  );
+  return sanitizeChatGPTAdLibraryCopy({
+    title: incoming.title || current.title || seed?.title || "",
+    advertiserName:
+      incoming.advertiserName || current.advertiserName || seed?.advertiserName || "",
+    body: incoming.body || current.body || seed?.body || "",
+    triggeringPrompts: prompts.length > 0 ? prompts : (seed?.triggeringPrompts ?? []),
+  });
+}
+
 export function sanitizeChatGPTAdLibraryCopy(
   input: ChatGPTAdLibraryCopyFields,
 ): ChatGPTAdLibraryCopyFields {

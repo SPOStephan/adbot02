@@ -11,10 +11,11 @@ import { importChatGPTAdLibraryBatch } from "@/lib/chatgpt-ad-library/import";
 import {
   extractAdIdsFromSitemapXml,
   hasUsableChatGPTAdLibraryCopy,
-  mergeChatGPTAdLibraryCopy,
+  resolveChatGPTAdLibraryCopy,
   parseChatGPTAdLibraryHtml,
   sanitizeChatGPTAdLibraryCopy,
 } from "@/lib/chatgpt-ad-library/parse-html";
+import { loadChatGPTAdLibraryForInternalIntelligence } from "@/lib/chatgpt-ad-library/retrieval";
 import {
   CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
@@ -560,23 +561,26 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
         triggeringPrompts: [...seed.triggeringPrompts],
       })
     : null;
-  const mergedCopy =
-    parsedCopy && seedCopy
-      ? mergeChatGPTAdLibraryCopy(parsedCopy, seedCopy) ?? {
-          ...parsedCopy,
-          body: parsedCopy.body || seedCopy.body,
-          triggeringPrompts:
-            parsedCopy.triggeringPrompts.length > 0
-              ? parsedCopy.triggeringPrompts
-              : seedCopy.triggeringPrompts,
-        }
-      : parsedCopy ?? seedCopy;
-  const importRecord =
-    mergedCopy && parsed
-      ? { ...parsed, ...mergedCopy }
-      : mergedCopy
-        ? { ...seed, ...mergedCopy }
-        : seed;
+  const mergedCopy = resolveChatGPTAdLibraryCopy({
+    current: parsedCopy ?? {
+      title: "",
+      advertiserName: "",
+      body: "",
+      triggeringPrompts: [],
+    },
+    incoming: parsedCopy ?? seedCopy ?? {
+      title: "",
+      advertiserName: "",
+      body: "",
+      triggeringPrompts: [],
+    },
+    seed: seedCopy,
+  });
+  const importRecord = parsed
+    ? { ...parsed, ...mergedCopy }
+    : seed
+      ? { ...seed, ...mergedCopy }
+      : null;
   if (!importRecord) {
     return emptyUnlockerProbe(adId, pageUrl, {
       ...base,
@@ -586,24 +590,6 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
         "Bild ist da, aber Anzeigentext und Trigger-Prompts fehlen. Ohne Copy importieren wir nicht — Bild allein nützt dem Korpus nichts.",
     });
   }
-
-  const displayTitle =
-    typeof importRecord.title === "string" ? importRecord.title : title;
-  const displayBody =
-    typeof importRecord.body === "string" && importRecord.body.trim()
-      ? importRecord.body.trim()
-      : body;
-  const displayPrompts = Array.isArray(importRecord.triggeringPrompts)
-    ? importRecord.triggeringPrompts.filter((item): item is string => typeof item === "string")
-    : triggeringPrompts;
-  const displayed = {
-    ...base,
-    hasCopy: true,
-    title: displayTitle,
-    body: displayBody,
-    promptCount: displayPrompts.length,
-    triggeringPrompts: displayPrompts.slice(0, 8),
-  };
 
   const uploaderUserId = await resolveChatGPTAdLibraryUploaderUserId();
   const summary = await importChatGPTAdLibraryBatch({
@@ -616,6 +602,25 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
     failed: summary.failed,
     details: { mode: "unlocker_probe", adId, plannedIds: [adId] },
   });
+  const storedHits = await loadChatGPTAdLibraryForInternalIntelligence({
+    limit: 48,
+  }).catch(() => []);
+  const stored = storedHits.find((hit) => hit.externalId === adId);
+  const displayTitle = stored?.title || mergedCopy.title || title;
+  const displayBody = stored?.bodyText || mergedCopy.body || null;
+  const displayPrompts =
+    stored?.triggeringPrompts?.length
+      ? stored.triggeringPrompts
+      : mergedCopy.triggeringPrompts;
+  const displayed = {
+    ...base,
+    hasCopy: Boolean(displayBody || displayPrompts.length),
+    title: displayTitle,
+    body: displayBody,
+    promptCount: displayPrompts.length,
+    triggeringPrompts: displayPrompts.slice(0, 8),
+  };
+
   const result = summary.results[0];
   const importStatus = result?.status ?? "failed";
   const ingested = importStatus === "imported" || importStatus === "refreshed";
@@ -623,11 +628,9 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
   if (importStatus === "imported") {
     message = `Bild + Text importiert: ${displayTitle ?? `#${adId}`} · ${displayPrompts.length} Trigger-Prompts.`;
   } else if (importStatus === "refreshed") {
-    message = hasCopy
-      ? `Schon im Vault — nur saubere Copy/Prompts wurden übernommen. ${displayPrompts.length} Trigger-Prompts.`
-      : `Seiten-Chrome verworfen. Seed-Copy für #${adId} wiederhergestellt.`;
+    message = `Vault repariert: SEO-Anhang entfernt, ${displayPrompts.length} Trigger-Prompts gespeichert.`;
   } else if (importStatus === "skipped_duplicate") {
-    message = `Schon im Vault mit Bild + Text. ${displayBody ? "Anzeigentext" : "Titel"} und ${displayPrompts.length} Prompts sind gespeichert.`;
+    message = `Schon im Vault. Gespeichert: ${displayBody ? "Anzeigentext" : "kein Body"} · ${displayPrompts.length} Prompts.`;
   } else {
     message = `Parser hatte Bild + Text, Import fehlgeschlagen: ${result?.error ?? "unbekannt"}.`;
   }
