@@ -36,7 +36,7 @@ assert.match(normalize, /kein Placeholder/);
 assert.doesNotMatch(normalize, /ChatGPT-Kontextanzeige aus öffentlicher Ad Library/);
 assert.doesNotMatch(normalize, /Typischer Trigger-Prompt/);
 assert.match(normalize, /whyItWorks: prompts\.slice/);
-assert.match(normalize, /body \|\s*$/m);
+assert.match(normalize, /body \|\|/);
 assert.match(types, /isGenericAdExampleObjectiveDetail/);
 assert.match(types, /triggeringPrompts/);
 assert.match(client, /ExampleInsight/);

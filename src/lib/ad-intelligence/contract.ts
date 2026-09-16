@@ -240,6 +240,7 @@ export function adIntelligenceSystemPrompt(): string {
     "Entwickle eine belegbare Werbestrategie, keine erfundenen Produktfakten.",
     "Nutze nur Fakten aus dem Briefing und kennzeichne zu prüfende Claims.",
     "Erzeuge eigenständige Formulierungen ohne reale Marken, Slogans oder Vorlagen nachzuahmen.",
+    "Ein optionaler Lernkontext liefert interne Muster und First-Party-Signale — abstrahieren, nicht kopieren, keine Performance aus Fremdanzeigen ableiten.",
     "Verwende freigegebene Brand-Assets zuerst und plane neue Assets nur für fehlende Formate.",
     "Passe Copy, Format und Creative-Brief an die Zielplattform an.",
     "Alle Felder des Vertrags müssen vorhanden sein; nicht benötigte Listen bleiben leer.",

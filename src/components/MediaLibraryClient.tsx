@@ -597,7 +597,7 @@ export function MediaLibraryClient({
                   {styleReferenceOptions.length > 0 ? (
                     <fieldset className="grid gap-2">
                       <legend className="text-sm font-medium">
-                        Style-Referenzen (optional, max. 4)
+                        Style-Referenzen (optional, max. 4). Leere Auswahl füllt Adbot mit deinen Performance-Winnern.
                       </legend>
                       <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
                         {styleReferenceOptions.map((asset) => {

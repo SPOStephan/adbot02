@@ -13,6 +13,8 @@ import {
   type AdCopyObjective,
   type AdCopySuggestion,
 } from "@/lib/ad-copy/providers";
+import { EMPTY_AD_LEARNING_CONTEXT } from "@/lib/ad-learning/context";
+import { loadAdLearningContext } from "@/lib/ad-learning/retrieve";
 import { openAiRatesFromEnv } from "@/lib/ad-copy/providers/openai";
 import { togetherRatesFromEnv } from "@/lib/ad-copy/providers/together";
 import {
@@ -85,6 +87,17 @@ export async function suggestAdCopyForDestination(input: {
   }
 
   try {
+    const learning = await loadAdLearningContext({
+      userId: input.userId,
+      platform: input.platform ?? "meta",
+      objective,
+      industry: input.industry,
+    }).catch(() => EMPTY_AD_LEARNING_CONTEXT);
+    console.info("ad_learning_copy_context", {
+      inspiration: learning.inspirationPatterns.length,
+      customerSignals: learning.customerSignals.length,
+    });
+
     const generated = await provider.generate({
       page,
       objective,
@@ -96,6 +109,7 @@ export async function suggestAdCopyForDestination(input: {
       offer: input.offer,
       audience: input.audience,
       brandAssets: input.brandAssets,
+      learning,
     });
     const actualCredits = creditsFromProviderCostEur(generated.costEur, 5);
 

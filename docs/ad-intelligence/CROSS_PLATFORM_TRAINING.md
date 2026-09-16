@@ -28,7 +28,7 @@ Die erste Matrix umfasst zehn Branchen, vier Seed-Ziele und vier Plattformen. Da
 | `preferences.jsonl` | Bevorzugte und abgelehnte Antworten für eine spätere DPO-Stufe |
 | `manifest.json` | Herkunft, Verteilung, Modelle, Splitregel und Mengen |
 
-Der Korpus ist ein **Bootstrapping-Datensatz**, kein Leistungsbeweis. Er lehrt Struktur, Plattform-Fit, Faktentreue und Policy-Verhalten. Sobald echte Kampagnen vorliegen, werden nur autorisierte First-Party-Ergebnisse als Performance-Signal ergänzt. Holdout-Situationen und Kundentrennung verhindern Leakage.
+Der Korpus ist ein **Bootstrapping-Datensatz**, kein Leistungsbeweis. Er lehrt Struktur, Plattform-Fit, Faktentreue und Policy-Verhalten. Sobald echte Kampagnen vorliegen, werden nur autorisierte First-Party-Ergebnisse als Performance-Signal ergänzt. Der Retrieval-Loop, der Bibliothek und Winner schon vor dem Fine-Tune in Vorschläge zieht, steht in `docs/ad-intelligence/LEARNING_SYSTEM.md`. Holdout-Situationen und Kundentrennung verhindern Leakage.
 
 ## Modellstrategie
 

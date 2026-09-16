@@ -19,6 +19,7 @@ import {
   reserveCredits,
 } from "@/lib/billing/credits";
 import { CustomerControlInputError } from "@/lib/meta/customer-control-input";
+import { attachCustomerWinnerStyleRefs } from "@/lib/ad-learning/style-refs";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /** Catalog action for free + locked_photo master generation (Phase 6). */
@@ -166,6 +167,16 @@ export async function enqueueCreativeAssetGenerationJob(input: {
     );
   }
 
+  const referenceAssetIds = await attachCustomerWinnerStyleRefs({
+    userId: input.customer.userId,
+    platformAccountId: input.customer.platformAccountId,
+    referenceAssetIds: input.generation.reference_asset_ids,
+  });
+  const generation = {
+    ...input.generation,
+    reference_asset_ids: referenceAssetIds,
+  };
+
   const reservation = await reserveCredits({
     userId: input.customer.userId,
     actionKey: CREATIVE_IMAGE_CREDIT_ACTION,
@@ -173,14 +184,14 @@ export async function enqueueCreativeAssetGenerationJob(input: {
       userId: input.customer.userId,
       platformAccountId: input.customer.platformAccountId,
       brandProfileId: input.brandProfileId,
-      generation: input.generation,
+      generation,
     }),
     referenceType: "creative_asset_job",
     ttlSeconds: CREATIVE_IMAGE_CREDIT_TTL_SECONDS,
   });
 
   const admin = createAdminClient();
-  const payload = input.generation as unknown as Record<string, unknown>;
+  const payload = generation as unknown as Record<string, unknown>;
 
   try {
     const { data, error } = await admin.rpc("enqueue_creative_asset_job", {

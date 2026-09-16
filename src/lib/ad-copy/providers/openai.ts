@@ -10,6 +10,7 @@ import type {
   AdCopyProviderResult,
   AdCopySuggestion,
 } from "@/lib/ad-copy/providers/types";
+import { formatAdLearningPromptBlock } from "@/lib/ad-learning/context";
 
 type OpenAiConfig = {
   apiKey: string;
@@ -67,8 +68,13 @@ export function createOpenAiAdCopyProvider(
         "description: optional kurz, Ziel ca. 30 Zeichen, max. 255.",
         "Kein Markdown, keine Erklärungen, keine Platzhalter.",
         "Ton: klar, konkret, werblich aber nicht marktschreierisch.",
+        "Falls ein Lernkontext folgt: nur Muster abstrahieren, nichts wörtlich kopieren, keine Performance erfinden.",
       ].join(" ");
 
+      const learning = formatAdLearningPromptBlock(input.learning ?? {
+        inspirationPatterns: [],
+        customerSignals: [],
+      });
       const user = [
         `Werbeziel: ${input.objective}`,
         `URL: ${input.page.url}`,
@@ -76,7 +82,10 @@ export function createOpenAiAdCopyProvider(
         `Meta-Beschreibung: ${input.page.description || "—"}`,
         "Seitenauszug:",
         input.page.excerpt || "—",
-      ].join("\n");
+        learning,
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",

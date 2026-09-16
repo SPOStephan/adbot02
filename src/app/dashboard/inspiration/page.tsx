@@ -55,7 +55,10 @@ export default async function AdExampleLibraryPage() {
         <p className="mt-2 max-w-3xl text-slate-500">
           Reale Anzeigen strukturiert nach Branche, Werbeziel, Funnel-Stufe,
           Plattform und Evidenz erfassen. Die Bibliothek ist intern, für Kunden
-          unsichtbar und technisch von Kampagnen-Uploads getrennt.
+          unsichtbar und technisch von Kampagnen-Uploads getrennt. Copy- und
+          Creative-Vorschläge ziehen passende Muster plus First-Party-Winner
+          aus diesem Korpus — ohne fremde Anzeigen zu kopieren oder deren
+          Sichtbarkeit als Erfolg zu werten.
         </p>
       </div>
 
