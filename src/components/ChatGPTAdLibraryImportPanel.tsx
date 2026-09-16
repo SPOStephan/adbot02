@@ -59,6 +59,8 @@ type UnlockerProbe = {
   title: string | null;
   imageUrl: string | null;
   credits: string | null;
+  providerError: string | null;
+  attempt: "none" | "auto" | "stealth_fallback";
   message: string;
 };
 
@@ -670,17 +672,28 @@ function UnlockerProbeBox({ probe }: { probe: UnlockerProbe }) {
         {` · HTTP ${probe.httpStatus || "–"}`}
         {` · Checkpoint ${probe.checkpoint ? "ja" : "nein"}`}
         {` · Bild ${probe.hasImage ? "ja" : "nein"}`}
-        {probe.credits ? ` · Credits ${probe.credits}` : ""}
+        {probe.credits != null && probe.credits !== "" ? ` · Credits ${probe.credits}` : ""}
+        {probe.attempt && probe.attempt !== "none" ? ` · Versuch ${probe.attempt}` : ""}
         {probe.title ? ` · ${probe.title}` : ""}
       </p>
+      {probe.providerError ? (
+        <p className="mt-2 font-mono text-xs">{probe.providerError}</p>
+      ) : null}
       {probe.ok ? (
         <p className="mt-2 text-xs font-semibold">
           Freelance (~50 USD) ist erst jetzt sinnvoll. Rot wäre gewesen: nicht kaufen.
         </p>
-      ) : (
+      ) : probe.checkpoint ? (
         <p className="mt-2 text-xs font-semibold">
           Die 50 Dollar nicht ausgeben. Derselbe Block bleibt mit mehr Credits.
         </p>
+      ) : probe.httpStatus === 400 ? (
+        <p className="mt-2 text-xs font-semibold">
+          Kein Checkpoint. ScrapingBee hat die Anfrage selbst abgelehnt — Freelance ändert das
+          nicht. Nach dem Parameter-Fix erneut probe.
+        </p>
+      ) : (
+        <p className="mt-2 text-xs font-semibold">Die 50 Dollar nicht ausgeben.</p>
       )}
     </div>
   );
