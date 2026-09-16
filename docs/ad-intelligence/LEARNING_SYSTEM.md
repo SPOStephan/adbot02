@@ -27,7 +27,7 @@ Success-Control (Pausen, Budget-Umschichtung) bleibt die **operative** Auswertun
 
 ### Phase 2 — Volumen und Verlierer
 
-- Offizielle Collector für Meta Ad Library, Google Transparency, TikTok (eigene Apps, nicht das Kunden-Token). Plan: `docs/meta-automation/AD_LIBRARY_COLLECTOR_PLAN.md`.
+- Offizielle Collector für Meta Ad Library, Google Transparency, TikTok (eigene Apps, nicht das Kunden-Token). Bau- und Zugangsplan: `docs/ad-examples/COLLECTOR_BUILD.md`.
 - Explizites Underperformer-Label aus Success-Control (nicht nur Winner).
 - OpenAI-Ads-Insights analog zu Meta-Winners verdrahten.
 - Semantische Suche (Embeddings), sobald der Vault größer wird als ein Scan.
