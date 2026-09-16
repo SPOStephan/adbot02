@@ -59,6 +59,7 @@ export function buildCollectorMemoryPreview(input: {
   const liveContext: AdLearningContext = {
     inspirationPatterns: input.livePatterns.slice(0, 5),
     customerSignals: [],
+    trainingSignals: [],
   };
 
   const mergedPatterns: InspirationPattern[] = [
@@ -91,6 +92,7 @@ export function buildCollectorMemoryPreview(input: {
     mergedPromptIfImported: formatAdLearningPromptBlock({
       inspirationPatterns: mergedPatterns,
       customerSignals: [],
+      trainingSignals: [],
     }),
   };
 }

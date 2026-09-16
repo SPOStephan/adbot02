@@ -124,6 +124,7 @@ export function createTogetherAdCopyProvider(
                     input.learning ?? {
                       inspirationPatterns: [],
                       customerSignals: [],
+                      trainingSignals: [],
                     },
                   ),
                 ]

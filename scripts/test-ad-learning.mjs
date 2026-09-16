@@ -121,7 +121,39 @@ assert.match(prompt, /best shift scheduling/);
 assert.match(prompt, /hero-summer/);
 assert.match(prompt, /First-Party|first-party|relativ besser/i);
 assert.doesNotMatch(prompt, /ChatGPT-Kontextanzeige/);
-assert.equal(formatAdLearningPromptBlock({ inspirationPatterns: [], customerSignals: [] }), "");
+assert.equal(formatAdLearningPromptBlock({ inspirationPatterns: [], customerSignals: [], trainingSignals: [] }), "");
+
+const trained = formatAdLearningPromptBlock({
+  inspirationPatterns: [],
+  customerSignals: [],
+  trainingSignals: [
+    {
+      runId: "t1",
+      verdict: "keep",
+      platform: "meta",
+      objective: "traffic",
+      industry: "Hotels",
+      landingHostname: "hotel.example",
+      headline: "Zimmer ohne Portalgebühr",
+      primaryText: "Direkt im Haus buchen.",
+      note: "Klarer Preisanker",
+    },
+    {
+      runId: "t2",
+      verdict: "reject",
+      platform: "meta",
+      objective: "traffic",
+      industry: "Hotels",
+      landingHostname: "hotel.example",
+      headline: "Beste Hotel-Deals der Welt!!!",
+      primaryText: "Jetzt klicken.",
+      note: "zu schreierisch",
+    },
+  ],
+});
+assert.match(trained, /Zimmer ohne Portalgebühr/);
+assert.match(trained, /so nicht/);
+assert.match(trained, /Beste Hotel-Deals/);
 
 assert.deepEqual(
   mergeStyleReferenceIds(["aaa"], ["bbb", "aaa", "ccc"], 4),

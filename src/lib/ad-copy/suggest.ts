@@ -51,10 +51,17 @@ export async function suggestAdCopyForDestination(input: {
   userId: string;
   destinationUrl: string;
   objective?: AdCopyObjective;
+  skipCredits?: boolean;
 } & AdCopyIntelligenceContext): Promise<SuggestAdCopyResult> {
   const objective = input.objective ?? "OUTCOME_TRAFFIC";
   const page = await fetchLandingPageContext(input.destinationUrl);
   const provider = getAdCopyProvider();
+  let landingHostname = "";
+  try {
+    landingHostname = new URL(page.url).hostname.toLowerCase();
+  } catch {
+    landingHostname = "";
+  }
 
   const estimatedCredits = estimateCreditsForActiveProvider();
   const idempotencyKey = createHash("sha256")
@@ -70,20 +77,22 @@ export async function suggestAdCopyForDestination(input: {
     .digest("hex")
     .slice(0, 64);
 
-  let reservation;
-  try {
-    reservation = await reserveCreditsAmount({
-      userId: input.userId,
-      actionKey: "creative.generate_copy_set",
-      amount: estimatedCredits,
-      idempotencyKey,
-      referenceType: "ad_copy_suggest",
-    });
-  } catch (error) {
-    if (error instanceof InsufficientCreditsError) {
+  let reservation: { reservationId: string; amount: number } | null = null;
+  if (!input.skipCredits) {
+    try {
+      reservation = await reserveCreditsAmount({
+        userId: input.userId,
+        actionKey: "creative.generate_copy_set",
+        amount: estimatedCredits,
+        idempotencyKey,
+        referenceType: "ad_copy_suggest",
+      });
+    } catch (error) {
+      if (error instanceof InsufficientCreditsError) {
+        throw error;
+      }
       throw error;
     }
-    throw error;
   }
 
   try {
@@ -92,10 +101,12 @@ export async function suggestAdCopyForDestination(input: {
       platform: input.platform ?? "meta",
       objective,
       industry: input.industry,
+      landingHostname,
     }).catch(() => EMPTY_AD_LEARNING_CONTEXT);
     console.info("ad_learning_copy_context", {
       inspiration: learning.inspirationPatterns.length,
       customerSignals: learning.customerSignals.length,
+      trainingSignals: learning.trainingSignals.length,
     });
 
     const generated = await provider.generate({
@@ -113,24 +124,24 @@ export async function suggestAdCopyForDestination(input: {
     });
     const actualCredits = creditsFromProviderCostEur(generated.costEur, 5);
 
-    // Prepaid estimate may be higher than actual; we keep the reserved amount
-    // (never undercharge). If actual exceeds reserve, refuse to return unpaid work.
-    if (actualCredits > reservation.amount) {
+    if (reservation && actualCredits > reservation.amount) {
       throw new Error(
         "Die KI-Kosten lagen über der Credit-Reserve. Bitte erneut versuchen.",
       );
     }
 
-    await commitCreditReservation({
-      userId: input.userId,
-      reservationId: reservation.reservationId,
-    });
+    if (reservation) {
+      await commitCreditReservation({
+        userId: input.userId,
+        reservationId: reservation.reservationId,
+      });
+    }
 
     return {
       suggestion: generated.suggestion,
       billing: {
         actionKey: "creative.generate_copy_set",
-        creditsCharged: reservation.amount,
+        creditsCharged: reservation?.amount ?? 0,
         providerCostEur: Number(generated.costEur.toFixed(6)),
         markup: 1.5,
         providerKey: generated.providerKey,
@@ -139,13 +150,15 @@ export async function suggestAdCopyForDestination(input: {
     };
   } catch (error) {
     try {
-      await releaseCreditReservation({
-        userId: input.userId,
-        reservationId: reservation.reservationId,
-      });
+      if (reservation) {
+        await releaseCreditReservation({
+          userId: input.userId,
+          reservationId: reservation.reservationId,
+        });
+      }
     } catch (releaseError) {
       console.error("ad_copy_credit_release_failed", {
-        reservationId: reservation.reservationId,
+        reservationId: reservation?.reservationId ?? null,
         message:
           releaseError instanceof Error
             ? releaseError.message
