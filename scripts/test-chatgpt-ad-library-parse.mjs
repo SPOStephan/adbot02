@@ -4,10 +4,13 @@ import { readFileSync } from "node:fs";
 import {
   hasUsableChatGPTAdLibraryCopy,
   isChatGPTAdLibraryChromeText,
+  isDirtyChatGPTAdLibraryCopy,
   isLikelyChatGPTAdTriggerPrompt,
+  resolveChatGPTAdLibraryCopy,
   mergeChatGPTAdLibraryCopy,
   parseChatGPTAdLibraryHtml,
   scoreChatGPTAdLibraryCopy,
+  stripChatGPTAdLibrarySeoBlurb,
 } from "../src/lib/chatgpt-ad-library/parse-html.ts";
 
 const html = readFileSync(
@@ -26,7 +29,8 @@ assert.equal(parsed.id, 7341);
 assert.match(String(parsed.imageUrl), /14fdb811b3d1c4b284228434b2635206f04c8e55b21db949e0ccb3b82afd5cf9/);
 assert.equal(parsed.advertiserName, "GlossGenius");
 assert.equal(parsed.title, "One System To Do It All");
-assert.match(String(parsed.body), /Scheduling, payments/);
+assert.equal(String(parsed.body), "Scheduling, payments, and admin. Done for you.");
+assert.doesNotMatch(String(parsed.body), /sponsored ChatGPT ad/i);
 assert.ok(Array.isArray(parsed.triggeringPrompts));
 assert.ok(parsed.triggeringPrompts.includes("best shift scheduling app for a hair salon with 5 stylists"));
 assert.ok(hasUsableChatGPTAdLibraryCopy(parsed));
@@ -76,5 +80,66 @@ const imageOnly = parseChatGPTAdLibraryHtml({
 });
 assert.ok(imageOnly);
 assert.equal(hasUsableChatGPTAdLibraryCopy(imageOnly), false);
+assert.equal(
+  stripChatGPTAdLibrarySeoBlurb(
+    "Scheduling, payments, and admin. Done for you. A sponsored ChatGPT ad by GlossGenius in Birth Doula & Postpartum Doula Services, and the 12 prompts that trigger it.",
+  ),
+  "Scheduling, payments, and admin. Done for you.",
+);
+const seoCurrent = mergeChatGPTAdLibraryCopy(
+  {
+    title: "One System To Do It All",
+    advertiserName: "GlossGenius",
+    body: "Scheduling, payments, and admin. Done for you. A sponsored ChatGPT ad by GlossGenius in Birth Doula & Postpartum Doula Services, and the 12 prompts that trigger it.",
+    triggeringPrompts: [],
+  },
+  {
+    title: "One System To Do It All",
+    advertiserName: "GlossGenius",
+    body: "Scheduling, payments, and admin. Done for you.",
+    triggeringPrompts: [
+      "best shift scheduling app for a hair salon with 5 stylists",
+      "free scheduling app with built in time tracking",
+    ],
+  },
+);
+assert.ok(seoCurrent);
+assert.equal(seoCurrent.body, "Scheduling, payments, and admin. Done for you.");
+assert.ok(seoCurrent.triggeringPrompts.length >= 2);
+assert.equal(
+  isDirtyChatGPTAdLibraryCopy({
+    title: "One System To Do It All",
+    advertiserName: "GlossGenius",
+    body: "Scheduling, payments, and admin. Done for you. A sponsored ChatGPT ad by GlossGenius in Birth Doula, and the 12 prompts that trigger it.",
+    triggeringPrompts: [],
+  }),
+  true,
+);
+const forced = resolveChatGPTAdLibraryCopy({
+  current: {
+    title: "One System To Do It All",
+    advertiserName: "GlossGenius",
+    body: "Scheduling, payments, and admin. Done for you. A sponsored ChatGPT ad by GlossGenius in Birth Doula, and the 12 prompts that trigger it.",
+    triggeringPrompts: [],
+  },
+  incoming: {
+    title: "One System To Do It All",
+    advertiserName: "GlossGenius",
+    body: "Scheduling, payments, and admin. Done for you. A sponsored ChatGPT ad by GlossGenius in Birth Doula, and the 12 prompts that trigger it.",
+    triggeringPrompts: [],
+  },
+  seed: {
+    title: "One System To Do It All",
+    advertiserName: "GlossGenius",
+    body: "Scheduling, payments, and admin. Done for you.",
+    triggeringPrompts: [
+      "best shift scheduling app for a hair salon with 5 stylists",
+      "free scheduling app with built in time tracking",
+    ],
+  },
+});
+assert.equal(forced.body, "Scheduling, payments, and admin. Done for you.");
+assert.equal(forced.triggeringPrompts.length, 2);
+assert.doesNotMatch(forced.body, /sponsored/i);
 
 console.log("test-chatgpt-ad-library-parse: ok");

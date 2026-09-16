@@ -18,9 +18,9 @@ import {
 } from "@/lib/chatgpt-ad-library/types";
 import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/import-constants";
 import {
-  mergeChatGPTAdLibraryCopy,
+  isDirtyChatGPTAdLibraryCopy,
+  resolveChatGPTAdLibraryCopy,
   sanitizeChatGPTAdLibraryCopy,
-  scoreChatGPTAdLibraryCopy,
 } from "@/lib/chatgpt-ad-library/parse-html";
 import { chatGPTAdLibrarySeedRecordForId } from "@/lib/chatgpt-ad-library/seed-records";
 import { sanitizeAssetMetadata } from "@/lib/creative-assets/image";
@@ -169,12 +169,17 @@ async function refreshExistingLibraryCopy(input: {
         triggeringPrompts: [...seed.triggeringPrompts],
       })
     : null;
-  const merged =
-    mergeChatGPTAdLibraryCopy(current, incoming) ??
-    (scoreChatGPTAdLibraryCopy(current) < 0 && seedCopy
-      ? mergeChatGPTAdLibraryCopy(current, seedCopy)
-      : null);
-  if (!merged) return false;
+  const merged = resolveChatGPTAdLibraryCopy({
+    current,
+    incoming,
+    seed: seedCopy,
+  });
+  const changed =
+    isDirtyChatGPTAdLibraryCopy(current) ||
+    merged.body !== current.body.trim() ||
+    merged.title !== current.title.trim() ||
+    merged.triggeringPrompts.join("\n") !== current.triggeringPrompts.join("\n");
+  if (!changed) return false;
 
   const nextRecord = {
     ...input.record,
