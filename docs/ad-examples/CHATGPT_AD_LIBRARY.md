@@ -82,7 +82,7 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 ## Admin-Oberfläche
 
 - Seite: `/dashboard/inspiration` — Status, letzter Lauf und importierte Ads stehen **in der Scrape-Karte** (serverseitig geladen, kein Toast).
-- **Unlocker-Probe + Import #7341**: Bild + Copy + Prompts. Karten zeigen Anzeigentext und Trigger-Prompts, nicht nur das Bild.
+- **Unlocker-Probe + Import #7341**: Bild + Copy + Prompts. Karten zeigen Anzeigentext und die echten Trigger-Prompts aus der Quelle — keinen Platzhalter wie „ChatGPT-Kontextanzeige“.
 - Auto-Scrape-Panel + optionaler JSON-Import
 - Status: `GET /api/admin/chatgpt-ad-library/crawl` · `POST { action: "probe_unlocker" }`
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`

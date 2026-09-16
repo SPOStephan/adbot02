@@ -127,9 +127,13 @@ export function toAdExampleInput(record: ChatGPTAdLibraryRecord): AdExampleInput
     record.category.find((item) => /saas|software|tech|hotel|travel|e-?commerce|finance|health|beauty|real estate|marketing/i.test(item)) ??
     record.category[0] ??
     "ChatGPT Ads · allgemein";
-  const promptHint =
-    record.triggeringPrompts[0]?.slice(0, 180) ||
-    "ChatGPT-Kontextanzeige aus öffentlicher Ad Library";
+  const prompts = record.triggeringPrompts.map((item) => item.trim()).filter(Boolean);
+  const body = record.body.trim();
+  const objectiveDetail = (
+    body ||
+    prompts.slice(0, 3).join(" · ") ||
+    `${record.advertiserName}: ${record.title}`
+  ).slice(0, 600);
 
   return {
     title: record.title.slice(0, 120),
@@ -137,7 +141,7 @@ export function toAdExampleInput(record: ChatGPTAdLibraryRecord): AdExampleInput
     platform: "openai_ads",
     industry: industry.slice(0, 100),
     objective: "traffic",
-    objectiveDetail: `Interne Referenz aus ${CHATGPT_AD_LIBRARY_PROVIDER}. Typischer Trigger-Prompt: ${promptHint}`,
+    objectiveDetail,
     funnelStage: "consideration",
     sourceKind: "chatgpt_ad_library",
     sourceUrl: record.sourceUrl,
@@ -148,16 +152,11 @@ export function toAdExampleInput(record: ChatGPTAdLibraryRecord): AdExampleInput
     country: "Mehrere / unbekannt",
     language: "en",
     hookText: record.title.slice(0, 500),
-    bodyText: record.body.slice(0, 2000),
+    bodyText: body.slice(0, 2000),
     ctaText: "",
     landingPageUrl: record.landingPageUrl,
     performanceNote: "",
-    whyItWorks:
-      record.triggeringPrompts.length > 0
-        ? `Sichtbare ChatGPT-Platzierung. Erfasste Trigger-Prompts (Auszug): ${record.triggeringPrompts
-            .slice(0, 5)
-            .join(" · ")}`
-        : "Öffentliche ChatGPT-Ad-Library-Referenz ohne Performancebeleg.",
+    whyItWorks: prompts.slice(0, 12).join("\n").slice(0, 1500),
     tags: [
       "chatgpt-ad-library",
       "internal-only",

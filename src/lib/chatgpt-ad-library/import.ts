@@ -2,6 +2,7 @@ import "server-only";
 
 import sharp from "sharp";
 
+import { isGenericAdExampleObjectiveDetail } from "@/lib/ad-examples/types";
 import { adExampleMetadata } from "@/lib/ad-examples/input";
 import {
   externalSourceMetadata,
@@ -176,6 +177,7 @@ async function refreshExistingLibraryCopy(input: {
   });
   const changed =
     isDirtyChatGPTAdLibraryCopy(current) ||
+    isGenericAdExampleObjectiveDetail(asText(example.objective_detail)) ||
     merged.body !== current.body.trim() ||
     merged.title !== current.title.trim() ||
     merged.triggeringPrompts.join("\n") !== current.triggeringPrompts.join("\n");

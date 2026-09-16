@@ -120,6 +120,7 @@ function inputFromMetadata(metadataValue: unknown): { input: AdExampleInput; leg
 
 function view(row: AssetRow): AdExampleView {
   const parsed = inputFromMetadata(row.metadata);
+  const external = record(record(row.metadata).external_source);
   return {
     id: row.id,
     ...parsed.input,
@@ -130,6 +131,7 @@ function view(row: AssetRow): AdExampleView {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     legacy: parsed.legacy,
+    triggeringPrompts: stringArray(external.triggering_prompts),
   };
 }
 

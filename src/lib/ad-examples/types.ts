@@ -89,7 +89,14 @@ export type AdExampleView = AdExampleInput & {
   createdAt: string;
   updatedAt: string;
   legacy: boolean;
+  triggeringPrompts: string[];
 };
+
+/** Canned ChatGPT-library sentence — never show this as if it were a trigger prompt. */
+export function isGenericAdExampleObjectiveDetail(value: string): boolean {
+  return /ChatGPT-Kontextanzeige aus öffentlicher Ad Library/i.test(value)
+    || /^Interne Referenz aus chatgptadlibrary\.com/i.test(value);
+}
 
 export function labelForOption(
   options: readonly { value: string; label: string }[],

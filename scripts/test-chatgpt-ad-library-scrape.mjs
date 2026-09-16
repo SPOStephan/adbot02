@@ -123,6 +123,11 @@ assert.match(parseHtml, /stripChatGPTAdLibrarySeoBlurb/);
 assert.match(parseHtml, /resolveChatGPTAdLibraryCopy/);
 assert.match(parseHtml, /isDirtyChatGPTAdLibraryCopy/);
 assert.match(read("src/lib/chatgpt-ad-library/import.ts"), /isDirtyChatGPTAdLibraryCopy/);
+assert.match(read("src/lib/chatgpt-ad-library/import.ts"), /isGenericAdExampleObjectiveDetail/);
+assert.doesNotMatch(
+  read("src/lib/chatgpt-ad-library/normalize.ts"),
+  /ChatGPT-Kontextanzeige aus öffentlicher Ad Library/,
+);
 assert.match(read("src/lib/chatgpt-ad-library/normalize.ts"), /stripChatGPTAdLibrarySeoBlurb/);
 assert.match(parseHtml, /a sponsored chatgpt ad by/);
 assert.match(scrape, /chatGPTAdLibrarySeedRecordForId/);
