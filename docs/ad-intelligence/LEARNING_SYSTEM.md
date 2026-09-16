@@ -53,3 +53,5 @@ Success-Control (Pausen, Budget-Umschichtung) bleibt die **operative** Auswertun
 | Copy | `suggestAdCopyForDestination` → OpenAI / Together |
 | Creative Style-Refs | `enqueueCreativeAssetGenerationJob` → `attachCustomerWinnerStyleRefs` |
 | Winner-Label | `apply_brand_asset_performance_winners` nach Meta-Sync |
+| Sandbox / Staging | `ad_library_collector_items` → Admin `/dashboard/inspiration` |
+| Live-Korpus (zentrales Gedächtnis) | `brand_assets` mit `library_scope=INSPIRATION` + `metadata.library=ad_example_library` |

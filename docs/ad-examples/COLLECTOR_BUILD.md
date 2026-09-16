@@ -42,20 +42,20 @@ Zusätzlich: Keyword-/Branchenliste (Hotels, SaaS, Beauty, …), Zielländer (`D
 
 Das ist der gemeinsame Kern. Einmal bauen, alle Collector andocken. Kann **vor** den API-Keys stehen.
 
-1. **Staging-Tabelle** `ad_library_collector_items`  
-   `provider` (`meta` / `google` / `tiktok`), `external_id`, `platform`, `status`, `source_url`, Roh-JSON, Bild-Hash, normalisierte Textfelder, `collector_batch_id`. Unique `(provider, external_id)`.
+1. **Staging-Tabelle** `ad_library_collector_items` — **gebaut.**  
+   `provider` (`manual` / `chatgpt_ad_library` / `meta` / `google` / `tiktok`), `external_id`, `platform`, `status`, `source_url`, Roh-JSON, Bild-Hash, normalisierte Textfelder, `collector_batch_id`. Unique `(provider, external_id)`. Migration `20260916120000_ad_library_collector_items.sql`.
 
-2. **Normalizer pro Plattform** (wie `normalizeChatGPTAdLibraryRecord`)  
-   Pflicht: Bild (JPEG/PNG nach Download), Hook/Body wenn vorhanden, Advertiser, Quell-URL, `source_kind`, `evidence_level=public_transparency`, `rights_basis=reference_only`, `use_for_generation=false`, `use_for_internal_intelligence=true`.
+2. **Normalizer** — **gebaut** (`src/lib/ad-library-collector/normalize.ts`).  
+   Pflicht vor Vault: Bild (JPEG/PNG oder HTTPS-URL), Hook/Body/Begründung, Advertiser, `source_kind`, `evidence_level=public_transparency` für Fremdquellen, `rights_basis=reference_only`, `use_for_generation=false`, `use_for_internal_intelligence=true`.
 
-3. **Admin-Import**  
-   `POST /api/admin/ad-library-collector/import` (Site-Admin oder `CRON_SECRET`). Liest `ready_for_import`, ruft `uploadInspirationVaultImage` / `register_inspiration_vault_asset`, schreibt `imported` oder Fehler. Dedup über `external_source.external_id` wie beim ChatGPT-Import.
+3. **Admin-Import** — **gebaut.**  
+   `POST /api/admin/ad-library-collector/import` (Site-Admin oder `CRON_SECRET`). Liest `ready_for_import`, ruft `uploadInspirationVaultImage` / `register_inspiration_vault_asset`, schreibt `imported` oder Fehler. Dedup über `external_source.provider` + `external_id`.
 
-4. **Admin-Sicht** unter `/dashboard/inspiration`  
-   Letzter Batch, Fehler, Pending-Zähler. Kein Kunden-UI.
+4. **Admin-Sicht** unter `/dashboard/inspiration` — **gebaut** (Korpus-Sandbox).  
+   Inbox, Statusmaschine `fetched → reviewed → ready_for_import → imported`, Gedächtnis-Probe, JSONL-Stapel. Kein Kunden-UI.
 
 5. **Learning-Retrieval**  
-   Schon in Phase 1 (`src/lib/ad-learning/retrieve.ts`). Neue Vault-Zeilen fließen automatisch in Copy-Muster, sobald Text da ist. Bilder als Style-Ref weiter nur bei `use_for_generation=true`.
+   Schon in Phase 1 (`src/lib/ad-learning/retrieve.ts`). Neue Vault-Zeilen fließen automatisch in Copy-Muster, sobald Text da ist. Bilder als Style-Ref weiter nur bei `use_for_generation=true`. Die Sandbox selbst ist **kein** Live-Gedächtnis.
 
 ## Was außerhalb von Adbot gebaut werden muss
 
@@ -74,7 +74,7 @@ Meta-Felder typischerweise: Ad-Library-ID, Page-Name, Body, CTA, `ad_snapshot_ur
 
 ## Reihenfolge
 
-1. **Adbot-Importvertrag + Staging** — entblockt alle drei Quellen.  
+1. **Adbot-Importvertrag + Staging** — gebaut. Migration im produktiven Supabase ausführen. Entblockt alle drei Quellen und manuelle Beispiele.  
 2. **Meta-Collector**, sobald die eigene App `ads_archive` wirklich kommerzielle Ads in den Zielländern liefert (ein Probe-Fetch vor dem Volumen).  
 3. **Google** nur nach schriftlich klarem API-Zugang.  
 4. **TikTok** nur nach Research-Approval **und** Freigabe, dass interne Inspiration zulässig ist.  
