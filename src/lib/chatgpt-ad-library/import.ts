@@ -184,9 +184,8 @@ async function refreshExistingLibraryCopy(input: {
     triggeringPrompts: merged.triggeringPrompts,
     landingPageUrl:
       input.record.landingPageUrl ??
-      (seed && "landingPageUrl" in seed ? seed.landingPageUrl : null) ??
-      asText(example.landing_page_url) ||
-      null,
+      seed?.landingPageUrl ??
+      (asText(example.landing_page_url) || null),
   };
 
   const nextMetadata = sanitizeAssetMetadata({
