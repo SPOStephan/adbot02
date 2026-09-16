@@ -33,6 +33,15 @@ assert.match(normalize, /use_for_internal_intelligence: true/);
 assert.match(normalize, /customer_visible: false/);
 assert.match(normalize, /reference_only/);
 assert.match(normalize, /kein Placeholder/);
+assert.doesNotMatch(normalize, /ChatGPT-Kontextanzeige aus öffentlicher Ad Library/);
+assert.doesNotMatch(normalize, /Typischer Trigger-Prompt/);
+assert.match(normalize, /whyItWorks: prompts\.slice/);
+assert.match(normalize, /body \|\s*$/m);
+assert.match(types, /isGenericAdExampleObjectiveDetail/);
+assert.match(types, /triggeringPrompts/);
+assert.match(client, /ExampleInsight/);
+assert.match(client, /Keine Trigger-Prompts in der Quelle gefunden/);
+assert.match(service, /triggering_prompts/);
 const parseHtml = read("src/lib/chatgpt-ad-library/parse-html.ts");
 const libraryTypes = read("src/lib/chatgpt-ad-library/types.ts");
 assert.match(parseHtml, /img\.chatgptadlibrary\.com/);
@@ -90,5 +99,17 @@ assert.match(service, /external_source/);
 const seed = JSON.parse(fixture.trim().split("\n")[0]);
 assert.equal(typeof seed.id, "number");
 assert.match(seed.imageUrl, /^https:\/\/img\.chatgptadlibrary\.com\/c\/[0-9a-f]{2}\/[0-9a-f]+\.webp$/i);
+
+const { isGenericAdExampleObjectiveDetail } = await import("../src/lib/ad-examples/types.ts");
+assert.equal(
+  isGenericAdExampleObjectiveDetail(
+    "Interne Referenz aus chatgptadlibrary.com. Typischer Trigger-Prompt: ChatGPT-Kontextanzeige aus öffentlicher Ad Library",
+  ),
+  true,
+);
+assert.equal(
+  isGenericAdExampleObjectiveDetail("Scheduling, payments, and admin. Done for you."),
+  false,
+);
 
 console.log("test-chatgpt-ad-library: ok");

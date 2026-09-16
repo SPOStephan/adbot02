@@ -426,6 +426,9 @@ export function parseChatGPTAdLibraryHtml(input: {
         "triggerPrompts",
         "observedPrompts",
         "promptTexts",
+        "prompts",
+        "queries",
+        "chatPrompts",
       ]);
     }
     if (embeddedPrompts.length < 1) {
@@ -468,7 +471,16 @@ export function parseChatGPTAdLibraryHtml(input: {
       ...embeddedPrompts,
       ...jsonStringArray(
         html,
-        ["triggeringPrompts", "associatedPrompts", "triggerPrompts", "observedPrompts"],
+        [
+          "triggeringPrompts",
+          "associatedPrompts",
+          "triggerPrompts",
+          "observedPrompts",
+          "promptTexts",
+          "prompts",
+          "queries",
+          "chatPrompts",
+        ],
         40,
       ),
       ...visiblePromptList(html),

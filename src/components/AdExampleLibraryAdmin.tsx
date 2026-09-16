@@ -19,6 +19,7 @@ import {
   AD_EXAMPLE_PLATFORMS,
   AD_EXAMPLE_RIGHTS_BASES,
   AD_EXAMPLE_SOURCE_KINDS,
+  isGenericAdExampleObjectiveDetail,
   labelForOption,
   type AdExampleView,
 } from "@/lib/ad-examples/types";
@@ -32,6 +33,35 @@ type ApiResponse = {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <span className="text-xs font-extrabold uppercase tracking-wide text-slate-600">{children}</span>;
+}
+
+function ExampleInsight({ example }: { example: AdExampleView }) {
+  const prompts = example.triggeringPrompts ?? [];
+  const body = example.bodyText.trim();
+  const hook = example.hookText.trim();
+  const detail = example.objectiveDetail.trim();
+  const hideDetail =
+    example.sourceKind === "chatgpt_ad_library" || isGenericAdExampleObjectiveDetail(detail);
+  const copy = body || hook || (hideDetail ? "" : detail);
+
+  return (
+    <>
+      {copy ? (
+        <p className="mt-3 text-sm leading-6 text-slate-700">{copy}</p>
+      ) : null}
+      {prompts.length > 0 ? (
+        <ul className="mt-3 space-y-1 text-sm leading-6 text-slate-800">
+          {prompts.slice(0, 8).map((prompt) => (
+            <li key={prompt}>“{prompt}”</li>
+          ))}
+        </ul>
+      ) : example.sourceKind === "chatgpt_ad_library" ? (
+        <p className="mt-3 text-sm text-amber-800">Keine Trigger-Prompts in der Quelle gefunden.</p>
+      ) : !copy && detail ? (
+        <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{detail}</p>
+      ) : null}
+    </>
+  );
 }
 
 function ExampleFields({ example, includeFile }: { example?: AdExampleView; includeFile: boolean }) {
@@ -188,7 +218,7 @@ export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: Ad
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return examples.filter((item) => {
-      const haystack = [item.title, item.advertiserName, item.industry, item.objectiveDetail, item.hookText, ...item.tags].join(" ").toLowerCase();
+      const haystack = [item.title, item.advertiserName, item.industry, item.objectiveDetail, item.hookText, item.bodyText, ...(item.triggeringPrompts ?? []), ...item.tags].join(" ").toLowerCase();
       return (!needle || haystack.includes(needle)) && (platform === "all" || item.platform === platform) && (objective === "all" || item.objective === objective) && (industry === "all" || item.industry === industry);
     });
   }, [examples, query, platform, objective, industry]);
@@ -314,7 +344,23 @@ export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: Ad
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img alt={example.title} className="max-h-72 w-full object-contain" src={example.previewUrl} />
                 </a>
-                <div className="p-5"><div className="flex flex-wrap gap-2 text-[11px] font-extrabold uppercase tracking-wide"><span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">{labelForOption(AD_EXAMPLE_PLATFORMS, example.platform)}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{example.industry}</span><span className="rounded-full bg-violet-50 px-2 py-1 text-violet-700">{labelForOption(AD_EXAMPLE_OBJECTIVES, example.objective)}</span>{example.useForGeneration ? <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">Freigegeben</span> : null}{example.legacy ? <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">Klassifizieren</span> : null}</div><h3 className="mt-3 text-lg font-extrabold">{example.title}</h3><p className="mt-1 text-sm font-semibold text-slate-600">{example.advertiserName}</p><p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{example.objectiveDetail}</p><div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">{example.sourceUrl ? <a className="inline-flex items-center gap-1 text-blue-700 hover:underline" href={example.sourceUrl} rel="noreferrer" target="_blank">Quelle <ExternalLink className="size-3" /></a> : null}<span className="text-slate-500">Qualität {example.qualityRating}/5</span><span className="text-slate-500">{labelForOption(AD_EXAMPLE_EVIDENCE_LEVELS, example.evidenceLevel)}</span></div></div>
+                <div className="p-5">
+                  <div className="flex flex-wrap gap-2 text-[11px] font-extrabold uppercase tracking-wide">
+                    <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">{labelForOption(AD_EXAMPLE_PLATFORMS, example.platform)}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{example.industry}</span>
+                    <span className="rounded-full bg-violet-50 px-2 py-1 text-violet-700">{labelForOption(AD_EXAMPLE_OBJECTIVES, example.objective)}</span>
+                    {example.useForGeneration ? <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">Freigegeben</span> : null}
+                    {example.legacy ? <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">Klassifizieren</span> : null}
+                  </div>
+                  <h3 className="mt-3 text-lg font-extrabold">{example.title}</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">{example.advertiserName}</p>
+                  <ExampleInsight example={example} />
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
+                    {example.sourceUrl ? <a className="inline-flex items-center gap-1 text-blue-700 hover:underline" href={example.sourceUrl} rel="noreferrer" target="_blank">Quelle <ExternalLink className="size-3" /></a> : null}
+                    <span className="text-slate-500">Qualität {example.qualityRating}/5</span>
+                    <span className="text-slate-500">{labelForOption(AD_EXAMPLE_EVIDENCE_LEVELS, example.evidenceLevel)}</span>
+                  </div>
+                </div>
               </div>
               <details className="border-t border-slate-100"><summary className="cursor-pointer list-none px-5 py-4 text-sm font-extrabold text-blue-700"><span className="inline-flex items-center gap-2"><Pencil className="size-4" />Klassifikation bearbeiten</span></summary><form className="border-t border-slate-100 p-5" onSubmit={(event) => void save(event, example)}><ExampleFields example={example} includeFile={false} /><div className="mt-5 flex flex-wrap gap-2"><button className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white hover:bg-blue-700 disabled:opacity-50" disabled={pending === example.id} type="submit">{pending === example.id ? <LoaderCircle className="size-4 animate-spin" /> : <Pencil className="size-4" />}Speichern</button><button className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-rose-200 px-4 py-3 text-sm font-extrabold text-rose-700 hover:bg-rose-50 disabled:opacity-50" disabled={pending === example.id} onClick={() => void remove(example)} type="button"><Trash2 className="size-4" />Entfernen</button></div></form></details>
             </article>
