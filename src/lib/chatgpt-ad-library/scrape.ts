@@ -390,6 +390,8 @@ export type ChatGPTAdLibraryUnlockerProbe = {
   title: string | null;
   imageUrl: string | null;
   credits: string | null;
+  providerError: string | null;
+  attempt: "none" | "auto" | "stealth_fallback";
   message: string;
 };
 
@@ -418,6 +420,8 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
       title: null,
       imageUrl: null,
       credits: null,
+      providerError: "SCRAPINGBEE_API_KEY fehlt",
+      attempt: "none",
       message:
         "SCRAPINGBEE_API_KEY fehlt. Trial-Key (1000 Credits, keine Karte) in Vercel Production setzen, neu deployen, dann erneut prüfen. Freelance noch nicht kaufen.",
     };
@@ -448,8 +452,14 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
   } else if (checkpoint) {
     message =
       "Probe rot: ScrapingBee sieht denselben Vercel-Checkpoint. Freelance kaufen ändert das nicht — nur mehr Credits.";
+  } else if (unlocked.status === 400) {
+    message = unlocked.providerError
+      ? `Probe rot: ScrapingBee hat die Anfrage abgelehnt (400): ${unlocked.providerError}. Das ist kein Checkpoint — Parameter/Key, nicht der 50-Dollar-Plan.`
+      : "Probe rot: ScrapingBee hat die Anfrage abgelehnt (400). Das ist kein Checkpoint — Parameter/Key, nicht der 50-Dollar-Plan.";
   } else if (!unlocked.ok) {
-    message = `Probe rot: Unlocker-HTTP ${unlocked.status || "failed"}. Freelance noch nicht kaufen.`;
+    message = unlocked.providerError
+      ? `Probe rot: Unlocker-HTTP ${unlocked.status || "failed"}: ${unlocked.providerError}. Freelance noch nicht kaufen.`
+      : `Probe rot: Unlocker-HTTP ${unlocked.status || "failed"}. Freelance noch nicht kaufen.`;
   } else {
     message =
       "Probe rot: HTML ohne CDN-Bild-URL. Parser findet nichts. Freelance noch nicht kaufen.";
@@ -468,6 +478,8 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
     title,
     imageUrl,
     credits: unlocked.cost,
+    providerError: unlocked.providerError,
+    attempt: unlocked.attempt,
     message,
   };
 }

@@ -17,23 +17,60 @@ export type UnlockedPage = {
   status: number;
   text: string;
   cost: string | null;
+  providerError: string | null;
+  attempt: "none" | "auto" | "stealth_fallback";
 };
 
-/**
- * Fetch a chatgptadlibrary.com URL through ScrapingBee Auto-Mode.
- * Auto-Mode picks the cheapest proxy/JS tier that succeeds (up to stealth).
- */
-export async function unlockChatGPTAdLibraryUrl(url: string): Promise<UnlockedPage> {
-  const key = scrapingBeeApiKey();
-  if (!key) {
-    return { ok: false, status: 0, text: "", cost: null };
-  }
+type UnlockParams = Record<string, string>;
 
+/**
+ * ScrapingBee only accepts wait_browser=domcontentloaded|load|networkidle0|networkidle2.
+ * `networkidle` is invalid and returns HTTP 400 with 0 credits before any scrape.
+ */
+const AUTO_PARAMS: UnlockParams = {
+  mode: "auto",
+  wait_browser: "networkidle2",
+  timeout: "80000",
+};
+
+const STEALTH_PARAMS: UnlockParams = {
+  render_js: "true",
+  stealth_proxy: "true",
+  wait_browser: "networkidle2",
+  timeout: "80000",
+};
+
+export function extractScrapingBeeError(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const parts = ["error", "message", "detail", "reason"]
+      .map((key) => parsed[key])
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .map((value) => value.trim());
+    if (parts.length > 0) return parts.join(" — ").slice(0, 280);
+  } catch {
+    // not JSON
+  }
+  if (/vercel security checkpoint/i.test(trimmed) || /<!doctype|<html/i.test(trimmed)) {
+    return null;
+  }
+  return trimmed.replace(/\s+/g, " ").slice(0, 280);
+}
+
+async function fetchScrapingBeePage(
+  url: string,
+  key: string,
+  params: UnlockParams,
+  attempt: UnlockedPage["attempt"],
+): Promise<UnlockedPage> {
   const endpoint = new URL(SCRAPINGBEE_ENDPOINT);
   endpoint.searchParams.set("api_key", key);
   endpoint.searchParams.set("url", url);
-  endpoint.searchParams.set("mode", "auto");
-  endpoint.searchParams.set("wait_browser", "networkidle");
+  for (const [name, value] of Object.entries(params)) {
+    endpoint.searchParams.set(name, value);
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UNLOCK_TIMEOUT_MS);
@@ -53,10 +90,43 @@ export async function unlockChatGPTAdLibraryUrl(url: string): Promise<UnlockedPa
       status: blocked ? 429 : response.status,
       text,
       cost,
+      providerError: response.ok ? null : extractScrapingBeeError(text),
+      attempt,
     };
   } catch {
-    return { ok: false, status: 0, text: "", cost: null };
+    return {
+      ok: false,
+      status: 0,
+      text: "",
+      cost: null,
+      providerError: "unlocker_timeout_or_network",
+      attempt,
+    };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Fetch a chatgptadlibrary.com URL through ScrapingBee.
+ * Auto-Mode first (cheapest winning tier). HTTP 400 retries with explicit stealth
+ * — trial accounts may reject mode=auto; invalid wait_browser also 400s at 0 credits.
+ */
+export async function unlockChatGPTAdLibraryUrl(url: string): Promise<UnlockedPage> {
+  const key = scrapingBeeApiKey();
+  if (!key) {
+    return {
+      ok: false,
+      status: 0,
+      text: "",
+      cost: null,
+      providerError: "SCRAPINGBEE_API_KEY fehlt",
+      attempt: "none",
+    };
+  }
+
+  const auto = await fetchScrapingBeePage(url, key, AUTO_PARAMS, "auto");
+  if (auto.ok || auto.status !== 400) return auto;
+
+  return fetchScrapingBeePage(url, key, STEALTH_PARAMS, "stealth_fallback");
 }

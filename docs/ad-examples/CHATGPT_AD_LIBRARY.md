@@ -45,7 +45,8 @@ Deshalb: **keine 50 USD, bevor die Admin-Probe grün ist.**
 3. Production **neu deployen**.
 4. Unter `/dashboard/inspiration` **Unlocker-Probe #7341** (kein Import, eine Seite, Stealth bis ~75 Credits).
 5. **Grün** (kein Checkpoint, CDN-Bild-URL da) → erst dann Freelance (~50 USD/Monat, 250k Credits). 5 Ads/2h + Shard ≈ 160k Credits/Monat.
-6. **Rot** (Checkpoint oder kein Bild) → Freelance nicht kaufen. Mehr Credits lösen denselben Block nicht.
+6. **Rot + Checkpoint** → Freelance nicht kaufen. Mehr Credits lösen denselben Block nicht.
+7. **HTTP 400 / Credits 0** ist kein Checkpoint — ungültige ScrapingBee-Parameter (früher `wait_browser=networkidle`). Nach dem Fix erneut probe, nicht kaufen.
 
 Die Probe prüft den unbekannten Teil: Unlocker schafft `/ad/7341` und der Parser findet `img.chatgptadlibrary.com/c/…webp`. Schon grün ohne Unlocker: Crawl-Tabelle, Cron-Auth, Plan-IDs, öffentliches CDN, Seed-Import, Admin-Uploader-Fallback.
 
