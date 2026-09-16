@@ -89,7 +89,7 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 
 ## KI-Nutzung
 
-`loadChatGPTAdLibraryForInternalIntelligence()` liefert Treffer nur aus dem Inspiration Vault mit `use_for_internal_intelligence=true`. Style-Referenzen für Kundengenerierung brauchen weiterhin explizites `use_for_generation=true`.
+`loadChatGPTAdLibraryForInternalIntelligence()` liefert Treffer nur aus dem Inspiration Vault mit `use_for_internal_intelligence=true`. Copy-Vorschläge ziehen Textmuster über `src/lib/ad-learning/` — ohne fremde Ads als Gewinner zu behandeln. Bild-Style-Referenzen für Kundengenerierung brauchen weiterhin explizites `use_for_generation=true`.
 
 ## Abgrenzung
 

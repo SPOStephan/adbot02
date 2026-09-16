@@ -2,6 +2,7 @@ import "server-only";
 
 import type { LandingPageContext } from "@/lib/ad-copy/page-context";
 import type { TokenUsage } from "@/lib/ad-copy/pricing";
+import type { AdLearningContext } from "@/lib/ad-learning/types";
 import type { AdIntelligencePlatform } from "@/lib/ad-intelligence/contract";
 
 export type AdCopyObjective = "OUTCOME_TRAFFIC" | "OUTCOME_LEADS";
@@ -33,6 +34,7 @@ export type AdCopyIntelligenceContext = {
     label: string;
     reference: string;
   }>;
+  learning?: AdLearningContext;
 };
 
 export type AdCopyProvider = {

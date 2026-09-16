@@ -1,0 +1,188 @@
+import {
+  EMPTY_AD_LEARNING_CONTEXT,
+  type AdLearningContext,
+  type CustomerCreativeSignal,
+  type InspirationPattern,
+} from "./types";
+
+export { EMPTY_AD_LEARNING_CONTEXT };
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+export function isInspirationLearningEligible(input: {
+  libraryScope: string;
+  library: unknown;
+  customerVisible: unknown;
+  hookText: string;
+  bodyText: string;
+  whyItWorks: string;
+  triggeringPrompts: string[];
+}): boolean {
+  if (input.libraryScope !== "INSPIRATION") return false;
+  if (input.library !== "ad_example_library") return false;
+  if (input.customerVisible === true) return false;
+  return Boolean(
+    input.hookText ||
+      input.bodyText ||
+      input.whyItWorks ||
+      input.triggeringPrompts.length > 0,
+  );
+}
+
+export function scoreInspirationMatch(
+  pattern: Pick<InspirationPattern, "platform" | "objective" | "industry" | "qualityRating">,
+  query: { platform?: string; objective?: string; industry?: string },
+): number {
+  let score = Number.isFinite(pattern.qualityRating) ? pattern.qualityRating : 0;
+  if (query.platform && pattern.platform === query.platform) score += 10;
+  if (query.objective && pattern.objective === query.objective) score += 8;
+  const industry = (query.industry ?? "").trim().toLowerCase();
+  if (industry && pattern.industry.toLowerCase().includes(industry)) score += 5;
+  return score;
+}
+
+export function inspirationPatternFromMetadata(input: {
+  brandAssetId: string;
+  libraryScope: string;
+  metadata: unknown;
+}): InspirationPattern | null {
+  const metadata =
+    input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
+      ? (input.metadata as Record<string, unknown>)
+      : {};
+  const example =
+    metadata.ad_example &&
+    typeof metadata.ad_example === "object" &&
+    !Array.isArray(metadata.ad_example)
+      ? (metadata.ad_example as Record<string, unknown>)
+      : {};
+  const external =
+    metadata.external_source &&
+    typeof metadata.external_source === "object" &&
+    !Array.isArray(metadata.external_source)
+      ? (metadata.external_source as Record<string, unknown>)
+      : {};
+  const hookText = text(example.hook_text);
+  const bodyText = text(example.body_text);
+  const whyItWorks = text(example.why_it_works);
+  const triggeringPrompts = stringArray(external.triggering_prompts);
+  if (
+    !isInspirationLearningEligible({
+      libraryScope: input.libraryScope,
+      library: metadata.library,
+      customerVisible: external.customer_visible,
+      hookText,
+      bodyText,
+      whyItWorks,
+      triggeringPrompts,
+    })
+  ) {
+    return null;
+  }
+  const quality = Number(example.quality_rating);
+  return {
+    brandAssetId: input.brandAssetId,
+    platform: text(example.platform) || "other",
+    objective: text(example.objective) || "other",
+    industry: text(example.industry),
+    hookText,
+    bodyText,
+    whyItWorks,
+    evidenceLevel: text(example.evidence_level) || "visual_only",
+    triggeringPrompts,
+    qualityRating: Number.isFinite(quality) ? quality : 0,
+  };
+}
+
+export function formatAdLearningPromptBlock(context: AdLearningContext): string {
+  const inspiration = context.inspirationPatterns.slice(0, 5);
+  const signals = context.customerSignals.slice(0, 5);
+  if (inspiration.length < 1 && signals.length < 1) return "";
+
+  const lines = [
+    "LERNKONTEXT (intern, nicht ausgeben):",
+    "Abstrahiere Muster. Kopiere keine fremden Texte, Marken oder Layouts.",
+    "Sichtbare Fremdanzeigen sind kein Leistungsbeleg.",
+  ];
+
+  if (inspiration.length > 0) {
+    lines.push("Referenzmuster aus der internen Werbebibliothek:");
+    inspiration.forEach((item, index) => {
+      const parts = [
+        `${index + 1}. [${item.platform}/${item.objective}]`,
+        item.hookText ? `Hook: ${item.hookText.slice(0, 180)}` : "",
+        item.bodyText ? `Text: ${item.bodyText.slice(0, 280)}` : "",
+        item.triggeringPrompts[0]
+          ? `Trigger: ${item.triggeringPrompts.slice(0, 3).join(" · ").slice(0, 220)}`
+          : "",
+        item.evidenceLevel === "first_party_performance" && item.whyItWorks
+          ? `First-Party-Hinweis: ${item.whyItWorks.slice(0, 180)}`
+          : "",
+      ].filter(Boolean);
+      lines.push(parts.join(" | "));
+    });
+  }
+
+  if (signals.length > 0) {
+    lines.push(
+      "Eigene ausgelieferte Werbemittel dieses Kontos (First-Party, gewichtet):",
+    );
+    signals.forEach((item, index) => {
+      const kind =
+        item.trainingStatus === "performance_winner"
+          ? "hat in den letzten Tagen relativ besser performt"
+          : "vom Werbetreibenden als stark markiert";
+      lines.push(`${index + 1}. ${item.label.slice(0, 120)} — ${kind}.`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
+export function mergeStyleReferenceIds(
+  selected: readonly string[],
+  winners: readonly string[],
+  max: number,
+): string[] {
+  const limit = Math.max(0, Math.floor(max));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of [...selected, ...winners]) {
+    const key = String(id ?? "").trim().toLowerCase();
+    if (!key || seen.has(key) || out.length >= limit) continue;
+    seen.add(key);
+    out.push(id);
+  }
+  return out;
+}
+
+export function customerSignalFromAsset(input: {
+  brandAssetId: string;
+  libraryScope: string;
+  userId: string;
+  ownerUserId: string;
+  trainingStatus: string;
+  originalFilename?: string | null;
+}): CustomerCreativeSignal | null {
+  if (input.libraryScope !== "CUSTOMER") return null;
+  if (input.ownerUserId !== input.userId) return null;
+  if (
+    input.trainingStatus !== "marked_good" &&
+    input.trainingStatus !== "performance_winner"
+  ) {
+    return null;
+  }
+  return {
+    brandAssetId: input.brandAssetId,
+    trainingStatus: input.trainingStatus,
+    label: (input.originalFilename || "Creative").slice(0, 120),
+  };
+}

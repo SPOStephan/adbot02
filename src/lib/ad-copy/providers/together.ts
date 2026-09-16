@@ -17,6 +17,7 @@ import type {
   AdCopyProvider,
   AdCopyProviderResult,
 } from "@/lib/ad-copy/providers/types";
+import { formatAdLearningPromptBlock } from "@/lib/ad-learning/context";
 
 const TOGETHER_INFERENCE_BASE_URL =
   "https://api-inference.together.ai/v1";
@@ -78,46 +79,56 @@ export function createTogetherAdCopyProvider(
               { role: "system", content: adIntelligenceSystemPrompt() },
               {
                 role: "user",
-                content: serializeAdIntelligenceBrief({
-                  contractVersion: AD_INTELLIGENCE_CONTRACT_VERSION,
-                  platform: input.platform ?? "meta",
-                  industry:
-                    input.industry ?? "Aus der Landingpage ableiten",
-                  objective: objectiveFor(input.objective),
-                  funnelStage:
-                    input.objective === "OUTCOME_LEADS"
-                      ? "conversion"
-                      : "consideration",
-                  market:
-                    input.market ??
-                    "Aus Zielseite und Kampagnenkontext ableiten",
-                  language:
-                    input.language ?? "Sprache der Zielseite verwenden",
-                  brandName:
-                    input.brandName ??
-                    (input.page.title || "Werbetreibender"),
-                  offer:
-                    input.offer ??
-                    (input.page.description ||
-                      input.page.excerpt ||
-                      "Angebot der Landingpage"),
-                  audience:
-                    input.audience ??
-                    "Menschen mit einer zur Landingpage passenden Informations- oder Kaufabsicht",
-                  landingPageUrl: input.page.url,
-                  landingPageTitle: input.page.title,
-                  landingPageDescription: input.page.description,
-                  landingPageExcerpt: input.page.excerpt,
-                  requiredFacts: [
-                    "Nur Aussagen verwenden, die aus den Landingpage-Inhalten hervorgehen.",
-                  ],
-                  forbiddenClaims: [
-                    "Keine Garantien, Marktführerschaft, Preise oder Rabatte ohne Beleg.",
-                    "Keine sensiblen persönlichen Eigenschaften unterstellen.",
-                  ],
-                  brandAssets: input.brandAssets ?? [],
-                  assetPolicy: "reuse_first_then_generate_missing",
-                }),
+                content: [
+                  serializeAdIntelligenceBrief({
+                    contractVersion: AD_INTELLIGENCE_CONTRACT_VERSION,
+                    platform: input.platform ?? "meta",
+                    industry:
+                      input.industry ?? "Aus der Landingpage ableiten",
+                    objective: objectiveFor(input.objective),
+                    funnelStage:
+                      input.objective === "OUTCOME_LEADS"
+                        ? "conversion"
+                        : "consideration",
+                    market:
+                      input.market ??
+                      "Aus Zielseite und Kampagnenkontext ableiten",
+                    language:
+                      input.language ?? "Sprache der Zielseite verwenden",
+                    brandName:
+                      input.brandName ??
+                      (input.page.title || "Werbetreibender"),
+                    offer:
+                      input.offer ??
+                      (input.page.description ||
+                        input.page.excerpt ||
+                        "Angebot der Landingpage"),
+                    audience:
+                      input.audience ??
+                      "Menschen mit einer zur Landingpage passenden Informations- oder Kaufabsicht",
+                    landingPageUrl: input.page.url,
+                    landingPageTitle: input.page.title,
+                    landingPageDescription: input.page.description,
+                    landingPageExcerpt: input.page.excerpt,
+                    requiredFacts: [
+                      "Nur Aussagen verwenden, die aus den Landingpage-Inhalten hervorgehen.",
+                    ],
+                    forbiddenClaims: [
+                      "Keine Garantien, Marktführerschaft, Preise oder Rabatte ohne Beleg.",
+                      "Keine sensiblen persönlichen Eigenschaften unterstellen.",
+                    ],
+                    brandAssets: input.brandAssets ?? [],
+                    assetPolicy: "reuse_first_then_generate_missing",
+                  }),
+                  formatAdLearningPromptBlock(
+                    input.learning ?? {
+                      inspirationPatterns: [],
+                      customerSignals: [],
+                    },
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join("\n\n"),
               },
             ],
           }),

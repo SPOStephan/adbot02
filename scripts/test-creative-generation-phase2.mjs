@@ -199,7 +199,8 @@ try {
       )
       .replaceAll("@/lib/meta/customer-control-input", "./customer-control-input-stub.mjs")
       .replaceAll("@/lib/supabase/admin", "./admin-stub.mjs")
-      .replaceAll("@/lib/billing/credits", "./billing-credits-stub.mjs");
+      .replaceAll("@/lib/billing/credits", "./billing-credits-stub.mjs")
+      .replaceAll("@/lib/ad-learning/style-refs", "./ad-learning-style-refs-stub.mjs");
     await writeFile(
       join(temporaryDirectory, outName),
       transpile(source)
@@ -247,6 +248,17 @@ try {
       "}",
       "export async function releaseCreditReservation() { return true; }",
       "export async function commitCreditReservation() { return true; }",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  await writeFile(
+    join(temporaryDirectory, "ad-learning-style-refs-stub.mjs"),
+    [
+      "export async function attachCustomerWinnerStyleRefs(input) {",
+      "  return [...input.referenceAssetIds].slice(0, 4);",
+      "}",
       "",
     ].join("\n"),
     "utf8",

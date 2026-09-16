@@ -56,7 +56,7 @@ Für die erste Grundmenge ist ein ausgewogener Korpus sinnvoll. Pro Kombination 
 
 ## Nutzung für KI-Vorschläge
 
-Die administrative Bibliothek dient als **Retrieval- und Referenzschicht**. Vor einer Creative-Generierung wählt Adbot höchstens wenige passende, ausdrücklich freigegebene Beispiele anhand von Branche, Ziel, Funnel-Stufe, Plattform, Format, Sprache und Markt aus. Die Generierung darf abstrahierte Muster wie Hook-Typ, Angebotsstruktur, visuelle Hierarchie, Vertrauenselemente und Handlungsaufforderung verwenden. Fremde Texte oder Gestaltungen werden nicht unverändert reproduziert.
+Die administrative Bibliothek ist die **Retrieval-Schicht** (Phase 1 in `docs/ad-intelligence/LEARNING_SYSTEM.md`). Vor Copy- und Creative-Vorschlägen wählt Adbot wenige passende interne Beispiele anhand von Plattform, Ziel und Branche. Die Generierung darf abstrahierte Muster verwenden. Fremde Texte oder Gestaltungen werden nicht unverändert reproduziert. Nur First-Party-Daten aus dem eigenen Werbekonto zählen als Leistungssignal.
 
 Davon getrennt existiert ein rechtebereinigter synthetischer Seed-Korpus für das tatsächliche Fine-Tuning des plattformübergreifenden Adbot-Kreativkerns. Bibliotheks-Screenshots gelangen nicht automatisch in diesen Trainingskorpus. Die Trainingsarchitektur und ihre Freigabegates sind in `docs/ad-intelligence/CROSS_PLATFORM_TRAINING.md` dokumentiert.
 
