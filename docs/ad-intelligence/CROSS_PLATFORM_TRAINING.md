@@ -94,6 +94,8 @@ Bis dahin bleibt `AD_COPY_PROVIDER=openai` der unveränderte Produktionspfad. De
 
 Die im Modell erzeugte Strategie ist gemeinsam. Zeichenlimits, API-Enums, Targeting- und Reviewregeln bleiben deterministischer Code und werden nicht dem Modell überlassen.
 
+Die verbindliche Reihenfolge nach Vault und Sandbox (Gates A–C, wann Together wirklich startet) steht in `docs/ad-intelligence/LEARNING_SYSTEM.md` unter **Nächste Schritte**.
+
 ## Nächste Ausbaustufe
 
 Nach dem Seed-Training folgt ein fester Evaluationssatz mit Blindbewertung gegen die aktuelle Baseline. Erst bei messbarer Verbesserung wird der Endpoint für einen kleinen internen Canary aktiviert. Danach erweitert Adbot den Korpus kontrolliert um:
