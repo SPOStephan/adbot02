@@ -82,6 +82,40 @@ jobs:
             echo "configured=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Unlocker is on Production. Never import Playwright in that path —
+      # installing it is skipped, and a static `import "playwright"` crashes the job.
+      - name: Unlock batch via Production
+        if: steps.unlocker.outputs.configured == 'true'
+        env:
+          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          call() {
+            local mode="$1"
+            local max="$2"
+            echo "=== ${mode} ==="
+            local tmp
+            tmp=$(mktemp)
+            local code
+            code=$(curl -sS -o "$tmp" -w "%{http_code}" --max-time "$max" \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              -H "Accept: application/json" \
+              "${ADBOT_APP_URL}/api/cron/chatgpt-ad-library-scrape?mode=${mode}")
+            cat "$tmp"
+            echo
+            if [ "$code" != "200" ]; then
+              echo "::error::${mode} HTTP ${code}"
+              exit 1
+            fi
+            if ! grep -q '"ok":true' "$tmp"; then
+              echo "::error::${mode} response is not ok"
+              exit 1
+            fi
+          }
+          call unlock_discover 120
+          call unlock 290
+
       - name: Install Playwright
         if: steps.unlocker.outputs.configured != 'true'
         run: |
@@ -89,6 +123,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Scrape batch (≤5) and ingest
+        if: steps.unlocker.outputs.configured != 'true'
         env:
           ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

@@ -69,6 +69,17 @@ assert.match(script, /bot_checkpoint/);
 assert.match(script, /ingest_seed/);
 assert.match(script, /unlockerConfigured/);
 assert.match(script, /mode=unlock/);
+assert.doesNotMatch(script, /^import \{ chromium \} from ["']playwright["']/m);
+assert.match(script, /import\(["']playwright["']\)/);
+assert.match(workflow, /Unlock batch via Production/);
+assert.match(workflow, /mode=\$\{mode\}/);
+assert.match(workflow, /call unlock_discover/);
+assert.match(workflow, /call unlock /);
+assert.match(workflow, /if: steps\.unlocker\.outputs\.configured == 'true'/);
+assert.match(
+  workflow,
+  /if: steps\.unlocker\.outputs\.configured != 'true'[\s\S]*chatgpt-ad-library-scrape-playwright/,
+);
 assert.match(cron, /unlock_discover/);
 assert.match(scrape, /scrapeChatGPTAdLibraryUnlockBatch/);
 const unlocker = read("src/lib/chatgpt-ad-library/unlocker.ts");

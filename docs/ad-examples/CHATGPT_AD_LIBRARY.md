@@ -1,6 +1,6 @@
 # ChatGPT Ad Library → interner Inspiration Vault
 
-**Stand:** 15. September 2026  
+**Stand:** 16. September 2026  
 **Quelle:** https://www.chatgptadlibrary.com/library  
 **Sichtbarkeit:** nur Site-Admins + interne KI. Niemals kundensichtbar.
 
@@ -16,7 +16,7 @@ Die Library-HTML, Ad-Seiten und Sitemap-Shards sind hinter einem **Vercel Securi
 - `ad/sitemap.xml` (Index, `x-ad-sitemap-count` ≈ 16k)
 - CDN-Bilder `img.chatgptadlibrary.com`
 
-Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Die GitHub Action plant ≤5 IDs und öffnet **nur diese Ad-Seiten** in einem frischen Browser (Gästelimit der Quelle).
+Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Ist ScrapingBee in Production gesetzt, ruft die GitHub Action nur `unlock_discover` + `unlock` auf der App auf — **ohne Playwright zu installieren oder zu importieren**. Fehlt der Key, fällt sie auf ≤5 Ad-Seiten in einem frischen Browser zurück (Gästelimit der Quelle).
 
 | Komponente | Rolle |
 | --- | --- |
