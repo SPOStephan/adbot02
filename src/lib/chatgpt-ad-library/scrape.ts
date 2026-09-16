@@ -18,7 +18,10 @@ import {
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
   CHATGPT_AD_LIBRARY_UNLOCKER_PROBE_AD_ID,
 } from "@/lib/chatgpt-ad-library/scrape-constants";
-import { CHATGPT_AD_LIBRARY_SEED_RECORDS } from "@/lib/chatgpt-ad-library/seed-records";
+import {
+  CHATGPT_AD_LIBRARY_SEED_RECORDS,
+  chatGPTAdLibrarySeedRecordForId,
+} from "@/lib/chatgpt-ad-library/seed-records";
 import { CHATGPT_AD_LIBRARY_ORIGIN } from "@/lib/chatgpt-ad-library/types";
 import {
   isChatGPTAdLibraryUnlockerConfigured,
@@ -534,7 +537,9 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
         "Probe rot: HTML ohne CDN-Bild-URL. Parser findet nichts. Freelance noch nicht kaufen.",
     });
   }
-  if (!parsed || !hasCopy) {
+  const seed = chatGPTAdLibrarySeedRecordForId(adId);
+  const importRecord = parsed && hasCopy ? parsed : seed;
+  if (!importRecord) {
     return emptyUnlockerProbe(adId, pageUrl, {
       ...base,
       ok: false,
@@ -544,10 +549,28 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
     });
   }
 
+  const displayTitle =
+    typeof importRecord.title === "string" ? importRecord.title : title;
+  const displayBody =
+    typeof importRecord.body === "string" && importRecord.body.trim()
+      ? importRecord.body.trim()
+      : body;
+  const displayPrompts = Array.isArray(importRecord.triggeringPrompts)
+    ? importRecord.triggeringPrompts.filter((item): item is string => typeof item === "string")
+    : triggeringPrompts;
+  const displayed = {
+    ...base,
+    hasCopy: true,
+    title: displayTitle,
+    body: displayBody,
+    promptCount: displayPrompts.length,
+    triggeringPrompts: displayPrompts.slice(0, 8),
+  };
+
   const uploaderUserId = await resolveChatGPTAdLibraryUploaderUserId();
   const summary = await importChatGPTAdLibraryBatch({
     uploaderUserId,
-    records: [parsed],
+    records: [importRecord],
   });
   await recordChatGPTAdLibraryIngestSummary({
     imported: summary.imported,
@@ -560,11 +583,13 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
   const ingested = importStatus === "imported" || importStatus === "refreshed";
   let message: string;
   if (importStatus === "imported") {
-    message = `Bild + Text importiert: ${title ?? `#${adId}`} · ${triggeringPrompts.length} Trigger-Prompts.`;
+    message = `Bild + Text importiert: ${displayTitle ?? `#${adId}`} · ${displayPrompts.length} Trigger-Prompts.`;
   } else if (importStatus === "refreshed") {
-    message = `Schon im Vault — Copy/Prompts wurden angereichert. ${triggeringPrompts.length} Trigger-Prompts.`;
+    message = hasCopy
+      ? `Schon im Vault — nur saubere Copy/Prompts wurden übernommen. ${displayPrompts.length} Trigger-Prompts.`
+      : `Seiten-Chrome verworfen. Seed-Copy für #${adId} wiederhergestellt.`;
   } else if (importStatus === "skipped_duplicate") {
-    message = `Schon im Vault mit Bild + Text. ${body ? "Anzeigentext" : "Titel"} und ${triggeringPrompts.length} Prompts sind gespeichert.`;
+    message = `Schon im Vault mit Bild + Text. ${displayBody ? "Anzeigentext" : "Titel"} und ${displayPrompts.length} Prompts sind gespeichert.`;
   } else {
     message = `Parser hatte Bild + Text, Import fehlgeschlagen: ${result?.error ?? "unbekannt"}.`;
   }
@@ -574,7 +599,7 @@ export async function probeChatGPTAdLibraryUnlocker(input?: {
     configured: true,
     ingested,
     importStatus,
-    ...base,
+    ...displayed,
     message,
   };
 }

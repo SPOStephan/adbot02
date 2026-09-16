@@ -32,3 +32,8 @@ export const CHATGPT_AD_LIBRARY_SEED_RECORDS = [
     ],
   },
 ] as const;
+
+export function chatGPTAdLibrarySeedRecordForId(id: string | number) {
+  const key = String(id);
+  return CHATGPT_AD_LIBRARY_SEED_RECORDS.find((row) => String(row.id) === key) ?? null;
+}
