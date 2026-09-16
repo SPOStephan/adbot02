@@ -17,6 +17,7 @@ import {
   type ChatGPTAdLibraryRecord,
 } from "@/lib/chatgpt-ad-library/types";
 import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/import-constants";
+import { sanitizeAssetMetadata } from "@/lib/creative-assets/image";
 import { MediaLibraryError, uploadInspirationVaultImage } from "@/lib/media-library/upload";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -103,6 +104,71 @@ async function findExistingByExternalId(externalId: string): Promise<string | nu
     }
   }
   return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+/**
+ * Existing seed/image-only rows keep the file. Richer live copy overwrites thin metadata.
+ */
+async function refreshExistingLibraryCopy(input: {
+  brandAssetId: string;
+  record: ChatGPTAdLibraryRecord;
+}): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("brand_assets")
+    .select("metadata")
+    .eq("id", input.brandAssetId)
+    .eq("library_scope", "INSPIRATION")
+    .neq("status", "REVOKED")
+    .maybeSingle();
+  if (error || !data) return false;
+
+  const metadata = asRecord(data.metadata);
+  const example = asRecord(metadata.ad_example);
+  const external = asRecord(metadata.external_source);
+  const currentBody = asText(example.body_text);
+  const currentPrompts = asStringArray(external.triggering_prompts);
+  const incomingRicher =
+    input.record.body.trim().length > currentBody.length ||
+    input.record.triggeringPrompts.length > currentPrompts.length ||
+    (Boolean(input.record.landingPageUrl) && !asText(example.landing_page_url));
+  if (!incomingRicher) return false;
+
+  const nextMetadata = sanitizeAssetMetadata({
+    ...metadata,
+    ...adExampleMetadata(toAdExampleInput(input.record)),
+    never_launch: true,
+    external_source: {
+      ...external,
+      ...externalSourceMetadata(input.record),
+    },
+  });
+
+  const updated = await admin
+    .from("brand_assets")
+    .update({ metadata: nextMetadata, updated_at: new Date().toISOString() })
+    .eq("id", input.brandAssetId)
+    .eq("library_scope", "INSPIRATION")
+    .neq("status", "REVOKED")
+    .select("id")
+    .maybeSingle();
+  return Boolean(updated.data?.id);
 }
 
 export async function downloadAndConvertLibraryImage(imageUrl: string): Promise<{
@@ -237,9 +303,13 @@ export async function importChatGPTAdLibraryRecord(input: {
   try {
     const existingId = await findExistingByExternalId(externalId);
     if (existingId) {
+      const refreshed = await refreshExistingLibraryCopy({
+        brandAssetId: existingId,
+        record,
+      });
       return {
         externalId,
-        status: "skipped_duplicate",
+        status: refreshed ? "refreshed" : "skipped_duplicate",
         brandAssetId: existingId,
         error: null,
       };
@@ -314,6 +384,7 @@ export async function importChatGPTAdLibraryBatch(input: {
   return {
     attempted: results.length,
     imported: results.filter((item) => item.status === "imported").length,
+    refreshed: results.filter((item) => item.status === "refreshed").length,
     skippedDuplicate: results.filter((item) => item.status === "skipped_duplicate").length,
     failed: results.filter((item) => item.status === "failed").length,
     results,

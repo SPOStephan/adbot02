@@ -18,7 +18,7 @@ export type ChatGPTAdLibraryRecord = {
 
 export type ChatGPTAdLibraryImportResult = {
   externalId: string;
-  status: "imported" | "skipped_duplicate" | "failed";
+  status: "imported" | "refreshed" | "skipped_duplicate" | "failed";
   brandAssetId: string | null;
   error: string | null;
 };
@@ -26,6 +26,7 @@ export type ChatGPTAdLibraryImportResult = {
 export type ChatGPTAdLibraryImportSummary = {
   attempted: number;
   imported: number;
+  refreshed: number;
   skippedDuplicate: number;
   failed: number;
   results: ChatGPTAdLibraryImportResult[];

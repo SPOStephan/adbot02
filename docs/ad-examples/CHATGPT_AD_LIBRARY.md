@@ -25,7 +25,7 @@ Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Die GitHub Acti
 | Tabelle `chatgpt_ad_library_crawl_state` | Queue, Cursor, Zähler, `next_probe_id` |
 | `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover (CRON_SECRET) |
 | GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h: Unlocker-Batch oder Playwright-Fallback |
-| Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Probe #7341, Seed-Knopf |
+| Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Probe + Import #7341, Copy auf den Karten |
 | Vercel Cron (6h) | Mit Unlocker: dieselben ≤5 Ads. Ohne Key: Seed-Fallback, keine Queue-Entnahme. |
 | ScrapingBee | Unlocker. Trial zuerst (1000 Credits, keine Karte). Freelance erst nach grüner Probe. Key nur in **Vercel Production**. |
 
@@ -43,8 +43,8 @@ Deshalb: **keine 50 USD, bevor die Admin-Probe grün ist.**
 1. Account auf https://www.scrapingbee.com/ — **Trial, 1000 Credits, keine Kreditkarte**.
 2. API-Key nach **Vercel → Project → Settings → Environment Variables → Production** als `SCRAPINGBEE_API_KEY`.
 3. Production **neu deployen**.
-4. Unter `/dashboard/inspiration` **Unlocker-Probe #7341** (kein Import, eine Seite, Stealth bis ~75 Credits).
-5. **Grün** (kein Checkpoint, CDN-Bild-URL da) → erst dann Freelance (~50 USD/Monat, 250k Credits). 5 Ads/2h + Shard ≈ 160k Credits/Monat.
+4. Unter `/dashboard/inspiration` **Unlocker-Probe + Import #7341** (eine Seite). Erfolg nur bei **Bild + Anzeigentext oder Trigger-Prompts**. Image-only wird nicht importiert.
+5. **Grün mit Copy** → erst dann Freelance (~50 USD/Monat, 250k Credits). 5 Ads/2h + Shard ≈ 160k Credits/Monat.
 6. **Rot + Checkpoint** → Freelance nicht kaufen. Mehr Credits lösen denselben Block nicht.
 7. **HTTP 400 / Credits 0** ist kein Checkpoint — ungültige ScrapingBee-Parameter (früher `wait_browser=networkidle`). Nach dem Fix erneut probe, nicht kaufen.
 
@@ -82,7 +82,7 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 ## Admin-Oberfläche
 
 - Seite: `/dashboard/inspiration` — Status, letzter Lauf und importierte Ads stehen **in der Scrape-Karte** (serverseitig geladen, kein Toast).
-- **Unlocker-Probe #7341** (kein Import): Trial-Key prüfen, bevor Freelance gekauft wird.
+- **Unlocker-Probe + Import #7341**: Bild + Copy + Prompts. Karten zeigen Anzeigentext und Trigger-Prompts, nicht nur das Bild.
 - Auto-Scrape-Panel + optionaler JSON-Import
 - Status: `GET /api/admin/chatgpt-ad-library/crawl` · `POST { action: "probe_unlocker" }`
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`

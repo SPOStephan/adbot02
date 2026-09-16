@@ -16,6 +16,7 @@ export type ChatGPTAdLibraryIntelligenceHit = {
   triggeringPrompts: string[];
   categories: string[];
   sourceUrl: string | null;
+  landingPageUrl: string | null;
   previewUrl: string;
   useForGeneration: boolean;
   customerVisible: false;
@@ -112,6 +113,7 @@ export async function loadChatGPTAdLibraryForInternalIntelligence(input?: {
       triggeringPrompts,
       categories,
       sourceUrl: text(external.source_url) || text(example.source_url) || null,
+      landingPageUrl: text(example.landing_page_url) || null,
       previewUrl: `/api/media-library/preview?assetId=${encodeURIComponent(String(row.id))}`,
       useForGeneration: example.use_for_generation === true,
       customerVisible: false,

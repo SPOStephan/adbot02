@@ -8,6 +8,7 @@ import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/im
 type ImportSummary = {
   attempted: number;
   imported: number;
+  refreshed?: number;
   skippedDuplicate: number;
   failed: number;
   results: Array<{
@@ -44,19 +45,28 @@ export type ChatGPTAdLibraryHitCard = {
   advertiserName: string;
   previewUrl: string;
   sourceUrl: string | null;
+  bodyText?: string;
+  hookText?: string;
+  triggeringPrompts?: string[];
+  landingPageUrl?: string | null;
 };
 
 type UnlockerProbe = {
   ok: boolean;
   configured: boolean;
-  ingested: false;
+  ingested: boolean;
+  importStatus: "imported" | "refreshed" | "skipped_duplicate" | "failed" | "skipped_no_copy" | null;
   adId: string;
   pageUrl: string;
   checkpoint: boolean;
   httpStatus: number;
   hasImage: boolean;
+  hasCopy: boolean;
   parseOk: boolean;
   title: string | null;
+  body: string | null;
+  promptCount: number;
+  triggeringPrompts: string[];
   imageUrl: string | null;
   credits: string | null;
   providerError: string | null;
@@ -294,6 +304,7 @@ export function ChatGPTAdLibraryImportPanel({
       }
       setProbe(payload.probe);
       setNotice(payload.probe.message);
+      await refreshCrawl();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unlocker-Probe fehlgeschlagen.");
     } finally {
@@ -361,8 +372,8 @@ export function ChatGPTAdLibraryImportPanel({
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
             {crawl?.unlockerConfigured ? (
               <p className="mt-2 text-sm font-semibold text-emerald-800">
-                Unlocker-Key gesetzt ({crawl.unlockerProvider ?? "scrapingbee"}). Zuerst Probe
-                #7341 — Freelance (~50 USD) erst nach Grün.
+                Unlocker-Key gesetzt ({crawl.unlockerProvider ?? "scrapingbee"}). Probe importiert
+                Bild + Anzeigentext + Trigger-Prompts — nicht nur das Bild.
               </p>
             ) : (
               <p className="mt-2 text-sm font-semibold text-amber-900">
@@ -451,9 +462,28 @@ export function ChatGPTAdLibraryImportPanel({
                     <p className="mt-1 text-xs font-semibold text-emerald-900/80">
                       {hit.advertiserName}
                     </p>
+                    {hit.bodyText || hit.hookText ? (
+                      <p className="mt-2 text-sm leading-5 text-emerald-950">
+                        {hit.bodyText || hit.hookText}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs font-semibold text-amber-800">
+                        Kein Anzeigentext gespeichert.
+                      </p>
+                    )}
+                    {(hit.triggeringPrompts ?? []).length > 0 ? (
+                      <ul className="mt-2 space-y-1 text-xs leading-5 text-emerald-900">
+                        {(hit.triggeringPrompts ?? []).slice(0, 6).map((prompt) => (
+                          <li key={prompt}>“{prompt}”</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-xs text-amber-800">Keine Trigger-Prompts gespeichert.</p>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-3">
                     {hit.sourceUrl ? (
                       <a
-                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
                         href={hit.sourceUrl}
                         rel="noreferrer"
                         target="_blank"
@@ -462,6 +492,18 @@ export function ChatGPTAdLibraryImportPanel({
                         <ExternalLink className="size-3" />
                       </a>
                     ) : null}
+                    {hit.landingPageUrl ? (
+                      <a
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                        href={hit.landingPageUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Landing
+                        <ExternalLink className="size-3" />
+                      </a>
+                    ) : null}
+                    </div>
                   </div>
                 </article>
               ))}
@@ -513,7 +555,7 @@ export function ChatGPTAdLibraryImportPanel({
             ) : (
               <FlaskConical className="size-4" />
             )}
-            Unlocker-Probe #7341
+            Unlocker-Probe + Import #7341
           </button>
           <span className="text-sm font-semibold text-emerald-900">
             Status: {crawl ? (crawl.enabled ? "aktiv" : "pausiert") : "…"}
@@ -664,7 +706,7 @@ function UnlockerProbeBox({ probe }: { probe: UnlockerProbe }) {
   return (
     <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${tone}`} role="status">
       <p className="text-[11px] font-extrabold uppercase tracking-wide">
-        Unlocker-Probe · kein Import
+        Unlocker-Probe · Bild + Text
       </p>
       <p className="mt-1 font-semibold">{probe.message}</p>
       <p className="mt-2 text-xs">
@@ -672,16 +714,28 @@ function UnlockerProbeBox({ probe }: { probe: UnlockerProbe }) {
         {` · HTTP ${probe.httpStatus || "–"}`}
         {` · Checkpoint ${probe.checkpoint ? "ja" : "nein"}`}
         {` · Bild ${probe.hasImage ? "ja" : "nein"}`}
+        {` · Copy ${probe.hasCopy ? "ja" : "nein"}`}
+        {` · Prompts ${probe.promptCount ?? 0}`}
+        {probe.importStatus ? ` · Import ${probe.importStatus}` : ""}
         {probe.credits != null && probe.credits !== "" ? ` · Credits ${probe.credits}` : ""}
         {probe.attempt && probe.attempt !== "none" ? ` · Versuch ${probe.attempt}` : ""}
         {probe.title ? ` · ${probe.title}` : ""}
       </p>
+      {probe.body ? <p className="mt-2 text-sm leading-5">{probe.body}</p> : null}
+      {(probe.triggeringPrompts ?? []).length > 0 ? (
+        <ul className="mt-2 space-y-1 text-xs leading-5">
+          {probe.triggeringPrompts.slice(0, 6).map((prompt) => (
+            <li key={prompt}>“{prompt}”</li>
+          ))}
+        </ul>
+      ) : null}
       {probe.providerError ? (
         <p className="mt-2 font-mono text-xs">{probe.providerError}</p>
       ) : null}
       {probe.ok ? (
         <p className="mt-2 text-xs font-semibold">
-          Freelance (~50 USD) ist erst jetzt sinnvoll. Rot wäre gewesen: nicht kaufen.
+          Bild + Text liegen im Vault (oder waren schon da). Die Karte darunter muss Copy und
+          Prompts zeigen, nicht nur das Bild.
         </p>
       ) : probe.checkpoint ? (
         <p className="mt-2 text-xs font-semibold">
