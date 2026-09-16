@@ -11,11 +11,20 @@
  *
  * Usage (CI):
  *   ADBOT_APP_URL=https://… CRON_SECRET=… node scripts/chatgpt-ad-library-scrape-playwright.mjs
+ *
+ * When status.unlockerConfigured is true this process never loads Playwright:
+ * it only calls GET ?mode=unlock_discover and GET ?mode=unlock.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
+
+// Playwright is optional. Production Actions skip `npm install playwright`
+// when ScrapingBee is configured and must still reach the unlocker early-exit.
+async function launchChromium() {
+  const { chromium } = await import("playwright");
+  return chromium.launch({ headless: true });
+}
 
 const ORIGIN = "https://www.chatgptadlibrary.com";
 const BATCH_MAX = 5;
@@ -322,7 +331,7 @@ async function main() {
     return;
   }
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   const context = await browser.newContext({
     userAgent:
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
