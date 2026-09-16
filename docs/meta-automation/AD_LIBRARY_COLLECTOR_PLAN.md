@@ -91,4 +91,4 @@ Dieser Collector ist die **automatische Ergänzung** des Admin-Vaults — kein E
 3. AdBot: Import-RPC/Endpoint auf bestehende Vault-Registration  
 4. Kleiner Admin-Trigger „Batch importieren“  
 
-**Jetzt:** Pause — zuerst die andere aktive Meta-Funktion bauen.
+**Umsetzung und Zugang für alle Plattformen:** `docs/ad-examples/COLLECTOR_BUILD.md`.

@@ -27,7 +27,7 @@ Success-Control (Pausen, Budget-Umschichtung) bleibt die **operative** Auswertun
 
 ### Phase 2 — Volumen und Verlierer
 
-- Offizielle Collector für Meta Ad Library, Google Transparency, TikTok (eigene Apps, nicht das Kunden-Token). Plan: `docs/meta-automation/AD_LIBRARY_COLLECTOR_PLAN.md`.
+- Offizielle Collector für Meta Ad Library, Google Transparency, TikTok (eigene Apps, nicht das Kunden-Token). Bau- und Zugangsplan: `docs/ad-examples/COLLECTOR_BUILD.md`.
 - Explizites Underperformer-Label aus Success-Control (nicht nur Winner).
 - OpenAI-Ads-Insights analog zu Meta-Winners verdrahten.
 - Semantische Suche (Embeddings), sobald der Vault größer wird als ein Scan.
@@ -130,3 +130,5 @@ Gate C: Eval bestanden **und** interner Canary ohne Policy-/Faktenbruch. Erst da
 | Copy | `suggestAdCopyForDestination` → OpenAI / Together |
 | Creative Style-Refs | `enqueueCreativeAssetGenerationJob` → `attachCustomerWinnerStyleRefs` |
 | Winner-Label | `apply_brand_asset_performance_winners` nach Meta-Sync |
+| Sandbox / Staging | `ad_library_collector_items` → Admin `/dashboard/inspiration` |
+| Live-Korpus (zentrales Gedächtnis) | `brand_assets` mit `library_scope=INSPIRATION` + `metadata.library=ad_example_library` |

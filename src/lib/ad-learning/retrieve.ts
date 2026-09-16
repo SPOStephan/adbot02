@@ -112,6 +112,20 @@ async function loadCustomerSignals(input: {
   return signals;
 }
 
+export async function loadInspirationLearningPreview(input: {
+  platform?: string;
+  objective?: string;
+  industry?: string;
+  limit?: number;
+}): Promise<InspirationPattern[]> {
+  return loadInspirationPatterns({
+    platform: input.platform,
+    objective: mapObjective(input.objective),
+    industry: input.industry,
+    limit: Math.min(Math.max(input.limit ?? 8, 0), 8),
+  });
+}
+
 export async function loadAdLearningContext(
   input: LoadAdLearningContextInput,
 ): Promise<AdLearningContext> {

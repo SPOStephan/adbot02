@@ -68,4 +68,5 @@ assert.match(client, /triggeringPrompts/);
 assert.match(types, /isGenericAdExampleObjectiveDetail/);
 assert.match(service, /triggering_prompts/);
 assert.match(page, /ChatGPTAdLibraryImportPanel/);
+assert.match(page, /AdLibraryCollectorSandbox/);
 console.log("test-ad-example-library: ok");
