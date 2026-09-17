@@ -43,6 +43,11 @@ assert.match(dashboardNav, /\/dashboard\/training/);
 assert.match(dashboardNav, /\/dashboard\/inspiration/);
 assert.match(dashboardNav, /\/dashboard\/chatgpt-ads-anleitung/);
 
+const metaLibraryApi = read("src/app/api/admin/meta-ad-library/route.ts");
+assert.match(metaLibraryApi, /isSiteAdmin/);
+assert.match(metaLibraryApi, /isDashboardSameOriginRequest/);
+assert.match(read("src/app/dashboard/inspiration/page.tsx"), /MetaAdLibraryCollector/);
+
 const openAIAdsGuideAdminPage = read(
   "src/app/dashboard/chatgpt-ads-anleitung/page.tsx",
 );

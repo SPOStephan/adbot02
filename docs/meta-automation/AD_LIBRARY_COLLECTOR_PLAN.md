@@ -2,7 +2,7 @@
 
 Interner Plan — **kein Kundenfeature**. Ziel: Inspiration Vault befüllen, ohne AdBots produktive Meta-App zu belasten.
 
-**Status:** nur Spezifikation. Umsetzung erst nach der nächsten aktiven Meta-Funktion.
+**Status:** Collector-App in Adbot gebaut (Admin `/dashboard/inspiration`). Die Facebook-App selbst legt der Site-Admin in Meta for Developers an. Secrets: `META_AD_LIBRARY_*`, nie `META_APP_ID`.
 
 ## Warum getrennt von AdBot?
 

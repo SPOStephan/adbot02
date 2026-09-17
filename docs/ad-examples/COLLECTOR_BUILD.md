@@ -1,6 +1,6 @@
 # Phase-2-Collector: wie wir sie bekommen, was gebaut werden muss
 
-**Stand:** 16. September 2026  
+**Stand:** 17. September 2026  
 **Bezug:** `docs/ad-intelligence/LEARNING_SYSTEM.md` · `docs/meta-automation/AD_LIBRARY_COLLECTOR_PLAN.md` · `docs/ad-examples/SOURCE_STRATEGY.md`
 
 Die Collector sind **keine** Erweiterung der Kunden-Meta-App und **kein** Scraping der öffentlichen Library-Websites. Sie sind eigene, langsame Importe in den internen Inspiration-Vault. ChatGPT-Ad-Library-Scrape ist der Prototyp — für Meta, Google und TikTok gilt dasselbe Ziel, aber **offizielle APIs und getrennte Tokens**.
@@ -75,7 +75,7 @@ Meta-Felder typischerweise: Ad-Library-ID, Page-Name, Body, CTA, `ad_snapshot_ur
 ## Reihenfolge
 
 1. **Adbot-Importvertrag + Staging** — gebaut. Migration im produktiven Supabase ausführen. Entblockt alle drei Quellen und manuelle Beispiele.  
-2. **Meta-Collector**, sobald die eigene App `ads_archive` wirklich kommerzielle Ads in den Zielländern liefert (ein Probe-Fetch vor dem Volumen).  
+2. **Meta-Collector** — gebaut in Adbot (nicht in der Kunden-Meta-App). Admin unter `/dashboard/inspiration`: eigene App-Secrets `META_AD_LIBRARY_APP_ID` / `META_AD_LIBRARY_APP_SECRET`, Token verbinden, Probe-Fetch `ads_archive`, dann Staging. Nur wenn der Probe kommerzielle Ads in DE/AT/CH liefert, Volumen erhöhen.  
 3. **Google** nur nach schriftlich klarem API-Zugang.  
 4. **TikTok** nur nach Research-Approval **und** Freigabe, dass interne Inspiration zulässig ist.  
 5. Parallel weiter: ChatGPT-Unlocker + **eigene** ausgelieferte Ads (Meta-Sync, später OpenAI-Ads-Winner). Das ist das echte Leistungssignal, kein Collector-Ersatz.

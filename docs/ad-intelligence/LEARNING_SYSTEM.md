@@ -89,7 +89,7 @@ Gate B: **Echte Paare.** Mindestens Dutzende besser-vs-schlechter Paare aus eige
 
 Nur wenn Gate A steht und du Zugang hast.
 
-1. Eigene Meta-App, Probe-Fetch `ads_archive` in DE/AT/CH — wenn der kommerzielle Umfang leer ist, kein Collector-Bau.
+1. Eigene Meta-App (nicht die Kunden-App) + Probe-Fetch `ads_archive` in DE/AT/CH unter `/dashboard/inspiration`. Wenn der kommerzielle Umfang leer ist, kein Volumen.
 2. Google nur nach klarem API-Zugang.
 3. TikTok nur nach Research-Approval und rechtlicher Freigabe.
 4. Collector schreibt in die Sandbox (`fetched`), nie direkt in den Vault.
@@ -135,5 +135,6 @@ Gate C: Eval bestanden **und** interner Canary ohne Policy-/Faktenbruch. Erst da
 | Creative Style-Refs | `enqueueCreativeAssetGenerationJob` → `attachCustomerWinnerStyleRefs` |
 | Winner-Label | `apply_brand_asset_performance_winners` nach Meta-Sync |
 | Sandbox / Staging | `ad_library_collector_items` → Admin `/dashboard/inspiration` |
+| Meta Ad Library App | `META_AD_LIBRARY_*` + `ads_archive` → Admin `/dashboard/inspiration` |
 | KI-Training (URL → Ad → Rating) | `adbot_training_runs` → Admin `/dashboard/training` |
 | Live-Korpus (zentrales Gedächtnis) | `brand_assets` mit `library_scope=INSPIRATION` + `metadata.library=ad_example_library` |

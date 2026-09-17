@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AdExampleLibraryAdmin } from "@/components/AdExampleLibraryAdmin";
 import { AdLibraryCollectorSandbox } from "@/components/AdLibraryCollectorSandbox";
 import { ChatGPTAdLibraryImportPanel } from "@/components/ChatGPTAdLibraryImportPanel";
+import { MetaAdLibraryCollector } from "@/components/MetaAdLibraryCollector";
 import { getChatGPTAdLibraryCrawlStatus } from "@/lib/chatgpt-ad-library/crawl-state";
 import {
   countChatGPTAdLibraryImports,
@@ -11,6 +12,8 @@ import {
 import { loadAdIntelligenceCorpusSummary } from "@/lib/ad-intelligence/corpus";
 import { EMPTY_COLLECTOR_COUNTS } from "@/lib/ad-library-collector/types";
 import { loadCollectorInbox } from "@/lib/ad-library-collector/service";
+import { loadMetaAdLibraryStatus } from "@/lib/meta-ad-library/service";
+import { EMPTY_META_AD_LIBRARY_STATUS } from "@/lib/meta-ad-library/types";
 import { loadAdExamples } from "@/lib/ad-examples/service";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import { createClient } from "@/lib/supabase/server";
@@ -19,7 +22,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function AdExampleLibraryPage() {
+type PageProps = {
+  searchParams: Promise<{ library?: string }>;
+};
+
+export default async function AdExampleLibraryPage({ searchParams }: PageProps) {
+  const query = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -32,7 +40,7 @@ export default async function AdExampleLibraryPage() {
     redirect("/dashboard");
   }
 
-  const [examples, corpus, crawlResult, hits, importedCount, collectorInbox] =
+  const [examples, corpus, crawlResult, hits, importedCount, collectorInbox, libraryStatus] =
     await Promise.all([
       loadAdExamples(),
       loadAdIntelligenceCorpusSummary(),
@@ -49,6 +57,10 @@ export default async function AdExampleLibraryPage() {
         items: [],
         counts: { ...EMPTY_COLLECTOR_COUNTS },
         lastBatchId: null,
+        migrationNeeded: true,
+      })),
+      loadMetaAdLibraryStatus().catch(() => ({
+        ...EMPTY_META_AD_LIBRARY_STATUS,
         migrationNeeded: true,
       })),
     ]);
@@ -97,6 +109,10 @@ export default async function AdExampleLibraryPage() {
       ) : null}
 
       <div className="mt-8 space-y-8">
+        <MetaAdLibraryCollector
+          initialStatus={libraryStatus}
+          initialNotice={query.library ?? null}
+        />
         <AdLibraryCollectorSandbox initialInbox={collectorInbox} />
         <ChatGPTAdLibraryImportPanel
           initialCrawl={crawlResult.status}

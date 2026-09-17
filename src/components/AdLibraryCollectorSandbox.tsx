@@ -213,7 +213,8 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
             Hier landen Beispiele, bevor sie die KI wirklich sieht. Live-Gedächtnis
             ist der Inspiration-Vault (`brand_assets`, `library_scope=INSPIRATION`).
             First-Party-Winner bleiben am Kundenkonto. Diese Inbox ist die gemeinsame
-            Andockstelle für manuelle Beispiele und spätere Meta/Google/TikTok-Collector.
+            Andockstelle für manuelle Beispiele und den Meta-Ad-Library-Collector
+            (Google/TikTok später).
           </p>
         </div>
         <button

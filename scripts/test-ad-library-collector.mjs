@@ -180,6 +180,7 @@ assert.match(retrieve, /loadInspirationLearningPreview/);
 
 const page = read("src/app/dashboard/inspiration/page.tsx");
 assert.match(page, /AdLibraryCollectorSandbox/);
+assert.match(page, /MetaAdLibraryCollector/);
 
 const client = read("src/components/AdLibraryCollectorSandbox.tsx");
 assert.match(client, /Korpus-Sandbox/);
