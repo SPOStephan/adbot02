@@ -156,6 +156,15 @@ export async function POST(request: NextRequest) {
     console.error("chatgpt_ad_library_crawl_admin_post_failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return json({ ok: false, message: "Crawl-Aktion fehlgeschlagen." }, 500);
+    return json(
+      {
+        ok: false,
+        message:
+          error instanceof Error
+            ? `Crawl-Aktion fehlgeschlagen: ${error.message}`
+            : "Crawl-Aktion fehlgeschlagen.",
+      },
+      500,
+    );
   }
 }

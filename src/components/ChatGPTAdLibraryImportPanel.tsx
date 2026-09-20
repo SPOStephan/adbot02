@@ -546,7 +546,7 @@ export function ChatGPTAdLibraryImportPanel({
         };
       };
       if (!response.ok || !payload.ok) {
-        throw new Error(payload.message ?? "Sofortlauf fehlgeschlagen.");
+        throw new Error(runNowFailureMessage(response, payload.message));
       }
       if (payload.status) setCrawl(payload.status);
       if (payload.result?.skippedLease) {
@@ -1014,6 +1014,17 @@ function CrawlMetric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-xl font-extrabold text-emerald-950">{value}</p>
     </div>
   );
+}
+
+function runNowFailureMessage(response: Response, serverMessage?: string): string {
+  if (serverMessage?.trim()) return serverMessage.trim();
+  if (response.status === 504 || response.status === 524 || response.status === 502) {
+    return `Sofortlauf abgebrochen (HTTP ${response.status}): Production wartet noch auf den langen Unlock-Drain und überschreitet das Admin-Limit von 5 Minuten. Nach dem Merge ist der Klick ein kurzer Batch.`;
+  }
+  if (response.status > 0) {
+    return `Sofortlauf fehlgeschlagen (HTTP ${response.status}).`;
+  }
+  return "Sofortlauf fehlgeschlagen: keine Antwort vom Server.";
 }
 
 function formatWhen(value: string | null | undefined): string {

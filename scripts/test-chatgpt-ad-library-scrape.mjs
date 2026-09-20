@@ -55,6 +55,8 @@ assert.match(adminCrawl, /scrapeChatGPTAdLibraryUnlockBatch/);
 assert.match(adminCrawl, /budgetMs: 120_000/);
 assert.match(scrape, /last_failure_errors/);
 assert.match(panel, /Sofortlauf gestartet/);
+assert.match(panel, /runNowFailureMessage/);
+assert.match(panel, /Admin-Limit von 5 Minuten/);
 assert.match(panel, /Quelle ${sourceLabel}|Achtung: Queue war leer/);
 assert.match(crawlState, /clearChatGPTAdLibraryScrapeLeases/);
 assert.match(panel, /Stau auflösen/);
