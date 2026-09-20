@@ -85,7 +85,7 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 - **Unlocker-Probe + Import #7341**: Bild + Copy + Prompts. Karten zeigen Anzeigentext und die echten Trigger-Prompts aus der Quelle — keinen Platzhalter wie „ChatGPT-Kontextanzeige“.
 - Auto-Scrape-Panel + optionaler JSON-Import
 - Status: `GET /api/admin/chatgpt-ad-library/crawl` · `POST { action: "probe_unlocker" }`
-- Stau: `POST { action: "unstick" }` entfernt schon importierte IDs und holt `skipped_ids` zurück in die Queue (Recovery nach Credit-Fehlern). `POST { action: "run_now" }` holt den nächsten Unlocker-Lauf aus der **wartenden Queue**.
+- Stau: `POST { action: "unstick" }` entfernt schon importierte IDs und holt `skipped_ids` zurück in die Queue (Recovery nach Credit-Fehlern). `POST { action: "run_now" }` drainiert bis zu **6 Runden × 40 IDs** (unter 5 Minuten) aus der **wartenden Queue**. „Neu“ sind nur neue Vault-Zeilen; ein schon gespeichertes Bild einer *anderen* ID bekommt eine eigene Zeile (SHA-Suffix), statt still den alten Eintrag zu zählen.
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`
 - Vault-Zähler nutzt `count: exact` und paginiert. Neue Supabase-Projekte kappen eine einzelne REST-Antwort oft bei **1000 Zeilen** (`max-rows`) — das stoppt den Import nicht, täuscht aber „genau 1000 im Vault“ vor, wenn man alle Zeilen in einem Request holt.
 
@@ -100,6 +100,7 @@ Ein eingefrorener Vault-Zähler (z. B. 2458) ist **kein Code-Limit**. Häufige
 - ScrapingBee-Credits/Key: früher wurden `unlocker_400/401/403` dauerhaft nach `skipped_ids` geschrieben und haben die Queue verbrannt. Jetzt bricht der Lauf ab, die IDs bleiben in der Queue, Banner unter Inspiration.
 - GitHub Action in ~6–40 s „grün“: Unlocker ist an, aber das Lease ist oft schon vom Vercel-Minuten-Cron belegt (`skippedLease`). Der Minuten-Cron ist der eigentliche Importer.
 - Importierte IDs werden über den `external_id`-Index geprüft, nicht über einen 1000-Zeilen-Scan. Discover hängt keine schon importierten IDs wieder vor die Queue.
+- Der Inspiration-Vault registriert Dateien per SHA-256. Viele ChatGPT-Ads teilen ein Creative — ohne Suffix würde `register_inspiration_vault_asset` die alte Zeile zurückgeben, der Sofortlauf „39 neu“ sagen und **Im Vault** stehen bleiben. Der Import legt in dem Fall eine eigene Zeile an.
 
 ## KI-Nutzung
 

@@ -187,6 +187,7 @@ export async function countChatGPTAdLibraryImports(): Promise<number> {
       .eq("library_scope", "INSPIRATION")
       .neq("status", "REVOKED")
       .filter("metadata->>library", "eq", "ad_example_library")
+      .order("id", { ascending: true })
       .range(from, from + page - 1);
     if (error || !Array.isArray(data) || data.length < 1) break;
     for (const row of data) {

@@ -58,7 +58,7 @@
     "test:site-admin": "node scripts/test-site-admin.mjs",
     "test:site-logo": "node scripts/test-site-logo.mjs",
     "test:ad-examples": "node scripts/test-ad-example-library.mjs && node scripts/test-ad-library-collector.mjs && node scripts/test-ad-training.mjs",
-    "test:chatgpt-ad-library": "node scripts/test-chatgpt-ad-library.mjs && node --experimental-strip-types scripts/test-chatgpt-ad-library-parse.mjs",
+    "test:chatgpt-ad-library": "node scripts/test-chatgpt-ad-library.mjs && node --experimental-strip-types scripts/test-chatgpt-ad-library-parse.mjs && node --experimental-strip-types scripts/test-chatgpt-ad-library-jpeg.mjs",
     "test:chatgpt-ad-library-scrape": "node scripts/test-chatgpt-ad-library-scrape.mjs && node scripts/test-chatgpt-ad-library-plan.mjs",
     "test:chatgpt-ad-library-parse": "node --experimental-strip-types scripts/test-chatgpt-ad-library-parse.mjs",
     "test:ad-learning": "node scripts/test-ad-learning.mjs",
