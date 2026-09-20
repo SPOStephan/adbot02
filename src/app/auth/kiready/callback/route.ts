@@ -14,6 +14,7 @@ import {
 } from "@/lib/kiready/cookies";
 import { decideAccessFromContext, denialMessage } from "@/lib/kiready/entitlement";
 import { getKireadyOidcEnv, isKireadyOidcConfigured } from "@/lib/kiready/env";
+import { KireadyContextError } from "@/lib/kiready/errors";
 import {
   createLocalAdbotUser,
   findIdentity,
@@ -145,8 +146,12 @@ export async function GET(request: NextRequest) {
       tokens,
       secure,
     });
-  } catch {
-    const response = kireadyLoginErrorRedirect("KIready-Anmeldung konnte nicht abgeschlossen werden.");
+  } catch (error) {
+    const response = kireadyLoginErrorRedirect(
+      error instanceof KireadyContextError
+        ? error.message
+        : "KIready-Anmeldung konnte nicht abgeschlossen werden.",
+    );
     clearOidcFlowCookies(response, secure);
     return response;
   }

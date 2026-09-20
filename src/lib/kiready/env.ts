@@ -4,6 +4,7 @@ import { APP_SITE_URL } from "@/lib/site-urls";
 import {
   DEFAULT_KIREADY_CONTEXT_URL,
   DEFAULT_KIREADY_ISSUER,
+  DEFAULT_KIREADY_OIDC_CLIENT_ID,
   DEFAULT_KIREADY_PORTAL_URL,
   KIREADY_CALLBACK_PATH,
 } from "@/lib/kiready/public";
@@ -33,28 +34,21 @@ function requiredWhenConfigured(name: string, value: string): string {
 }
 
 export function isKireadyOidcConfigured(): boolean {
-  return Boolean(
-    optional("KIREADY_OIDC_CLIENT_ID") &&
-      optional("KIREADY_OIDC_CLIENT_SECRET") &&
-      optional("KIREADY_STATE_SECRET"),
-  );
+  return Boolean(optional("KIREADY_OIDC_CLIENT_SECRET"));
 }
 
 export function getKireadyOidcEnv(): KireadyOidcEnv {
-  const clientId = requiredWhenConfigured(
-    "KIREADY_OIDC_CLIENT_ID",
-    optional("KIREADY_OIDC_CLIENT_ID"),
-  );
+  const clientId =
+    optional("KIREADY_OIDC_CLIENT_ID") || DEFAULT_KIREADY_OIDC_CLIENT_ID;
   const clientSecret = requiredWhenConfigured(
     "KIREADY_OIDC_CLIENT_SECRET",
     optional("KIREADY_OIDC_CLIENT_SECRET"),
   );
-  const stateSecret = requiredWhenConfigured(
-    "KIREADY_STATE_SECRET",
-    optional("KIREADY_STATE_SECRET"),
-  );
+  const stateSecret = optional("KIREADY_STATE_SECRET") || clientSecret;
   if (stateSecret.length < 32) {
-    throw new Error("KIREADY_STATE_SECRET muss mindestens 32 Zeichen haben.");
+    throw new Error(
+      "KIREADY_STATE_SECRET oder KIREADY_OIDC_CLIENT_SECRET muss mindestens 32 Zeichen haben.",
+    );
   }
 
   const issuer = (optional("KIREADY_OIDC_ISSUER") || DEFAULT_KIREADY_ISSUER).replace(
