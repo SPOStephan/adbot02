@@ -1,5 +1,6 @@
 import "server-only";
 
+import { resolveKireadyContextError } from "@/lib/kiready/errors";
 import {
   hasPersonalAdbotUse,
   parseKireadyAdbotContext,
@@ -19,10 +20,11 @@ export async function fetchKireadyAdbotContext(input: {
     },
     cache: "no-store",
   });
+  const raw = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) {
-    throw new Error("KIready-Adbot-Kontext nicht erreichbar.");
+    throw resolveKireadyContextError(response.status, raw);
   }
-  const parsed = parseKireadyAdbotContext(await response.json());
+  const parsed = parseKireadyAdbotContext(raw);
   if (!parsed) {
     throw new Error("KIready-Adbot-Kontext ist ungültig.");
   }

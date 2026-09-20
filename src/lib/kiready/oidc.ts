@@ -5,6 +5,12 @@ import { createHash } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 import type { KireadyOidcEnv } from "@/lib/kiready/env";
+import {
+  DEFAULT_KIREADY_AUTHORIZATION_ENDPOINT,
+  DEFAULT_KIREADY_ISSUER,
+  DEFAULT_KIREADY_JWKS_URI,
+  DEFAULT_KIREADY_TOKEN_ENDPOINT,
+} from "@/lib/kiready/public";
 import type { KireadyOidcClaims } from "@/lib/kiready/types";
 import { randomOidcValue } from "@/lib/kiready/crypto";
 
@@ -28,6 +34,21 @@ export function createPkcePair() {
   return { verifier, challenge };
 }
 
+function defaultDiscoveryDocument(issuer: string): OidcDiscovery | null {
+  if (issuer.replace(/\/+$/, "") !== DEFAULT_KIREADY_ISSUER) return null;
+  return {
+    issuer: DEFAULT_KIREADY_ISSUER,
+    authorization_endpoint: DEFAULT_KIREADY_AUTHORIZATION_ENDPOINT,
+    token_endpoint: DEFAULT_KIREADY_TOKEN_ENDPOINT,
+    jwks_uri: DEFAULT_KIREADY_JWKS_URI,
+  };
+}
+
+export function clientSecretBasicHeader(clientId: string, clientSecret: string): string {
+  const credentials = `${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`;
+  return `Basic ${Buffer.from(credentials, "utf8").toString("base64")}`;
+}
+
 export async function loadKireadyDiscovery(issuer: string): Promise<OidcDiscovery> {
   const now = Date.now();
   if (
@@ -39,31 +60,42 @@ export async function loadKireadyDiscovery(issuer: string): Promise<OidcDiscover
   }
 
   const url = `${issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`;
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    throw new Error("KIready-OIDC-Discovery nicht erreichbar.");
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error("KIready-OIDC-Discovery nicht erreichbar.");
+    }
+    const raw = (await response.json()) as unknown;
+    if (
+      !isRecord(raw) ||
+      typeof raw.issuer !== "string" ||
+      typeof raw.authorization_endpoint !== "string" ||
+      typeof raw.token_endpoint !== "string" ||
+      typeof raw.jwks_uri !== "string"
+    ) {
+      throw new Error("KIready-OIDC-Discovery ist unvollständig.");
+    }
+    const document: OidcDiscovery = {
+      issuer: raw.issuer,
+      authorization_endpoint: raw.authorization_endpoint,
+      token_endpoint: raw.token_endpoint,
+      jwks_uri: raw.jwks_uri,
+    };
+    discoveryCache = { issuer, document, fetchedAt: now };
+    return document;
+  } catch (error) {
+    const fallback = defaultDiscoveryDocument(issuer);
+    if (fallback) {
+      discoveryCache = { issuer, document: fallback, fetchedAt: now };
+      return fallback;
+    }
+    throw error instanceof Error
+      ? error
+      : new Error("KIready-OIDC-Discovery nicht erreichbar.");
   }
-  const raw = (await response.json()) as unknown;
-  if (
-    !isRecord(raw) ||
-    typeof raw.issuer !== "string" ||
-    typeof raw.authorization_endpoint !== "string" ||
-    typeof raw.token_endpoint !== "string" ||
-    typeof raw.jwks_uri !== "string"
-  ) {
-    throw new Error("KIready-OIDC-Discovery ist unvollständig.");
-  }
-  const document: OidcDiscovery = {
-    issuer: raw.issuer,
-    authorization_endpoint: raw.authorization_endpoint,
-    token_endpoint: raw.token_endpoint,
-    jwks_uri: raw.jwks_uri,
-  };
-  discoveryCache = { issuer, document, fetchedAt: now };
-  return document;
 }
 
 export function buildKireadyAuthorizeUrl(input: {
@@ -95,14 +127,13 @@ export async function exchangeKireadyCode(input: {
     grant_type: "authorization_code",
     code: input.code,
     redirect_uri: input.env.redirectUri,
-    client_id: input.env.clientId,
-    client_secret: input.env.clientSecret,
     code_verifier: input.verifier,
   });
   const response = await fetch(input.tokenEndpoint, {
     method: "POST",
     headers: {
       Accept: "application/json",
+      Authorization: clientSecretBasicHeader(input.env.clientId, input.env.clientSecret),
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body,

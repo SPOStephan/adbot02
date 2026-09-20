@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   if (!isKireadyOidcConfigured()) {
     return kireadyLoginErrorRedirect(
-      "KIready-Anmeldung ist noch nicht konfiguriert. Client-ID und Secret fehlen.",
+      "KIready-Anmeldung ist noch nicht konfiguriert. Das Client-Secret fehlt.",
     );
   }
 

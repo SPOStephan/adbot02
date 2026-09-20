@@ -10,6 +10,7 @@ export const KIREADY_PERMISSIONS = [
 export type KireadyAdbotPermission = (typeof KIREADY_PERMISSIONS)[number];
 
 export const KIREADY_ENTITLEMENT_STATUSES = [
+  "trial",
   "trialing",
   "active",
   "cancel_at_period_end",

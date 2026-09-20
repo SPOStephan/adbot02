@@ -29,6 +29,7 @@ export function decideKireadyAccess(input: {
   if (!input.hasAccess && input.status !== "past_due") return "no_company_access";
   if (input.status === "past_due") return "past_due";
   if (
+    input.status === "trial" ||
     input.status === "trialing" ||
     input.status === "active" ||
     input.status === "cancel_at_period_end"
