@@ -16,6 +16,7 @@ assert.match(read("src/app/auth/kiready/callback/route.ts"), /verifyKireadyIdTok
 assert.match(read("src/app/auth/kiready/callback/route.ts"), /findIdentity/);
 assert.match(read("src/app/auth/kiready/link/page.tsx"), /Konto einmalig verknüpfen/);
 assert.match(read("src/components/AuthForm.tsx"), /Mit KIready anmelden/);
+assert.match(read("src/components/AuthForm.tsx"), /Sicher anmelden[\s\S]*Mit KIready anmelden/);
 assert.match(read("src/components/DashboardHeaderChrome.tsx"), /KIready öffnen/);
 assert.match(read("src/components/SignOutButton.tsx"), /window\.location\.assign\(`\$\{APP_SITE_URL\}\/login`\)/);
 assert.match(read("src/lib/site-urls.ts"), /\/auth\/kiready\/start/);

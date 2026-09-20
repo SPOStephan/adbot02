@@ -48,8 +48,7 @@ export default function RegisterPage() {
             <p className="text-sm font-bold text-blue-600">Konto anlegen</p>
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight">Portalzugang erstellen</h2>
             <p className="mb-8 mt-3 text-slate-500">
-              Lege ein Adbot-Konto mit E-Mail und Passwort an. Kommst du über KIready,
-              reicht „Mit KIready anmelden“.
+              Nach der Registrierung kannst du direkt in das geschützte Dashboard wechseln.
             </p>
             <AuthForm mode="register" />
           </div>

@@ -141,13 +141,22 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
         {!loading ? <ArrowRight className="size-5" /> : null}
       </button>
 
-      <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-        oder
-      </p>
+      <div className="relative py-1">
+        <div className="absolute inset-x-0 top-1/2 h-px bg-slate-200" />
+        <p className="relative mx-auto w-fit bg-slate-50 px-3 text-xs font-medium text-slate-400">
+          oder
+        </p>
+      </div>
       <a
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-900 transition hover:bg-slate-50"
+        className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
         href={kireadyHref}
       >
+        <span
+          aria-hidden
+          className="grid size-6 place-items-center rounded-md bg-slate-900 text-[11px] font-extrabold text-white"
+        >
+          KI
+        </span>
         Mit KIready anmelden
       </a>
 
