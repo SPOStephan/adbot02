@@ -5,6 +5,7 @@ import {
   getChatGPTAdLibraryCrawlStatus,
   setChatGPTAdLibraryCrawlEnabled,
   unstickChatGPTAdLibraryQueue,
+  clearChatGPTAdLibraryScrapeLeases,
 } from "@/lib/chatgpt-ad-library/crawl-state";
 import {
   ingestChatGPTAdLibrarySeedFallback,
@@ -120,6 +121,12 @@ export async function POST(request: NextRequest) {
       const unstick = await unstickChatGPTAdLibraryQueue();
       const status = await getChatGPTAdLibraryCrawlStatus();
       return json({ ok: true, action, unstick, status });
+    }
+
+    if (action === "release_leases") {
+      const leases = await clearChatGPTAdLibraryScrapeLeases();
+      const status = await getChatGPTAdLibraryCrawlStatus();
+      return json({ ok: true, action, leases, status });
     }
 
     if (action === "run_now") {

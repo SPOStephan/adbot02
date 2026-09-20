@@ -45,6 +45,7 @@ export type ChatGPTAdLibraryCrawlStatus = {
   unlockerProvider: "scrapingbee";
   leaseBusy: boolean;
   activeLeases: number;
+  leaseUntil: string | null;
 };
 
 type CrawlRow = {
@@ -171,6 +172,10 @@ export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibrary
     unlockerProvider: "scrapingbee",
     leaseBusy: leases.length >= CHATGPT_AD_LIBRARY_UNLOCK_LEASE_MAX,
     activeLeases: leases.length,
+    leaseUntil: leases.reduce<string | null>((latest, item) => {
+      if (!latest || item.until > latest) return item.until;
+      return latest;
+    }, null),
   };
 }
 
@@ -579,4 +584,26 @@ export async function releaseChatGPTAdLibraryScrapeLease(owner: string): Promise
     })
     .eq("id", "default");
   if (error) throw new Error(`crawl_state_lease_release_failed: ${error.message}`);
+}
+
+export async function clearChatGPTAdLibraryScrapeLeases(): Promise<{
+  released: number;
+}> {
+  const row = await loadRow();
+  const runSummary = summary(row.last_run_summary);
+  const released = activeLeases(runSummary).length;
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("chatgpt_ad_library_crawl_state")
+    .update({
+      last_run_summary: {
+        ...runSummary,
+        active_leases: [],
+        last_lease_cleared_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", "default");
+  if (error) throw new Error(`crawl_state_lease_clear_failed: ${error.message}`);
+  return { released };
 }
