@@ -85,6 +85,8 @@ try {
   assert.equal(separateHostUrls.isPortalHostname("app.adbot.one"), true);
   assert.equal(separateHostUrls.isPortalPath("/passwort-vergessen"), true);
   assert.equal(separateHostUrls.isPortalPath("/passwort-neu"), true);
+  assert.equal(separateHostUrls.isPortalPath("/auth/kiready/start"), true);
+  assert.equal(separateHostUrls.isPortalPath("/auth/kiready/callback"), true);
   assert.equal(separateHostUrls.FUNNEL_SITE_URL, "https://funnel.adbot.one");
   assert.equal(
     separateHostUrls.createFunnelUrl("/f/karriere").toString(),

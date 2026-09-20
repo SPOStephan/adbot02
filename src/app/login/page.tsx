@@ -49,7 +49,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <p className="text-sm font-bold text-blue-600">Willkommen zurück</p>
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight">Beim Portal anmelden</h2>
             <p className="mb-8 mt-3 text-slate-500">
-              Nutze das Konto, das in deinem Supabase-Projekt verwaltet wird.
+              Nutze dein Adbot-Konto mit E-Mail und Passwort.
             </p>
             {error ? (
               <p className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">

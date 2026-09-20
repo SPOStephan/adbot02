@@ -58,6 +58,11 @@ export function isPortalPath(pathname: string) {
     normalizedPath === "/passwort-vergessen" ||
     normalizedPath === "/passwort-neu" ||
     normalizedPath === "/auth/callback" ||
+    normalizedPath === "/auth/kiready/start" ||
+    normalizedPath === "/auth/kiready/callback" ||
+    normalizedPath === "/auth/kiready/link" ||
+    normalizedPath === "/auth/kiready/link/confirm" ||
+    normalizedPath === "/auth/kiready/denied" ||
     normalizedPath === "/dashboard" ||
     normalizedPath.startsWith("/dashboard/")
   );

@@ -1,8 +1,10 @@
-import { Bell } from "lucide-react";
+import { Bell, ExternalLink } from "lucide-react";
 
 import { CreditsSidebarBalance } from "@/components/CreditsSidebarBalance";
 import { SignOutButton } from "@/components/SignOutButton";
 import { getCreditBalanceForUser } from "@/lib/billing/credits";
+import { getKireadyAccessForUser } from "@/lib/kiready/entitlement";
+import { kireadyPortalUrl } from "@/lib/kiready/public";
 import { createClient } from "@/lib/supabase/server";
 
 export async function DashboardHeaderChrome() {
@@ -26,6 +28,8 @@ export async function DashboardHeaderChrome() {
     creditBalance = null;
   }
 
+  const access = await getKireadyAccessForUser(user.id).catch(() => null);
+
   return (
     <div className="ml-auto flex items-center gap-2 sm:gap-4">
       <span className="lg:hidden">
@@ -34,6 +38,20 @@ export async function DashboardHeaderChrome() {
           compact
         />
       </span>
+      {access?.reason === "past_due" ? (
+        <span className="hidden rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 sm:inline">
+          Zahlung überfällig
+        </span>
+      ) : null}
+      <a
+        className="hidden items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950 sm:inline-flex"
+        href={kireadyPortalUrl()}
+        rel="noreferrer"
+        target="_blank"
+      >
+        KIready öffnen
+        <ExternalLink className="size-3.5" />
+      </a>
       <span className="hidden max-w-56 truncate text-sm text-slate-500 sm:block">
         {user.email}
       </span>

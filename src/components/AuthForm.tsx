@@ -7,6 +7,7 @@ import { ArrowRight, LoaderCircle, Mail } from "lucide-react";
 
 import { PasswordInput } from "@/components/PasswordInput";
 import { normalizeSafeNextPath } from "@/lib/auth/safe-next-path";
+import { KIREADY_START_PATH } from "@/lib/kiready/public";
 import { APP_SITE_URL } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/client";
 
@@ -76,6 +77,8 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
     setLoading(false);
   }
 
+  const kireadyHref = `${KIREADY_START_PATH}?next=${encodeURIComponent(safeNextPath)}`;
+
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="space-y-2">
@@ -137,6 +140,25 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
         {isLogin ? "Sicher anmelden" : "Kostenlos registrieren"}
         {!loading ? <ArrowRight className="size-5" /> : null}
       </button>
+
+      <div className="relative py-1">
+        <div className="absolute inset-x-0 top-1/2 h-px bg-slate-200" />
+        <p className="relative mx-auto w-fit bg-slate-50 px-3 text-xs font-medium text-slate-400">
+          oder
+        </p>
+      </div>
+      <a
+        className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+        href={kireadyHref}
+      >
+        <span
+          aria-hidden
+          className="grid size-6 place-items-center rounded-md bg-slate-900 text-[11px] font-extrabold text-white"
+        >
+          KI
+        </span>
+        Mit KIready anmelden
+      </a>
 
       <p className="text-center text-sm text-slate-500">
         {isLogin ? "Noch kein Konto?" : "Schon registriert?"}{" "}

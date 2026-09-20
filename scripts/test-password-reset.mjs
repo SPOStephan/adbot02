@@ -9,6 +9,8 @@ function read(path) {
   return readFileSync(join(root, path), "utf8");
 }
 
+assert.match(read("src/components/AuthForm.tsx"), /Mit KIready anmelden/);
+assert.match(read("src/components/AuthForm.tsx"), /KIREADY_START_PATH/);
 assert.match(read("src/components/AuthForm.tsx"), /Passwort vergessen\?/);
 assert.match(read("src/components/AuthForm.tsx"), /PasswordInput/);
 assert.match(read("src/components/ForgotPasswordForm.tsx"), /resetPasswordForEmail/);
