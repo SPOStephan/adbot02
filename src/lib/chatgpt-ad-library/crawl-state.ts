@@ -3,10 +3,17 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   CHATGPT_AD_LIBRARY_PROBE_MAX_ID,
-  CHATGPT_AD_LIBRARY_PROBE_WINDOW,
   CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
+  CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX,
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
 } from "@/lib/chatgpt-ad-library/scrape-constants";
+import {
+  compactPendingIds,
+  normalizeLibraryIdList,
+  selectScrapeBatch,
+  type ScrapePlanSource,
+} from "@/lib/chatgpt-ad-library/plan";
+import { countChatGPTAdLibraryImports } from "@/lib/chatgpt-ad-library/retrieval";
 import { CHATGPT_AD_LIBRARY_SYSTEM_IDS } from "@/lib/chatgpt-ad-library/system-ids";
 import { CHATGPT_AD_LIBRARY_PROVIDER } from "@/lib/chatgpt-ad-library/types";
 import { isChatGPTAdLibraryUnlockerConfigured } from "@/lib/chatgpt-ad-library/unlocker";
@@ -14,6 +21,10 @@ import { isChatGPTAdLibraryUnlockerConfigured } from "@/lib/chatgpt-ad-library/u
 export type ChatGPTAdLibraryCrawlStatus = {
   enabled: boolean;
   pendingCount: number;
+  skippedCount: number;
+  vaultCount: number;
+  lastPlanSource: ScrapePlanSource | null;
+  queueStarved: boolean;
   nextDiscoverShard: number;
   nextProbeId: number;
   catalogSize: number;
@@ -36,6 +47,7 @@ type CrawlRow = {
   id: string;
   enabled: boolean;
   pending_ids: unknown;
+  skipped_ids?: unknown;
   next_discover_shard: number;
   last_plan_at: string | null;
   last_ingest_at: string | null;
@@ -48,18 +60,13 @@ type CrawlRow = {
 };
 
 function asIdList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [
-    ...new Set(
-      value
-        .map((item) => String(item ?? "").trim())
-        .filter((item) => /^\d{1,12}$/.test(item)),
-    ),
-  ];
+  return normalizeLibraryIdList(value);
 }
 
-function uniqueIds(...groups: string[][]): string[] {
-  return [...new Set(groups.flat().filter((id) => /^\d{1,12}$/.test(id)))];
+function skippedFromRow(row: CrawlRow): string[] {
+  const fromColumn = asIdList(row.skipped_ids);
+  if (fromColumn.length > 0) return fromColumn;
+  return asIdList(summary(row.last_run_summary).skipped_ids);
 }
 
 function summary(value: unknown): Record<string, unknown> {
@@ -74,15 +81,30 @@ function probeCursor(value: Record<string, unknown>): number {
   return Math.min(Math.floor(raw), CHATGPT_AD_LIBRARY_PROBE_MAX_ID + 1);
 }
 
+const ROW_SELECT_WITH_SKIPPED =
+  "id,enabled,pending_ids,skipped_ids,next_discover_shard,last_plan_at,last_ingest_at,last_discover_at,last_run_summary,total_planned,total_imported,total_skipped_duplicate,total_failed";
+const ROW_SELECT =
+  "id,enabled,pending_ids,next_discover_shard,last_plan_at,last_ingest_at,last_discover_at,last_run_summary,total_planned,total_imported,total_skipped_duplicate,total_failed";
+
+function isMissingSkippedColumn(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  return /skipped_ids/i.test(error.message ?? "");
+}
+
 async function loadRow(): Promise<CrawlRow> {
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const withSkipped = await admin
     .from("chatgpt_ad_library_crawl_state")
-    .select(
-      "id,enabled,pending_ids,next_discover_shard,last_plan_at,last_ingest_at,last_discover_at,last_run_summary,total_planned,total_imported,total_skipped_duplicate,total_failed",
-    )
+    .select(ROW_SELECT_WITH_SKIPPED)
     .eq("id", "default")
     .maybeSingle();
+  const { data, error } = isMissingSkippedColumn(withSkipped.error)
+    ? await admin
+        .from("chatgpt_ad_library_crawl_state")
+        .select(ROW_SELECT)
+        .eq("id", "default")
+        .maybeSingle()
+    : withSkipped;
   if (error) {
     throw new Error(`crawl_state_load_failed: ${error.message}`);
   }
@@ -90,9 +112,7 @@ async function loadRow(): Promise<CrawlRow> {
     const inserted = await admin
       .from("chatgpt_ad_library_crawl_state")
       .upsert({ id: "default" }, { onConflict: "id" })
-      .select(
-        "id,enabled,pending_ids,next_discover_shard,last_plan_at,last_ingest_at,last_discover_at,last_run_summary,total_planned,total_imported,total_skipped_duplicate,total_failed",
-      )
+      .select(ROW_SELECT)
       .maybeSingle();
     if (inserted.error || !inserted.data) {
       throw new Error("crawl_state_bootstrap_failed");
@@ -104,22 +124,43 @@ async function loadRow(): Promise<CrawlRow> {
 
 export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibraryCrawlStatus> {
   const row = await loadRow();
+  const runSummary = summary(row.last_run_summary);
+  const pending = asIdList(row.pending_ids);
+  const skipped = skippedFromRow(row);
+  const lastPlanIds = asIdList(runSummary.last_plan_ids);
+  const lastPlanSource = (["pending", "catalog", "probe", "empty"] as const).includes(
+    runSummary.last_plan_source as ScrapePlanSource,
+  )
+    ? (runSummary.last_plan_source as ScrapePlanSource)
+    : null;
+  const catalogSet = new Set(CHATGPT_AD_LIBRARY_SYSTEM_IDS);
+  const queueStarved =
+    pending.length > 20 &&
+    lastPlanIds.length > 0 &&
+    lastPlanIds.every((id) => catalogSet.has(id));
+  const vaultCount = await countChatGPTAdLibraryImports().catch(() => 0);
   return {
     enabled: row.enabled === true,
-    pendingCount: asIdList(row.pending_ids).length,
+    pendingCount: pending.length,
+    skippedCount: skipped.length,
+    vaultCount,
+    lastPlanSource,
+    queueStarved,
     nextDiscoverShard: Number(row.next_discover_shard) || 0,
-    nextProbeId: probeCursor(summary(row.last_run_summary)),
+    nextProbeId: probeCursor(runSummary),
     catalogSize: CHATGPT_AD_LIBRARY_SYSTEM_IDS.length,
     probeMaxId: CHATGPT_AD_LIBRARY_PROBE_MAX_ID,
     lastPlanAt: row.last_plan_at,
     lastIngestAt: row.last_ingest_at,
     lastDiscoverAt: row.last_discover_at,
-    lastRunSummary: summary(row.last_run_summary),
+    lastRunSummary: runSummary,
     totalPlanned: Number(row.total_planned) || 0,
     totalImported: Number(row.total_imported) || 0,
     totalSkippedDuplicate: Number(row.total_skipped_duplicate) || 0,
     totalFailed: Number(row.total_failed) || 0,
-    scrapeBatchMax: CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
+    scrapeBatchMax: isChatGPTAdLibraryUnlockerConfigured()
+      ? CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX
+      : CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
     sitemapShardCount: CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
     unlockerConfigured: isChatGPTAdLibraryUnlockerConfigured(),
     unlockerProvider: "scrapingbee",
@@ -144,10 +185,14 @@ export async function enqueueChatGPTAdLibraryIds(ids: Array<number | string>): P
 }> {
   const incoming = asIdList(ids);
   const row = await loadRow();
-  const pending = asIdList(row.pending_ids);
+  const skipped = skippedFromRow(row);
+  const pending = compactPendingIds({
+    pending: row.pending_ids,
+    skipped,
+  });
   const before = new Set(pending);
   for (const id of incoming) {
-    if (!before.has(id)) pending.push(id);
+    if (!before.has(id) && !skipped.includes(id)) pending.push(id);
   }
   const admin = createAdminClient();
   const { error } = await admin
@@ -203,26 +248,13 @@ async function alreadyImportedExternalIds(ids: string[]): Promise<Set<string>> {
   return found;
 }
 
-function nextProbeWindow(
-  start: number,
-  exclude: Set<string>,
-): { ids: string[]; nextProbeId: number } {
-  const ids: string[] = [];
-  let cursor = start;
-  while (cursor <= CHATGPT_AD_LIBRARY_PROBE_MAX_ID && ids.length < CHATGPT_AD_LIBRARY_PROBE_WINDOW) {
-    const id = String(cursor);
-    cursor += 1;
-    if (!exclude.has(id)) ids.push(id);
-  }
-  return { ids, nextProbeId: cursor };
-}
-
 export async function planChatGPTAdLibraryScrapeBatch(input?: {
   limit?: number;
 }): Promise<{
   enabled: boolean;
   ids: string[];
   pendingRemaining: number;
+  source: ScrapePlanSource;
   discoverShard: number | null;
 }> {
   const row = await loadRow();
@@ -231,64 +263,152 @@ export async function planChatGPTAdLibraryScrapeBatch(input?: {
       enabled: false,
       ids: [],
       pendingRemaining: asIdList(row.pending_ids).length,
+      source: "empty",
       discoverShard: null,
     };
   }
 
   const limit = Math.min(
     Math.max(input?.limit ?? CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX, 1),
-    CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
+    25,
   );
   const runSummary = summary(row.last_run_summary);
-  let nextProbeId = probeCursor(runSummary);
-
+  const skipped = skippedFromRow(row);
   const pending = asIdList(row.pending_ids);
-  let merged = uniqueIds([...CHATGPT_AD_LIBRARY_SYSTEM_IDS], pending);
-  let imported = await alreadyImportedExternalIds(merged);
-  let fresh = merged.filter((id) => !imported.has(id));
-
-  if (fresh.length < limit && nextProbeId <= CHATGPT_AD_LIBRARY_PROBE_MAX_ID) {
-    const exclude = new Set([...merged, ...fresh]);
-    const window = nextProbeWindow(nextProbeId, exclude);
-    nextProbeId = window.nextProbeId;
-    if (window.ids.length > 0) {
-      const windowImported = await alreadyImportedExternalIds(window.ids);
-      imported = new Set([...imported, ...windowImported]);
-      fresh = uniqueIds(
-        fresh,
-        window.ids.filter((id) => !imported.has(id)),
-      );
-    }
-  }
-
-  const ids = fresh.slice(0, limit);
-  const remaining = fresh.slice(ids.length);
+  const imported = await alreadyImportedExternalIds([
+    ...pending,
+    ...CHATGPT_AD_LIBRARY_SYSTEM_IDS,
+  ]);
+  const pick = selectScrapeBatch({
+    pending,
+    skipped,
+    imported,
+    nextProbeId: probeCursor(runSummary),
+    limit,
+  });
   const discoverShard = Number(row.next_discover_shard) % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
+  const nextSummary = {
+    ...runSummary,
+    last_plan_ids: pick.ids,
+    last_plan_at: new Date().toISOString(),
+    last_plan_source: pick.source,
+    next_probe_id: pick.nextProbeId,
+    catalog_size: CHATGPT_AD_LIBRARY_SYSTEM_IDS.length,
+    skipped_ids: skipped.slice(0, 20_000),
+  };
 
   const admin = createAdminClient();
-  const { error } = await admin
+  const update: Record<string, unknown> = {
+    pending_ids: pick.remainingPending.slice(0, 50_000),
+    last_plan_at: new Date().toISOString(),
+    total_planned: Number(row.total_planned || 0) + pick.ids.length,
+    last_run_summary: nextSummary,
+    updated_at: new Date().toISOString(),
+  };
+  let { error } = await admin
     .from("chatgpt_ad_library_crawl_state")
-    .update({
-      pending_ids: remaining.slice(0, 50_000),
-      last_plan_at: new Date().toISOString(),
-      total_planned: Number(row.total_planned || 0) + ids.length,
-      last_run_summary: {
-        ...runSummary,
-        last_plan_ids: ids,
-        last_plan_at: new Date().toISOString(),
-        next_probe_id: nextProbeId,
-        catalog_size: CHATGPT_AD_LIBRARY_SYSTEM_IDS.length,
-      },
-      updated_at: new Date().toISOString(),
-    })
+    .update({ ...update, skipped_ids: skipped.slice(0, 20_000) })
     .eq("id", "default");
+  if (error && isMissingSkippedColumn(error)) {
+    const fallback = await admin
+      .from("chatgpt_ad_library_crawl_state")
+      .update(update)
+      .eq("id", "default");
+    error = fallback.error;
+  }
   if (error) throw new Error(`crawl_state_plan_failed: ${error.message}`);
 
   return {
     enabled: true,
-    ids,
-    pendingRemaining: remaining.length,
+    ids: pick.ids,
+    pendingRemaining: pick.remainingPending.length,
+    source: pick.source,
     discoverShard,
+  };
+}
+
+export async function markChatGPTAdLibraryIdsSkipped(ids: Array<number | string>): Promise<{
+  skippedCount: number;
+  pendingCount: number;
+}> {
+  const incoming = asIdList(ids);
+  const row = await loadRow();
+  const skipped = [...new Set([...skippedFromRow(row), ...incoming])].slice(0, 20_000);
+  const pending = compactPendingIds({
+    pending: row.pending_ids,
+    skipped,
+  });
+  const admin = createAdminClient();
+  const payload = {
+    pending_ids: pending,
+    last_run_summary: {
+      ...summary(row.last_run_summary),
+      skipped_ids: skipped,
+    },
+    updated_at: new Date().toISOString(),
+  };
+  let { error } = await admin
+    .from("chatgpt_ad_library_crawl_state")
+    .update({ ...payload, skipped_ids: skipped })
+    .eq("id", "default");
+  if (error && isMissingSkippedColumn(error)) {
+    const fallback = await admin
+      .from("chatgpt_ad_library_crawl_state")
+      .update(payload)
+      .eq("id", "default");
+    error = fallback.error;
+  }
+  if (error) throw new Error(`crawl_state_skip_failed: ${error.message}`);
+  return { skippedCount: skipped.length, pendingCount: pending.length };
+}
+
+export async function unstickChatGPTAdLibraryQueue(): Promise<{
+  pendingBefore: number;
+  pendingAfter: number;
+  droppedImported: number;
+  droppedSkipped: number;
+  vaultCount: number;
+}> {
+  const row = await loadRow();
+  const pendingBefore = asIdList(row.pending_ids);
+  const skipped = skippedFromRow(row);
+  const imported = await alreadyImportedExternalIds(pendingBefore);
+  const pendingAfter = compactPendingIds({
+    pending: pendingBefore,
+    skipped,
+    imported,
+  });
+  const admin = createAdminClient();
+  const runSummary = {
+    ...summary(row.last_run_summary),
+    skipped_ids: skipped.slice(0, 20_000),
+    last_unstick_at: new Date().toISOString(),
+    last_unstick_dropped:
+      pendingBefore.length - pendingAfter.length,
+  };
+  const payload = {
+    pending_ids: pendingAfter.slice(0, 50_000),
+    last_run_summary: runSummary,
+    updated_at: new Date().toISOString(),
+  };
+  let { error } = await admin
+    .from("chatgpt_ad_library_crawl_state")
+    .update({ ...payload, skipped_ids: skipped.slice(0, 20_000) })
+    .eq("id", "default");
+  if (error && isMissingSkippedColumn(error)) {
+    const fallback = await admin
+      .from("chatgpt_ad_library_crawl_state")
+      .update(payload)
+      .eq("id", "default");
+    error = fallback.error;
+  }
+  if (error) throw new Error(`crawl_state_unstick_failed: ${error.message}`);
+  return {
+    pendingBefore: pendingBefore.length,
+    pendingAfter: pendingAfter.length,
+    droppedImported: pendingBefore.filter((id) => imported.has(id)).length,
+    droppedSkipped: pendingBefore.filter((id) => skipped.includes(id)).length,
+    vaultCount: await countChatGPTAdLibraryImports().catch(() => 0),
   };
 }
 
@@ -297,11 +417,11 @@ export async function markChatGPTAdLibraryDiscoverDone(input: {
   enqueuedIds: string[];
 }): Promise<void> {
   const row = await loadRow();
-  const pending = asIdList(row.pending_ids);
-  const before = new Set(pending);
-  for (const id of asIdList(input.enqueuedIds)) {
-    if (!before.has(id)) pending.push(id);
-  }
+  const skipped = skippedFromRow(row);
+  const pending = compactPendingIds({
+    pending: [...asIdList(row.pending_ids), ...asIdList(input.enqueuedIds)],
+    skipped,
+  });
   const nextShard =
     (Number(row.next_discover_shard) + 1) % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
   const admin = createAdminClient();

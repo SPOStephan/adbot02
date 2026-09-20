@@ -11,7 +11,9 @@
 #   SCRAPINGBEE_API_KEY   from https://www.scrapingbee.com/ (Freelance ~$50/mo)
 # Optional on Vercel:
 #   CHATGPT_AD_LIBRARY_UPLOADER_USER_ID  (site admin UUID)
-# Apply migration 20260915140000_chatgpt_ad_library_crawl_state.sql
+# Apply migrations:
+#   20260915140000_chatgpt_ad_library_crawl_state.sql
+#   20260920120000_chatgpt_ad_library_skipped_ids.sql
 
 name: ChatGPT Ad Library scrape
 

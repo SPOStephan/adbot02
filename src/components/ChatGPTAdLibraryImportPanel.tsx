@@ -22,6 +22,10 @@ type ImportSummary = {
 type CrawlStatus = {
   enabled: boolean;
   pendingCount: number;
+  skippedCount?: number;
+  vaultCount?: number;
+  lastPlanSource?: "pending" | "catalog" | "probe" | "empty" | null;
+  queueStarved?: boolean;
   nextDiscoverShard: number;
   nextProbeId?: number;
   catalogSize?: number;
@@ -127,7 +131,7 @@ export function ChatGPTAdLibraryImportPanel({
     const [crawlRes, importRes, hitsRes] = await Promise.all([
       fetch("/api/admin/chatgpt-ad-library/crawl", { credentials: "same-origin" }),
       fetch("/api/admin/chatgpt-ad-library/import", { credentials: "same-origin" }),
-      fetch("/api/admin/chatgpt-ad-library/intelligence?limit=48", {
+      fetch("/api/admin/chatgpt-ad-library/intelligence?limit=96", {
         credentials: "same-origin",
       }),
     ]);
@@ -351,6 +355,82 @@ export function ChatGPTAdLibraryImportPanel({
     }
   }
 
+  async function unstickQueue() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/chatgpt-ad-library/crawl", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unstick" }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        status?: CrawlStatus;
+        unstick?: {
+          pendingBefore: number;
+          pendingAfter: number;
+          droppedImported: number;
+          droppedSkipped: number;
+          vaultCount: number;
+        };
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message ?? "Stau konnte nicht aufgelöst werden.");
+      }
+      if (payload.status) setCrawl(payload.status);
+      setNotice(
+        `Queue bereinigt: ${payload.unstick?.pendingBefore ?? "?"} → ${payload.unstick?.pendingAfter ?? "?"} wartend. Der nächste Lauf holt echte Queue-IDs, nicht den Katalog-Loop.`,
+      );
+      await refreshCrawl();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Stau-Auflösung fehlgeschlagen.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function runNow() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/chatgpt-ad-library/crawl", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "run_now" }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        status?: CrawlStatus;
+        result?: {
+          plannedIds?: string[];
+          summary?: { imported?: number; failed?: number };
+          failures?: Array<{ id: string; error: string }>;
+        };
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message ?? "Sofortlauf fehlgeschlagen.");
+      }
+      if (payload.status) setCrawl(payload.status);
+      const imported = payload.result?.summary?.imported ?? 0;
+      const failed = payload.result?.failures?.length ?? payload.result?.summary?.failed ?? 0;
+      setNotice(
+        `Sofortlauf: ${payload.result?.plannedIds?.length ?? 0} IDs geplant · ${imported} neu · ${failed} übersprungen/fehlgeschlagen.`,
+      );
+      await refreshCrawl();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Sofortlauf fehlgeschlagen.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
@@ -363,11 +443,10 @@ export function ChatGPTAdLibraryImportPanel({
               Wiederkehrender Scrape (max. {crawl?.scrapeBatchMax ?? 5}/Lauf)
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-950/80">
-              IDs kommen aus dem <strong>Systemkatalog</strong>
-              {crawl?.catalogSize ? ` (${crawl.catalogSize} verifizierte Ads)` : ""}, der öffentlichen
-              Sitemap und einem sequenziellen Probe, wenn Live-HTML blockiert ist. Der Browser öffnet
-              nur die Ad-Seiten und importiert pro Lauf höchstens {crawl?.scrapeBatchMax ?? 5} neue
-              Anzeigen. Du musst nichts eintippen — Auto-Scrape anlassen.
+              Die Queue (Discoverer/Sitemap) hat Vorrang. Der kleine Systemkatalog und die
+              Sequenz-Probe laufen nur, wenn die Queue leer ist. Pro Lauf höchstens{" "}
+              {crawl?.scrapeBatchMax ?? 5} neue Anzeigen. Auto-Scrape anlassen — tote IDs
+              (404/ohne Copy) werden übersprungen, nicht endlos wiederholt.
             </p>
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
             {crawl?.unlockerConfigured ? (
@@ -403,21 +482,35 @@ export function ChatGPTAdLibraryImportPanel({
           </p>
         ) : null}
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <CrawlMetric label="Queue" value={crawl ? String(crawl.pendingCount) : "…"} />
-          <CrawlMetric label="Importiert (Crawl)" value={crawl ? String(crawl.totalImported) : "…"} />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <CrawlMetric label="Queue wartend" value={crawl ? String(crawl.pendingCount) : "…"} />
+          <CrawlMetric label="Im Vault" value={crawl ? String(crawl.vaultCount ?? importedCount ?? "…") : "…"} />
+          <CrawlMetric label="Übersprungen" value={crawl ? String(crawl.skippedCount ?? 0) : "…"} />
           <CrawlMetric
-            label="Duplikate"
-            value={crawl ? String(crawl.totalSkippedDuplicate) : "…"}
+            label="Lauf-Zähler Import"
+            value={crawl ? String(crawl.totalImported) : "…"}
           />
-          <CrawlMetric label="Fehler" value={crawl ? String(crawl.totalFailed) : "…"} />
+          <CrawlMetric label="Lauf-Zähler Fehler" value={crawl ? String(crawl.totalFailed) : "…"} />
         </div>
+        {crawl?.queueStarved ? (
+          <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+            Stau: {crawl.pendingCount} IDs warten, aber die letzten Läufe haben nur den
+            Systemkatalog wiederholt ({Array.isArray(crawl.lastRunSummary?.last_plan_ids)
+              ? (crawl.lastRunSummary?.last_plan_ids as unknown[]).join(", ")
+              : "Katalog-IDs"}
+            ). „Stau auflösen“ und „Jetzt einen Lauf“ holt die echte Queue.
+          </p>
+        ) : null}
         <p className="mt-3 text-xs text-emerald-900/70">
           Letzter Ingest: {formatWhen(crawl?.lastIngestAt)} · Discover:{" "}
           {formatWhen(crawl?.lastDiscoverAt)} · Probe ab #{crawl?.nextProbeId ?? "–"} · Geplant
           gesamt: {crawl?.totalPlanned ?? "–"}
         </p>
-        <LastRunBox summary={crawl?.lastRunSummary} imported={crawl?.totalImported ?? 0} />
+        <LastRunBox
+          summary={crawl?.lastRunSummary}
+          imported={crawl?.vaultCount ?? crawl?.totalImported ?? 0}
+          planSource={crawl?.lastPlanSource ?? null}
+        />
 
         <section className="mt-5 rounded-xl border border-emerald-200 bg-white p-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
@@ -543,6 +636,22 @@ export function ChatGPTAdLibraryImportPanel({
             type="button"
           >
             Pausieren
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+            disabled={pending}
+            onClick={() => void unstickQueue()}
+            type="button"
+          >
+            Stau auflösen
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-extrabold text-sky-950 hover:bg-sky-100 disabled:opacity-50"
+            disabled={pending}
+            onClick={() => void runNow()}
+            type="button"
+          >
+            Jetzt einen Lauf
           </button>
           <button
             className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
@@ -756,9 +865,11 @@ function UnlockerProbeBox({ probe }: { probe: UnlockerProbe }) {
 function LastRunBox({
   summary,
   imported,
+  planSource,
 }: {
   summary?: Record<string, unknown>;
   imported: number;
+  planSource?: "pending" | "catalog" | "probe" | "empty" | null;
 }) {
   const planIds = Array.isArray(summary?.last_plan_ids)
     ? summary.last_plan_ids.map(String).join(", ")
@@ -767,6 +878,14 @@ function LastRunBox({
     typeof summary?.last_discover_count === "number" ? summary.last_discover_count : null;
   const lastImported =
     typeof summary?.last_imported === "number" ? summary.last_imported : null;
+  const sourceLabel =
+    planSource === "pending"
+      ? "Queue"
+      : planSource === "catalog"
+        ? "Katalog"
+        : planSource === "probe"
+          ? "Sequenz-Probe"
+          : null;
 
   return (
     <div className="mt-4 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-emerald-950">
@@ -775,6 +894,7 @@ function LastRunBox({
       </p>
       <p className="mt-1 font-semibold">
         {planIds ? `Geplant: ${planIds}` : "Noch kein Plan gespeichert."}
+        {sourceLabel ? ` · Quelle ${sourceLabel}` : ""}
         {discoverCount != null ? ` · Discover ${discoverCount} IDs` : ""}
         {lastImported != null ? ` · zuletzt importiert ${lastImported}` : ""}
         {` · Vault gesamt ${imported}`}

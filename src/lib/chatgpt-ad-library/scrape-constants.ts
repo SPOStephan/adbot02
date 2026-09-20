@@ -1,5 +1,7 @@
 /** Shared scrape batch size — stays within chatgptadlibrary.com's ~5-page guest limit. */
 export const CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX = 5;
+/** Unlocker path is not bound to the guest page cap; keep under the 300s cron. */
+export const CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX = 10;
 export const CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT = 4;
 
 /** Sequential probe ceiling when live HTML discover is checkpointed. */

@@ -47,7 +47,7 @@ export async function loadChatGPTAdLibraryForInternalIntelligence(input?: {
   limit?: number;
   query?: string;
 }): Promise<ChatGPTAdLibraryIntelligenceHit[]> {
-  const limit = Math.min(Math.max(input?.limit ?? 40, 1), 100);
+  const limit = Math.min(Math.max(input?.limit ?? 40, 1), 200);
   const needle = (input?.query ?? "").trim().toLowerCase();
   const admin = createAdminClient();
 
@@ -136,7 +136,7 @@ export async function countChatGPTAdLibraryImports(): Promise<number> {
     .eq("library_scope", "INSPIRATION")
     .neq("status", "REVOKED")
     .filter("metadata->>library", "eq", "ad_example_library")
-    .limit(500);
+    .limit(2000);
   if (error || !Array.isArray(data)) return hits.length;
   let count = 0;
   for (const row of data) {

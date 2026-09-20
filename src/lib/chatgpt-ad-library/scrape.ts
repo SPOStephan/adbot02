@@ -4,9 +4,11 @@ import {
   enqueueChatGPTAdLibraryIds,
   getChatGPTAdLibraryCrawlStatus,
   markChatGPTAdLibraryDiscoverDone,
+  markChatGPTAdLibraryIdsSkipped,
   planChatGPTAdLibraryScrapeBatch,
   recordChatGPTAdLibraryIngestSummary,
 } from "@/lib/chatgpt-ad-library/crawl-state";
+import { shouldSkipScrapeError } from "@/lib/chatgpt-ad-library/plan";
 import { importChatGPTAdLibraryBatch } from "@/lib/chatgpt-ad-library/import";
 import {
   extractAdIdsFromSitemapXml,
@@ -15,10 +17,14 @@ import {
   parseChatGPTAdLibraryHtml,
   sanitizeChatGPTAdLibraryCopy,
 } from "@/lib/chatgpt-ad-library/parse-html";
-import { loadChatGPTAdLibraryForInternalIntelligence } from "@/lib/chatgpt-ad-library/retrieval";
+import {
+  countChatGPTAdLibraryImports,
+  loadChatGPTAdLibraryForInternalIntelligence,
+} from "@/lib/chatgpt-ad-library/retrieval";
 import {
   CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
+  CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX,
   CHATGPT_AD_LIBRARY_UNLOCKER_PROBE_AD_ID,
 } from "@/lib/chatgpt-ad-library/scrape-constants";
 import {
@@ -33,6 +39,21 @@ import {
 import { resolveChatGPTAdLibraryUploaderUserId } from "@/lib/chatgpt-ad-library/uploader";
 
 const FETCH_TIMEOUT_MS = 25_000;
+
+async function persistScrapeFailures(
+  failures: Array<{ id: string; error: string }>,
+): Promise<void> {
+  const skip = failures.filter((item) => shouldSkipScrapeError(item.error)).map((item) => item.id);
+  const retry = failures.filter((item) => !shouldSkipScrapeError(item.error)).map((item) => item.id);
+  if (skip.length > 0) await markChatGPTAdLibraryIdsSkipped(skip);
+  if (retry.length > 0) await enqueueChatGPTAdLibraryIds(retry);
+}
+
+async function maybeSeedFallback(reason: string) {
+  const vaultCount = await countChatGPTAdLibraryImports().catch(() => 0);
+  if (vaultCount > 0) return null;
+  return ingestChatGPTAdLibrarySeedFallback({ reason });
+}
 
 async function fetchText(url: string): Promise<{ ok: boolean; status: number; text: string }> {
   const controller = new AbortController();
@@ -128,8 +149,7 @@ export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
     if (isCheckpoint(fetched.status, fetched.text)) {
       blocked = true;
       failures.push({ id, error: "bot_checkpoint_429" });
-      // Re-queue remaining + current for the Playwright worker.
-      await enqueueChatGPTAdLibraryIds(plan.ids);
+      await enqueueChatGPTAdLibraryIds(plan.ids.slice(plan.ids.indexOf(id)));
       break;
     }
     if (!fetched.ok) {
@@ -148,10 +168,13 @@ export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
     records.push(parsed);
   }
 
+  await persistScrapeFailures(failures.filter((item) => item.error !== "bot_checkpoint_429"));
+
   if (records.length < 1) {
+    const seed = await maybeSeedFallback(blocked ? "http_checkpoint" : "http_empty");
     await recordChatGPTAdLibraryIngestSummary({
-      imported: 0,
-      skippedDuplicate: 0,
+      imported: seed?.imported ?? 0,
+      skippedDuplicate: seed?.skippedDuplicate ?? 0,
       failed: failures.length,
       details: { mode: "http", blocked, plannedIds: plan.ids },
     });
@@ -159,7 +182,7 @@ export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
       mode: "http",
       blocked,
       plannedIds: plan.ids,
-      summary: null,
+      summary: seed,
       failures,
     };
   }
@@ -310,9 +333,11 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
     input?.ids && input.ids.length > 0
       ? {
           enabled: true,
-          ids: input.ids.slice(0, CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX),
+          ids: input.ids.slice(0, CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX),
         }
-      : await planChatGPTAdLibraryScrapeBatch();
+      : await planChatGPTAdLibraryScrapeBatch({
+          limit: CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX,
+        });
 
   if (!plan.enabled) {
     return {
@@ -335,11 +360,9 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
       if (unlocked.status === 429 || /vercel security checkpoint/i.test(unlocked.text)) {
         blocked = true;
         failures.push({ id, error: "unlocker_checkpoint" });
-        await enqueueChatGPTAdLibraryIds([id]);
         continue;
       }
       failures.push({ id, error: `unlocker_${unlocked.status || "failed"}` });
-      await enqueueChatGPTAdLibraryIds([id]);
       continue;
     }
     const parsed = parseChatGPTAdLibraryHtml({
@@ -358,9 +381,15 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
     records.push(parsed);
   }
 
+  await persistScrapeFailures(failures);
+
   if (records.length < 1) {
-    const seed = await ingestChatGPTAdLibrarySeedFallback({
-      reason: blocked ? "unlocker_checkpoint" : "unlocker_empty",
+    const seed = await maybeSeedFallback(blocked ? "unlocker_checkpoint" : "unlocker_empty");
+    await recordChatGPTAdLibraryIngestSummary({
+      imported: seed?.imported ?? 0,
+      skippedDuplicate: seed?.skippedDuplicate ?? 0,
+      failed: failures.length,
+      details: { mode: "unlock", blocked, plannedIds: plan.ids },
     });
     return {
       mode: "unlock",

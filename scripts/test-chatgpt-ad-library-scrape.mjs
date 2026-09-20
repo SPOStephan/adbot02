@@ -24,11 +24,24 @@ const systemIdsTs = read("src/lib/chatgpt-ad-library/system-ids.ts");
 const systemIdsJson = JSON.parse(read("fixtures/chatgpt-ad-library/system-ids.json"));
 
 assert.match(constants, /CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX = 5/);
+assert.match(constants, /CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX = 10/);
 assert.match(constants, /CHATGPT_AD_LIBRARY_PROBE_MAX_ID = 30_000/);
 assert.match(crawlState, /planChatGPTAdLibraryScrapeBatch/);
+assert.match(crawlState, /selectScrapeBatch/);
+assert.match(crawlState, /unstickChatGPTAdLibraryQueue/);
+assert.match(crawlState, /skipped_ids/);
+assert.match(crawlState, /queueStarved/);
 assert.match(crawlState, /CHATGPT_AD_LIBRARY_SYSTEM_IDS/);
 assert.match(crawlState, /next_probe_id/);
 assert.match(crawlState, /pending_ids/);
+assert.match(scrape, /maybeSeedFallback|vaultCount/);
+assert.match(scrape, /markChatGPTAdLibraryIdsSkipped/);
+assert.match(adminCrawl, /action === "unstick"/);
+assert.match(adminCrawl, /action === "run_now"/);
+assert.match(panel, /Stau auflösen/);
+assert.match(panel, /Jetzt einen Lauf/);
+assert.match(panel, /Queue wartend/);
+assert.match(vercel, /\*\/15 \* \* \* \*/);
 assert.match(scrape, /bot_checkpoint_429/);
 assert.match(scrape, /skippedPlan/);
 assert.match(scrape, /discoverChatGPTAdLibraryIds/);
@@ -137,6 +150,14 @@ assert.match(migration, /chatgpt_ad_library_crawl_state/);
 assert.match(docs, /GitHub Action/);
 assert.match(docs, /max\. 5|≤5/);
 assert.match(docs, /skippedPlan|keine.*Queue-Entnahme/);
+assert.match(docs, /20260920120000/);
+assert.match(docs, /action: "unstick"/);
+assert.match(docs, /wartenden Queue/);
+assert.match(crawlState, /compactPendingIds/);
+assert.doesNotMatch(
+  crawlState,
+  /if \(!before\.has\(id\)\) pending\.push\(id\);/,
+);
 
 const fromTs = [...systemIdsTs.matchAll(/"(\d{1,12})"/g)].map((m) => m[1]);
 assert.ok(fromTs.includes("7341"));
