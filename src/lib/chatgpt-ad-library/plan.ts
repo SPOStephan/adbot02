@@ -88,7 +88,7 @@ export function selectScrapeBatch(input: {
 }): ScrapePlanPick {
   const limit = Math.min(
     Math.max(input.limit ?? CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX, 1),
-    40,
+    80,
   );
   const imported = new Set(input.imported ?? []);
   const skipped = new Set(normalizeLibraryIdList(input.skipped));

@@ -19,7 +19,7 @@ import { constantTimeEqual } from "@/lib/meta/crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 const NO_STORE = {
   "Cache-Control": "private, no-store, max-age=0",

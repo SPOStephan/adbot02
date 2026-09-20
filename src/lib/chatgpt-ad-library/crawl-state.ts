@@ -5,6 +5,8 @@ import {
   CHATGPT_AD_LIBRARY_PROBE_MAX_ID,
   CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
   CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX,
+  CHATGPT_AD_LIBRARY_UNLOCK_LEASE_MAX,
+  CHATGPT_AD_LIBRARY_UNLOCK_LEASE_TTL_MS,
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
 } from "@/lib/chatgpt-ad-library/scrape-constants";
 import {
@@ -270,7 +272,7 @@ export async function planChatGPTAdLibraryScrapeBatch(input?: {
 
   const limit = Math.min(
     Math.max(input?.limit ?? CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX, 1),
-    40,
+    80,
   );
   const runSummary = summary(row.last_run_summary);
   const skipped = skippedFromRow(row);
@@ -471,4 +473,75 @@ export async function recordChatGPTAdLibraryIngestSummary(input: {
     })
     .eq("id", "default");
   if (error) throw new Error(`crawl_state_ingest_failed: ${error.message}`);
+}
+
+type ScrapeLease = { owner: string; until: string };
+
+function activeLeases(value: Record<string, unknown>, now = Date.now()): ScrapeLease[] {
+  const raw = value.active_leases;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const owner = String((item as { owner?: unknown }).owner ?? "").trim();
+    const until = String((item as { until?: unknown }).until ?? "").trim();
+    const expires = Date.parse(until);
+    if (!owner || !Number.isFinite(expires) || expires <= now) return [];
+    return [{ owner, until }];
+  });
+}
+
+export async function claimChatGPTAdLibraryScrapeLease(input?: {
+  owner?: string;
+  maxConcurrent?: number;
+  ttlMs?: number;
+}): Promise<{ claimed: boolean; owner: string; active: number }> {
+  const owner =
+    input?.owner?.trim() ||
+    `scrape-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const maxConcurrent = Math.max(
+    1,
+    input?.maxConcurrent ?? CHATGPT_AD_LIBRARY_UNLOCK_LEASE_MAX,
+  );
+  const ttlMs = Math.max(30_000, input?.ttlMs ?? CHATGPT_AD_LIBRARY_UNLOCK_LEASE_TTL_MS);
+  const row = await loadRow();
+  const runSummary = summary(row.last_run_summary);
+  const leases = activeLeases(runSummary);
+  if (leases.length >= maxConcurrent) {
+    return { claimed: false, owner, active: leases.length };
+  }
+  const next = [
+    ...leases,
+    { owner, until: new Date(Date.now() + ttlMs).toISOString() },
+  ];
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("chatgpt_ad_library_crawl_state")
+    .update({
+      last_run_summary: {
+        ...runSummary,
+        active_leases: next,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", "default");
+  if (error) throw new Error(`crawl_state_lease_claim_failed: ${error.message}`);
+  return { claimed: true, owner, active: next.length };
+}
+
+export async function releaseChatGPTAdLibraryScrapeLease(owner: string): Promise<void> {
+  const row = await loadRow();
+  const runSummary = summary(row.last_run_summary);
+  const next = activeLeases(runSummary).filter((item) => item.owner !== owner);
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("chatgpt_ad_library_crawl_state")
+    .update({
+      last_run_summary: {
+        ...runSummary,
+        active_leases: next,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", "default");
+  if (error) throw new Error(`crawl_state_lease_release_failed: ${error.message}`);
 }

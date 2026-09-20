@@ -443,11 +443,10 @@ export function ChatGPTAdLibraryImportPanel({
               Wiederkehrender Scrape (max. {crawl?.scrapeBatchMax ?? 5}/Lauf)
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-950/80">
-              Die Queue (Discoverer/Sitemap) hat Vorrang. Der Unlocker holt bis zu{" "}
-              {crawl?.scrapeBatchMax ?? 20} Anzeigen parallel (5 gleichzeitig), alle 5
-              Minuten, bei Tempo eine zweite Runde. Katalog und Sequenz-Probe nur, wenn die
-              Queue leer ist. Tote IDs (404/ohne Copy) werden übersprungen, nicht endlos
-              wiederholt.
+              Die Queue hat Vorrang. Unlocker: bis {crawl?.scrapeBatchMax ?? 40} IDs pro
+              Runde, 12 parallel, Cron jede Minute, ein Lauf füllt das 800-Sekunden-Fenster.
+              ScrapingBee-Credits sind keine Bremse — Tarif upgraden, wenn sie leer sind.
+              Tote IDs (404/ohne Copy) werden übersprungen, nicht endlos wiederholt.
             </p>
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
             {crawl?.unlockerConfigured ? (

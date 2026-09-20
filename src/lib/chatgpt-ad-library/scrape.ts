@@ -1,15 +1,18 @@
 import "server-only";
 
 import {
+  claimChatGPTAdLibraryScrapeLease,
   enqueueChatGPTAdLibraryIds,
   getChatGPTAdLibraryCrawlStatus,
   markChatGPTAdLibraryDiscoverDone,
   markChatGPTAdLibraryIdsSkipped,
   planChatGPTAdLibraryScrapeBatch,
   recordChatGPTAdLibraryIngestSummary,
+  releaseChatGPTAdLibraryScrapeLease,
 } from "@/lib/chatgpt-ad-library/crawl-state";
 import { mapPool, shouldSkipScrapeError } from "@/lib/chatgpt-ad-library/plan";
 import { importChatGPTAdLibraryBatch } from "@/lib/chatgpt-ad-library/import";
+import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/import-constants";
 import {
   extractAdIdsFromSitemapXml,
   hasUsableChatGPTAdLibraryCopy,
@@ -27,6 +30,7 @@ import {
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
   CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX,
   CHATGPT_AD_LIBRARY_UNLOCK_CONCURRENCY,
+  CHATGPT_AD_LIBRARY_UNLOCK_DRAIN_BUDGET_MS,
   CHATGPT_AD_LIBRARY_UNLOCK_ROUND_BUDGET_MS,
   CHATGPT_AD_LIBRARY_UNLOCK_ROUNDS_MAX,
   CHATGPT_AD_LIBRARY_UNLOCKER_PROBE_AD_ID,
@@ -51,6 +55,34 @@ async function persistScrapeFailures(
   const retry = failures.filter((item) => !shouldSkipScrapeError(item.error)).map((item) => item.id);
   if (skip.length > 0) await markChatGPTAdLibraryIdsSkipped(skip);
   if (retry.length > 0) await enqueueChatGPTAdLibraryIds(retry);
+}
+
+async function importUnlockedRecords(records: unknown[]) {
+  const uploaderUserId = await resolveChatGPTAdLibraryUploaderUserId();
+  let imported = 0;
+  let skippedDuplicate = 0;
+  let failed = 0;
+  let refreshed = 0;
+  const results: Awaited<ReturnType<typeof importChatGPTAdLibraryBatch>>["results"] = [];
+  for (let from = 0; from < records.length; from += CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX) {
+    const summary = await importChatGPTAdLibraryBatch({
+      uploaderUserId,
+      records: records.slice(from, from + CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX),
+    });
+    imported += summary.imported;
+    skippedDuplicate += summary.skippedDuplicate;
+    failed += summary.failed;
+    refreshed += summary.refreshed ?? 0;
+    results.push(...summary.results);
+  }
+  return {
+    attempted: records.length,
+    imported,
+    refreshed,
+    skippedDuplicate,
+    failed,
+    results,
+  };
 }
 
 async function maybeSeedFallback(reason: string) {
@@ -374,7 +406,10 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
   const leftover: string[] = [];
   const budgetMs = Math.max(
     20_000,
-    Math.min(input?.budgetMs ?? CHATGPT_AD_LIBRARY_UNLOCK_ROUND_BUDGET_MS, 260_000),
+    Math.min(
+      input?.budgetMs ?? CHATGPT_AD_LIBRARY_UNLOCK_ROUND_BUDGET_MS,
+      CHATGPT_AD_LIBRARY_UNLOCK_DRAIN_BUDGET_MS,
+    ),
   );
   const deadline = Date.now() + budgetMs;
   const queue = [...plan.ids];
@@ -443,11 +478,7 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
     };
   }
 
-  const uploaderUserId = await resolveChatGPTAdLibraryUploaderUserId();
-  const summary = await importChatGPTAdLibraryBatch({
-    uploaderUserId,
-    records,
-  });
+  const summary = await importUnlockedRecords(records);
   await recordChatGPTAdLibraryIngestSummary({
     imported: summary.imported,
     skippedDuplicate: summary.skippedDuplicate,
@@ -473,13 +504,27 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
   summary: Awaited<ReturnType<typeof importChatGPTAdLibraryBatch>> | null;
   failures: Array<{ id: string; error: string }>;
   rounds: number;
+  skippedLease?: boolean;
 }> {
   const maxRounds = Math.min(
     Math.max(input?.rounds ?? CHATGPT_AD_LIBRARY_UNLOCK_ROUNDS_MAX, 1),
-    4,
+    20,
   );
+  const lease = await claimChatGPTAdLibraryScrapeLease();
+  if (!lease.claimed) {
+    return {
+      mode: "unlock",
+      blocked: false,
+      plannedIds: [],
+      summary: null,
+      failures: [],
+      rounds: 0,
+      skippedLease: true,
+    };
+  }
+
   const started = Date.now();
-  const totalBudget = 240_000;
+  const totalBudget = CHATGPT_AD_LIBRARY_UNLOCK_DRAIN_BUDGET_MS;
   const plannedIds: string[] = [];
   const failures: Array<{ id: string; error: string }> = [];
   let blocked = false;
@@ -489,26 +534,30 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
   let lastSummary: Awaited<ReturnType<typeof importChatGPTAdLibraryBatch>> | null = null;
   let rounds = 0;
 
-  for (let i = 0; i < maxRounds; i += 1) {
-    const remaining = totalBudget - (Date.now() - started);
-    if (remaining < 45_000) break;
-    const result = await scrapeChatGPTAdLibraryUnlockBatch({ budgetMs: remaining });
-    rounds += 1;
-    plannedIds.push(...result.plannedIds);
-    failures.push(...result.failures);
-    blocked = blocked || result.blocked;
-    if (result.summary) {
-      imported += result.summary.imported;
-      skippedDuplicate += result.summary.skippedDuplicate;
-      failed += result.summary.failed;
-      lastSummary = {
-        ...result.summary,
-        imported,
-        skippedDuplicate,
-        failed,
-      };
+  try {
+    for (let i = 0; i < maxRounds; i += 1) {
+      const remaining = totalBudget - (Date.now() - started);
+      if (remaining < 30_000) break;
+      const result = await scrapeChatGPTAdLibraryUnlockBatch({ budgetMs: remaining });
+      rounds += 1;
+      plannedIds.push(...result.plannedIds);
+      failures.push(...result.failures);
+      blocked = blocked || result.blocked;
+      if (result.summary) {
+        imported += result.summary.imported;
+        skippedDuplicate += result.summary.skippedDuplicate;
+        failed += result.summary.failed;
+        lastSummary = {
+          ...result.summary,
+          imported,
+          skippedDuplicate,
+          failed,
+        };
+      }
+      if (result.plannedIds.length < 1) break;
     }
-    if (result.plannedIds.length < 1) break;
+  } finally {
+    await releaseChatGPTAdLibraryScrapeLease(lease.owner).catch(() => undefined);
   }
 
   return {
