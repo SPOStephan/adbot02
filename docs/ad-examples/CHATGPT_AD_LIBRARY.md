@@ -87,6 +87,7 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 - Status: `GET /api/admin/chatgpt-ad-library/crawl` · `POST { action: "probe_unlocker" }`
 - Stau: `POST { action: "unstick" }` entfernt schon importierte/tote IDs aus `pending_ids`. `POST { action: "run_now" }` holt den nächsten Unlocker-Lauf aus der **wartenden Queue**, nicht aus dem Katalog-Loop.
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`
+- Vault-Zähler nutzt `count: exact` und paginiert. Neue Supabase-Projekte kappen eine einzelne REST-Antwort oft bei **1000 Zeilen** (`max-rows`) — das stoppt den Import nicht, täuscht aber „genau 1000 im Vault“ vor, wenn man alle Zeilen in einem Request holt.
 
 ## Queue-Stau (Diagnose)
 

@@ -232,7 +232,7 @@ async function alreadyImportedExternalIds(ids: string[]): Promise<Set<string>> {
 
   const admin = createAdminClient();
   const page = 200;
-  for (let from = 0; from < 10_000; from += page) {
+  for (let from = 0; from < 100_000; from += page) {
     const { data, error } = await admin
       .from("brand_assets")
       .select("metadata")

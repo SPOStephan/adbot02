@@ -127,26 +127,41 @@ export async function loadChatGPTAdLibraryForInternalIntelligence(input?: {
 }
 
 export async function countChatGPTAdLibraryImports(): Promise<number> {
-  const hits = await loadChatGPTAdLibraryForInternalIntelligence({ limit: 100 });
-  // Count via a wider scan for the admin summary badge.
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const exact = await admin
     .from("brand_assets")
-    .select("id,metadata")
+    .select("id", { count: "exact", head: true })
     .eq("library_scope", "INSPIRATION")
     .neq("status", "REVOKED")
     .filter("metadata->>library", "eq", "ad_example_library")
-    .limit(2000);
-  if (error || !Array.isArray(data)) return hits.length;
+    .filter("metadata->external_source->>provider", "eq", CHATGPT_AD_LIBRARY_PROVIDER)
+    .filter("metadata->external_source->>use_for_internal_intelligence", "eq", "true");
+  if (!exact.error && typeof exact.count === "number") {
+    return exact.count;
+  }
+
+  // New Supabase projects often cap a single response at 1000 rows (max-rows).
   let count = 0;
-  for (const row of data) {
-    const external = record(record(row.metadata).external_source);
-    if (
-      external.provider === CHATGPT_AD_LIBRARY_PROVIDER &&
-      external.use_for_internal_intelligence === true
-    ) {
-      count += 1;
+  const page = 200;
+  for (let from = 0; from < 100_000; from += page) {
+    const { data, error } = await admin
+      .from("brand_assets")
+      .select("id,metadata")
+      .eq("library_scope", "INSPIRATION")
+      .neq("status", "REVOKED")
+      .filter("metadata->>library", "eq", "ad_example_library")
+      .range(from, from + page - 1);
+    if (error || !Array.isArray(data) || data.length < 1) break;
+    for (const row of data) {
+      const external = record(record(row.metadata).external_source);
+      if (
+        external.provider === CHATGPT_AD_LIBRARY_PROVIDER &&
+        external.use_for_internal_intelligence === true
+      ) {
+        count += 1;
+      }
     }
+    if (data.length < page) break;
   }
   return count;
 }
