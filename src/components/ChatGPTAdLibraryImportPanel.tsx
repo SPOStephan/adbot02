@@ -44,6 +44,8 @@ type CrawlStatus = {
   scrapeBatchMax: number;
   unlockerConfigured?: boolean;
   unlockerProvider?: string;
+  leaseBusy?: boolean;
+  activeLeases?: number;
 };
 
 export type ChatGPTAdLibraryHitCard = {
@@ -459,6 +461,7 @@ export function ChatGPTAdLibraryImportPanel({
           pendingAfter: number;
           droppedImported: number;
           droppedSkipped: number;
+          requeuedSkipped?: number;
           vaultCount: number;
         };
       };
@@ -467,7 +470,11 @@ export function ChatGPTAdLibraryImportPanel({
       }
       if (payload.status) setCrawl(payload.status);
       setNotice(
-        `Queue bereinigt: ${payload.unstick?.pendingBefore ?? "?"} → ${payload.unstick?.pendingAfter ?? "?"} wartend. Der nächste Lauf holt echte Queue-IDs, nicht den Katalog-Loop.`,
+        `Queue bereinigt: ${payload.unstick?.pendingBefore ?? "?"} → ${payload.unstick?.pendingAfter ?? "?"} wartend` +
+          (payload.unstick?.requeuedSkipped
+            ? `, ${payload.unstick.requeuedSkipped} zuvor übersprungene IDs zurückgeholt`
+            : "") +
+          ". Danach „Jetzt einen Lauf“ oder den Minuten-Cron abwarten.",
       );
       await refreshCrawl();
     } catch (caught) {
@@ -576,6 +583,18 @@ export function ChatGPTAdLibraryImportPanel({
           />
           <CrawlMetric label="Lauf-Zähler Fehler" value={crawl ? String(crawl.totalFailed) : "…"} />
         </div>
+        {crawl?.leaseBusy ? (
+          <p className="mt-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800">
+            Es laufen bereits {crawl.activeLeases ?? 2} Unlock-Jobs. Weitere Cron-Starts warten
+            auf ein freies Lease — das ist kein Vault-Limit.
+          </p>
+        ) : null}
+        {crawl?.lastRunSummary?.last_unlocker_block === "credits" ? (
+          <p className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-950">
+            Import steht: ScrapingBee-Guthaben oder API-Key blockiert. Die Queue wird nicht
+            verworfen. Credits aufladen, dann „Jetzt einen Lauf“.
+          </p>
+        ) : null}
         {crawl?.queueStarved ? (
           <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
             Stau: {crawl.pendingCount} IDs warten, aber die letzten Läufe haben nur den
@@ -1004,6 +1023,11 @@ function LastRunBox({
         {sourceLabel ? ` · Quelle ${sourceLabel}` : ""}
         {discoverCount != null ? ` · Discover ${discoverCount} IDs` : ""}
         {lastImported != null ? ` · zuletzt importiert ${lastImported}` : ""}
+        {summary?.last_unlocker_block === "credits"
+          ? " · Unlocker-Block: ScrapingBee-Credits"
+          : summary?.skippedLease
+            ? " · Lauf übersprungen (Lease belegt)"
+            : ""}
         {` · Vault gesamt ${imported}`}
       </p>
     </div>

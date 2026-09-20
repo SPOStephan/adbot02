@@ -25,6 +25,7 @@ async function loadPlan() {
 
 const {
   compactPendingIds,
+  isUnlockerProviderBlockError,
   mapPool,
   selectScrapeBatch,
   shouldSkipScrapeError,
@@ -38,6 +39,13 @@ assert.equal(shouldSkipScrapeError("unlocker_404"), true);
 assert.equal(shouldSkipScrapeError("unlocker_checkpoint"), false);
 assert.equal(shouldSkipScrapeError("unlocker_429"), false);
 assert.equal(shouldSkipScrapeError("bot_checkpoint_429"), false);
+assert.equal(shouldSkipScrapeError("unlocker_400"), false);
+assert.equal(shouldSkipScrapeError("unlocker_401"), false);
+assert.equal(shouldSkipScrapeError("unlocker_credits"), false);
+assert.equal(shouldSkipScrapeError("unlocker_empty_html"), false);
+assert.equal(isUnlockerProviderBlockError("unlocker_credits"), true);
+assert.equal(isUnlockerProviderBlockError("unlocker_400"), true);
+assert.equal(isUnlockerProviderBlockError("parse_copy_missing"), false);
 
 const pendingFirst = selectScrapeBatch({
   pending: ["9001", "9002", "18", "21"],

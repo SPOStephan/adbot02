@@ -85,7 +85,7 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 - **Unlocker-Probe + Import #7341**: Bild + Copy + Prompts. Karten zeigen Anzeigentext und die echten Trigger-Prompts aus der Quelle — keinen Platzhalter wie „ChatGPT-Kontextanzeige“.
 - Auto-Scrape-Panel + optionaler JSON-Import
 - Status: `GET /api/admin/chatgpt-ad-library/crawl` · `POST { action: "probe_unlocker" }`
-- Stau: `POST { action: "unstick" }` entfernt schon importierte/tote IDs aus `pending_ids`. `POST { action: "run_now" }` holt den nächsten Unlocker-Lauf aus der **wartenden Queue**, nicht aus dem Katalog-Loop.
+- Stau: `POST { action: "unstick" }` entfernt schon importierte IDs und holt `skipped_ids` zurück in die Queue (Recovery nach Credit-Fehlern). `POST { action: "run_now" }` holt den nächsten Unlocker-Lauf aus der **wartenden Queue**.
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`
 - Vault-Zähler nutzt `count: exact` und paginiert. Neue Supabase-Projekte kappen eine einzelne REST-Antwort oft bei **1000 Zeilen** (`max-rows`) — das stoppt den Import nicht, täuscht aber „genau 1000 im Vault“ vor, wenn man alle Zeilen in einem Request holt.
 
@@ -94,6 +94,12 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 `Queue` ist `chatgpt_ad_library_crawl_state.pending_ids`, kein Worker-Hang. Ein älterer Planner hat bei jedem Lauf den Systemkatalog (`18, 21, 22, 43, …`) vor die Discover-IDs gesetzt. Die Sitemap-IDs blieben liegen, der Katalog wurde bei 404/ohne Copy immer wieder geplant — deshalb wuchs `total_failed` (Lauf-Zähler), während der Vault klein blieb. `total_imported` ist ein Lebenszeit-Zähler (inkl. früherer Seed-Fallbacks), nicht die Anzahl sichtbarer Karten.
 
 Der Planner nimmt jetzt zuerst `pending_ids`. Tote IDs landen in `skipped_ids` und werden nicht erneut vor die Queue gehängt. Seed-Fallback nur wenn der Vault leer ist.
+
+Ein eingefrorener Vault-Zähler (z. B. 2458) ist **kein Code-Limit**. Häufige echte Blocker:
+
+- ScrapingBee-Credits/Key: früher wurden `unlocker_400/401/403` dauerhaft nach `skipped_ids` geschrieben und haben die Queue verbrannt. Jetzt bricht der Lauf ab, die IDs bleiben in der Queue, Banner unter Inspiration.
+- GitHub Action in ~6–40 s „grün“: Unlocker ist an, aber das Lease ist oft schon vom Vercel-Minuten-Cron belegt (`skippedLease`). Der Minuten-Cron ist der eigentliche Importer.
+- Importierte IDs werden über den `external_id`-Index geprüft, nicht über einen 1000-Zeilen-Scan. Discover hängt keine schon importierten IDs wieder vor die Queue.
 
 ## KI-Nutzung
 

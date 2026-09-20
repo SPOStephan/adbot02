@@ -19,7 +19,21 @@ const SKIP_ERRORS = new Set([
   "http_404",
   "unlocker_404",
   "http_410",
+  "unlocker_410",
 ]);
+
+/** ScrapingBee credit/auth/param errors must not burn the queue into skipped_ids. */
+export function isUnlockerProviderBlockError(error: string): boolean {
+  const normalized = error.trim().toLowerCase();
+  return (
+    normalized === "unlocker_credits" ||
+    normalized === "unlocker_400" ||
+    normalized === "unlocker_401" ||
+    normalized === "unlocker_402" ||
+    normalized === "unlocker_403" ||
+    /credit|quota|payment required|api[_ ]key/i.test(normalized)
+  );
+}
 
 export function normalizeLibraryIdList(value: unknown): string[] {
   if (typeof value === "string" && /^\d{1,12}$/.test(value.trim())) return [value.trim()];
@@ -42,8 +56,9 @@ export function normalizeLibraryIdList(value: unknown): string[] {
 
 export function shouldSkipScrapeError(error: string): boolean {
   const normalized = error.trim().toLowerCase();
+  if (isUnlockerProviderBlockError(normalized)) return false;
   if (SKIP_ERRORS.has(normalized)) return true;
-  return /^(http|unlocker)_4\d\d$/.test(normalized) && !normalized.endsWith("429");
+  return /^(http|unlocker)_4(04|10)$/.test(normalized);
 }
 
 export function compactPendingIds(input: {

@@ -43,6 +43,8 @@ export type ChatGPTAdLibraryCrawlStatus = {
   sitemapShardCount: number;
   unlockerConfigured: boolean;
   unlockerProvider: "scrapingbee";
+  leaseBusy: boolean;
+  activeLeases: number;
 };
 
 type CrawlRow = {
@@ -141,6 +143,7 @@ export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibrary
     lastPlanIds.length > 0 &&
     lastPlanIds.every((id) => catalogSet.has(id));
   const vaultCount = await countChatGPTAdLibraryImports().catch(() => 0);
+  const leases = activeLeases(runSummary);
   return {
     enabled: row.enabled === true,
     pendingCount: pending.length,
@@ -155,7 +158,7 @@ export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibrary
     lastPlanAt: row.last_plan_at,
     lastIngestAt: row.last_ingest_at,
     lastDiscoverAt: row.last_discover_at,
-    lastRunSummary: runSummary,
+    lastRunSummary: publicRunSummary(runSummary),
     totalPlanned: Number(row.total_planned) || 0,
     totalImported: Number(row.total_imported) || 0,
     totalSkippedDuplicate: Number(row.total_skipped_duplicate) || 0,
@@ -166,6 +169,8 @@ export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibrary
     sitemapShardCount: CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
     unlockerConfigured: isChatGPTAdLibraryUnlockerConfigured(),
     unlockerProvider: "scrapingbee",
+    leaseBusy: leases.length >= CHATGPT_AD_LIBRARY_UNLOCK_LEASE_MAX,
+    activeLeases: leases.length,
   };
 }
 
@@ -188,13 +193,15 @@ export async function enqueueChatGPTAdLibraryIds(ids: Array<number | string>): P
   const incoming = asIdList(ids);
   const row = await loadRow();
   const skipped = skippedFromRow(row);
+  const imported = await alreadyImportedExternalIds(incoming).catch(() => new Set<string>());
   const pending = compactPendingIds({
     pending: row.pending_ids,
     skipped,
+    imported,
   });
   const before = new Set(pending);
   for (const id of incoming) {
-    if (!before.has(id) && !skipped.includes(id)) pending.push(id);
+    if (!before.has(id) && !skipped.includes(id) && !imported.has(id)) pending.push(id);
   }
   const admin = createAdminClient();
   const { error } = await admin
@@ -225,29 +232,59 @@ function externalIdFromMetadata(metadata: unknown): string | null {
   return /^\d{1,12}$/.test(externalId) ? externalId : null;
 }
 
+const IMPORTED_LOOKUP_CHUNK = 80;
+
+export function chatgptExternalIdOrFilter(ids: string[]): string {
+  return normalizeLibraryIdList(ids)
+    .map((id) => `metadata->external_source->>external_id.eq.${id}`)
+    .join(",");
+}
+
 async function alreadyImportedExternalIds(ids: string[]): Promise<Set<string>> {
-  const wanted = new Set(ids.filter((id) => /^\d{1,12}$/.test(id)));
+  const wanted = normalizeLibraryIdList(ids);
   const found = new Set<string>();
-  if (wanted.size < 1) return found;
+  if (wanted.length < 1) return found;
 
   const admin = createAdminClient();
-  const page = 200;
-  for (let from = 0; from < 100_000; from += page) {
+  for (let i = 0; i < wanted.length; i += IMPORTED_LOOKUP_CHUNK) {
+    const slice = wanted.slice(i, i + IMPORTED_LOOKUP_CHUNK);
+    const orFilter = chatgptExternalIdOrFilter(slice);
     const { data, error } = await admin
       .from("brand_assets")
       .select("metadata")
       .eq("library_scope", "INSPIRATION")
       .neq("status", "REVOKED")
       .filter("metadata->external_source->>provider", "eq", CHATGPT_AD_LIBRARY_PROVIDER)
-      .range(from, from + page - 1);
-    if (error || !Array.isArray(data) || data.length < 1) break;
+      .or(orFilter);
+    if (error || !Array.isArray(data)) {
+      for (const id of slice) {
+        const one = await admin
+          .from("brand_assets")
+          .select("id")
+          .eq("library_scope", "INSPIRATION")
+          .neq("status", "REVOKED")
+          .filter("metadata->external_source->>external_id", "eq", id)
+          .limit(1)
+          .maybeSingle();
+        if (one.data?.id) found.add(id);
+      }
+      continue;
+    }
     for (const row of data) {
       const externalId = externalIdFromMetadata(row.metadata);
-      if (externalId && wanted.has(externalId)) found.add(externalId);
+      if (externalId) found.add(externalId);
     }
-    if (data.length < page || found.size >= wanted.size) break;
   }
   return found;
+}
+
+function publicRunSummary(value: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...value };
+  delete next.skipped_ids;
+  if (Array.isArray(next.last_plan_ids)) {
+    next.last_plan_ids = next.last_plan_ids.slice(0, 40);
+  }
+  return next;
 }
 
 export async function planChatGPTAdLibraryScrapeBatch(input?: {
@@ -277,8 +314,9 @@ export async function planChatGPTAdLibraryScrapeBatch(input?: {
   const runSummary = summary(row.last_run_summary);
   const skipped = skippedFromRow(row);
   const pending = asIdList(row.pending_ids);
+  const lookahead = pending.slice(0, Math.max(limit * 10, 400));
   const imported = await alreadyImportedExternalIds([
-    ...pending,
+    ...lookahead,
     ...CHATGPT_AD_LIBRARY_SYSTEM_IDS,
   ]);
   const pick = selectScrapeBatch({
@@ -369,24 +407,26 @@ export async function unstickChatGPTAdLibraryQueue(): Promise<{
   pendingAfter: number;
   droppedImported: number;
   droppedSkipped: number;
+  requeuedSkipped: number;
   vaultCount: number;
 }> {
   const row = await loadRow();
   const pendingBefore = asIdList(row.pending_ids);
   const skipped = skippedFromRow(row);
-  const imported = await alreadyImportedExternalIds(pendingBefore);
+  const imported = await alreadyImportedExternalIds([...pendingBefore, ...skipped]);
+  const recovered = skipped.filter((id) => !imported.has(id));
   const pendingAfter = compactPendingIds({
-    pending: pendingBefore,
-    skipped,
+    pending: [...pendingBefore, ...recovered],
     imported,
   });
   const admin = createAdminClient();
   const runSummary = {
     ...summary(row.last_run_summary),
-    skipped_ids: skipped.slice(0, 20_000),
+    skipped_ids: [],
     last_unstick_at: new Date().toISOString(),
-    last_unstick_dropped:
-      pendingBefore.length - pendingAfter.length,
+    last_unstick_dropped: pendingBefore.length + recovered.length - pendingAfter.length,
+    last_unstick_requeued_skipped: recovered.length,
+    last_unlocker_block: null,
   };
   const payload = {
     pending_ids: pendingAfter.slice(0, 50_000),
@@ -395,7 +435,7 @@ export async function unstickChatGPTAdLibraryQueue(): Promise<{
   };
   let { error } = await admin
     .from("chatgpt_ad_library_crawl_state")
-    .update({ ...payload, skipped_ids: skipped.slice(0, 20_000) })
+    .update({ ...payload, skipped_ids: [] })
     .eq("id", "default");
   if (error && isMissingSkippedColumn(error)) {
     const fallback = await admin
@@ -410,6 +450,7 @@ export async function unstickChatGPTAdLibraryQueue(): Promise<{
     pendingAfter: pendingAfter.length,
     droppedImported: pendingBefore.filter((id) => imported.has(id)).length,
     droppedSkipped: pendingBefore.filter((id) => skipped.includes(id)).length,
+    requeuedSkipped: recovered.length,
     vaultCount: await countChatGPTAdLibraryImports().catch(() => 0),
   };
 }
@@ -419,18 +460,12 @@ export async function markChatGPTAdLibraryDiscoverDone(input: {
   enqueuedIds: string[];
 }): Promise<void> {
   const row = await loadRow();
-  const skipped = skippedFromRow(row);
-  const pending = compactPendingIds({
-    pending: [...asIdList(row.pending_ids), ...asIdList(input.enqueuedIds)],
-    skipped,
-  });
   const nextShard =
     (Number(row.next_discover_shard) + 1) % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
   const admin = createAdminClient();
   const { error } = await admin
     .from("chatgpt_ad_library_crawl_state")
     .update({
-      pending_ids: pending.slice(0, 50_000),
       next_discover_shard: nextShard,
       last_discover_at: new Date().toISOString(),
       last_run_summary: {

@@ -10,7 +10,11 @@ import {
   recordChatGPTAdLibraryIngestSummary,
   releaseChatGPTAdLibraryScrapeLease,
 } from "@/lib/chatgpt-ad-library/crawl-state";
-import { mapPool, shouldSkipScrapeError } from "@/lib/chatgpt-ad-library/plan";
+import {
+  isUnlockerProviderBlockError,
+  mapPool,
+  shouldSkipScrapeError,
+} from "@/lib/chatgpt-ad-library/plan";
 import { importChatGPTAdLibraryBatch } from "@/lib/chatgpt-ad-library/import";
 import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/import-constants";
 import {
@@ -42,6 +46,7 @@ import {
 import { CHATGPT_AD_LIBRARY_ORIGIN } from "@/lib/chatgpt-ad-library/types";
 import {
   isChatGPTAdLibraryUnlockerConfigured,
+  isScrapingBeeCreditOrAuthError,
   unlockChatGPTAdLibraryUrl,
 } from "@/lib/chatgpt-ad-library/unlocker";
 import { resolveChatGPTAdLibraryUploaderUserId } from "@/lib/chatgpt-ad-library/uploader";
@@ -403,6 +408,7 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
   const records: unknown[] = [];
   const failures: Array<{ id: string; error: string }> = [];
   let blocked = false;
+  let providerBlocked = false;
   const leftover: string[] = [];
   const budgetMs = Math.max(
     20_000,
@@ -427,6 +433,9 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
         if (unlocked.status === 429 || /vercel security checkpoint/i.test(unlocked.text)) {
           return { id, error: "unlocker_checkpoint", blocked: true, record: null };
         }
+        if (isScrapingBeeCreditOrAuthError(unlocked)) {
+          return { id, error: "unlocker_credits", blocked: false, record: null };
+        }
         return {
           id,
           error: `unlocker_${unlocked.status || "failed"}`,
@@ -439,7 +448,12 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
         adId: id,
         pageUrl,
       });
-      if (!parsed) return { id, error: "parse_failed", blocked: false, record: null };
+      if (!parsed) {
+        if (!unlocked.text || unlocked.text.length < 200) {
+          return { id, error: "unlocker_empty_html", blocked: false, record: null };
+        }
+        return { id, error: "parse_failed", blocked: false, record: null };
+      }
       if (!hasUsableChatGPTAdLibraryCopy(parsed)) {
         return { id, error: "parse_copy_missing", blocked: false, record: null };
       }
@@ -451,7 +465,12 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
         continue;
       }
       if (item.blocked) blocked = true;
+      if (isUnlockerProviderBlockError(item.error ?? "")) providerBlocked = true;
       failures.push({ id: item.id, error: item.error ?? "unlocker_failed" });
+    }
+    if (providerBlocked) {
+      leftover.push(...queue);
+      break;
     }
   }
 
@@ -459,7 +478,16 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
     await enqueueChatGPTAdLibraryIds(leftover);
   }
 
-  await persistScrapeFailures(failures);
+  const skippable = providerBlocked
+    ? failures.filter((item) => !isUnlockerProviderBlockError(item.error))
+    : failures;
+  const blockedIds = providerBlocked
+    ? failures.filter((item) => isUnlockerProviderBlockError(item.error)).map((item) => item.id)
+    : [];
+  if (blockedIds.length > 0) {
+    await enqueueChatGPTAdLibraryIds(blockedIds);
+  }
+  await persistScrapeFailures(skippable);
 
   if (records.length < 1) {
     const seed = await maybeSeedFallback(blocked ? "unlocker_checkpoint" : "unlocker_empty");
@@ -467,7 +495,12 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
       imported: seed?.imported ?? 0,
       skippedDuplicate: seed?.skippedDuplicate ?? 0,
       failed: failures.length,
-      details: { mode: "unlock", blocked, plannedIds: plan.ids },
+      details: {
+        mode: "unlock",
+        blocked,
+        plannedIds: plan.ids,
+        last_unlocker_block: providerBlocked ? "credits" : blocked ? "checkpoint" : null,
+      },
     });
     return {
       mode: "unlock",
@@ -483,7 +516,12 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
     imported: summary.imported,
     skippedDuplicate: summary.skippedDuplicate,
     failed: summary.failed + failures.length,
-    details: { mode: "unlock", blocked, plannedIds: plan.ids },
+    details: {
+      mode: "unlock",
+      blocked,
+      plannedIds: plan.ids,
+      last_unlocker_block: providerBlocked ? "credits" : blocked ? "checkpoint" : null,
+    },
   });
 
   return {
@@ -555,6 +593,7 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
         };
       }
       if (result.plannedIds.length < 1) break;
+      if (result.failures.some((item) => isUnlockerProviderBlockError(item.error))) break;
     }
   } finally {
     await releaseChatGPTAdLibraryScrapeLease(lease.owner).catch(() => undefined);
