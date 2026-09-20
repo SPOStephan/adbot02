@@ -26,7 +26,7 @@ Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Ist ScrapingBee
 | `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover (CRON_SECRET) |
 | GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h: Unlocker-Batch oder Playwright-Fallback |
 | Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Probe + Import #7341, Copy auf den Karten |
-| Vercel Cron (15 min) | Unlocker: bis 10 Ads aus der **wartenden Queue**. Katalog nur wenn die Queue leer ist. |
+| Vercel Cron (5 min) | Unlocker: bis 20 Ads parallel (5 gleichzeitig) aus der **wartenden Queue**, bei Tempo 2 Runden. Katalog nur wenn die Queue leer ist. Discover pausiert, solange ≥250 IDs warten. |
 | ScrapingBee | Unlocker. Trial zuerst (1000 Credits, keine Karte). Freelance erst nach grüner Probe. Key nur in **Vercel Production**. |
 
 Secrets für die Action (GitHub → Settings → Secrets and variables → Actions — **nicht** nur Vercel):
@@ -44,13 +44,13 @@ Deshalb: **keine 50 USD, bevor die Admin-Probe grün ist.**
 2. API-Key nach **Vercel → Project → Settings → Environment Variables → Production** als `SCRAPINGBEE_API_KEY`.
 3. Production **neu deployen**.
 4. Unter `/dashboard/inspiration` **Unlocker-Probe + Import #7341** (eine Seite). Erfolg nur bei **Bild + Anzeigentext oder Trigger-Prompts**. Image-only wird nicht importiert.
-5. **Grün mit Copy** → erst dann Freelance (~50 USD/Monat, 250k Credits). 5 Ads/2h + Shard ≈ 160k Credits/Monat.
+5. **Grün mit Copy** → erst dann Freelance (~50 USD/Monat, 250k Credits). 20 Ads / 5 min verbraucht Credits deutlich schneller als der alte 10/15-min-Takt.
 6. **Rot + Checkpoint** → Freelance nicht kaufen. Mehr Credits lösen denselben Block nicht.
 7. **HTTP 400 / Credits 0** ist kein Checkpoint — ungültige ScrapingBee-Parameter (früher `wait_browser=networkidle`). Nach dem Fix erneut probe, nicht kaufen.
 
 Die Probe prüft den unbekannten Teil: Unlocker schafft `/ad/7341` und der Parser findet **Bild + echte Copy**. Such-Chrome, Theme-Scripts, og-Titel und der SEO-Zusatz „A sponsored ChatGPT ad by … and the N prompts that trigger it“ zählen nicht. Fehlen Live-Prompts, bleibt der verifizierte Seed.
 
-Was nach einer grünen Probe noch knirschen *kann* (kein 50-Dollar-Risiko): fünf Seiten vs. 300s Cron-Timeout, Sitemap-Shards, HTML-Varianten anderer Ads, Trial-Credits (≈13 Stealth-Seiten).
+Was nach einer grünen Probe noch knirschen *kann* (kein 50-Dollar-Risiko): 20 parallele Seiten vs. 300s Cron-Timeout, Sitemap-Shards, HTML-Varianten anderer Ads, Trial-Credits.
 
 Optional Vercel: `CHATGPT_AD_LIBRARY_UPLOADER_USER_ID` (Site-Admin-UUID).
 
@@ -58,8 +58,8 @@ Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql` und `202609201200
 
 Ablauf pro Lauf mit Unlocker:
 
-1. `GET ?mode=unlock_discover` holt den aktuellen Sitemap-Shard über ScrapingBee.
-2. `GET ?mode=unlock` plant bis 10 IDs **aus der wartenden Queue**, unlockt die Ad-Seiten, parsed HTML, ingest (WebP→JPEG).
+1. `GET ?mode=unlock_discover` holt den aktuellen Sitemap-Shard über ScrapingBee — oder überspringt Discover, wenn schon ≥250 IDs warten.
+2. `GET ?mode=unlock` (und der 5-Minuten-Cron) plant bis 20 IDs **aus der wartenden Queue**, unlockt sie parallel (5 gleichzeitig), parsed HTML, ingest (WebP→JPEG). Eine zweite Runde, wenn Zeit bleibt.
 3. Ohne Key: Playwright auf dem Runner (meist Checkpoint, `skippedPlan` / keine Queue-Entnahme) und Seed-Fallback nur wenn der Vault leer ist.
 
 Admin kann denselben Seed jederzeit unter `/dashboard/inspiration` mit **GlossGenius-Seed jetzt importieren** nachziehen.
