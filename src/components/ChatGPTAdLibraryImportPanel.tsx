@@ -46,6 +46,7 @@ type CrawlStatus = {
   unlockerProvider?: string;
   leaseBusy?: boolean;
   activeLeases?: number;
+  leaseUntil?: string | null;
 };
 
 export type ChatGPTAdLibraryHitCard = {
@@ -484,6 +485,38 @@ export function ChatGPTAdLibraryImportPanel({
     }
   }
 
+  async function releaseLeases() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/chatgpt-ad-library/crawl", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "release_leases" }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        status?: CrawlStatus;
+        leases?: { released?: number };
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message ?? "Leases konnten nicht freigegeben werden.");
+      }
+      if (payload.status) setCrawl(payload.status);
+      setNotice(
+        `${payload.leases?.released ?? 0} Unlock-Leases freigegeben. Danach „Jetzt einen Lauf“.`,
+      );
+      await refreshCrawl();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Lease-Freigabe fehlgeschlagen.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function runNow() {
     if (pending) return;
     setPending(true);
@@ -584,10 +617,31 @@ export function ChatGPTAdLibraryImportPanel({
           <CrawlMetric label="Lauf-Zähler Fehler" value={crawl ? String(crawl.totalFailed) : "…"} />
         </div>
         {crawl?.leaseBusy ? (
-          <p className="mt-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800">
-            Es laufen bereits {crawl.activeLeases ?? 2} Unlock-Jobs. Weitere Cron-Starts warten
-            auf ein freies Lease — das ist kein Vault-Limit.
-          </p>
+          <div className="mt-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800">
+            <p>
+              Es laufen bereits {crawl.activeLeases ?? 2} Unlock-Jobs
+              {crawl.leaseUntil ? ` (belegt bis ${formatWhen(crawl.leaseUntil)})` : ""}.
+              Weitere Cron-Starts warten auf ein freies Lease — das ist kein Vault-Limit.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                className="inline-flex min-h-11 items-center rounded-xl border border-amber-400 bg-amber-50 px-4 py-2 text-sm font-extrabold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                disabled={pending}
+                onClick={() => void unstickQueue()}
+                type="button"
+              >
+                Stau auflösen
+              </button>
+              <button
+                className="inline-flex min-h-11 items-center rounded-xl border border-slate-400 bg-white px-4 py-2 text-sm font-extrabold text-slate-900 hover:bg-slate-100 disabled:opacity-50"
+                disabled={pending}
+                onClick={() => void releaseLeases()}
+                type="button"
+              >
+                Leases freigeben
+              </button>
+            </div>
+          </div>
         ) : null}
         {crawl?.lastRunSummary?.last_unlocker_block === "credits" ? (
           <p className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-950">
@@ -614,6 +668,74 @@ export function ChatGPTAdLibraryImportPanel({
           imported={crawl?.vaultCount ?? crawl?.totalImported ?? 0}
           planSource={crawl?.lastPlanSource ?? null}
         />
+
+        {notice ? (
+          <p
+            className="mt-4 rounded-xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-900"
+            role="status"
+          >
+            {notice}
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            className="inline-flex min-h-11 items-center rounded-xl bg-emerald-700 px-4 py-3 text-sm font-extrabold text-white hover:bg-emerald-800 disabled:opacity-50"
+            disabled={pending || crawl?.enabled === true}
+            onClick={() => void toggleCrawl(true)}
+            type="button"
+          >
+            Auto-Scrape an
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center rounded-xl border border-emerald-300 bg-white px-4 py-3 text-sm font-extrabold text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
+            disabled={pending || crawl?.enabled === false}
+            onClick={() => void toggleCrawl(false)}
+            type="button"
+          >
+            Pausieren
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+            disabled={pending}
+            onClick={() => void unstickQueue()}
+            type="button"
+          >
+            Stau auflösen
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-extrabold text-slate-900 hover:bg-slate-50 disabled:opacity-50"
+            disabled={pending || !crawl?.leaseBusy}
+            onClick={() => void releaseLeases()}
+            type="button"
+          >
+            Leases freigeben
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-extrabold text-sky-950 hover:bg-sky-100 disabled:opacity-50"
+            disabled={pending}
+            onClick={() => void runNow()}
+            type="button"
+          >
+            Jetzt einen Lauf
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+            disabled={pending}
+            onClick={() => void probeUnlocker()}
+            type="button"
+          >
+            {pending ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <FlaskConical className="size-4" />
+            )}
+            Unlocker-Probe + Import #7341
+          </button>
+          <span className="text-sm font-semibold text-emerald-900">
+            Status: {crawl ? (crawl.enabled ? "aktiv" : "pausiert") : "…"}
+          </span>
+        </div>
 
         <section className="mt-5 rounded-xl border border-emerald-200 bg-white p-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
@@ -745,57 +867,6 @@ export function ChatGPTAdLibraryImportPanel({
             </div>
           ) : null}
         </section>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            className="inline-flex min-h-11 items-center rounded-xl bg-emerald-700 px-4 py-3 text-sm font-extrabold text-white hover:bg-emerald-800 disabled:opacity-50"
-            disabled={pending || crawl?.enabled === true}
-            onClick={() => void toggleCrawl(true)}
-            type="button"
-          >
-            Auto-Scrape an
-          </button>
-          <button
-            className="inline-flex min-h-11 items-center rounded-xl border border-emerald-300 bg-white px-4 py-3 text-sm font-extrabold text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
-            disabled={pending || crawl?.enabled === false}
-            onClick={() => void toggleCrawl(false)}
-            type="button"
-          >
-            Pausieren
-          </button>
-          <button
-            className="inline-flex min-h-11 items-center rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
-            disabled={pending}
-            onClick={() => void unstickQueue()}
-            type="button"
-          >
-            Stau auflösen
-          </button>
-          <button
-            className="inline-flex min-h-11 items-center rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-extrabold text-sky-950 hover:bg-sky-100 disabled:opacity-50"
-            disabled={pending}
-            onClick={() => void runNow()}
-            type="button"
-          >
-            Jetzt einen Lauf
-          </button>
-          <button
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
-            disabled={pending}
-            onClick={() => void probeUnlocker()}
-            type="button"
-          >
-            {pending ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <FlaskConical className="size-4" />
-            )}
-            Unlocker-Probe + Import #7341
-          </button>
-          <span className="text-sm font-semibold text-emerald-900">
-            Status: {crawl ? (crawl.enabled ? "aktiv" : "pausiert") : "…"}
-          </span>
-        </div>
 
         {probe ? <UnlockerProbeBox probe={probe} /> : null}
 
