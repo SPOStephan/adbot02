@@ -500,6 +500,7 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
         blocked,
         plannedIds: plan.ids,
         last_unlocker_block: providerBlocked ? "credits" : blocked ? "checkpoint" : null,
+        last_failure_errors: failures.slice(0, 8).map((item) => `${item.id}:${item.error}`),
       },
     });
     return {
@@ -521,6 +522,7 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
       blocked,
       plannedIds: plan.ids,
       last_unlocker_block: providerBlocked ? "credits" : blocked ? "checkpoint" : null,
+      last_failure_errors: failures.slice(0, 8).map((item) => `${item.id}:${item.error}`),
     },
   });
 
