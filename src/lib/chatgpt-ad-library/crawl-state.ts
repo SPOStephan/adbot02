@@ -270,7 +270,7 @@ export async function planChatGPTAdLibraryScrapeBatch(input?: {
 
   const limit = Math.min(
     Math.max(input?.limit ?? CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX, 1),
-    25,
+    40,
   );
   const runSummary = summary(row.last_run_summary);
   const skipped = skippedFromRow(row);

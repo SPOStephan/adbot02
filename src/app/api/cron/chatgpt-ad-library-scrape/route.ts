@@ -10,8 +10,8 @@ import {
   ingestChatGPTAdLibraryScrapeRecords,
   ingestChatGPTAdLibrarySeedFallback,
   scrapeChatGPTAdLibraryHttpBatch,
-  scrapeChatGPTAdLibraryUnlockBatch,
   scrapeChatGPTAdLibraryUnlockDiscover,
+  scrapeChatGPTAdLibraryUnlockDrain,
 } from "@/lib/chatgpt-ad-library/scrape";
 import { CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX } from "@/lib/chatgpt-ad-library/scrape-constants";
 import { ChatGPTAdLibraryImportError } from "@/lib/chatgpt-ad-library/import";
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     }
 
     if (mode === "unlock") {
-      const result = await scrapeChatGPTAdLibraryUnlockBatch();
+      const result = await scrapeChatGPTAdLibraryUnlockDrain();
       return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
     }
 

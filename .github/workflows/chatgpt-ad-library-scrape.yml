@@ -117,6 +117,7 @@ jobs:
           }
           call unlock_discover 120
           call unlock 290
+          call unlock 290
 
       - name: Install Playwright
         if: steps.unlocker.outputs.configured != 'true'

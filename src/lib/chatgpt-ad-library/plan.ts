@@ -58,6 +58,26 @@ export function compactPendingIds(input: {
   );
 }
 
+export async function mapPool<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  const limit = Math.max(1, Math.min(concurrency, items.length || 1));
+  let next = 0;
+  async function run(): Promise<void> {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, Math.max(items.length, 1)) }, () => run()));
+  return results;
+}
+
 export function selectScrapeBatch(input: {
   pending: unknown;
   skipped?: unknown;
@@ -68,7 +88,7 @@ export function selectScrapeBatch(input: {
 }): ScrapePlanPick {
   const limit = Math.min(
     Math.max(input.limit ?? CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX, 1),
-    25,
+    40,
   );
   const imported = new Set(input.imported ?? []);
   const skipped = new Set(normalizeLibraryIdList(input.skipped));
