@@ -14,6 +14,7 @@
     "test:supabase-admin-env": "node scripts/test-supabase-admin-env.mjs",
     "test:staging-routing": "node scripts/test-staging-routing.mjs",
     "test:password-reset": "node scripts/test-password-reset.mjs",
+    "test:kiready-sso": "node --experimental-strip-types scripts/test-kiready-sso.mjs",
     "test:dashboard-meta-connector": "node scripts/test-dashboard-meta-connector.mjs",
     "test:meta-disconnect": "node scripts/test-meta-disconnect.mjs",
     "test:meta-asset-prune": "node scripts/test-meta-asset-prune.mjs",
@@ -73,6 +74,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
+    "jose": "^6.1.3",
     "lucide-react": "^1.25.0",
     "next": "16.3.4",
     "react": "19.2.4",

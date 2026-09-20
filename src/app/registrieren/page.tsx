@@ -48,7 +48,8 @@ export default function RegisterPage() {
             <p className="text-sm font-bold text-blue-600">Konto anlegen</p>
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight">Portalzugang erstellen</h2>
             <p className="mb-8 mt-3 text-slate-500">
-              Nach der Registrierung kannst du direkt in das geschützte Dashboard wechseln.
+              Neue Zugänge sollen über KIready entstehen. E-Mail und Passwort bleiben
+              vorübergehend als Rückfall.
             </p>
             <AuthForm mode="register" />
           </div>

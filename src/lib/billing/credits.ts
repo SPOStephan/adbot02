@@ -1,5 +1,6 @@
 import "server-only";
 
+import { assertKireadyPaidActionAllowed } from "@/lib/kiready/entitlement";
 import { createAdminClient } from "../supabase/admin";
 
 /** Billable product actions — prices live in credit_action_costs. */
@@ -186,6 +187,7 @@ export async function reserveCredits(input: {
   referenceId?: string;
   ttlSeconds?: number;
 }): Promise<CreditReservation> {
+  await assertKireadyPaidActionAllowed(input.userId);
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("reserve_credits", {
     p_user_id: input.userId,
@@ -224,6 +226,7 @@ export async function reserveCreditsAmount(input: {
     throw new Error("Credit reservation amount is invalid");
   }
 
+  await assertKireadyPaidActionAllowed(input.userId);
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("reserve_credits_amount", {
     p_user_id: input.userId,

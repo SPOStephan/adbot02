@@ -7,6 +7,7 @@ import { ArrowRight, LoaderCircle, Mail } from "lucide-react";
 
 import { PasswordInput } from "@/components/PasswordInput";
 import { normalizeSafeNextPath } from "@/lib/auth/safe-next-path";
+import { KIREADY_START_PATH } from "@/lib/kiready/public";
 import { APP_SITE_URL } from "@/lib/site-urls";
 import { createClient } from "@/lib/supabase/client";
 
@@ -76,8 +77,20 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
     setLoading(false);
   }
 
+  const kireadyHref = `${KIREADY_START_PATH}?next=${encodeURIComponent(safeNextPath)}`;
+
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
+      <a
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white shadow-lg shadow-slate-950/20 transition hover:bg-slate-800"
+        href={kireadyHref}
+      >
+        Mit KIready anmelden
+        <ArrowRight className="size-5" />
+      </a>
+      <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+        oder mit E-Mail und Passwort
+      </p>
       <div className="space-y-2">
         <label className="text-sm font-semibold text-slate-700" htmlFor="email">
           E-Mail-Adresse
