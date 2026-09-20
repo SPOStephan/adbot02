@@ -81,16 +81,6 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-      <a
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white shadow-lg shadow-slate-950/20 transition hover:bg-slate-800"
-        href={kireadyHref}
-      >
-        Mit KIready anmelden
-        <ArrowRight className="size-5" />
-      </a>
-      <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-        oder mit E-Mail und Passwort
-      </p>
       <div className="space-y-2">
         <label className="text-sm font-semibold text-slate-700" htmlFor="email">
           E-Mail-Adresse
@@ -150,6 +140,16 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
         {isLogin ? "Sicher anmelden" : "Kostenlos registrieren"}
         {!loading ? <ArrowRight className="size-5" /> : null}
       </button>
+
+      <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+        oder
+      </p>
+      <a
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-900 transition hover:bg-slate-50"
+        href={kireadyHref}
+      >
+        Mit KIready anmelden
+      </a>
 
       <p className="text-center text-sm text-slate-500">
         {isLogin ? "Noch kein Konto?" : "Schon registriert?"}{" "}
