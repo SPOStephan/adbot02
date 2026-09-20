@@ -1,3 +1,6 @@
+/** Admin library grid page size — keeps the inspiration page short. */
+export const AD_EXAMPLE_PAGE_SIZE = 24;
+
 export const AD_EXAMPLE_PLATFORMS = [
   { value: "openai_ads", label: "ChatGPT Ads" },
   { value: "meta", label: "Meta Ads" },

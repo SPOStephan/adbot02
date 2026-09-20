@@ -5,7 +5,11 @@ import {
   adExampleMetadata,
   parseAdExampleInput,
 } from "@/lib/ad-examples/input";
-import type { AdExampleInput, AdExampleView } from "@/lib/ad-examples/types";
+import {
+  AD_EXAMPLE_PAGE_SIZE,
+  type AdExampleInput,
+  type AdExampleView,
+} from "@/lib/ad-examples/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -135,17 +139,60 @@ function view(row: AssetRow): AdExampleView {
   };
 }
 
-export async function loadAdExamples(): Promise<AdExampleView[]> {
+export async function loadAdExamplesPage(input?: {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  platform?: string;
+  objective?: string;
+  industry?: string;
+}): Promise<{
+  examples: AdExampleView[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+}> {
+  const pageSize = Math.min(Math.max(input?.pageSize ?? AD_EXAMPLE_PAGE_SIZE, 1), 48);
+  const requestedPage = Math.max(Math.floor(input?.page ?? 1), 1);
+  const from = (requestedPage - 1) * pageSize;
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let query = admin
     .from("brand_assets")
     .select(
       "id,original_filename,width,height,metadata,storage_bucket,storage_path,created_at,updated_at",
+      { count: "exact" },
     )
     .eq("library_scope", "INSPIRATION")
     .neq("status", "REVOKED")
-    .order("updated_at", { ascending: false })
-    .limit(500);
+    .order("updated_at", { ascending: false });
+
+  const platform = (input?.platform ?? "").trim();
+  if (platform && platform !== "all") {
+    query = query.filter("metadata->ad_example->>platform", "eq", platform);
+  }
+  const objective = (input?.objective ?? "").trim();
+  if (objective && objective !== "all") {
+    query = query.filter("metadata->ad_example->>objective", "eq", objective);
+  }
+  const industry = (input?.industry ?? "").trim();
+  if (industry && industry !== "all") {
+    query = query.filter("metadata->ad_example->>industry", "eq", industry);
+  }
+  const needle = (input?.query ?? "").trim().replace(/[%*,()]/g, " ").slice(0, 80);
+  if (needle) {
+    query = query.or(
+      [
+        `metadata->ad_example->>title.ilike.%${needle}%`,
+        `metadata->ad_example->>advertiser_name.ilike.%${needle}%`,
+        `metadata->ad_example->>industry.ilike.%${needle}%`,
+        `metadata->ad_example->>hook_text.ilike.%${needle}%`,
+        `metadata->ad_example->>body_text.ilike.%${needle}%`,
+      ].join(","),
+    );
+  }
+
+  const { data, error, count } = await query.range(from, from + pageSize - 1);
   if (error) {
     throw new AdExampleServiceError(
       "load_failed",
@@ -153,7 +200,23 @@ export async function loadAdExamples(): Promise<AdExampleView[]> {
       "Die Werbebeispielbibliothek konnte nicht geladen werden.",
     );
   }
-  return ((data ?? []) as AssetRow[]).map(view);
+  const total = typeof count === "number" ? count : (data ?? []).length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  if (requestedPage > pageCount && total > 0) {
+    return loadAdExamplesPage({ ...input, page: pageCount });
+  }
+  return {
+    examples: ((data ?? []) as AssetRow[]).map(view),
+    total,
+    page: requestedPage,
+    pageSize,
+    pageCount,
+  };
+}
+
+export async function loadAdExamples(): Promise<AdExampleView[]> {
+  const result = await loadAdExamplesPage({ page: 1, pageSize: AD_EXAMPLE_PAGE_SIZE });
+  return result.examples;
 }
 
 export async function updateAdExample(input: {
