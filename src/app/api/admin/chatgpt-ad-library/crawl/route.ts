@@ -4,10 +4,12 @@ import {
   enqueueChatGPTAdLibraryIds,
   getChatGPTAdLibraryCrawlStatus,
   setChatGPTAdLibraryCrawlEnabled,
+  unstickChatGPTAdLibraryQueue,
 } from "@/lib/chatgpt-ad-library/crawl-state";
 import {
   ingestChatGPTAdLibrarySeedFallback,
   probeChatGPTAdLibraryUnlocker,
+  scrapeChatGPTAdLibraryHttpBatch,
 } from "@/lib/chatgpt-ad-library/scrape";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import {
@@ -111,6 +113,23 @@ export async function POST(request: NextRequest) {
         ingested: probe.ingested,
         buyFreelance: probe.ok && probe.hasCopy,
         probe,
+      });
+    }
+
+    if (action === "unstick") {
+      const unstick = await unstickChatGPTAdLibraryQueue();
+      const status = await getChatGPTAdLibraryCrawlStatus();
+      return json({ ok: true, action, unstick, status });
+    }
+
+    if (action === "run_now") {
+      const result = await scrapeChatGPTAdLibraryHttpBatch();
+      const status = await getChatGPTAdLibraryCrawlStatus();
+      return json({
+        ok: true,
+        action,
+        result,
+        status,
       });
     }
 

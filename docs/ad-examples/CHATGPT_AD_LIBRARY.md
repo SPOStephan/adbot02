@@ -1,6 +1,6 @@
 # ChatGPT Ad Library → interner Inspiration Vault
 
-**Stand:** 16. September 2026  
+**Stand:** 20. September 2026  
 **Quelle:** https://www.chatgptadlibrary.com/library  
 **Sichtbarkeit:** nur Site-Admins + interne KI. Niemals kundensichtbar.
 
@@ -21,12 +21,12 @@ Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Ist ScrapingBee
 | Komponente | Rolle |
 | --- | --- |
 | `CHATGPT_AD_LIBRARY_SYSTEM_IDS` | Verifizierter Systemkatalog. Queue braucht keine manuellen IDs. |
-| Sequenz-Probe bis 30 000 | Wenn Katalog + Live-Discover leer sind, liefert `mode=plan` die nächsten unimportierten IDs. |
-| Tabelle `chatgpt_ad_library_crawl_state` | Queue, Cursor, Zähler, `next_probe_id` |
+| Sequenz-Probe bis 30 000 | Nur wenn die Discover-Queue leer ist. Tote IDs (404/ohne Copy) landen in `skipped_ids`. |
+| Tabelle `chatgpt_ad_library_crawl_state` | Queue, Skip-Liste, Cursor, Zähler, `next_probe_id` |
 | `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover (CRON_SECRET) |
 | GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h: Unlocker-Batch oder Playwright-Fallback |
 | Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Probe + Import #7341, Copy auf den Karten |
-| Vercel Cron (6h) | Mit Unlocker: dieselben ≤5 Ads. Ohne Key: Seed-Fallback, keine Queue-Entnahme. |
+| Vercel Cron (15 min) | Unlocker: bis 10 Ads aus der **wartenden Queue**. Katalog nur wenn die Queue leer ist. |
 | ScrapingBee | Unlocker. Trial zuerst (1000 Credits, keine Karte). Freelance erst nach grüner Probe. Key nur in **Vercel Production**. |
 
 Secrets für die Action (GitHub → Settings → Secrets and variables → Actions — **nicht** nur Vercel):
@@ -54,13 +54,13 @@ Was nach einer grünen Probe noch knirschen *kann* (kein 50-Dollar-Risiko): fün
 
 Optional Vercel: `CHATGPT_AD_LIBRARY_UPLOADER_USER_ID` (Site-Admin-UUID).
 
-Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql`
+Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql` und `20260920120000_chatgpt_ad_library_skipped_ids.sql`.
 
 Ablauf pro Lauf mit Unlocker:
 
 1. `GET ?mode=unlock_discover` holt den aktuellen Sitemap-Shard über ScrapingBee.
-2. `GET ?mode=unlock` plant ≤5 IDs, unlockt die Ad-Seiten, parsed HTML, ingest (WebP→JPEG).
-3. Ohne Key: Playwright auf dem Runner (meist Checkpoint) und Seed-Fallback.
+2. `GET ?mode=unlock` plant bis 10 IDs **aus der wartenden Queue**, unlockt die Ad-Seiten, parsed HTML, ingest (WebP→JPEG).
+3. Ohne Key: Playwright auf dem Runner (meist Checkpoint, `skippedPlan` / keine Queue-Entnahme) und Seed-Fallback nur wenn der Vault leer ist.
 
 Admin kann denselben Seed jederzeit unter `/dashboard/inspiration` mit **GlossGenius-Seed jetzt importieren** nachziehen.
 
@@ -85,7 +85,14 @@ Manuelles JSONL bleibt nur als Notfall-Fallback.
 - **Unlocker-Probe + Import #7341**: Bild + Copy + Prompts. Karten zeigen Anzeigentext und die echten Trigger-Prompts aus der Quelle — keinen Platzhalter wie „ChatGPT-Kontextanzeige“.
 - Auto-Scrape-Panel + optionaler JSON-Import
 - Status: `GET /api/admin/chatgpt-ad-library/crawl` · `POST { action: "probe_unlocker" }`
+- Stau: `POST { action: "unstick" }` entfernt schon importierte/tote IDs aus `pending_ids`. `POST { action: "run_now" }` holt den nächsten Unlocker-Lauf aus der **wartenden Queue**, nicht aus dem Katalog-Loop.
 - Interner KI-Abruf: `GET /api/admin/chatgpt-ad-library/intelligence?q=…`
+
+## Queue-Stau (Diagnose)
+
+`Queue` ist `chatgpt_ad_library_crawl_state.pending_ids`, kein Worker-Hang. Ein älterer Planner hat bei jedem Lauf den Systemkatalog (`18, 21, 22, 43, …`) vor die Discover-IDs gesetzt. Die Sitemap-IDs blieben liegen, der Katalog wurde bei 404/ohne Copy immer wieder geplant — deshalb wuchs `total_failed` (Lauf-Zähler), während der Vault klein blieb. `total_imported` ist ein Lebenszeit-Zähler (inkl. früherer Seed-Fallbacks), nicht die Anzahl sichtbarer Karten.
+
+Der Planner nimmt jetzt zuerst `pending_ids`. Tote IDs landen in `skipped_ids` und werden nicht erneut vor die Queue gehängt. Seed-Fallback nur wenn der Vault leer ist.
 
 ## KI-Nutzung
 

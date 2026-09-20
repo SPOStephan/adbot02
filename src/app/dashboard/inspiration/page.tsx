@@ -43,7 +43,7 @@ export default async function AdExampleLibraryPage() {
           error:
             error instanceof Error ? error.message : "Crawl-Status nicht verfügbar.",
         })),
-      loadChatGPTAdLibraryForInternalIntelligence({ limit: 48 }).catch(() => []),
+      loadChatGPTAdLibraryForInternalIntelligence({ limit: 96 }).catch(() => []),
       countChatGPTAdLibraryImports().catch(() => 0),
       loadCollectorInbox().catch(() => ({
         items: [],
