@@ -12,6 +12,18 @@ export function isChatGPTAdLibraryUnlockerConfigured(): boolean {
   return scrapingBeeApiKey() !== null;
 }
 
+export function isScrapingBeeCreditOrAuthError(input: {
+  status: number;
+  text?: string | null;
+  providerError?: string | null;
+}): boolean {
+  if (input.status === 401 || input.status === 402) return true;
+  const blob = `${input.providerError ?? ""} ${input.text ?? ""}`.toLowerCase();
+  return /not enough credits|insufficient credits|credits? (left|remaining|exhausted)|out of credits|quota exceeded|payment required/.test(
+    blob,
+  );
+}
+
 export type UnlockedPage = {
   ok: boolean;
   status: number;
