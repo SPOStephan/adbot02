@@ -10,7 +10,7 @@ import {
 import {
   ingestChatGPTAdLibrarySeedFallback,
   probeChatGPTAdLibraryUnlocker,
-  scrapeChatGPTAdLibraryHttpBatch,
+  scrapeChatGPTAdLibraryUnlockBatch,
 } from "@/lib/chatgpt-ad-library/scrape";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import {
@@ -130,7 +130,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "run_now") {
-      const result = await scrapeChatGPTAdLibraryHttpBatch();
+      const result = await scrapeChatGPTAdLibraryUnlockBatch({
+        budgetMs: 120_000,
+      });
       const status = await getChatGPTAdLibraryCrawlStatus();
       return json({
         ok: true,
@@ -154,6 +156,15 @@ export async function POST(request: NextRequest) {
     console.error("chatgpt_ad_library_crawl_admin_post_failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return json({ ok: false, message: "Crawl-Aktion fehlgeschlagen." }, 500);
+    return json(
+      {
+        ok: false,
+        message:
+          error instanceof Error
+            ? `Crawl-Aktion fehlgeschlagen: ${error.message}`
+            : "Crawl-Aktion fehlgeschlagen.",
+      },
+      500,
+    );
   }
 }

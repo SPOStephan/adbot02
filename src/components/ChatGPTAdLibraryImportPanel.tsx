@@ -521,6 +521,12 @@ export function ChatGPTAdLibraryImportPanel({
     if (pending) return;
     setPending(true);
     setError(null);
+    setNotice(
+      "Sofortlauf gestartet: ein Unlock-Batch, Zahlen aktualisieren sich währenddessen. Der Probe-Button dreht sich nicht extra — das war nur der gemeinsame Ladezustand.",
+    );
+    const poll = window.setInterval(() => {
+      void refreshCrawl(hitsPage);
+    }, 8_000);
     try {
       const response = await fetch("/api/admin/chatgpt-ad-library/crawl", {
         method: "POST",
@@ -534,23 +540,38 @@ export function ChatGPTAdLibraryImportPanel({
         status?: CrawlStatus;
         result?: {
           plannedIds?: string[];
-          summary?: { imported?: number; failed?: number };
+          skippedLease?: boolean;
+          summary?: { imported?: number; failed?: number; skippedDuplicate?: number };
           failures?: Array<{ id: string; error: string }>;
         };
       };
       if (!response.ok || !payload.ok) {
-        throw new Error(payload.message ?? "Sofortlauf fehlgeschlagen.");
+        throw new Error(runNowFailureMessage(response, payload.message));
       }
       if (payload.status) setCrawl(payload.status);
-      const imported = payload.result?.summary?.imported ?? 0;
-      const failed = payload.result?.failures?.length ?? payload.result?.summary?.failed ?? 0;
-      setNotice(
-        `Sofortlauf: ${payload.result?.plannedIds?.length ?? 0} IDs geplant · ${imported} neu · ${failed} übersprungen/fehlgeschlagen.`,
-      );
-      await refreshCrawl();
+      if (payload.result?.skippedLease) {
+        setNotice(
+          "Sofortlauf übersprungen: beide Unlock-Leases sind belegt. Zuerst „Leases freigeben“.",
+        );
+      } else {
+        const imported = payload.result?.summary?.imported ?? 0;
+        const refreshed = payload.result?.summary?.skippedDuplicate ?? 0;
+        const failed = payload.result?.failures?.length ?? payload.result?.summary?.failed ?? 0;
+        const sample = (payload.result?.failures ?? [])
+          .slice(0, 4)
+          .map((item) => `${item.id}:${item.error}`)
+          .join(" · ");
+        setNotice(
+          `Sofortlauf fertig: ${payload.result?.plannedIds?.length ?? 0} IDs geplant · ${imported} neu · ${refreshed} schon im Vault · ${failed} fehlgeschlagen` +
+            (sample ? ` · ${sample}` : "") +
+            ".",
+        );
+      }
+      await refreshCrawl(hitsPage);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Sofortlauf fehlgeschlagen.");
     } finally {
+      window.clearInterval(poll);
       setPending(false);
     }
   }
@@ -712,11 +733,12 @@ export function ChatGPTAdLibraryImportPanel({
             Leases freigeben
           </button>
           <button
-            className="inline-flex min-h-11 items-center rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-extrabold text-sky-950 hover:bg-sky-100 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-extrabold text-sky-950 hover:bg-sky-100 disabled:opacity-50"
             disabled={pending}
             onClick={() => void runNow()}
             type="button"
           >
+            {pending ? <LoaderCircle className="size-4 animate-spin" /> : null}
             Jetzt einen Lauf
           </button>
           <button
@@ -725,11 +747,7 @@ export function ChatGPTAdLibraryImportPanel({
             onClick={() => void probeUnlocker()}
             type="button"
           >
-            {pending ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <FlaskConical className="size-4" />
-            )}
+            <FlaskConical className="size-4" />
             Unlocker-Probe + Import #7341
           </button>
           <span className="text-sm font-semibold text-emerald-900">
@@ -998,6 +1016,17 @@ function CrawlMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function runNowFailureMessage(response: Response, serverMessage?: string): string {
+  if (serverMessage?.trim()) return serverMessage.trim();
+  if (response.status === 504 || response.status === 524 || response.status === 502) {
+    return `Sofortlauf abgebrochen (HTTP ${response.status}): Production wartet noch auf den langen Unlock-Drain und überschreitet das Admin-Limit von 5 Minuten. Nach dem Merge ist der Klick ein kurzer Batch.`;
+  }
+  if (response.status > 0) {
+    return `Sofortlauf fehlgeschlagen (HTTP ${response.status}).`;
+  }
+  return "Sofortlauf fehlgeschlagen: keine Antwort vom Server.";
+}
+
 function formatWhen(value: string | null | undefined): string {
   if (!value) return "noch nie";
   const date = new Date(value);
@@ -1075,6 +1104,11 @@ function LastRunBox({
     typeof summary?.last_discover_count === "number" ? summary.last_discover_count : null;
   const lastImported =
     typeof summary?.last_imported === "number" ? summary.last_imported : null;
+  const lastFailed =
+    typeof summary?.last_failed === "number" ? summary.last_failed : null;
+  const failureErrors = Array.isArray(summary?.last_failure_errors)
+    ? summary.last_failure_errors.map(String).slice(0, 8).join(" · ")
+    : "";
   const sourceLabel =
     planSource === "pending"
       ? "Queue"
@@ -1093,7 +1127,11 @@ function LastRunBox({
         {planIds ? `Geplant: ${planIds}` : "Noch kein Plan gespeichert."}
         {sourceLabel ? ` · Quelle ${sourceLabel}` : ""}
         {discoverCount != null ? ` · Discover ${discoverCount} IDs` : ""}
-        {lastImported != null ? ` · zuletzt importiert ${lastImported}` : ""}
+        {lastImported != null ? ` · zuletzt neu ${lastImported}` : ""}
+        {lastFailed != null ? ` · zuletzt Fehler ${lastFailed}` : ""}
+        {planSource === "catalog"
+          ? " · Achtung: Queue war leer, deshalb nur der Systemkatalog"
+          : ""}
         {summary?.last_unlocker_block === "credits"
           ? " · Unlocker-Block: ScrapingBee-Credits"
           : summary?.skippedLease
@@ -1101,6 +1139,9 @@ function LastRunBox({
             : ""}
         {` · Vault gesamt ${imported}`}
       </p>
+      {failureErrors ? (
+        <p className="mt-2 font-mono text-xs leading-5 text-emerald-900/80">{failureErrors}</p>
+      ) : null}
     </div>
   );
 }
