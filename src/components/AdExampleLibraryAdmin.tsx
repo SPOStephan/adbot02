@@ -10,7 +10,9 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { InspirationPager } from "@/components/InspirationPager";
 
 import {
   AD_EXAMPLE_EVIDENCE_LEVELS,
@@ -18,6 +20,7 @@ import {
   AD_EXAMPLE_OBJECTIVES,
   AD_EXAMPLE_PLATFORMS,
   AD_EXAMPLE_RIGHTS_BASES,
+  AD_EXAMPLE_PAGE_SIZE,
   AD_EXAMPLE_SOURCE_KINDS,
   isGenericAdExampleObjectiveDetail,
   labelForOption,
@@ -200,28 +203,87 @@ function jsonValues(form: HTMLFormElement): Record<string, unknown> {
   return Object.fromEntries(data.entries());
 }
 
-export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: AdExampleView[] }) {
+export function AdExampleLibraryAdmin({
+  initialExamples,
+  initialTotal = initialExamples.length,
+  initialPage = 1,
+  initialPageCount = 1,
+}: {
+  initialExamples: AdExampleView[];
+  initialTotal?: number;
+  initialPage?: number;
+  initialPageCount?: number;
+}) {
   const createFormRef = useRef<HTMLFormElement>(null);
   const [examples, setExamples] = useState(initialExamples);
+  const [total, setTotal] = useState(initialTotal);
+  const [page, setPage] = useState(initialPage);
+  const [pageCount, setPageCount] = useState(Math.max(1, initialPageCount));
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [platform, setPlatform] = useState("all");
   const [objective, setObjective] = useState("all");
   const [industry, setIndustry] = useState("all");
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  async function loadPage(nextPage: number, reset = false) {
+    const target = reset ? 1 : nextPage;
+    setPending("page");
+    try {
+      const params = new URLSearchParams({
+        page: String(target),
+        pageSize: String(AD_EXAMPLE_PAGE_SIZE),
+        q: debouncedQuery,
+        platform,
+        objective,
+        industry,
+      });
+      const response = await fetch(`/api/admin/ad-examples?${params}`, {
+        credentials: "same-origin",
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        examples?: AdExampleView[];
+        total?: number;
+        page?: number;
+        pageCount?: number;
+      };
+      if (!response.ok || !payload.ok || !Array.isArray(payload.examples)) {
+        throw new Error(payload.message ?? "Bibliothek konnte nicht geladen werden.");
+      }
+      setExamples(payload.examples);
+      setTotal(typeof payload.total === "number" ? payload.total : payload.examples.length);
+      setPage(payload.page ?? target);
+      setPageCount(Math.max(1, payload.pageCount ?? 1));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Bibliothek konnte nicht geladen werden.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  const skipFilterFetch = useRef(true);
+  useEffect(() => {
+    if (skipFilterFetch.current) {
+      skipFilterFetch.current = false;
+      return;
+    }
+    void loadPage(1, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load when filters change
+  }, [debouncedQuery, platform, objective, industry]);
+
   const industries = useMemo(
-    () => [...new Set(examples.map((item) => item.industry))].sort((a, b) => a.localeCompare(b, "de")),
+    () => [...new Set(examples.map((item) => item.industry).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de")),
     [examples],
   );
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return examples.filter((item) => {
-      const haystack = [item.title, item.advertiserName, item.industry, item.objectiveDetail, item.hookText, item.bodyText, ...(item.triggeringPrompts ?? []), ...item.tags].join(" ").toLowerCase();
-      return (!needle || haystack.includes(needle)) && (platform === "all" || item.platform === platform) && (objective === "all" || item.objective === objective) && (industry === "all" || item.industry === industry);
-    });
-  }, [examples, query, platform, objective, industry]);
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -231,7 +293,9 @@ export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: Ad
       const response = await fetch("/api/admin/ad-examples", { method: "POST", credentials: "same-origin", body: new FormData(event.currentTarget) });
       const payload = (await response.json().catch(() => ({}))) as ApiResponse;
       if (!response.ok || !payload.ok || !payload.example) throw new Error(payload.message ?? "Upload fehlgeschlagen.");
-      setExamples((current) => [payload.example as AdExampleView, ...current.filter((item) => item.id !== payload.example?.id)]);
+      setExamples((current) => [payload.example as AdExampleView, ...current.filter((item) => item.id !== payload.example?.id)].slice(0, AD_EXAMPLE_PAGE_SIZE));
+      setTotal((current) => current + 1);
+      setPage(1);
       createFormRef.current?.reset();
       setNotice("Werbebeispiel gespeichert und klassifiziert.");
     } catch (caught) {
@@ -266,8 +330,8 @@ export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: Ad
       });
       const payload = (await response.json().catch(() => ({}))) as ApiResponse;
       if (!response.ok || !payload.ok) throw new Error(payload.message ?? "Entfernen fehlgeschlagen.");
-      setExamples((current) => current.filter((item) => item.id !== example.id));
       setNotice("Werbebeispiel entfernt.");
+      await loadPage(page);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Entfernen fehlgeschlagen."); }
     finally { setPending(null); }
   }
@@ -327,7 +391,7 @@ export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: Ad
       </details>
 
       <section className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-xl font-extrabold">Bibliothek</h2><p className="mt-1 text-sm text-slate-500">{filtered.length} von {examples.length} Beispielen sichtbar · {examples.filter((item) => item.useForGeneration).length} für Vorschläge freigegeben</p></div></div>
+        <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-xl font-extrabold">Bibliothek</h2><p className="mt-1 text-sm text-slate-500">{total} Beispiele gesamt · {AD_EXAMPLE_PAGE_SIZE} pro Seite · {examples.filter((item) => item.useForGeneration).length} auf dieser Seite für Vorschläge freigegeben</p></div></div>
         <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-4">
           <label className="relative md:col-span-1"><Search className="absolute left-3 top-3 size-4 text-slate-400" /><input className="h-10 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm" onChange={(event) => setQuery(event.target.value)} placeholder="Suchen…" value={query} /></label>
           <label className="relative"><Filter className="absolute left-3 top-3 size-4 text-slate-400" /><select className="h-10 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm" onChange={(event) => setPlatform(event.target.value)} value={platform}><option value="all">Alle Plattformen</option>{AD_EXAMPLE_PLATFORMS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
@@ -335,8 +399,15 @@ export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: Ad
           <select className="h-10 rounded-lg border border-slate-200 px-3 text-sm" onChange={(event) => setIndustry(event.target.value)} value={industry}><option value="all">Alle Branchen</option>{industries.map((item) => <option key={item} value={item}>{item}</option>)}</select>
         </div>
 
+        <InspirationPager
+          disabled={pending === "page"}
+          onPage={(next) => void loadPage(next)}
+          page={page}
+          pageCount={pageCount}
+          total={total}
+        />
         <div className="grid gap-5 xl:grid-cols-2">
-          {filtered.map((example) => (
+          {examples.map((example) => (
             <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" key={example.id}>
               <div className="grid gap-0 sm:grid-cols-[15rem_1fr]">
                 <a className="flex min-h-52 items-center justify-center bg-slate-100" href={example.previewUrl} rel="noreferrer" target="_blank">
@@ -366,7 +437,14 @@ export function AdExampleLibraryAdmin({ initialExamples }: { initialExamples: Ad
             </article>
           ))}
         </div>
-        {filtered.length === 0 ? <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-500">Keine Werbebeispiele für diese Filter.</p> : null}
+        <InspirationPager
+          disabled={pending === "page"}
+          onPage={(next) => void loadPage(next)}
+          page={page}
+          pageCount={pageCount}
+          total={total}
+        />
+        {examples.length === 0 ? <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-500">Keine Werbebeispiele für diese Filter.</p> : null}
       </section>
     </div>
   );

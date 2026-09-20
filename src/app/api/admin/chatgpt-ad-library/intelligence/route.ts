@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { loadChatGPTAdLibraryForInternalIntelligence } from "@/lib/chatgpt-ad-library/retrieval";
+import { CHATGPT_AD_LIBRARY_PAGE_SIZE } from "@/lib/chatgpt-ad-library/import-constants";
+import { loadChatGPTAdLibraryPage } from "@/lib/chatgpt-ad-library/retrieval";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import { isDashboardSameOriginReadRequest } from "@/lib/meta/customer-control-route";
 import { createClient } from "@/lib/supabase/server";
@@ -36,17 +37,22 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const query = url.searchParams.get("q") ?? "";
-    const limitRaw = Number(url.searchParams.get("limit") ?? "40");
-    const hits = await loadChatGPTAdLibraryForInternalIntelligence({
+    const limitRaw = Number(url.searchParams.get("limit") ?? String(CHATGPT_AD_LIBRARY_PAGE_SIZE));
+    const offsetRaw = Number(url.searchParams.get("offset") ?? "0");
+    const page = await loadChatGPTAdLibraryPage({
       query,
-      limit: Number.isFinite(limitRaw) ? limitRaw : 40,
+      limit: Number.isFinite(limitRaw) ? limitRaw : CHATGPT_AD_LIBRARY_PAGE_SIZE,
+      offset: Number.isFinite(offsetRaw) ? offsetRaw : 0,
     });
 
     return json({
       ok: true,
       customerVisible: false,
-      count: hits.length,
-      hits,
+      count: page.hits.length,
+      total: page.total,
+      offset: page.offset,
+      limit: page.limit,
+      hits: page.hits,
     });
   } catch (error) {
     console.error("chatgpt_ad_library_intelligence_failed", {

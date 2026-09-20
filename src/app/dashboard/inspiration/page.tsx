@@ -4,14 +4,15 @@ import { AdExampleLibraryAdmin } from "@/components/AdExampleLibraryAdmin";
 import { AdLibraryCollectorSandbox } from "@/components/AdLibraryCollectorSandbox";
 import { ChatGPTAdLibraryImportPanel } from "@/components/ChatGPTAdLibraryImportPanel";
 import { getChatGPTAdLibraryCrawlStatus } from "@/lib/chatgpt-ad-library/crawl-state";
+import { CHATGPT_AD_LIBRARY_PAGE_SIZE } from "@/lib/chatgpt-ad-library/import-constants";
 import {
   countChatGPTAdLibraryImports,
-  loadChatGPTAdLibraryForInternalIntelligence,
+  loadChatGPTAdLibraryPage,
 } from "@/lib/chatgpt-ad-library/retrieval";
 import { loadAdIntelligenceCorpusSummary } from "@/lib/ad-intelligence/corpus";
 import { EMPTY_COLLECTOR_COUNTS } from "@/lib/ad-library-collector/types";
 import { loadCollectorInbox } from "@/lib/ad-library-collector/service";
-import { loadAdExamples } from "@/lib/ad-examples/service";
+import { loadAdExamplesPage } from "@/lib/ad-examples/service";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,9 +33,9 @@ export default async function AdExampleLibraryPage() {
     redirect("/dashboard");
   }
 
-  const [examples, corpus, crawlResult, hits, importedCount, collectorInbox] =
+  const [examples, corpus, crawlResult, vaultPage, importedCount, collectorInbox] =
     await Promise.all([
-      loadAdExamples(),
+      loadAdExamplesPage({ page: 1 }),
       loadAdIntelligenceCorpusSummary(),
       getChatGPTAdLibraryCrawlStatus()
         .then((status) => ({ status, error: null as string | null }))
@@ -43,7 +44,14 @@ export default async function AdExampleLibraryPage() {
           error:
             error instanceof Error ? error.message : "Crawl-Status nicht verfügbar.",
         })),
-      loadChatGPTAdLibraryForInternalIntelligence({ limit: 96 }).catch(() => []),
+      loadChatGPTAdLibraryPage({ limit: CHATGPT_AD_LIBRARY_PAGE_SIZE, offset: 0 }).catch(
+        () => ({
+          hits: [],
+          total: 0,
+          offset: 0,
+          limit: CHATGPT_AD_LIBRARY_PAGE_SIZE,
+        }),
+      ),
       countChatGPTAdLibraryImports().catch(() => 0),
       loadCollectorInbox().catch(() => ({
         items: [],
@@ -101,10 +109,16 @@ export default async function AdExampleLibraryPage() {
         <ChatGPTAdLibraryImportPanel
           initialCrawl={crawlResult.status}
           initialCrawlError={crawlResult.error}
-          initialHits={hits}
+          initialHits={vaultPage.hits}
+          initialHitsTotal={vaultPage.total}
           initialImportedCount={importedCount}
         />
-        <AdExampleLibraryAdmin initialExamples={examples} />
+        <AdExampleLibraryAdmin
+          initialExamples={examples.examples}
+          initialTotal={examples.total}
+          initialPage={examples.page}
+          initialPageCount={examples.pageCount}
+        />
       </div>
     </>
   );

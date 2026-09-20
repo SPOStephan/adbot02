@@ -1,5 +1,6 @@
 import "server-only";
 
+import { CHATGPT_AD_LIBRARY_PAGE_SIZE } from "@/lib/chatgpt-ad-library/import-constants";
 import { CHATGPT_AD_LIBRARY_PROVIDER } from "@/lib/chatgpt-ad-library/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -43,25 +44,70 @@ function stringArray(value: unknown): string[] {
  * Never returns customer-library assets. Never implies customer visibility.
  * Creative generation still requires explicit use_for_generation on the ad_example.
  */
-export async function loadChatGPTAdLibraryForInternalIntelligence(input?: {
+export { CHATGPT_AD_LIBRARY_PAGE_SIZE };
+
+function applyChatGPTLibraryFilters<T extends { filter: (column: string, op: string, value: string) => T; or: (filters: string) => T }>(
+  query: T,
+  needle: string,
+): T {
+  let next = query
+    .filter("metadata->>library", "eq", "ad_example_library")
+    .filter("metadata->external_source->>provider", "eq", CHATGPT_AD_LIBRARY_PROVIDER)
+    .filter("metadata->external_source->>use_for_internal_intelligence", "eq", "true");
+  const safe = needle.replace(/[%*,()]/g, " ").slice(0, 80);
+  if (safe) {
+    next = next.or(
+      [
+        `metadata->ad_example->>title.ilike.%${safe}%`,
+        `metadata->ad_example->>advertiser_name.ilike.%${safe}%`,
+        `metadata->ad_example->>body_text.ilike.%${safe}%`,
+        `metadata->external_source->>external_id.ilike.%${safe}%`,
+      ].join(","),
+    );
+  }
+  return next;
+}
+
+export async function loadChatGPTAdLibraryPage(input?: {
   limit?: number;
+  offset?: number;
   query?: string;
-}): Promise<ChatGPTAdLibraryIntelligenceHit[]> {
-  const limit = Math.min(Math.max(input?.limit ?? 40, 1), 200);
-  const needle = (input?.query ?? "").trim().toLowerCase();
+}): Promise<{
+  hits: ChatGPTAdLibraryIntelligenceHit[];
+  total: number;
+  offset: number;
+  limit: number;
+}> {
+  const limit = Math.min(Math.max(input?.limit ?? CHATGPT_AD_LIBRARY_PAGE_SIZE, 1), 48);
+  const offset = Math.max(Math.floor(input?.offset ?? 0), 0);
+  const needle = (input?.query ?? "").trim();
   const admin = createAdminClient();
 
-  const { data, error } = await admin
-    .from("brand_assets")
-    .select("id,metadata,updated_at")
-    .eq("library_scope", "INSPIRATION")
-    .neq("status", "REVOKED")
-    .filter("metadata->>library", "eq", "ad_example_library")
-    .order("updated_at", { ascending: false })
-    .limit(500);
+  const counted = applyChatGPTLibraryFilters(
+    admin
+      .from("brand_assets")
+      .select("id", { count: "exact", head: true })
+      .eq("library_scope", "INSPIRATION")
+      .neq("status", "REVOKED"),
+    needle,
+  );
+  const listed = applyChatGPTLibraryFilters(
+    admin
+      .from("brand_assets")
+      .select("id,metadata,updated_at")
+      .eq("library_scope", "INSPIRATION")
+      .neq("status", "REVOKED")
+      .order("updated_at", { ascending: false }),
+    needle,
+  );
+
+  const [{ count, error: countError }, { data, error }] = await Promise.all([
+    counted,
+    listed.range(offset, offset + limit - 1),
+  ]);
 
   if (error || !Array.isArray(data)) {
-    return [];
+    return { hits: [], total: 0, offset, limit };
   }
 
   const hits: ChatGPTAdLibraryIntelligenceHit[] = [];
@@ -83,24 +129,6 @@ export async function loadChatGPTAdLibraryForInternalIntelligence(input?: {
     const triggeringPrompts = stringArray(external.triggering_prompts);
     const categories = stringArray(external.categories);
 
-    if (needle) {
-      const haystack = [
-        title,
-        advertiserName,
-        String(external.external_id ?? ""),
-        industry,
-        hookText,
-        bodyText,
-        whyItWorks,
-        ...tags,
-        ...triggeringPrompts,
-        ...categories,
-      ]
-        .join(" ")
-        .toLowerCase();
-      if (!haystack.includes(needle)) continue;
-    }
-
     hits.push({
       brandAssetId: String(row.id),
       externalId: String(external.external_id ?? ""),
@@ -119,11 +147,20 @@ export async function loadChatGPTAdLibraryForInternalIntelligence(input?: {
       useForGeneration: example.use_for_generation === true,
       customerVisible: false,
     });
-
-    if (hits.length >= limit) break;
   }
 
-  return hits;
+  const total =
+    !countError && typeof count === "number" ? count : offset + hits.length;
+  return { hits, total, offset, limit };
+}
+
+export async function loadChatGPTAdLibraryForInternalIntelligence(input?: {
+  limit?: number;
+  offset?: number;
+  query?: string;
+}): Promise<ChatGPTAdLibraryIntelligenceHit[]> {
+  const page = await loadChatGPTAdLibraryPage(input);
+  return page.hits;
 }
 
 export async function countChatGPTAdLibraryImports(): Promise<number> {

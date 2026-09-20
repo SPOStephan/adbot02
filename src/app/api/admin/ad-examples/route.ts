@@ -3,13 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { AdExampleInputError, adExampleMetadata } from "@/lib/ad-examples/input";
 import {
   AdExampleServiceError,
+  loadAdExamplesPage,
   parseAdExampleInput,
   removeAdExample,
   updateAdExample,
 } from "@/lib/ad-examples/service";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import { MediaLibraryError, uploadInspirationVaultImage } from "@/lib/media-library/upload";
-import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
+import {
+  isDashboardSameOriginReadRequest,
+  isDashboardSameOriginRequest,
+} from "@/lib/meta/customer-control-route";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -25,8 +29,12 @@ function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE });
 }
 
-async function requireAdmin(request: NextRequest) {
-  if (!isDashboardSameOriginRequest(request)) {
+async function requireAdmin(request: NextRequest, mode: "read" | "write" = "write") {
+  const sameOrigin =
+    mode === "read"
+      ? isDashboardSameOriginReadRequest(request)
+      : isDashboardSameOriginRequest(request);
+  if (!sameOrigin) {
     return { error: json({ ok: false, message: "Ungültige Herkunft." }, 403) };
   }
   const supabase = await createClient();
@@ -54,6 +62,27 @@ function errorResponse(error: unknown) {
     { ok: false, code: "internal_error", message: "Das Werbebeispiel konnte nicht gespeichert werden." },
     500,
   );
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await requireAdmin(request, "read");
+    if ("error" in auth && auth.error) return auth.error;
+    const url = new URL(request.url);
+    const pageRaw = Number(url.searchParams.get("page") ?? "1");
+    const pageSizeRaw = Number(url.searchParams.get("pageSize") ?? "24");
+    const result = await loadAdExamplesPage({
+      page: Number.isFinite(pageRaw) ? pageRaw : 1,
+      pageSize: Number.isFinite(pageSizeRaw) ? pageSizeRaw : 24,
+      query: url.searchParams.get("q") ?? "",
+      platform: url.searchParams.get("platform") ?? "all",
+      objective: url.searchParams.get("objective") ?? "all",
+      industry: url.searchParams.get("industry") ?? "all",
+    });
+    return json({ ok: true, ...result });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 function formValues(form: FormData): Record<string, unknown> {

@@ -3,7 +3,11 @@
 import { ExternalLink, FlaskConical, LoaderCircle, RefreshCw, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/import-constants";
+import { InspirationPager } from "@/components/InspirationPager";
+import {
+  CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX,
+  CHATGPT_AD_LIBRARY_PAGE_SIZE,
+} from "@/lib/chatgpt-ad-library/import-constants";
 
 type ImportSummary = {
   attempted: number;
@@ -82,6 +86,7 @@ type PanelProps = {
   initialCrawl?: CrawlStatus | null;
   initialCrawlError?: string | null;
   initialHits?: ChatGPTAdLibraryHitCard[];
+  initialHitsTotal?: number;
   initialImportedCount?: number | null;
 };
 
@@ -113,6 +118,7 @@ export function ChatGPTAdLibraryImportPanel({
   initialCrawl = null,
   initialCrawlError = null,
   initialHits = [],
+  initialHitsTotal,
   initialImportedCount = null,
 }: PanelProps) {
   const [pending, setPending] = useState(false);
@@ -124,46 +130,124 @@ export function ChatGPTAdLibraryImportPanel({
   const [lastSummary, setLastSummary] = useState<ImportSummary | null>(null);
   const [crawl, setCrawl] = useState<CrawlStatus | null>(initialCrawl);
   const [hits, setHits] = useState<ChatGPTAdLibraryHitCard[]>(initialHits);
+  const [hitsTotal, setHitsTotal] = useState(
+    initialHitsTotal ?? initialImportedCount ?? initialHits.length,
+  );
+  const [hitsPage, setHitsPage] = useState(1);
+  const [hitsPageCount, setHitsPageCount] = useState(
+    Math.max(
+      1,
+      Math.ceil(
+        (initialHitsTotal ?? initialImportedCount ?? initialHits.length) /
+          CHATGPT_AD_LIBRARY_PAGE_SIZE,
+      ),
+    ),
+  );
+  const [paging, setPaging] = useState(false);
   const [workerHint, setWorkerHint] = useState<string | null>(null);
   const [probe, setProbe] = useState<UnlockerProbe | null>(null);
 
-  const refreshCrawl = useCallback(async () => {
-    const [crawlRes, importRes, hitsRes] = await Promise.all([
-      fetch("/api/admin/chatgpt-ad-library/crawl", { credentials: "same-origin" }),
-      fetch("/api/admin/chatgpt-ad-library/import", { credentials: "same-origin" }),
-      fetch("/api/admin/chatgpt-ad-library/intelligence?limit=96", {
-        credentials: "same-origin",
-      }),
-    ]);
-    const crawlPayload = (await crawlRes.json().catch(() => ({}))) as {
-      ok?: boolean;
-      status?: CrawlStatus;
-      workerHint?: string;
-      message?: string;
-    };
-    const importPayload = (await importRes.json().catch(() => ({}))) as {
-      ok?: boolean;
-      imported?: number;
-      message?: string;
-    };
-    const hitsPayload = (await hitsRes.json().catch(() => ({}))) as {
-      ok?: boolean;
+  const applyHitsPage = useCallback(
+    (payload: {
       hits?: ChatGPTAdLibraryHitCard[];
-      message?: string;
-    };
-    if (crawlRes.ok && crawlPayload.ok && crawlPayload.status) {
-      setCrawl(crawlPayload.status);
-      setWorkerHint(crawlPayload.workerHint ?? null);
-    } else {
-      setError(crawlPayload.message ?? "Crawl-Status konnte nicht geladen werden.");
+      total?: number;
+      offset?: number;
+      limit?: number;
+    }) => {
+      if (!Array.isArray(payload.hits)) return;
+      const limit = payload.limit ?? CHATGPT_AD_LIBRARY_PAGE_SIZE;
+      const offset = payload.offset ?? 0;
+      const total =
+        typeof payload.total === "number"
+          ? payload.total
+          : offset + payload.hits.length;
+      setHits(payload.hits);
+      setHitsTotal(total);
+      setHitsPage(Math.floor(offset / Math.max(limit, 1)) + 1);
+      setHitsPageCount(Math.max(1, Math.ceil(total / Math.max(limit, 1))));
+    },
+    [],
+  );
+
+  const refreshCrawl = useCallback(
+    async (nextHitsPage = 1) => {
+      const offset = (Math.max(nextHitsPage, 1) - 1) * CHATGPT_AD_LIBRARY_PAGE_SIZE;
+      const params = new URLSearchParams({
+        limit: String(CHATGPT_AD_LIBRARY_PAGE_SIZE),
+        offset: String(offset),
+      });
+      const [crawlRes, importRes, hitsRes] = await Promise.all([
+        fetch("/api/admin/chatgpt-ad-library/crawl", { credentials: "same-origin" }),
+        fetch("/api/admin/chatgpt-ad-library/import", { credentials: "same-origin" }),
+        fetch(`/api/admin/chatgpt-ad-library/intelligence?${params}`, {
+          credentials: "same-origin",
+        }),
+      ]);
+      const crawlPayload = (await crawlRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        status?: CrawlStatus;
+        workerHint?: string;
+        message?: string;
+      };
+      const importPayload = (await importRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        imported?: number;
+        message?: string;
+      };
+      const hitsPayload = (await hitsRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        hits?: ChatGPTAdLibraryHitCard[];
+        total?: number;
+        offset?: number;
+        limit?: number;
+        message?: string;
+      };
+      if (crawlRes.ok && crawlPayload.ok && crawlPayload.status) {
+        setCrawl(crawlPayload.status);
+        setWorkerHint(crawlPayload.workerHint ?? null);
+      } else {
+        setError(crawlPayload.message ?? "Crawl-Status konnte nicht geladen werden.");
+      }
+      if (importRes.ok && importPayload.ok && typeof importPayload.imported === "number") {
+        setImportedCount(importPayload.imported);
+      }
+      if (hitsRes.ok && hitsPayload.ok) {
+        applyHitsPage(hitsPayload);
+      }
+    },
+    [applyHitsPage],
+  );
+
+  async function loadHitsPage(nextPage: number) {
+    if (paging) return;
+    setPaging(true);
+    try {
+      const offset = (Math.max(nextPage, 1) - 1) * CHATGPT_AD_LIBRARY_PAGE_SIZE;
+      const params = new URLSearchParams({
+        limit: String(CHATGPT_AD_LIBRARY_PAGE_SIZE),
+        offset: String(offset),
+      });
+      const response = await fetch(`/api/admin/chatgpt-ad-library/intelligence?${params}`, {
+        credentials: "same-origin",
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        hits?: ChatGPTAdLibraryHitCard[];
+        total?: number;
+        offset?: number;
+        limit?: number;
+        message?: string;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message ?? "Korpus konnte nicht geladen werden.");
+      }
+      applyHitsPage(payload);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Korpus konnte nicht geladen werden.");
+    } finally {
+      setPaging(false);
     }
-    if (importRes.ok && importPayload.ok && typeof importPayload.imported === "number") {
-      setImportedCount(importPayload.imported);
-    }
-    if (hitsRes.ok && hitsPayload.ok && Array.isArray(hitsPayload.hits)) {
-      setHits(hitsPayload.hits);
-    }
-  }, []);
+  }
 
   useEffect(() => {
     if (initialCrawl) return;
@@ -465,7 +549,7 @@ export function ChatGPTAdLibraryImportPanel({
           <button
             className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm font-extrabold text-emerald-800 hover:bg-emerald-50 disabled:opacity-50"
             disabled={pending}
-            onClick={() => void refreshCrawl()}
+            onClick={() => void refreshCrawl(hitsPage)}
             type="button"
           >
             <RefreshCw className="size-4" />
@@ -523,8 +607,19 @@ export function ChatGPTAdLibraryImportPanel({
               </h3>
             </div>
             <p className="text-sm font-semibold text-emerald-900">
-              {importedCount ?? hits.length} im Vault
+              {hitsTotal || importedCount || hits.length} im Vault · {CHATGPT_AD_LIBRARY_PAGE_SIZE}{" "}
+              pro Seite
             </p>
+          </div>
+          <div className="mt-4">
+            <InspirationPager
+              disabled={paging}
+              noun="Ads"
+              onPage={(next) => void loadHitsPage(next)}
+              page={hitsPage}
+              pageCount={hitsPageCount}
+              total={hitsTotal}
+            />
           </div>
           {hits.length > 0 ? (
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -618,6 +713,18 @@ export function ChatGPTAdLibraryImportPanel({
               </button>
             </div>
           )}
+          {hits.length > 0 ? (
+            <div className="mt-4">
+              <InspirationPager
+                disabled={paging}
+                noun="Ads"
+                onPage={(next) => void loadHitsPage(next)}
+                page={hitsPage}
+                pageCount={hitsPageCount}
+                total={hitsTotal}
+              />
+            </div>
+          ) : null}
         </section>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
