@@ -1,5 +1,6 @@
 # Small recurring ChatGPT Ad Library scrape (internal inspiration vault only).
-# Max 5 ads per run — matches the site's guest page limit in a fresh browser.
+# Unlocker path drains the queue at full tempo. Playwright fallback stays ≤5
+# (chatgptadlibrary.com guest page cap in a fresh browser).
 #
 # Required in GitHub → Settings → Secrets and variables → Actions:
 #   Secret CRON_SECRET     (= same value as Vercel CRON_SECRET, ≥32 chars)

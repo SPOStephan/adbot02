@@ -113,12 +113,12 @@ assert.equal(productionStall.remainingPending.length, 16_593);
 assert.ok(!productionStall.ids.some((id) => CHATGPT_AD_LIBRARY_SYSTEM_IDS.includes(id)));
 
 const biggerPending = selectScrapeBatch({
-  pending: Array.from({ length: 40 }, (_, i) => String(20_000 + i)),
-  limit: 20,
+  pending: Array.from({ length: 80 }, (_, i) => String(20_000 + i)),
+  limit: 40,
 });
 assert.equal(biggerPending.source, "pending");
-assert.equal(biggerPending.ids.length, 20);
-assert.equal(biggerPending.remainingPending.length, 20);
+assert.equal(biggerPending.ids.length, 40);
+assert.equal(biggerPending.remainingPending.length, 40);
 
 const seen = [];
 const pooled = await mapPool(["a", "b", "c", "d"], 2, async (item, index) => {

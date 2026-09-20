@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/cron/chatgpt-ad-library-scrape",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     }
   ]
 }

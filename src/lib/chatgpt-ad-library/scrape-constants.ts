@@ -1,11 +1,14 @@
 /** Shared scrape batch size — stays within chatgptadlibrary.com's ~5-page guest limit. */
 export const CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX = 5;
-/** Unlocker path is not bound to the guest page cap; keep under the 300s cron. */
-export const CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX = 20;
-export const CHATGPT_AD_LIBRARY_UNLOCK_CONCURRENCY = 5;
-/** Second round only if the first batch still leaves time in the cron window. */
-export const CHATGPT_AD_LIBRARY_UNLOCK_ROUNDS_MAX = 2;
-export const CHATGPT_AD_LIBRARY_UNLOCK_ROUND_BUDGET_MS = 210_000;
+/** Unlocker path is not bound to the guest page cap. Credits are not a throttle. */
+export const CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX = 40;
+export const CHATGPT_AD_LIBRARY_UNLOCK_CONCURRENCY = 12;
+/** Fill the 800s Vercel Pro window; cron every minute restarts when the lease frees. */
+export const CHATGPT_AD_LIBRARY_UNLOCK_ROUNDS_MAX = 16;
+export const CHATGPT_AD_LIBRARY_UNLOCK_ROUND_BUDGET_MS = 180_000;
+export const CHATGPT_AD_LIBRARY_UNLOCK_DRAIN_BUDGET_MS = 750_000;
+export const CHATGPT_AD_LIBRARY_UNLOCK_LEASE_MAX = 2;
+export const CHATGPT_AD_LIBRARY_UNLOCK_LEASE_TTL_MS = 14 * 60_000;
 /** Skip sitemap discover while the pending queue is already large. */
 export const CHATGPT_AD_LIBRARY_DISCOVER_DEFER_PENDING = 250;
 export const CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT = 4;
