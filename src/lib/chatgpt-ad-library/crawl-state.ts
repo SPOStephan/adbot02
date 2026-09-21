@@ -279,6 +279,19 @@ async function alreadyImportedExternalIds(ids: string[]): Promise<Set<string>> {
       const externalId = externalIdFromMetadata(row.metadata);
       if (externalId) found.add(externalId);
     }
+    const missing = slice.filter((id) => !found.has(id));
+    for (const id of missing) {
+      const one = await admin
+        .from("brand_assets")
+        .select("id")
+        .eq("library_scope", "INSPIRATION")
+        .neq("status", "REVOKED")
+        .filter("metadata->external_source->>provider", "eq", CHATGPT_AD_LIBRARY_PROVIDER)
+        .filter("metadata->external_source->>external_id", "eq", id)
+        .limit(1)
+        .maybeSingle();
+      if (one.data?.id) found.add(id);
+    }
   }
   return found;
 }
@@ -324,12 +337,14 @@ export async function planChatGPTAdLibraryScrapeBatch(input?: {
     ...lookahead,
     ...CHATGPT_AD_LIBRARY_SYSTEM_IDS,
   ]);
+  const vaultCount = await countChatGPTAdLibraryImports().catch(() => 0);
   const pick = selectScrapeBatch({
     pending,
     skipped,
     imported,
     nextProbeId: probeCursor(runSummary),
     limit,
+    skipCatalog: vaultCount > 0,
   });
   const discoverShard = Number(row.next_discover_shard) % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
   const nextSummary = {

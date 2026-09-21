@@ -100,6 +100,8 @@ export function selectScrapeBatch(input: {
   systemIds?: readonly string[];
   nextProbeId?: number;
   limit?: number;
+  /** After the vault has real imports, do not keep re-planning the seed catalog. */
+  skipCatalog?: boolean;
 }): ScrapePlanPick {
   const limit = Math.min(
     Math.max(input.limit ?? CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX, 1),
@@ -126,9 +128,9 @@ export function selectScrapeBatch(input: {
     };
   }
 
-  const catalog = (input.systemIds ?? CHATGPT_AD_LIBRARY_SYSTEM_IDS).filter(
-    (id) => !exclude.has(id),
-  );
+  const catalog = input.skipCatalog
+    ? []
+    : (input.systemIds ?? CHATGPT_AD_LIBRARY_SYSTEM_IDS).filter((id) => !exclude.has(id));
   if (catalog.length > 0) {
     return {
       ids: catalog.slice(0, limit),

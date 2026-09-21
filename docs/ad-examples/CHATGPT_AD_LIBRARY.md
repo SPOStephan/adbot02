@@ -26,7 +26,7 @@ Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Ist ScrapingBee
 | `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover (CRON_SECRET) |
 | GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h: Unlocker-Batch oder Playwright-Fallback |
 | Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Probe + Import #7341, Copy auf den Karten |
-| Vercel Cron (jede Minute) | Unlocker: bis 40 Ads / Runde, 12 parallel, bis 800s. Max. 2 gleichzeitige Läufe (Lease). Katalog nur wenn die Queue leer ist. Discover pausiert bei ≥250 wartenden IDs. |
+| Vercel Cron (jede Minute) | Unlocker: bis 40 Ads / Runde, 12 parallel, bis 800s. Max. 2 gleichzeitige Läufe (Lease). Leere Queue → zuerst Sitemap-Discover, dann Sequenz-Probe. Katalog nur zum Bootstrappen eines leeren Vaults. Discover pausiert bei ≥250 wartenden IDs. |
 | ScrapingBee | Unlocker. Credits sind **kein** Drosselgrund. Free/Trial leer → sofort upgraden. Key nur in **Vercel Production**. |
 
 Secrets für die Action (GitHub → Settings → Secrets and variables → Actions — **nicht** nur Vercel):
@@ -101,6 +101,7 @@ Ein eingefrorener Vault-Zähler (z. B. 2458) ist **kein Code-Limit**. Häufige
 - GitHub Action in ~6–40 s „grün“: Unlocker ist an, aber das Lease ist oft schon vom Vercel-Minuten-Cron belegt (`skippedLease`). Der Minuten-Cron ist der eigentliche Importer.
 - Importierte IDs werden über den `external_id`-Index geprüft, nicht über einen 1000-Zeilen-Scan. Discover hängt keine schon importierten IDs wieder vor die Queue.
 - Der Inspiration-Vault registriert Dateien per SHA-256. Viele ChatGPT-Ads teilen ein Creative — ohne Suffix würde `register_inspiration_vault_asset` die alte Zeile zurückgeben, der Sofortlauf „39 neu“ sagen und **Im Vault** stehen bleiben. Der Import legt in dem Fall eine eigene Zeile an.
+- Vault bleibt stehen, Queue 0, letzter Plan = Katalog (`18, 21, 22, …`): nicht Stau/Lease klicken. Discover lief nur über die 2h-GitHub-Action; der Minuten-Cron hat den schon importierten Katalog wiederholt. Jetzt holt ein leerer Drain zuerst den nächsten Sitemap-Shard und plant danach die Sequenz-Probe.
 
 ## KI-Nutzung
 
