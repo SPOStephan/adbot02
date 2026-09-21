@@ -537,6 +537,8 @@ export async function scrapeChatGPTAdLibraryUnlockBatch(input?: {
 
 export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
   rounds?: number;
+  budgetMs?: number;
+  requireLease?: boolean;
 }): Promise<{
   mode: "unlock";
   blocked: boolean;
@@ -550,7 +552,10 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
     Math.max(input?.rounds ?? CHATGPT_AD_LIBRARY_UNLOCK_ROUNDS_MAX, 1),
     20,
   );
-  const lease = await claimChatGPTAdLibraryScrapeLease();
+  const requireLease = input?.requireLease !== false;
+  const lease = requireLease
+    ? await claimChatGPTAdLibraryScrapeLease()
+    : { claimed: true, owner: "" };
   if (!lease.claimed) {
     return {
       mode: "unlock",
@@ -564,12 +569,19 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
   }
 
   const started = Date.now();
-  const totalBudget = CHATGPT_AD_LIBRARY_UNLOCK_DRAIN_BUDGET_MS;
+  const totalBudget = Math.max(
+    30_000,
+    Math.min(
+      input?.budgetMs ?? CHATGPT_AD_LIBRARY_UNLOCK_DRAIN_BUDGET_MS,
+      CHATGPT_AD_LIBRARY_UNLOCK_DRAIN_BUDGET_MS,
+    ),
+  );
   const plannedIds: string[] = [];
   const failures: Array<{ id: string; error: string }> = [];
   let blocked = false;
   let imported = 0;
   let skippedDuplicate = 0;
+  let refreshed = 0;
   let failed = 0;
   let lastSummary: Awaited<ReturnType<typeof importChatGPTAdLibraryBatch>> | null = null;
   let rounds = 0;
@@ -586,11 +598,13 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
       if (result.summary) {
         imported += result.summary.imported;
         skippedDuplicate += result.summary.skippedDuplicate;
+        refreshed += result.summary.refreshed ?? 0;
         failed += result.summary.failed;
         lastSummary = {
           ...result.summary,
           imported,
           skippedDuplicate,
+          refreshed,
           failed,
         };
       }
@@ -598,7 +612,9 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
       if (result.failures.some((item) => isUnlockerProviderBlockError(item.error))) break;
     }
   } finally {
-    await releaseChatGPTAdLibraryScrapeLease(lease.owner).catch(() => undefined);
+    if (requireLease && lease.owner) {
+      await releaseChatGPTAdLibraryScrapeLease(lease.owner).catch(() => undefined);
+    }
   }
 
   return {

@@ -300,7 +300,7 @@ export async function uploadInspirationVaultImage(input: {
   bytes: Uint8Array;
   note?: string;
   metadata?: Record<string, unknown>;
-}): Promise<{ brandAssetId: string }> {
+}): Promise<{ brandAssetId: string; reusedExisting: boolean }> {
   const declared = asImageMime(input.mimeType);
   if (!declared) {
     throw new MediaLibraryError(
@@ -337,6 +337,17 @@ export async function uploadInspirationVaultImage(input: {
   });
 
   const admin = createAdminClient();
+  const prior = await admin
+    .from("brand_assets")
+    .select("id")
+    .eq("library_scope", "INSPIRATION")
+    .eq("sha256", inspected.sha256)
+    .neq("status", "REVOKED")
+    .limit(1);
+  const priorId =
+    Array.isArray(prior.data) && prior.data[0] && typeof prior.data[0].id === "string"
+      ? prior.data[0].id
+      : "";
   const { data, error } = await admin.rpc("register_inspiration_vault_asset", {
     p_uploader_user_id: input.uploaderUserId,
     p_storage_bucket: stored.bucket,
@@ -366,5 +377,5 @@ export async function uploadInspirationVaultImage(input: {
     );
   }
 
-  return { brandAssetId: data };
+  return { brandAssetId: data, reusedExisting: Boolean(priorId) };
 }

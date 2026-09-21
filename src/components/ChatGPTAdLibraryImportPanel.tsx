@@ -8,6 +8,10 @@ import {
   CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX,
   CHATGPT_AD_LIBRARY_PAGE_SIZE,
 } from "@/lib/chatgpt-ad-library/import-constants";
+import {
+  CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS,
+  CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX,
+} from "@/lib/chatgpt-ad-library/scrape-constants";
 
 type ImportSummary = {
   attempted: number;
@@ -522,7 +526,7 @@ export function ChatGPTAdLibraryImportPanel({
     setPending(true);
     setError(null);
     setNotice(
-      "Sofortlauf gestartet: ein Unlock-Batch, Zahlen aktualisieren sich währenddessen. Der Probe-Button dreht sich nicht extra — das war nur der gemeinsame Ladezustand.",
+      `Sofortlauf gestartet: bis ${CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS} Unlock-Runden (je ${CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX} IDs). Zahlen aktualisieren sich währenddessen. Der Probe-Button dreht sich nicht extra.`,
     );
     const poll = window.setInterval(() => {
       void refreshCrawl(hitsPage);
@@ -541,28 +545,42 @@ export function ChatGPTAdLibraryImportPanel({
         result?: {
           plannedIds?: string[];
           skippedLease?: boolean;
-          summary?: { imported?: number; failed?: number; skippedDuplicate?: number };
+          rounds?: number;
+          summary?: {
+            imported?: number;
+            failed?: number;
+            skippedDuplicate?: number;
+            refreshed?: number;
+          };
           failures?: Array<{ id: string; error: string }>;
         };
       };
       if (!response.ok || !payload.ok) {
         throw new Error(runNowFailureMessage(response, payload.message));
       }
-      if (payload.status) setCrawl(payload.status);
+      if (payload.status) {
+        setCrawl(payload.status);
+        if (typeof payload.status.vaultCount === "number") {
+          setImportedCount(payload.status.vaultCount);
+        }
+      }
       if (payload.result?.skippedLease) {
         setNotice(
           "Sofortlauf übersprungen: beide Unlock-Leases sind belegt. Zuerst „Leases freigeben“.",
         );
       } else {
         const imported = payload.result?.summary?.imported ?? 0;
-        const refreshed = payload.result?.summary?.skippedDuplicate ?? 0;
+        const already = payload.result?.summary?.skippedDuplicate ?? 0;
+        const refreshed = payload.result?.summary?.refreshed ?? 0;
         const failed = payload.result?.failures?.length ?? payload.result?.summary?.failed ?? 0;
+        const vaultNow = payload.status?.vaultCount;
         const sample = (payload.result?.failures ?? [])
           .slice(0, 4)
           .map((item) => `${item.id}:${item.error}`)
           .join(" · ");
         setNotice(
-          `Sofortlauf fertig: ${payload.result?.plannedIds?.length ?? 0} IDs geplant · ${imported} neu · ${refreshed} schon im Vault · ${failed} fehlgeschlagen` +
+          `Sofortlauf fertig: ${payload.result?.rounds ?? 1} Runden · ${payload.result?.plannedIds?.length ?? 0} IDs geplant · ${imported} neu im Vault · ${refreshed} Copy aktualisiert · ${already} schon vorhanden · ${failed} fehlgeschlagen` +
+            (typeof vaultNow === "number" ? ` · Im Vault jetzt ${vaultNow}` : "") +
             (sample ? ` · ${sample}` : "") +
             ".",
         );
@@ -588,10 +606,13 @@ export function ChatGPTAdLibraryImportPanel({
               Wiederkehrender Scrape (max. {crawl?.scrapeBatchMax ?? 5}/Lauf)
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-950/80">
-              Die Queue hat Vorrang. Unlocker: bis {crawl?.scrapeBatchMax ?? 40} IDs pro
+              Die Queue hat Vorrang. Unlocker: bis {crawl?.scrapeBatchMax ?? CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX} IDs pro
               Runde, 12 parallel, Cron jede Minute, ein Lauf füllt das 800-Sekunden-Fenster.
+              „Jetzt einen Lauf“ holt bis {CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS} Runden
+              ({CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS * CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX} IDs) in einem Klick.
               ScrapingBee-Credits sind keine Bremse — Tarif upgraden, wenn sie leer sind.
               Tote IDs (404/ohne Copy) werden übersprungen, nicht endlos wiederholt.
+              „Neu“ zählt nur neue Vault-Zeilen — gleiches Bild einer anderen ID legt eine eigene Zeile an.
             </p>
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
             {crawl?.unlockerConfigured ? (
@@ -766,8 +787,13 @@ export function ChatGPTAdLibraryImportPanel({
               </h3>
             </div>
             <p className="text-sm font-semibold text-emerald-900">
-              {hitsTotal || importedCount || hits.length} im Vault · {CHATGPT_AD_LIBRARY_PAGE_SIZE}{" "}
-              pro Seite
+              {Math.max(
+                crawl?.vaultCount ?? 0,
+                hitsTotal ?? 0,
+                importedCount ?? 0,
+                hits.length,
+              )}{" "}
+              im Vault · {CHATGPT_AD_LIBRARY_PAGE_SIZE} pro Seite
             </p>
           </div>
           <div className="mt-4">
@@ -1019,7 +1045,7 @@ function CrawlMetric({ label, value }: { label: string; value: string }) {
 function runNowFailureMessage(response: Response, serverMessage?: string): string {
   if (serverMessage?.trim()) return serverMessage.trim();
   if (response.status === 504 || response.status === 524 || response.status === 502) {
-    return `Sofortlauf abgebrochen (HTTP ${response.status}): Production wartet noch auf den langen Unlock-Drain und überschreitet das Admin-Limit von 5 Minuten. Nach dem Merge ist der Klick ein kurzer Batch.`;
+    return `Sofortlauf abgebrochen (HTTP ${response.status}): der Lauf braucht mehrere Unlock-Runden und hat das Admin-Limit von 5 Minuten überschritten. Nochmal klicken setzt an der Queue fort.`;
   }
   if (response.status > 0) {
     return `Sofortlauf fehlgeschlagen (HTTP ${response.status}).`;

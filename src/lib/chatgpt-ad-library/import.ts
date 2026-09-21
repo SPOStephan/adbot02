@@ -17,6 +17,7 @@ import {
   type ChatGPTAdLibraryImportSummary,
   type ChatGPTAdLibraryRecord,
 } from "@/lib/chatgpt-ad-library/types";
+import { uniquifyJpegBytes } from "@/lib/chatgpt-ad-library/jpeg-uniquify";
 import { CHATGPT_AD_LIBRARY_IMPORT_BATCH_MAX } from "@/lib/chatgpt-ad-library/import-constants";
 import {
   isDirtyChatGPTAdLibraryCopy,
@@ -52,6 +53,7 @@ async function findExistingByExternalId(externalId: string): Promise<string | nu
     .select("id,metadata")
     .eq("library_scope", "INSPIRATION")
     .neq("status", "REVOKED")
+    .filter("metadata->external_source->>provider", "eq", CHATGPT_AD_LIBRARY_PROVIDER)
     .filter("metadata->external_source->>external_id", "eq", externalId)
     .limit(20);
 
@@ -127,6 +129,21 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     : [];
+}
+
+async function existingExternalIdForAsset(brandAssetId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("brand_assets")
+    .select("metadata")
+    .eq("id", brandAssetId)
+    .eq("library_scope", "INSPIRATION")
+    .neq("status", "REVOKED")
+    .maybeSingle();
+  if (error || !data) return null;
+  const external = asRecord(asRecord(data.metadata).external_source);
+  const externalId = String(external.external_id ?? "").trim();
+  return /^\d{1,12}$/.test(externalId) ? externalId : null;
 }
 
 /**
@@ -367,13 +384,55 @@ export async function importChatGPTAdLibraryRecord(input: {
       external_source: externalSourceMetadata(record),
     };
 
-    const uploaded = await uploadInspirationVaultImage({
-      uploaderUserId: input.uploaderUserId,
-      fileName: image.fileName,
-      mimeType: image.mimeType,
-      bytes: image.bytes,
-      metadata,
-    });
+    const persist = (bytes: Uint8Array) =>
+      uploadInspirationVaultImage({
+        uploaderUserId: input.uploaderUserId,
+        fileName: image.fileName,
+        mimeType: image.mimeType,
+        bytes,
+        metadata,
+      });
+
+    let uploaded = await persist(image.bytes);
+    let rowExternalId = await existingExternalIdForAsset(uploaded.brandAssetId);
+
+    if (uploaded.reusedExisting && rowExternalId === externalId) {
+      const refreshed = await refreshExistingLibraryCopy({
+        brandAssetId: uploaded.brandAssetId,
+        record,
+      });
+      return {
+        externalId,
+        status: refreshed ? "refreshed" : "skipped_duplicate",
+        brandAssetId: uploaded.brandAssetId,
+        error: null,
+      };
+    }
+
+    if (uploaded.reusedExisting) {
+      uploaded = await persist(uniquifyJpegBytes(image.bytes, externalId));
+      rowExternalId = await existingExternalIdForAsset(uploaded.brandAssetId);
+      if (uploaded.reusedExisting && rowExternalId === externalId) {
+        const refreshed = await refreshExistingLibraryCopy({
+          brandAssetId: uploaded.brandAssetId,
+          record,
+        });
+        return {
+          externalId,
+          status: refreshed ? "refreshed" : "skipped_duplicate",
+          brandAssetId: uploaded.brandAssetId,
+          error: null,
+        };
+      }
+      if (uploaded.reusedExisting) {
+        return {
+          externalId,
+          status: "failed",
+          brandAssetId: null,
+          error: "vault_sha_collision",
+        };
+      }
+    }
 
     return {
       externalId,

@@ -10,8 +10,12 @@ import {
 import {
   ingestChatGPTAdLibrarySeedFallback,
   probeChatGPTAdLibraryUnlocker,
-  scrapeChatGPTAdLibraryUnlockBatch,
+  scrapeChatGPTAdLibraryUnlockDrain,
 } from "@/lib/chatgpt-ad-library/scrape";
+import {
+  CHATGPT_AD_LIBRARY_RUN_NOW_BUDGET_MS,
+  CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS,
+} from "@/lib/chatgpt-ad-library/scrape-constants";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import {
   isDashboardSameOriginReadRequest,
@@ -130,8 +134,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "run_now") {
-      const result = await scrapeChatGPTAdLibraryUnlockBatch({
-        budgetMs: 120_000,
+      const result = await scrapeChatGPTAdLibraryUnlockDrain({
+        rounds: CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS,
+        budgetMs: CHATGPT_AD_LIBRARY_RUN_NOW_BUDGET_MS,
+        requireLease: false,
       });
       const status = await getChatGPTAdLibraryCrawlStatus();
       return json({

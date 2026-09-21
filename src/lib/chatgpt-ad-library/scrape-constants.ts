@@ -19,3 +19,7 @@ export const CHATGPT_AD_LIBRARY_PROBE_WINDOW = 200;
 
 /** Paid-unlocker smoke test: one public ad, never ingested. */
 export const CHATGPT_AD_LIBRARY_UNLOCKER_PROBE_AD_ID = "7341";
+
+/** Admin „Jetzt einen Lauf“ — several rounds, stays under the 300s route limit. */
+export const CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS = 6;
+export const CHATGPT_AD_LIBRARY_RUN_NOW_BUDGET_MS = 240_000;
