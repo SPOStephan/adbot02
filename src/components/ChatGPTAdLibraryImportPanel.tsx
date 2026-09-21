@@ -700,6 +700,17 @@ export function ChatGPTAdLibraryImportPanel({
             ). „Stau auflösen“ und „Jetzt einen Lauf“ holt die echte Queue.
           </p>
         ) : null}
+        {crawl &&
+        !crawl.queueStarved &&
+        crawl.pendingCount < 1 &&
+        (crawl.lastPlanSource === "catalog" || crawl.lastPlanSource === "empty") &&
+        (crawl.vaultCount ?? 0) > 0 ? (
+          <p className="mt-3 rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-950">
+            Queue leer — nicht „Stau auflösen“ und nicht „Leases freigeben“. Der Katalog ist
+            schon im Vault, deshalb stagniert die Zahl. Discover holt den nächsten
+            Sitemap-Shard; „Jetzt einen Lauf“ oder den Minuten-Cron abwarten.
+          </p>
+        ) : null}
         <p className="mt-3 text-xs text-emerald-900/70">
           Letzter Ingest: {formatWhen(crawl?.lastIngestAt)} · Discover:{" "}
           {formatWhen(crawl?.lastDiscoverAt)} · Probe ab #{crawl?.nextProbeId ?? "–"} · Geplant

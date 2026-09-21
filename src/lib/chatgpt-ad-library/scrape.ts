@@ -552,6 +552,12 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
     Math.max(input?.rounds ?? CHATGPT_AD_LIBRARY_UNLOCK_ROUNDS_MAX, 1),
     20,
   );
+  if (isChatGPTAdLibraryUnlockerConfigured()) {
+    const before = await getChatGPTAdLibraryCrawlStatus().catch(() => null);
+    if (before && before.pendingCount < 1) {
+      await scrapeChatGPTAdLibraryUnlockDiscover().catch(() => undefined);
+    }
+  }
   const requireLease = input?.requireLease !== false;
   const lease = requireLease
     ? await claimChatGPTAdLibraryScrapeLease()

@@ -78,6 +78,18 @@ assert.equal(catalogOnly.source, "catalog");
 assert.deepEqual(catalogOnly.ids, ["18", "21"]);
 assert.deepEqual(catalogOnly.remainingPending, []);
 
+const skipCatalogAfterVault = selectScrapeBatch({
+  pending: [],
+  imported: [],
+  skipped: [],
+  systemIds: ["18", "21", "7341"],
+  nextProbeId: 1,
+  limit: 3,
+  skipCatalog: true,
+});
+assert.equal(skipCatalogAfterVault.source, "probe");
+assert.deepEqual(skipCatalogAfterVault.ids, ["1", "2", "3"]);
+
 const compacted = compactPendingIds({
   pending: ["18", "9001", "9001", "21"],
   skipped: ["18"],
