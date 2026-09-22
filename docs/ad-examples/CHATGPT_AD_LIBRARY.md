@@ -26,7 +26,7 @@ Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Ist ScrapingBee
 | `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover (CRON_SECRET) |
 | GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h: Unlocker-Batch oder Playwright-Fallback |
 | Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Probe + Import #7341, Copy auf den Karten |
-| Vercel Cron (jede Minute) | Unlocker: bis 40 Ads / Runde, 12 parallel, bis 800s. Max. 2 gleichzeitige Läufe (Lease). Leere Queue → zuerst Sitemap-Discover, dann Sequenz-Probe. Katalog nur zum Bootstrappen eines leeren Vaults. Discover pausiert bei ≥250 wartenden IDs. |
+| Vercel Cron (alle 15 Minuten) | Ein kurzer Unlock-Batch (~50s). Kein 800s-Drain, kein Sitemap-Discover. Sonst blockiert Production Login und Dashboard. |
 | ScrapingBee | Unlocker. Credits sind **kein** Drosselgrund. Free/Trial leer → sofort upgraden. Key nur in **Vercel Production**. |
 
 Secrets für die Action (GitHub → Settings → Secrets and variables → Actions — **nicht** nur Vercel):
@@ -59,7 +59,7 @@ Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql` und `202609201200
 Ablauf pro Lauf mit Unlocker:
 
 1. `GET ?mode=unlock_discover` holt den aktuellen Sitemap-Shard über ScrapingBee — oder überspringt Discover, wenn schon ≥250 IDs warten.
-2. `GET ?mode=unlock` und der Minuten-Cron drainen die **wartende Queue** (40 IDs/Runde, 12 parallel, 800s-Fenster). ScrapingBee-Credits werden nicht geschont.
+2. `GET ?mode=unlock` (GitHub Action, alle 2h) drainiert die **wartende Queue**. Der Vercel-Cron alle 15 Minuten macht nur einen kurzen Batch. ScrapingBee-Credits werden nicht geschont.
 3. Ohne Key: Playwright auf dem Runner (meist Checkpoint, `skippedPlan` / keine Queue-Entnahme) und Seed-Fallback nur wenn der Vault leer ist.
 
 Admin kann denselben Seed jederzeit unter `/dashboard/inspiration` mit **GlossGenius-Seed jetzt importieren** nachziehen.
@@ -98,10 +98,10 @@ Der Planner nimmt jetzt zuerst `pending_ids`. Tote IDs landen in `skipped_ids` u
 Ein eingefrorener Vault-Zähler (z. B. 2458) ist **kein Code-Limit**. Häufige echte Blocker:
 
 - ScrapingBee-Credits/Key: früher wurden `unlocker_400/401/403` dauerhaft nach `skipped_ids` geschrieben und haben die Queue verbrannt. Jetzt bricht der Lauf ab, die IDs bleiben in der Queue, Banner unter Inspiration.
-- GitHub Action in ~6–40 s „grün“: Unlocker ist an, aber das Lease ist oft schon vom Vercel-Minuten-Cron belegt (`skippedLease`). Der Minuten-Cron ist der eigentliche Importer.
+- GitHub Action Timeout (exit 28): Production hat auf Discover nicht geantwortet. Das ist kein Ubuntu-Update und kein Vercel-Plan-Limit. Der Minuten-Cron mit 800s-Drain hat die Functions vollgelaufen.
 - Importierte IDs werden über den `external_id`-Index geprüft, nicht über einen 1000-Zeilen-Scan. Discover hängt keine schon importierten IDs wieder vor die Queue.
 - Der Inspiration-Vault registriert Dateien per SHA-256. Viele ChatGPT-Ads teilen ein Creative — ohne Suffix würde `register_inspiration_vault_asset` die alte Zeile zurückgeben, der Sofortlauf „39 neu“ sagen und **Im Vault** stehen bleiben. Der Import legt in dem Fall eine eigene Zeile an.
-- Vault bleibt stehen, Queue 0, letzter Plan = Katalog (`18, 21, 22, …`): nicht Stau/Lease klicken. Discover lief nur über die 2h-GitHub-Action; der Minuten-Cron hat den schon importierten Katalog wiederholt. Jetzt holt ein leerer Drain zuerst den nächsten Sitemap-Shard und plant danach die Sequenz-Probe.
+- Vault bleibt stehen, Queue 0, letzter Plan = Katalog (`18, 21, 22, …`): nicht Stau/Lease klicken. Discover nur über `mode=unlock_discover` (GitHub), nicht im Vercel-Cron.
 - Discover darf fehlende IDs nicht einzeln gegen den Vault prüfen — ein Sitemap-Shard hat Tausende neue IDs, das hängt die Cron-Funktion und damit `/dashboard/inspiration`. Es gilt der gebündelte `external_id`-Lookup, plus 10-Minuten-Pause zwischen Discovers.
 
 ## KI-Nutzung

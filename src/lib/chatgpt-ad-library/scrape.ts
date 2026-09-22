@@ -144,7 +144,11 @@ export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
     if (input?.ids && input.ids.length > 0) {
       return scrapeChatGPTAdLibraryUnlockBatch(input);
     }
-    return scrapeChatGPTAdLibraryUnlockDrain();
+    // Vercel Cron hits this every tick. A full drain/discover here stacks
+    // 800s functions and starves login + dashboard.
+    return scrapeChatGPTAdLibraryUnlockBatch({
+      budgetMs: 50_000,
+    });
   }
 
   if (!input?.ids || input.ids.length < 1) {
@@ -340,6 +344,21 @@ export async function scrapeChatGPTAdLibraryUnlockDiscover(): Promise<{
 
   const peek = await peekChatGPTAdLibraryCrawl();
   const shard = peek.nextDiscoverShard % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
+  const lastDiscoverMs = peek.lastDiscoverAt ? Date.parse(peek.lastDiscoverAt) : Number.NaN;
+  if (
+    Number.isFinite(lastDiscoverMs) &&
+    Date.now() - lastDiscoverMs < CHATGPT_AD_LIBRARY_DISCOVER_COOLDOWN_MS
+  ) {
+    return {
+      mode: "unlock_discover",
+      configured: true,
+      shard,
+      added: 0,
+      pendingCount: peek.pendingCount,
+      ids: [],
+      blocked: false,
+    };
+  }
   if (peek.pendingCount >= CHATGPT_AD_LIBRARY_DISCOVER_DEFER_PENDING) {
     return {
       mode: "unlock_discover",
@@ -553,18 +572,6 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
     Math.max(input?.rounds ?? CHATGPT_AD_LIBRARY_UNLOCK_ROUNDS_MAX, 1),
     20,
   );
-  if (isChatGPTAdLibraryUnlockerConfigured()) {
-    const before = await peekChatGPTAdLibraryCrawl().catch(() => null);
-    const lastDiscoverMs = before?.lastDiscoverAt
-      ? Date.parse(before.lastDiscoverAt)
-      : Number.NaN;
-    const discoverCool =
-      Number.isFinite(lastDiscoverMs) &&
-      Date.now() - lastDiscoverMs < CHATGPT_AD_LIBRARY_DISCOVER_COOLDOWN_MS;
-    if (before && before.pendingCount < 1 && !discoverCool) {
-      await scrapeChatGPTAdLibraryUnlockDiscover().catch(() => undefined);
-    }
-  }
   const requireLease = input?.requireLease !== false;
   const lease = requireLease
     ? await claimChatGPTAdLibraryScrapeLease()

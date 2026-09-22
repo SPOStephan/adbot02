@@ -46,8 +46,7 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
         return;
       }
 
-      router.push(safeNextPath);
-      router.refresh();
+      window.location.assign(safeNextPath);
       return;
     }
 

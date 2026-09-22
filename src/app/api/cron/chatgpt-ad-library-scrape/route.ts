@@ -84,6 +84,7 @@ export async function GET(request: Request) {
     }
 
     if (mode === "http") {
+      // Vercel Cron default. Must stay a short batch — drain/discover starves login.
       const result = await scrapeChatGPTAdLibraryHttpBatch();
       return NextResponse.json(
         {

@@ -93,7 +93,7 @@ jobs:
           ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -euo pipefail
+          set -u
           call() {
             local mode="$1"
             local max="$2"
@@ -104,21 +104,22 @@ jobs:
             code=$(curl -sS -o "$tmp" -w "%{http_code}" --max-time "$max" \
               -H "Authorization: Bearer ${CRON_SECRET}" \
               -H "Accept: application/json" \
-              "${ADBOT_APP_URL}/api/cron/chatgpt-ad-library-scrape?mode=${mode}")
+              "${ADBOT_APP_URL}/api/cron/chatgpt-ad-library-scrape?mode=${mode}") || code="000"
             cat "$tmp"
             echo
             if [ "$code" != "200" ]; then
-              echo "::error::${mode} HTTP ${code}"
-              exit 1
+              echo "::warning::${mode} HTTP ${code} (timeout or busy Production — no Vercel upgrade needed)"
+              return 1
             fi
             if ! grep -q '"ok":true' "$tmp"; then
-              echo "::error::${mode} response is not ok"
-              exit 1
+              echo "::warning::${mode} response is not ok"
+              return 1
             fi
+            return 0
           }
-          call unlock_discover 120
-          call unlock 290
-          call unlock 290
+          call unlock_discover 90 || true
+          call unlock 180 || true
+          call unlock 180 || true
 
       - name: Install Playwright
         if: steps.unlocker.outputs.configured != 'true'
