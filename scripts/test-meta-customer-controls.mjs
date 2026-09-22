@@ -484,6 +484,19 @@ assert.deepEqual(
     pixelId: "123456789012345",
     label: "Haupt",
     customEventType: "LEAD",
+    testEventCode: "",
+  },
+);
+assert.deepEqual(parsePixelCommand({ action: "list" }), { action: "list" });
+assert.deepEqual(
+  parsePixelCommand({
+    action: "probe",
+    pixelId: "123456789012345",
+  }),
+  {
+    action: "probe",
+    pixelId: "123456789012345",
+    testEventCode: "",
   },
 );
 expectInputError(
@@ -976,9 +989,11 @@ const pixelBindingSource = await readFile(
   "utf8",
 );
 assert.match(pixelBindingSource, /Funnel und Freebie übernehmen die ID/);
-assert.match(pixelBindingSource, /melden sie danach selbst an Meta/);
 assert.match(pixelBindingSource, /Funnel absendet oder/);
 assert.match(pixelBindingSource, /Meta Pixel global verbinden/);
+assert.match(pixelBindingSource, /CAPI prüfen und Pixel bestätigen/);
+assert.match(pixelBindingSource, /Events-Manager-Token/);
+assert.match(pixelBindingSource, /action: "list"/);
 assert.match(blueprintRouteSource, /parseBlueprintCommand/);
 assert.match(blueprintRouteSource, /applyCustomerBlueprintCommand/);
 assert.match(assetImportRouteSource, /parseAssetImportCommand/);
@@ -1475,5 +1490,60 @@ assert.doesNotMatch(
   atomicLaunchMigrationSource,
   /grant execute on function public\.approve_meta_launch_canary_plan[\s\S]{0,160}to authenticated/,
 );
+
+assert.match(serviceSource, /listConnectionAdAccountPixels/);
+assert.match(serviceSource, /probeConnectionCapi/);
+assert.match(serviceSource, /capi_via_connection/);
+assert.match(
+  await readFile(path.join(root, "src/app/api/internal/funnel-capi/route.ts"), "utf8"),
+  /verifyFunnelCapiRelayToken/,
+);
+assert.match(
+  await readFile(path.join(root, "src/app/api/internal/funnel-capi/route.ts"), "utf8"),
+  /sendConnectionCapiEvent/,
+);
+assert.doesNotMatch(
+  await readFile(path.join(root, "src/lib/meta/connection-capi.ts"), "utf8"),
+  /ensureFreezeWritesForLaunch|planCustomerOrganicBoost|materializeCustomerLaunch/,
+);
+
+const capiSource = await readFile(
+  path.join(root, "src/lib/meta/conversions-api.ts"),
+  "utf8",
+);
+const transpiledCapi = ts.transpileModule(capiSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ES2020,
+  },
+}).outputText;
+const capiModule = await import(
+  `data:text/javascript;base64,${Buffer.from(transpiledCapi).toString("base64")}`
+);
+assert.deepEqual(
+  capiModule.parseAdAccountPixels({
+    data: [{ id: "123456789012345", name: "Haupt-Pixel" }, { id: "bad" }],
+  }),
+  [{ pixelId: "123456789012345", name: "Haupt-Pixel" }],
+);
+assert.equal(capiModule.classifyCapiGraphFailure({ httpStatus: 403, code: 200 }), "denied");
+assert.equal(capiModule.classifyCapiGraphFailure({ httpStatus: 500 }), "error");
+assert.match(capiModule.connectionCapiCustomerMessage("ok"), /ohne Events-Manager-Token/);
+assert.match(capiModule.connectionCapiCustomerMessage("denied"), /Login-for-Business/);
+const probeEvent = capiModule.buildCapiProbeEvent({
+  pixelId: "123456789012345",
+  eventId: "probe-1",
+  eventTime: 1_700_000_000,
+});
+assert.equal(probeEvent.event_name, "Lead");
+assert.equal(probeEvent.custom_data.content_name, "Adbot CAPI probe");
+assert.equal(probeEvent.event_id, "probe-1");
+
+const capiMigration = await readFile(
+  path.join(root, "supabase/migrations/20260922120000_meta_pixel_capi_via_connection.sql"),
+  "utf8",
+);
+assert.match(capiMigration, /capi_via_connection/);
+assert.match(capiMigration, /capi_probe_status/);
 
 console.log("Meta customer control validation, API boundary and dashboard checks passed");

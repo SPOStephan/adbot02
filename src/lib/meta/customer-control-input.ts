@@ -492,7 +492,7 @@ function normalizedHostname(value: unknown, field: string): string {
 
 const DOMAIN_ACTIONS = ["register", "confirm"] as const;
 const DOMAIN_VERIFICATION_METHODS = ["CUSTOMER_CONFIRMATION"] as const;
-const PIXEL_ACTIONS = ["confirm", "revoke"] as const;
+const PIXEL_ACTIONS = ["list", "probe", "confirm", "revoke"] as const;
 const DEFAULT_LEAD_CUSTOM_EVENT = "LEAD";
 
 export type DomainCommand =
@@ -506,11 +506,18 @@ export type DomainCommand =
   | { action: "confirm"; domainId: string };
 
 export type PixelCommand =
+  | { action: "list" }
+  | {
+      action: "probe";
+      pixelId: string;
+      testEventCode: string;
+    }
   | {
       action: "confirm";
       pixelId: string;
       label: string;
       customEventType: string;
+      testEventCode: string;
     }
   | { action: "revoke"; pixelRowId: string };
 
@@ -536,9 +543,26 @@ function requiredCustomEventType(value: unknown): string {
   return text;
 }
 
+function optionalTestEventCode(value: unknown): string {
+  const text = optionalText(value, "Der Test-Event-Code", 160);
+  if (!text) return "";
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(text)) {
+    inputError(
+      "invalid_test_event_code",
+      "Der Test-Event-Code darf nur Buchstaben, Ziffern, _ oder - enthalten.",
+    );
+  }
+  return text;
+}
+
 export function parsePixelCommand(value: unknown): PixelCommand {
   const body = asJsonObject(value);
   const action = requiredEnum(body.action, "Die Pixel-Aktion", PIXEL_ACTIONS);
+
+  if (action === "list") {
+    assertExactKeys(body, ["action"], "Der Pixel-Befehl");
+    return { action };
+  }
 
   if (action === "revoke") {
     assertExactKeys(body, ["action", "pixelRowId"], "Der Pixel-Befehl");
@@ -548,15 +572,29 @@ export function parsePixelCommand(value: unknown): PixelCommand {
     };
   }
 
+  if (action === "probe") {
+    assertExactKeys(
+      body,
+      ["action", "pixelId", "testEventCode"],
+      "Der Pixel-Befehl",
+    );
+    return {
+      action,
+      pixelId: requiredPixelId(body.pixelId, "Die Pixel-ID"),
+      testEventCode: optionalTestEventCode(body.testEventCode),
+    };
+  }
+
   assertExactKeys(
     body,
-    ["action", "pixelId", "label", "customEventType"],
+    ["action", "pixelId", "label", "customEventType", "testEventCode"],
     "Der Pixel-Befehl",
   );
   return {
     action,
     pixelId: requiredPixelId(body.pixelId, "Die Pixel-ID"),
     label: optionalText(body.label, "Die Pixel-Bezeichnung", 120),
+    testEventCode: optionalTestEventCode(body.testEventCode),
     customEventType: requiredCustomEventType(body.customEventType),
   };
 }

@@ -4,9 +4,10 @@ Einfache Schritte für dich und für Kundinnen und Kunden. Ziel: Eine echte Bewe
 
 ## 1. Meta Pixel in Adbot verbinden
 
-1. In der Meta Business Suite den Events Manager öffnen und die numerische Pixel-ID kopieren.
-2. In Adbot unter **Tracking** die ID einfügen und **Pixel bestätigen**.
+1. Meta muss verbunden sein. Unter **Tracking** lädt Adbot die Pixel am verbundenen Werbekonto.
+2. Pixel wählen und **CAPI prüfen und Pixel bestätigen**. Adbot prüft mit dem Connection-Token, ob Conversions API wirklich schreibbar ist.
 3. Das Conversion-Event bleibt im Regelfall `LEAD`.
+4. Wenn Liste oder Prüfung scheitert: Pixel/Dataset in der Login-for-Business-Konfiguration zuweisen, dann Meta neu verbinden. Ein Events-Manager-Token ist nicht der Kundenweg.
 
 Funnel und Freebie übernehmen die ID automatisch, wenn dort noch keine andere steht.
 
@@ -15,9 +16,7 @@ Funnel und Freebie übernehmen die ID automatisch, wenn dort noch keine andere s
 1. Funnel öffnen → gewünschter Funnel → **Einstellungen** → **Meta Conversion Tracking**.
 2. **Meta-Tracking aktiv** einschalten. Pixel-ID kommt meist schon aus dem Portal.
 3. Eventname: `Lead`. Zeitpunkt: **Beim Absenden**.
-4. Empfohlen: Conversions-API-Zugangstoken aus dem Events Manager hinterlegen.
-
-Ohne Token arbeitet der Funnel nur mit dem Browser-Pixel. Adblocker können Events schlucken. Gut/Schlecht-Bewertungen können dann nicht serverseitig an Meta gehen.
+4. Serverseitige CAPI (Lead und Gut/Schlecht) nutzt die geprüfte Meta-Verbindung im Portal. Kein Events-Manager-Token.
 
 ## 3. Domain anlegen und bestätigen
 
@@ -36,7 +35,7 @@ Ohne Token arbeitet der Funnel nur mit dem Browser-Pixel. Adblocker können Even
 
 1. Optional im Funnel einen Test-Event-Code aus dem Events Manager eintragen.
 2. Eine eindeutig als Test markierte Bewerbung absenden.
-3. Im Events Manager unter Test Events muss `Lead` erscheinen. Mit Token siehst du Browser- und Serversignal zur selben Event-ID.
+3. Im Events Manager unter Test Events muss `Lead` erscheinen. Browser-Pixel und Serversignal über die Meta-Verbindung teilen dieselbe Event-ID.
 4. Testcode danach leeren. Testdatensatz fachlich kontrollieren und entfernen.
 
 ## 6. Gute und schlechte Leads bewerten
@@ -69,4 +68,4 @@ So bekommt Meta sofort ein Qualitätsgefälle, noch bevor jemand manuell bewerte
 
 Wichtig: Eine nachträgliche Schlecht-Bewertung löscht den ursprünglichen Lead nicht. Meta lernt vor allem über die **guten** Folgesignale. Deshalb regelmäßig Gut markieren, sobald eine Bewerbung fachlich passt.
 
-Das Conversions-API-Token ist dafür Pflicht. Ohne Token bleibt die Bewertung in Adbot gespeichert, geht aber nicht an Meta.
+Die CAPI-Prüfung unter Tracking muss dafür grün sein. Ohne funktionierende Meta-Verbindung bleibt die Bewertung in Adbot gespeichert, geht aber nicht an Meta. Ein Events-Manager-Token ist nicht der Kundenweg.

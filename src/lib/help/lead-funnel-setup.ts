@@ -19,20 +19,21 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
     id: "pixel",
     title: "Meta Pixel in Adbot verbinden",
     summary:
-      "Einmal unter Tracking die Pixel-ID bestätigen. Funnel und Freebie übernehmen sie automatisch, wenn dort noch keine andere steht.",
+      "Unter Tracking die Pixel aus dem verbundenen Werbekonto laden, CAPI prüfen und bestätigen. Funnel und Freebie übernehmen sie automatisch, wenn dort noch keine andere steht.",
     href: "/dashboard/tracking",
     actionLabel: "Zu Tracking",
     details: [
-      "Meta Business Suite → Events Manager → Datenquellen → Pixel öffnen und die numerische Pixel-ID kopieren.",
-      "In Adbot unter Tracking einfügen, Bezeichnung wählen und auf „Pixel bestätigen“ klicken.",
-      "Conversion-Event bleibt im Regelfall LEAD. Das ist dasselbe Ereignis, das der Funnel als Lead sendet.",
+      "Meta muss bereits verbunden sein. Adbot listet Pixel am verbundenen Werbekonto — nicht aus dem Events Manager kopieren.",
+      "Pixel wählen und „CAPI prüfen und Pixel bestätigen“ klicken. Adbot sendet eine Probe mit dem Connection-Token.",
+      "Nur wenn die Probe ankommt, ist das der Kundenweg. Conversion-Event bleibt im Regelfall LEAD.",
+      "Wenn Liste oder Probe scheitert: Pixel/Dataset in der Login-for-Business-Konfiguration zuweisen, dann Meta neu verbinden. Ein Events-Manager-Token ist nicht der Kundenweg.",
     ],
   },
   {
     id: "funnel-tracking",
     title: "Meta-Tracking im Funnel einschalten",
     summary:
-      "Im Funnel unter Einstellungen den Schalter „Meta-Tracking aktiv“ setzen. Für Lead-Qualität und zuverlässige Events zusätzlich das Conversions-API-Token hinterlegen.",
+      "Im Funnel unter Einstellungen den Schalter „Meta-Tracking aktiv“ setzen. Serverseitige CAPI kommt aus der Meta-Verbindung im Portal — kein Events-Manager-Token.",
     href: "/api/funnel/sso",
     external: true,
     actionLabel: "Funnel öffnen",
@@ -40,7 +41,7 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
       "Funnel öffnen → gewünschter Funnel → Einstellungen → Meta Conversion Tracking.",
       "„Meta-Tracking aktiv“ einschalten. Die Pixel-ID kommt meist schon aus dem Portal.",
       "Eventname auf Lead lassen. Conversion-Zeitpunkt: Beim Absenden.",
-      "Optional, aber empfohlen: Conversions-API-Zugangstoken aus dem Events Manager. Ohne Token sieht Meta nur den Browser-Pixel — Adblocker können Events schlucken, und Gut/Schlecht kann nicht serverseitig zurückgemeldet werden.",
+      "Lead und Gut/Schlecht gehen serverseitig über die geprüfte Meta-Verbindung. Ein Events-Manager-Token ist nicht der Kundenweg.",
     ],
   },
   {
@@ -78,7 +79,7 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
     actionLabel: "Zu Tracking",
     details: [
       "Optional: Im Funnel einen Test-Event-Code aus dem Events Manager eintragen, Testbewerbung senden, Code danach wieder leeren.",
-      "Im Events Manager unter Test Events sollte Lead erscheinen. Mit Token siehst du Browser- und Serversignal zur selben Event-ID.",
+      "Im Events Manager unter Test Events sollte Lead erscheinen — Browser-Pixel plus Serversignal über die Meta-Verbindung zur selben Event-ID.",
       "Testdatensatz in der Funnel-Bewerbungsübersicht nach der Kontrolle löschen oder als Test markieren.",
     ],
   },

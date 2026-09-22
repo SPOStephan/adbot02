@@ -10,7 +10,8 @@ import {
   resolveQualityEventName,
   resolveQualityEventValue,
 } from "@shared/leadValue";
-import { getMetaServerSettings } from "./funnelStore";
+import { getFunnelOwner, getMetaServerSettings } from "./funnelStore";
+import { sendViaPortalCapi } from "./portalCapiRelay";
 
 const META_GRAPH_API_VERSION = "v25.0";
 /** Initial attempt + bounded retries for transient failures only. */
@@ -217,15 +218,11 @@ export async function sendMetaApplicationConversion(
     return { status: "skipped", reason: "awaiting_doi" };
   if (!submission.metaEventId)
     return { status: "skipped", reason: "event_id_missing" };
-  const settings = await getMetaServerSettings(config.id);
-  if (!settings.accessToken)
-    return { status: "skipped", reason: "browser_only" };
-
-  return postMetaCapiEvent({
+  const event = buildMetaConversionEvent(config, application, submission, request);
+  return deliverMetaCapiEvent({
+    funnelId: config.id,
     pixelId: config.metaTracking.pixelId,
-    accessToken: settings.accessToken,
-    testEventCode: settings.testEventCode,
-    event: buildMetaConversionEvent(config, application, submission, request),
+    event,
     eventId: submission.metaEventId,
     fetchImpl,
   });
@@ -243,23 +240,55 @@ export async function sendMetaLeadQualityEvent(
     return { status: "skipped", reason: "tracking_disabled" };
   if (!config.metaTracking.pixelId)
     return { status: "skipped", reason: "pixel_missing" };
-  const settings = await getMetaServerSettings(config.id);
+  const event = buildMetaLeadQualityEvent(
+    config,
+    application,
+    quality,
+    eventId,
+    eventTime
+  );
+  return deliverMetaCapiEvent({
+    funnelId: config.id,
+    pixelId: config.metaTracking.pixelId,
+    event,
+    eventId,
+    fetchImpl,
+  });
+}
+
+async function deliverMetaCapiEvent(input: {
+  funnelId: string;
+  pixelId: string;
+  event: Record<string, unknown>;
+  eventId?: string;
+  fetchImpl: typeof fetch;
+}): Promise<MetaSendResult> {
+  const owner = await getFunnelOwner(input.funnelId);
+  const settings = await getMetaServerSettings(input.funnelId);
+  const ownerUserId = owner?.userId?.trim() || "";
+
+  // Customer path: portal holds the Login-for-Business token and posts CAPI.
+  // Owned funnels never copy that token into Funnel or fall back to Events Manager.
+  if (/^[0-9a-f-]{36}$/i.test(ownerUserId)) {
+    return sendViaPortalCapi({
+      ownerUserId,
+      pixelId: input.pixelId,
+      event: input.event,
+      testEventCode: settings.testEventCode || undefined,
+      fetchImpl: input.fetchImpl,
+    });
+  }
+
   if (!settings.accessToken)
     return { status: "skipped", reason: "browser_only" };
 
   return postMetaCapiEvent({
-    pixelId: config.metaTracking.pixelId,
+    pixelId: input.pixelId,
     accessToken: settings.accessToken,
     testEventCode: settings.testEventCode,
-    event: buildMetaLeadQualityEvent(
-      config,
-      application,
-      quality,
-      eventId,
-      eventTime
-    ),
-    eventId,
-    fetchImpl,
+    event: input.event,
+    eventId: input.eventId,
+    fetchImpl: input.fetchImpl,
   });
 }
 

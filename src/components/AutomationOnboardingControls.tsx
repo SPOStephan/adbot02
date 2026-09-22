@@ -29,6 +29,10 @@ export type ConfirmedPixelView = {
   customEventType: string;
   status: "CONFIRMED";
   customerConfirmedAt: string | null;
+  capiViaConnection: boolean;
+  capiProbeStatus: "untested" | "ok" | "denied" | "error";
+  capiProbeAt: string | null;
+  capiProbeDetail: string | null;
 };
 
 export type ObjectiveBlueprintView = {

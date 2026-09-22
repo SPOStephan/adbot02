@@ -12,6 +12,7 @@ import type { ApplicationRecord, ApplicationSubmission } from "@shared/funnel";
 import {
   resetMemoryStoreForTests,
   saveMetaServerSettings,
+  setFunnelOwner,
 } from "./funnelStore";
 import {
   buildMetaConversionEvent,
@@ -342,6 +343,53 @@ describe("Meta Conversions API", () => {
       );
     } finally {
       consoleError.mockRestore();
+    }
+  });
+
+  it("sendet bei Portal-Owner nur über das CAPI-Relay, nicht mit Events-Manager-Token", async () => {
+    const previousSecret = process.env.FUNNEL_SSO_SECRET;
+    const previousPortal = process.env.ADBOT_PORTAL_URL;
+    process.env.FUNNEL_SSO_SECRET = "funnel-sso-secret-for-capi-relay-tests-32";
+    process.env.ADBOT_PORTAL_URL = "https://portal.test";
+    try {
+      await setFunnelOwner(config.id, {
+        userId: "11111111-1111-4111-8111-111111111111",
+        email: "owner@example.org",
+      });
+      await saveMetaServerSettings(config.id, {
+        accessToken: "EAAB-should-never-leave-funnel",
+        clearAccessToken: false,
+        testEventCode: "TEST-CONN",
+      });
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true, eventsReceived: 1, attempts: 1 }), {
+          status: 200,
+        }),
+      );
+      await expect(
+        sendMetaApplicationConversion(
+          config,
+          application,
+          submission,
+          {},
+          fetchMock,
+        ),
+      ).resolves.toEqual({ status: "sent", eventsReceived: 1, attempts: 1 });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [url, request] = fetchMock.mock.calls[0]!;
+      expect(url).toBe("https://portal.test/api/internal/funnel-capi");
+      const body = JSON.parse(String(request.body));
+      expect(body.token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+      expect(body.event.event_id).toBe(submission.metaEventId);
+      expect(body.event.event_name).toBe("Lead");
+      expect(body.testEventCode).toBe("TEST-CONN");
+      expect(JSON.stringify(body)).not.toContain("EAAB-should-never-leave-funnel");
+      expect(String(url)).not.toContain("graph.facebook.com");
+    } finally {
+      if (previousSecret === undefined) delete process.env.FUNNEL_SSO_SECRET;
+      else process.env.FUNNEL_SSO_SECRET = previousSecret;
+      if (previousPortal === undefined) delete process.env.ADBOT_PORTAL_URL;
+      else process.env.ADBOT_PORTAL_URL = previousPortal;
     }
   });
 
