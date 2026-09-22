@@ -1,6 +1,6 @@
 # ChatGPT Ad Library → interner Inspiration Vault
 
-**Stand:** 20. September 2026  
+**Stand:** 22. September 2026  
 **Quelle:** https://www.chatgptadlibrary.com/library  
 **Sichtbarkeit:** nur Site-Admins + interne KI. Niemals kundensichtbar.
 
@@ -16,18 +16,31 @@ Die Library-HTML, Ad-Seiten und Sitemap-Shards sind hinter einem **Vercel Securi
 - `ad/sitemap.xml` (Index, `x-ad-sitemap-count` ≈ 16k)
 - CDN-Bilder `img.chatgptadlibrary.com`
 
-Deshalb scrapen wir **nicht** massenhaft von der Vercel-App aus. Ist ScrapingBee in Production gesetzt, ruft die GitHub Action nur `unlock_discover` + `unlock` auf der App auf — **ohne Playwright zu installieren oder zu importieren**. Fehlt der Key, fällt sie auf ≤5 Ad-Seiten in einem frischen Browser zurück (Gästelimit der Quelle).
+Deshalb scrapen wir **nicht** auf dem Adbot-Production-Projekt. Unlock und Parse laufen in einem **eigenen Vercel-Projekt** (`apps/chatgpt-ad-library-worker`, Root Directory genau dieser Ordner). Das Projekt hat einen eigenen Function-Pool und einen eigenen Minuten-Cron. Adbot (`app.adbot.one`) macht nur noch schnelle JSON-Aufrufe: Status, Plan, Ingest, Discover, Skip. Login und Dashboard teilen den Pool nicht mehr mit 800-Sekunden-Unlocks. Tempo wird nicht gedrosselt — der Worker holt weiter 40 IDs / 12 parallel.
 
 | Komponente | Rolle |
 | --- | --- |
 | `CHATGPT_AD_LIBRARY_SYSTEM_IDS` | Verifizierter Systemkatalog. Queue braucht keine manuellen IDs. |
 | Sequenz-Probe bis 30 000 | Nur wenn die Discover-Queue leer ist. Tote IDs (404/ohne Copy) landen in `skipped_ids`. |
 | Tabelle `chatgpt_ad_library_crawl_state` | Queue, Skip-Liste, Cursor, Zähler, `next_probe_id` |
-| `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover (CRON_SECRET) |
-| GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h: Unlocker-Batch oder Playwright-Fallback |
+| `GET/POST /api/cron/chatgpt-ad-library-scrape` | Status / Plan / Ingest / Discover / Skip auf Adbot (CRON_SECRET). Kein Unlock. |
+| Eigenes Vercel-Projekt `chatgpt-ad-library-worker` | Minuten-Cron: ScrapingBee + Parse + POST ingest. Eigener Function-Pool. |
+| GitHub Action `chatgpt-ad-library-scrape.yml` | alle 2h Backup: Worker anstoßen oder Unlock auf dem Runner. Playwright nur ohne Key. |
 | Admin `/dashboard/inspiration` | Auto an/aus, Unlocker-Probe + Import #7341, Copy auf den Karten |
-| Vercel Cron (alle 15 Minuten) | Ein kurzer Unlock-Batch (~50s). Kein 800s-Drain, kein Sitemap-Discover. Sonst blockiert Production Login und Dashboard. |
-| ScrapingBee | Unlocker. Credits sind **kein** Drosselgrund. Free/Trial leer → sofort upgraden. Key nur in **Vercel Production**. |
+| ScrapingBee | Unlocker. Credits sind **kein** Drosselgrund. Free/Trial leer → sofort upgraden. Key im **Worker-Projekt**. |
+
+### Zweites Vercel-Projekt anlegen
+
+1. Vercel → Add New Project → dasselbe GitHub-Repo `SPOStephan/adbot02`.
+2. **Root Directory:** `apps/chatgpt-ad-library-worker` (nicht `.`).
+3. Kein Custom-Domain für Nutzer, kein Login.
+4. Environment Variables (Production):
+   - `SCRAPINGBEE_API_KEY`
+   - `CRON_SECRET` (gleicher Wert wie Adbot)
+   - `ADBOT_APP_URL` = `https://app.adbot.one`
+5. Deploy. Cron `* * * * *` → `/api/run`.
+6. Auf dem **Adbot**-Projekt setzen: `CHATGPT_AD_LIBRARY_WORKER_URL` = Worker-URL (ohne Slash). Dann zeigt Inspiration den Worker als Unlocker und „Jetzt einen Lauf“ trifft den Worker, nicht Production.
+7. `SCRAPINGBEE_API_KEY` kann auf Adbot bleiben, nur für die Admin-Probe. Der Production-Cron auf Adbot startet keinen Unlock mehr.
 
 Secrets für die Action (GitHub → Settings → Secrets and variables → Actions — **nicht** nur Vercel):
 
@@ -35,14 +48,15 @@ Secrets für die Action (GitHub → Settings → Secrets and variables → Actio
 | --- | --- | --- |
 | `CRON_SECRET` | Repository **Secret** | gleicher Wert wie Vercel `CRON_SECRET` |
 | `ADBOT_APP_URL` | Repository Secret **oder** Variable | `https://app.adbot.one` |
+| `CHATGPT_AD_LIBRARY_WORKER_URL` | Secret oder Variable | Worker-URL, z. B. `https://adbot-chatgpt-ads.vercel.app` |
 
 **ScrapingBee ist gegen diesen Checkpoint nicht bewiesen.** Headless Chrome, Jina und Crawler-UAs scheitern. FlareSolverr scheitert oft an „Failed to verify your browser.“ Auto-Mode *kann* klappen — oder dieselbe Challenge sehen. Freelance ändert nur das Credit-Kontingent, nicht den Schutz.
 
 Deshalb: **keine 50 USD, bevor die Admin-Probe grün ist.**
 
 1. Account auf https://www.scrapingbee.com/ — **Trial, 1000 Credits, keine Kreditkarte**.
-2. API-Key nach **Vercel → Project → Settings → Environment Variables → Production** als `SCRAPINGBEE_API_KEY`.
-3. Production **neu deployen**.
+2. API-Key nach **Vercel → Scrape-Worker-Projekt → Settings → Environment Variables → Production** als `SCRAPINGBEE_API_KEY`.
+3. Worker **neu deployen**.
 4. Unter `/dashboard/inspiration` **Unlocker-Probe + Import #7341** (eine Seite). Erfolg nur bei **Bild + Anzeigentext oder Trigger-Prompts**. Image-only wird nicht importiert.
 5. Credits leer → ScrapingBee-Tarif upgraden. Tempo nicht drosseln.
 6. **Rot + Checkpoint** → mehr Credits lösen denselben Block nicht. Upgrade hilft nur bei leerem Guthaben.
@@ -58,9 +72,11 @@ Migration: `20260915140000_chatgpt_ad_library_crawl_state.sql` und `202609201200
 
 Ablauf pro Lauf mit Unlocker:
 
-1. `GET ?mode=unlock_discover` holt den aktuellen Sitemap-Shard über ScrapingBee — oder überspringt Discover, wenn schon ≥250 IDs warten.
-2. `GET ?mode=unlock` (GitHub Action, alle 2h) drainiert die **wartende Queue**. Der Vercel-Cron alle 15 Minuten macht nur einen kurzen Batch. ScrapingBee-Credits werden nicht geschont.
-3. Ohne Key: Playwright auf dem Runner (meist Checkpoint, `skippedPlan` / keine Queue-Entnahme) und Seed-Fallback nur wenn der Vault leer ist.
+1. Der Worker liest `GET ?mode=status` / `?mode=plan&limit=40` auf Adbot (schnell).
+2. Sitemap-Discover über ScrapingBee **auf dem Worker**, dann `POST { action: "discover" }` nach Adbot — oder Skip, wenn schon ≥250 IDs warten.
+3. Unlock der Queue **auf dem Worker**, dann `POST { action: "ingest" }` / `skip` / `requeue`. Credits werden nicht geschont.
+4. Ohne Worker-URL und ohne Key: Playwright auf dem Runner, ≤5 Ad-Seiten (meist Checkpoint, `skippedPlan` / keine Queue-Entnahme) und Seed-Fallback nur wenn der Vault leer ist.
+5. `GET ?mode=unlock` auf Adbot antwortet mit `use_worker` (409), außer `CHATGPT_AD_LIBRARY_ALLOW_INLINE_UNLOCK=1`.
 
 Admin kann denselben Seed jederzeit unter `/dashboard/inspiration` mit **GlossGenius-Seed jetzt importieren** nachziehen.
 
@@ -98,10 +114,10 @@ Der Planner nimmt jetzt zuerst `pending_ids`. Tote IDs landen in `skipped_ids` u
 Ein eingefrorener Vault-Zähler (z. B. 2458) ist **kein Code-Limit**. Häufige echte Blocker:
 
 - ScrapingBee-Credits/Key: früher wurden `unlocker_400/401/403` dauerhaft nach `skipped_ids` geschrieben und haben die Queue verbrannt. Jetzt bricht der Lauf ab, die IDs bleiben in der Queue, Banner unter Inspiration.
-- GitHub Action Timeout (exit 28): Production hat auf Discover nicht geantwortet. Das ist kein Ubuntu-Update und kein Vercel-Plan-Limit. Der Minuten-Cron mit 800s-Drain hat die Functions vollgelaufen.
+- GitHub Action Timeout (exit 28): Production hat auf Discover nicht geantwortet. Das ist kein Ubuntu-Update und kein Vercel-Plan-Upgrade. Unlock auf app.adbot.one füllt denselben Function-Pool wie Login — deshalb das eigene Worker-Projekt.
 - Importierte IDs werden über den `external_id`-Index geprüft, nicht über einen 1000-Zeilen-Scan. Discover hängt keine schon importierten IDs wieder vor die Queue.
 - Der Inspiration-Vault registriert Dateien per SHA-256. Viele ChatGPT-Ads teilen ein Creative — ohne Suffix würde `register_inspiration_vault_asset` die alte Zeile zurückgeben, der Sofortlauf „39 neu“ sagen und **Im Vault** stehen bleiben. Der Import legt in dem Fall eine eigene Zeile an.
-- Vault bleibt stehen, Queue 0, letzter Plan = Katalog (`18, 21, 22, …`): nicht Stau/Lease klicken. Discover nur über `mode=unlock_discover` (GitHub), nicht im Vercel-Cron.
+- Vault bleibt stehen, Queue 0, letzter Plan = Katalog (`18, 21, 22, …`): nicht Stau/Lease klicken. Discover läuft über den Worker, nicht über den Adbot-Cron.
 - Discover darf fehlende IDs nicht einzeln gegen den Vault prüfen — ein Sitemap-Shard hat Tausende neue IDs, das hängt die Cron-Funktion und damit `/dashboard/inspiration`. Es gilt der gebündelte `external_id`-Lookup, plus 10-Minuten-Pause zwischen Discovers.
 
 ## KI-Nutzung

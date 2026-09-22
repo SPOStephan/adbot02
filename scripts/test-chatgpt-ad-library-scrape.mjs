@@ -77,7 +77,7 @@ assert.match(panel, /Leases freigeben/);
 assert.match(panel, /leaseBusy[\s\S]*Stau auflösen/);
 assert.match(panel, /Jetzt einen Lauf/);
 assert.match(panel, /Queue wartend/);
-assert.match(vercel, /chatgpt-ad-library-scrape",\s*"schedule": "\*\/15 \* \* \* \*"/);
+assert.doesNotMatch(vercel, /chatgpt-ad-library-scrape/);
 assert.match(scrape, /bot_checkpoint_429/);
 assert.match(scrape, /skippedPlan/);
 assert.match(scrape, /discoverChatGPTAdLibraryIds/);
@@ -117,21 +117,21 @@ assert.match(script, /phase: "discover"/);
 assert.match(script, /bot_checkpoint/);
 assert.match(script, /ingest_seed/);
 assert.match(script, /unlockerConfigured/);
-assert.match(script, /mode=unlock/);
+assert.match(script, /dedicated Vercel worker/);
 assert.doesNotMatch(script, /^import \{ chromium \} from ["']playwright["']/m);
 assert.match(script, /import\(["']playwright["']\)/);
-assert.match(workflow, /Unlock batch via Production/);
-assert.match(workflow, /mode=\$\{mode\}/);
-assert.match(workflow, /call unlock_discover/);
-assert.match(workflow, /call unlock /);
-assert.match(workflow, /if: steps\.unlocker\.outputs\.configured == 'true'/);
+assert.match(workflow, /dedicated Vercel worker|CHATGPT_AD_LIBRARY_WORKER_URL/);
+assert.match(workflow, /chatgpt-ad-library-unlock-worker/);
+assert.doesNotMatch(workflow, /Unlock batch via Production/);
+assert.match(workflow, /if: steps\.worker\.outputs\.configured == 'true'/);
 assert.match(
   workflow,
-  /if: steps\.unlocker\.outputs\.configured != 'true'[\s\S]*chatgpt-ad-library-scrape-playwright/,
+  /steps\.worker\.outputs\.configured != 'true'[\s\S]*chatgpt-ad-library-scrape-playwright/,
 );
 assert.match(cron, /unlock_discover/);
 assert.match(scrape, /scrapeChatGPTAdLibraryUnlockBatch/);
-const unlocker = read("src/lib/chatgpt-ad-library/unlocker.ts");
+const unlocker = read("src/lib/chatgpt-ad-library/unlocker-core.ts");
+assert.match(read("src/lib/chatgpt-ad-library/unlocker.ts"), /unlocker-core/);
 assert.match(unlocker, /SCRAPINGBEE_API_KEY/);
 assert.match(unlocker, /mode.*auto/);
 assert.match(unlocker, /wait_browser.*networkidle2/);
@@ -150,15 +150,21 @@ assert.match(cron, /ingest_seed/);
 assert.match(adminCrawl, /import_seed/);
 assert.match(adminCrawl, /probe_unlocker/);
 assert.match(adminCrawl, /maxDuration = 300/);
-assert.match(cron, /maxDuration = 800/);
-assert.match(cron, /short batch/);
+assert.match(cron, /maxDuration = 30/);
+assert.match(cron, /dedicated_vercel_worker|use_worker/);
+assert.match(cron, /action === "skip"/);
+assert.match(cron, /planLimitFromQuery|limit=/);
 assert.match(crawlState, /claimChatGPTAdLibraryScrapeLease/);
 assert.match(scrape, /importUnlockedRecords|IMPORT_BATCH_MAX/);
 assert.match(scrape, /scrapeChatGPTAdLibraryUnlockDrain/);
-assert.match(scrape, /budgetMs: 50_000/);
+assert.match(scrape, /skippedPlan: true/);
 assert.doesNotMatch(
   scrape.slice(scrape.indexOf("scrapeChatGPTAdLibraryHttpBatch")),
   /return scrapeChatGPTAdLibraryUnlockDrain\(\);/,
+);
+assert.doesNotMatch(
+  scrape.slice(scrape.indexOf("scrapeChatGPTAdLibraryHttpBatch")),
+  /budgetMs: 50_000/,
 );
 assert.match(scrape, /requireLease/);
 assert.match(scrape, /budgetMs/);
@@ -198,14 +204,23 @@ assert.match(read("src/lib/chatgpt-ad-library/normalize.ts"), /stripChatGPTAdLib
 assert.match(parseHtml, /a sponsored chatgpt ad by/);
 assert.match(scrape, /chatGPTAdLibrarySeedRecordForId/);
 assert.match(panel, /Systemkatalog/);
-assert.match(vercel, /chatgpt-ad-library-scrape/);
+assert.doesNotMatch(vercel, /chatgpt-ad-library-scrape/);
 assert.match(migration, /chatgpt_ad_library_crawl_state/);
 assert.match(docs, /GitHub Action/);
 assert.match(docs, /max\. 5|≤5/);
 assert.match(docs, /skippedPlan|keine.*Queue-Entnahme/);
 assert.match(docs, /40 Ads|40 IDs/);
 assert.match(docs, /kein.*Drosselgrund|Credits sind keine Bremse|Credits werden nicht geschont/);
+assert.match(docs, /chatgpt-ad-library-worker|eigenen Vercel-Projekt/);
+assert.match(docs, /Root Directory/);
 assert.match(panel, /12 parallel|Credits sind keine Bremse/);
+assert.match(panel, /eigenen Vercel-Projekt|Worker-Projekt/);
+assert.match(read("src/lib/chatgpt-ad-library/worker-target.ts"), /CHATGPT_AD_LIBRARY_WORKER_URL/);
+assert.match(read("src/app/api/admin/chatgpt-ad-library/crawl/route.ts"), /dedicated_vercel_worker/);
+assert.match(read("apps/chatgpt-ad-library-worker/vercel.json"), /"schedule": "\* \* \* \* \*"/);
+assert.match(read("apps/chatgpt-ad-library-worker/api/run.ts"), /runDedicatedUnlock/);
+assert.match(read("apps/chatgpt-ad-library-worker/lib/unlock-run.ts"), /postAction\("ingest"/);
+assert.match(read("scripts/chatgpt-ad-library-unlock-worker.mjs"), /runDedicatedUnlock/);
 assert.match(docs, /20260920120000/);
 assert.match(docs, /action: "unstick"/);
 assert.match(docs, /wartenden Queue/);

@@ -1,0 +1,9 @@
+{
+  "name": "chatgpt-ad-library-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-shared.mjs",
+    "vercel-build": "node scripts/sync-shared.mjs"
+  }
+}

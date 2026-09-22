@@ -20,10 +20,6 @@
     {
       "path": "/api/cron/organic-boost-delivery",
       "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/chatgpt-ad-library-scrape",
-      "schedule": "*/15 * * * *"
     }
   ]
 }

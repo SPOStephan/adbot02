@@ -3,23 +3,27 @@ import { NextResponse } from "next/server";
 import {
   enqueueChatGPTAdLibraryIds,
   getChatGPTAdLibraryCrawlStatus,
+  markChatGPTAdLibraryIdsSkipped,
   planChatGPTAdLibraryScrapeBatch,
 } from "@/lib/chatgpt-ad-library/crawl-state";
 import {
   discoverChatGPTAdLibraryIds,
   ingestChatGPTAdLibraryScrapeRecords,
   ingestChatGPTAdLibrarySeedFallback,
-  scrapeChatGPTAdLibraryHttpBatch,
   scrapeChatGPTAdLibraryUnlockDiscover,
   scrapeChatGPTAdLibraryUnlockDrain,
 } from "@/lib/chatgpt-ad-library/scrape";
 import { CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX } from "@/lib/chatgpt-ad-library/scrape-constants";
+import {
+  allowInlineChatGPTAdLibraryUnlock,
+  isChatGPTAdLibraryWorkerConfigured,
+} from "@/lib/chatgpt-ad-library/worker-target";
 import { ChatGPTAdLibraryImportError } from "@/lib/chatgpt-ad-library/import";
 import { constantTimeEqual } from "@/lib/meta/crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 800;
+export const maxDuration = 30;
 
 const NO_STORE = {
   "Cache-Control": "private, no-store, max-age=0",
@@ -54,59 +58,71 @@ function requireCron(request: Request) {
   return { secret };
 }
 
+function planLimitFromQuery(url: URL): number {
+  const raw = Number(url.searchParams.get("limit"));
+  if (!Number.isFinite(raw)) return CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX;
+  return Math.min(Math.max(Math.floor(raw), 1), 80);
+}
+
+function useWorkerResponse() {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "use_worker",
+      message:
+        "Unlock läuft im eigenen Vercel-Projekt, nicht auf app.adbot.one. Sonst teilt der Scrape den Function-Pool mit Login.",
+      workerConfigured: isChatGPTAdLibraryWorkerConfigured(),
+    },
+    { status: 409, headers: NO_STORE },
+  );
+}
+
 /**
- * GET: plan next small batch for Playwright worker, or best-effort HTTP scrape.
- * Query: ?mode=plan (default for workers) | ?mode=http (direct attempt)
+ * GET: fast control-plane for the dedicated scrape worker.
+ * Query: ?mode=status | ?mode=plan&limit= | ?mode=http (heartbeat)
+ * Unlock stays off this deployment unless ALLOW_INLINE_UNLOCK=1.
  */
 export async function GET(request: Request) {
   const auth = requireCron(request);
   if ("error" in auth && auth.error) return auth.error;
 
   const url = new URL(request.url);
-  // Vercel Cron hits this without query → best-effort HTTP.
-  // Playwright worker uses ?mode=plan.
   const mode = (url.searchParams.get("mode") ?? "http").toLowerCase();
 
   try {
-    if (mode === "status") {
+    if (mode === "status" || mode === "http") {
       const status = await getChatGPTAdLibraryCrawlStatus();
-      return NextResponse.json({ ok: true, status }, { headers: NO_STORE });
-    }
-
-    if (mode === "unlock_discover") {
-      const result = await scrapeChatGPTAdLibraryUnlockDiscover();
-      return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
-    }
-
-    if (mode === "unlock") {
-      const result = await scrapeChatGPTAdLibraryUnlockDrain();
-      return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
-    }
-
-    if (mode === "http") {
-      // Vercel Cron default. Must stay a short batch — drain/discover starves login.
-      const result = await scrapeChatGPTAdLibraryHttpBatch();
       return NextResponse.json(
         {
           ok: true,
-          ...result,
-          note: result.blocked
-            ? "HTML ist bot-geschützt. ScrapingBee-Unlocker (SCRAPINGBEE_API_KEY) setzen."
-            : undefined,
+          heartbeat: mode === "http",
+          unlockOn: "dedicated_vercel_worker",
+          status,
         },
         { headers: NO_STORE },
       );
     }
 
-    const plan = await planChatGPTAdLibraryScrapeBatch({
-      limit: CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
-    });
+    if (mode === "unlock_discover") {
+      if (!allowInlineChatGPTAdLibraryUnlock()) return useWorkerResponse();
+      const result = await scrapeChatGPTAdLibraryUnlockDiscover();
+      return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
+    }
+
+    if (mode === "unlock") {
+      if (!allowInlineChatGPTAdLibraryUnlock()) return useWorkerResponse();
+      const result = await scrapeChatGPTAdLibraryUnlockDrain();
+      return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
+    }
+
+    const limit = planLimitFromQuery(url);
+    const plan = await planChatGPTAdLibraryScrapeBatch({ limit });
     const status = await getChatGPTAdLibraryCrawlStatus();
     return NextResponse.json(
       {
         ok: true,
         mode: "plan",
-        batchMax: CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
+        batchMax: limit,
         origin: "https://www.chatgptadlibrary.com",
         plan,
         status,
@@ -130,6 +146,7 @@ export async function GET(request: Request) {
  * - { action: "enqueue", ids: [...] }
  * - { action: "discover", shard, xml?, ids? }
  * - { action: "requeue", ids: [...] }
+ * - { action: "skip", ids: [...] }
  */
 export async function POST(request: Request) {
   const auth = requireCron(request);
@@ -188,6 +205,17 @@ export async function POST(request: Request) {
         );
       }
       const result = await enqueueChatGPTAdLibraryIds(body.ids);
+      return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
+    }
+
+    if (action === "skip") {
+      if (!Array.isArray(body.ids) || body.ids.length < 1) {
+        return NextResponse.json(
+          { ok: false, error: "ids_required" },
+          { status: 400, headers: NO_STORE },
+        );
+      }
+      const result = await markChatGPTAdLibraryIdsSkipped(body.ids);
       return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
     }
 

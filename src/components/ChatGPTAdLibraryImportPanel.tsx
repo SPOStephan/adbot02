@@ -48,6 +48,7 @@ type CrawlStatus = {
   scrapeBatchMax: number;
   unlockerConfigured?: boolean;
   unlockerProvider?: string;
+  scrapeWorkerConfigured?: boolean;
   leaseBusy?: boolean;
   activeLeases?: number;
   leaseUntil?: string | null;
@@ -479,7 +480,7 @@ export function ChatGPTAdLibraryImportPanel({
           (payload.unstick?.requeuedSkipped
             ? `, ${payload.unstick.requeuedSkipped} zuvor übersprungene IDs zurückgeholt`
             : "") +
-          ". Danach „Jetzt einen Lauf“ oder den Minuten-Cron abwarten.",
+          ". Danach „Jetzt einen Lauf“ oder den Minuten-Cron des Worker-Projekts abwarten.",
       );
       await refreshCrawl();
     } catch (caught) {
@@ -606,8 +607,11 @@ export function ChatGPTAdLibraryImportPanel({
               Wiederkehrender Scrape (max. {crawl?.scrapeBatchMax ?? 5}/Lauf)
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-950/80">
-              Die Queue hat Vorrang. Unlocker: bis {crawl?.scrapeBatchMax ?? CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX} IDs pro
-              Runde, 12 parallel, Cron jede Minute, ein Lauf füllt das 800-Sekunden-Fenster.
+              Die Queue hat Vorrang. Unlocker läuft in einem eigenen Vercel-Projekt — nicht auf
+              app.adbot.one, damit Login und Dashboard denselben Function-Pool nicht mit dem
+              Scrape teilen. Tempo bleibt hoch: bis{" "}
+              {crawl?.scrapeBatchMax ?? CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX} IDs pro Runde, 12
+              parallel, Cron jede Minute auf dem Worker.
               „Jetzt einen Lauf“ holt bis {CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS} Runden
               ({CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS * CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX} IDs) in einem Klick.
               ScrapingBee-Credits sind keine Bremse — Tarif upgraden, wenn sie leer sind.
@@ -617,14 +621,15 @@ export function ChatGPTAdLibraryImportPanel({
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
             {crawl?.unlockerConfigured ? (
               <p className="mt-2 text-sm font-semibold text-emerald-800">
-                Unlocker-Key gesetzt ({crawl.unlockerProvider ?? "scrapingbee"}). Probe importiert
-                Bild + Anzeigentext + Trigger-Prompts — nicht nur das Bild.
+                Unlocker-Key gesetzt ({crawl.unlockerProvider ?? "scrapingbee"}
+                {crawl.scrapeWorkerConfigured ? ", eigenes Vercel-Worker-Projekt" : ""}). Probe
+                importiert Bild + Anzeigentext + Trigger-Prompts — nicht nur das Bild.
               </p>
             ) : (
               <p className="mt-2 text-sm font-semibold text-amber-900">
                 Unlocker fehlt. Trial auf scrapingbee.com (1000 Credits, keine Karte) → Key als{" "}
-                <code>SCRAPINGBEE_API_KEY</code> in Vercel Production → neu deployen → Probe.
-                Freelance noch nicht kaufen.
+                <code>SCRAPINGBEE_API_KEY</code> im eigenen Scrape-Worker-Projekt (nicht auf
+                app.adbot.one) → deployen → Probe. Freelance noch nicht kaufen.
               </p>
             )}
           </div>
@@ -708,7 +713,7 @@ export function ChatGPTAdLibraryImportPanel({
           <p className="mt-3 rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-950">
             Queue leer — nicht „Stau auflösen“ und nicht „Leases freigeben“. Der Katalog ist
             schon im Vault, deshalb stagniert die Zahl. Discover holt den nächsten
-            Sitemap-Shard; „Jetzt einen Lauf“ oder den Minuten-Cron abwarten.
+            Sitemap-Shard; „Jetzt einen Lauf“ oder den Minuten-Cron des Worker-Projekts abwarten.
           </p>
         ) : null}
         <p className="mt-3 text-xs text-emerald-900/70">

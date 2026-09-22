@@ -144,11 +144,16 @@ export async function scrapeChatGPTAdLibraryHttpBatch(input?: {
     if (input?.ids && input.ids.length > 0) {
       return scrapeChatGPTAdLibraryUnlockBatch(input);
     }
-    // Vercel Cron hits this every tick. A full drain/discover here stacks
-    // 800s functions and starves login + dashboard.
-    return scrapeChatGPTAdLibraryUnlockBatch({
-      budgetMs: 50_000,
-    });
+    // Production must not unlock on the default cron path. ScrapingBee
+    // belongs on the dedicated Vercel worker project.
+    return {
+      mode: "http",
+      blocked: false,
+      skippedPlan: true,
+      plannedIds: [],
+      summary: null,
+      failures: [],
+    };
   }
 
   if (!input?.ids || input.ids.length < 1) {

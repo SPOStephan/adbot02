@@ -13,3 +13,6 @@ out/
 *.tsbuildinfo
 .vercel/
 .DS_Store
+
+# Copied into the scrape worker at build time
+apps/chatgpt-ad-library-worker/lib/shared/

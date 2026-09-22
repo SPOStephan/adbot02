@@ -19,6 +19,7 @@ import { countChatGPTAdLibraryImports } from "@/lib/chatgpt-ad-library/retrieval
 import { CHATGPT_AD_LIBRARY_SYSTEM_IDS } from "@/lib/chatgpt-ad-library/system-ids";
 import { CHATGPT_AD_LIBRARY_PROVIDER } from "@/lib/chatgpt-ad-library/types";
 import { isChatGPTAdLibraryUnlockerConfigured } from "@/lib/chatgpt-ad-library/unlocker";
+import { isChatGPTAdLibraryWorkerConfigured } from "@/lib/chatgpt-ad-library/worker-target";
 
 export type ChatGPTAdLibraryCrawlStatus = {
   enabled: boolean;
@@ -43,6 +44,7 @@ export type ChatGPTAdLibraryCrawlStatus = {
   sitemapShardCount: number;
   unlockerConfigured: boolean;
   unlockerProvider: "scrapingbee";
+  scrapeWorkerConfigured: boolean;
   leaseBusy: boolean;
   activeLeases: number;
   leaseUntil: string | null;
@@ -181,12 +183,15 @@ export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibrary
     totalImported: Number(row.total_imported) || 0,
     totalSkippedDuplicate: Number(row.total_skipped_duplicate) || 0,
     totalFailed: Number(row.total_failed) || 0,
-    scrapeBatchMax: isChatGPTAdLibraryUnlockerConfigured()
-      ? CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX
-      : CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
+    scrapeBatchMax:
+      isChatGPTAdLibraryUnlockerConfigured() || isChatGPTAdLibraryWorkerConfigured()
+        ? CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX
+        : CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
     sitemapShardCount: CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
-    unlockerConfigured: isChatGPTAdLibraryUnlockerConfigured(),
+    unlockerConfigured:
+      isChatGPTAdLibraryUnlockerConfigured() || isChatGPTAdLibraryWorkerConfigured(),
     unlockerProvider: "scrapingbee",
+    scrapeWorkerConfigured: isChatGPTAdLibraryWorkerConfigured(),
     leaseBusy: leases.length >= CHATGPT_AD_LIBRARY_UNLOCK_LEASE_MAX,
     activeLeases: leases.length,
     leaseUntil: leases.reduce<string | null>((latest, item) => {

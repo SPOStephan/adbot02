@@ -1,17 +1,16 @@
-# Small recurring ChatGPT Ad Library scrape (internal inspiration vault only).
-# Unlocker path drains the queue at full tempo. Playwright fallback stays ≤5
-# (chatgptadlibrary.com guest page cap in a fresh browser).
+# ChatGPT Ad Library scrape (internal inspiration vault only).
+# Unlock + parse belong on the dedicated Vercel worker project
+# (apps/chatgpt-ad-library-worker), not on app.adbot.one.
 #
 # Required in GitHub → Settings → Secrets and variables → Actions:
 #   Secret CRON_SECRET     (= same value as Vercel CRON_SECRET, ≥32 chars)
 #   Secret or Variable ADBOT_APP_URL  e.g. https://app.adbot.one  (no trailing slash)
+# Optional:
+#   Secret or Variable CHATGPT_AD_LIBRARY_WORKER_URL  e.g. https://adbot-chatgpt-ads.vercel.app
+#   Secret SCRAPINGBEE_API_KEY  (only if the Action should unlock itself)
 #
 # Vercel env vars alone are NOT visible to this workflow.
 #
-# Required on Vercel Production for live HTML (GitHub runners hit the checkpoint):
-#   SCRAPINGBEE_API_KEY   from https://www.scrapingbee.com/ (Freelance ~$50/mo)
-# Optional on Vercel:
-#   CHATGPT_AD_LIBRARY_UPLOADER_USER_ID  (site admin UUID)
 # Apply migrations:
 #   20260915140000_chatgpt_ad_library_crawl_state.sql
 #   20260920120000_chatgpt_ad_library_skipped_ids.sql
@@ -20,7 +19,7 @@ name: ChatGPT Ad Library scrape
 
 on:
   schedule:
-    # Every 2 hours
+    # Every 2 hours — backup if the dedicated Vercel worker is not deployed yet.
     - cron: "17 */2 * * *"
   workflow_dispatch:
 
@@ -48,7 +47,6 @@ jobs:
 
       - name: Require GitHub Actions secrets/vars
         env:
-          # URL may be a Variable (preferred) or a Secret.
           ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
@@ -70,65 +68,72 @@ jobs:
           echo "ADBOT_APP_URL is set (length ${#ADBOT_APP_URL})"
           echo "CRON_SECRET is set (length ${#CRON_SECRET})"
 
-      - name: Check unlocker
-        id: unlocker
+      - name: Check dedicated worker
+        id: worker
         env:
-          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CHATGPT_AD_LIBRARY_WORKER_URL: ${{ secrets.CHATGPT_AD_LIBRARY_WORKER_URL || vars.CHATGPT_AD_LIBRARY_WORKER_URL }}
         run: |
-          json=$(curl -sS -H "Authorization: Bearer ${CRON_SECRET}" \
-            "${ADBOT_APP_URL}/api/cron/chatgpt-ad-library-scrape?mode=status")
-          echo "$json"
-          if echo "$json" | grep -q '"unlockerConfigured":true'; then
+          if [ -n "${CHATGPT_AD_LIBRARY_WORKER_URL}" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Unlocker is on Production. Never import Playwright in that path —
-      # installing it is skipped, and a static `import "playwright"` crashes the job.
-      - name: Unlock batch via Production
-        if: steps.unlocker.outputs.configured == 'true'
+      - name: Unlock via dedicated Vercel worker
+        if: steps.worker.outputs.configured == 'true'
         env:
-          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
+          CHATGPT_AD_LIBRARY_WORKER_URL: ${{ secrets.CHATGPT_AD_LIBRARY_WORKER_URL || vars.CHATGPT_AD_LIBRARY_WORKER_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -u
-          call() {
-            local mode="$1"
-            local max="$2"
-            echo "=== ${mode} ==="
-            local tmp
-            tmp=$(mktemp)
-            local code
-            code=$(curl -sS -o "$tmp" -w "%{http_code}" --max-time "$max" \
-              -H "Authorization: Bearer ${CRON_SECRET}" \
-              -H "Accept: application/json" \
-              "${ADBOT_APP_URL}/api/cron/chatgpt-ad-library-scrape?mode=${mode}") || code="000"
-            cat "$tmp"
-            echo
-            if [ "$code" != "200" ]; then
-              echo "::warning::${mode} HTTP ${code} (timeout or busy Production — no Vercel upgrade needed)"
-              return 1
-            fi
-            if ! grep -q '"ok":true' "$tmp"; then
-              echo "::warning::${mode} response is not ok"
-              return 1
-            fi
-            return 0
-          }
-          call unlock_discover 90 || true
-          call unlock 180 || true
-          call unlock 180 || true
+          base="${CHATGPT_AD_LIBRARY_WORKER_URL%/}"
+          tmp=$(mktemp)
+          code=$(curl -sS -o "$tmp" -w "%{http_code}" --max-time 280 \
+            -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Accept: application/json" \
+            "${base}/api/run?mode=run") || code="000"
+          cat "$tmp"
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::warning::dedicated worker HTTP ${code} — Adbot Production was not used for unlock"
+          fi
+
+      - name: Check unlocker on Production (status only)
+        id: unlocker
+        if: steps.worker.outputs.configured != 'true'
+        env:
+          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCRAPINGBEE_API_KEY: ${{ secrets.SCRAPINGBEE_API_KEY }}
+        run: |
+          json=$(curl -sS -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${ADBOT_APP_URL}/api/cron/chatgpt-ad-library-scrape?mode=status")
+          echo "$json"
+          if [ -n "${SCRAPINGBEE_API_KEY}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Unlock on GitHub runner
+        if: steps.worker.outputs.configured != 'true' && steps.unlocker.outputs.configured == 'true'
+        env:
+          ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCRAPINGBEE_API_KEY: ${{ secrets.SCRAPINGBEE_API_KEY }}
+        run: |
+          node apps/chatgpt-ad-library-worker/scripts/sync-shared.mjs
+          node --experimental-strip-types scripts/chatgpt-ad-library-unlock-worker.mjs
 
       - name: Install Playwright
-        if: steps.unlocker.outputs.configured != 'true'
+        if: steps.worker.outputs.configured != 'true' && steps.unlocker.outputs.configured != 'true'
         run: |
           npm install --no-save --no-package-lock playwright@1.55.0
           npx playwright install --with-deps chromium
 
       - name: Scrape batch (≤5) and ingest
-        if: steps.unlocker.outputs.configured != 'true'
+        if: steps.worker.outputs.configured != 'true' && steps.unlocker.outputs.configured != 'true'
         env:
           ADBOT_APP_URL: ${{ secrets.ADBOT_APP_URL || vars.ADBOT_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

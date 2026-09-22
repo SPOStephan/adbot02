@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm run sync",
+  "buildCommand": "npm run vercel-build",
+  "crons": [
+    {
+      "path": "/api/run",
+      "schedule": "* * * * *"
+    }
+  ],
+  "functions": {
+    "api/run.ts": {
+      "maxDuration": 300,
+      "memory": 1024,
+      "includeFiles": "lib/**"
+    }
+  }
+}

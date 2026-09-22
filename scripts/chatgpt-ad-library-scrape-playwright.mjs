@@ -271,20 +271,9 @@ async function main() {
   }
 
   if (!DRY_RUN && statusPayload.status?.unlockerConfigured === true) {
-    const discover = await cronGet("/api/cron/chatgpt-ad-library-scrape?mode=unlock_discover");
-    console.log("unlock_discover", {
-      shard: discover.shard,
-      added: discover.added,
-      pendingCount: discover.pendingCount,
-      blocked: discover.blocked,
-    });
-    const scraped = await cronGet("/api/cron/chatgpt-ad-library-scrape?mode=unlock");
-    console.log("unlock", {
-      planned: scraped.plannedIds,
-      blocked: scraped.blocked,
-      summary: scraped.summary,
-      failures: scraped.failures,
-    });
+    console.log(
+      "unlocker configured — Playwright does not call Production unlock. Use the dedicated Vercel worker.",
+    );
     return;
   }
 

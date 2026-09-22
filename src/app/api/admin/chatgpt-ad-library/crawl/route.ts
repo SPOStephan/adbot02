@@ -16,6 +16,10 @@ import {
   CHATGPT_AD_LIBRARY_RUN_NOW_BUDGET_MS,
   CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS,
 } from "@/lib/chatgpt-ad-library/scrape-constants";
+import {
+  isChatGPTAdLibraryWorkerConfigured,
+  triggerChatGPTAdLibraryWorker,
+} from "@/lib/chatgpt-ad-library/worker-target";
 import { isSiteAdmin } from "@/lib/auth/site-admin";
 import {
   isDashboardSameOriginReadRequest,
@@ -67,7 +71,7 @@ export async function GET(request: NextRequest) {
       customerVisible: false,
       status,
       workerHint:
-        "Unlocker-Probe #7341 importiert Bild + Copy. Image-only gilt nicht als Erfolg. Freelance erst wenn Copy mitkommt.",
+        "Unlocker-Probe #7341 importiert Bild + Copy. Image-only gilt nicht als Erfolg. Freelance erst wenn Copy mitkommt. Der Minuten-Scrape gehört ins eigene Vercel-Projekt, nicht auf app.adbot.one.",
     });
   } catch (error) {
     console.error("chatgpt_ad_library_crawl_admin_get_failed", {
@@ -134,6 +138,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "run_now") {
+      if (isChatGPTAdLibraryWorkerConfigured()) {
+        const result = await triggerChatGPTAdLibraryWorker({ mode: "run_now" });
+        const status = await getChatGPTAdLibraryCrawlStatus();
+        return json({
+          ok: true,
+          action,
+          via: "dedicated_vercel_worker",
+          result,
+          status,
+        });
+      }
       const result = await scrapeChatGPTAdLibraryUnlockDrain({
         rounds: CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS,
         budgetMs: CHATGPT_AD_LIBRARY_RUN_NOW_BUDGET_MS,
@@ -143,6 +158,7 @@ export async function POST(request: NextRequest) {
       return json({
         ok: true,
         action,
+        via: "inline",
         result,
         status,
       });
