@@ -79,6 +79,25 @@ describe("Funnel-Router", () => {
 
     expect(result.id).toMatch(/^[0-9a-f-]{36}$/i);
     expect(result.notificationSent).toBe(false);
+    expect(result.leadValue).toBe(150);
+  });
+
+  it("speichert eine manuelle Gut-Bewertung auch ohne CAPI-Token", async () => {
+    const admin = appRouter.createCaller(adminContext);
+    const publicCaller = appRouter.createCaller(publicContext);
+    const submitted = await publicCaller.funnel.submit({
+      funnelSlug: "karriere",
+      answers: { arbeitsbereich: ["vertrieb"], berufserfahrung: ["3-plus"] },
+      contact: { name: "Erika Muster", email: "erika@example.org", phone: "+49 123" },
+      consent: true,
+    });
+    const rated = await admin.funnel.rateLeadQuality({ id: submitted.id, quality: "good" });
+    expect(rated.leadQuality).toBe("good");
+    expect(rated.leadValue).toBe(150);
+    expect(rated.metaQuality).toBe("skipped");
+    expect(rated.metaQualityReason).toBe("tracking_disabled");
+    const again = await admin.funnel.rateLeadQuality({ id: submitted.id, quality: "good" });
+    expect(again.metaQualityReason).toBe("already_rated");
   });
 
   it("liefert im Bewerbungs-Dashboard interne Seitennamen statt technischer Question-IDs", async () => {

@@ -1044,7 +1044,7 @@ async function loadCustomerDashboardImpl(
       ? await supabase
           .from("meta_confirmed_pixels")
           .select(
-            "id,pixel_id,label,custom_event_type,status,customer_confirmed_at",
+            "id,pixel_id,label,custom_event_type,status,customer_confirmed_at,capi_via_connection,capi_probe_status,capi_probe_at,capi_probe_detail",
           )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
@@ -1565,6 +1565,7 @@ async function loadCustomerDashboardImpl(
       if (String(pixel.status) !== "CONFIRMED") return [];
       const pixelId = String(pixel.pixel_id ?? "");
       if (!/^\d{5,25}$/.test(pixelId)) return [];
+      const probeStatus = String(pixel.capi_probe_status ?? "untested");
       return [
         {
           id: String(pixel.id),
@@ -1574,6 +1575,17 @@ async function loadCustomerDashboardImpl(
           status: "CONFIRMED" as const,
           customerConfirmedAt: pixel.customer_confirmed_at
             ? String(pixel.customer_confirmed_at)
+            : null,
+          capiViaConnection: pixel.capi_via_connection === true,
+          capiProbeStatus:
+            probeStatus === "ok" ||
+            probeStatus === "denied" ||
+            probeStatus === "error"
+              ? probeStatus
+              : "untested",
+          capiProbeAt: pixel.capi_probe_at ? String(pixel.capi_probe_at) : null,
+          capiProbeDetail: pixel.capi_probe_detail
+            ? String(pixel.capi_probe_detail)
             : null,
         },
       ];

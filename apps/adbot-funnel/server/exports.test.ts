@@ -33,6 +33,8 @@ describe("Bewerbungsexporte", () => {
     expect(csv).toContain('"Muster; Erika"');
     expect(csv).toContain('"Beispiel ""GmbH"""');
     expect(csv).toContain("CV Erika.pdf");
+    expect(csv).toContain('"Bewertung"');
+    expect(csv).toContain('"Lead-Wert"');
   });
 
   it("erzeugt ein lesbares PDF sowohl mit als auch ohne Bewerbungen", async () => {

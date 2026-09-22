@@ -20,10 +20,8 @@ export default function Settings() {
   const [draft, setDraft] = useState<FunnelConfig>();
   const [savedConfig, setSavedConfig] = useState<FunnelConfig>();
   const [copied, setCopied] = useState<"url" | "embed">();
-  const [metaAccessToken, setMetaAccessToken] = useState("");
   const [metaTestEventCode, setMetaTestEventCode] = useState("");
   const [savedMetaTestEventCode, setSavedMetaTestEventCode] = useState("");
-  const [clearMetaAccessToken, setClearMetaAccessToken] = useState(false);
   const [customHostname, setCustomHostname] = useState("");
 
   useEffect(() => { if (query.data?.config) { setDraft(query.data.config); setSavedConfig(query.data.config); } }, [query.data?.config]);
@@ -31,8 +29,6 @@ export default function Settings() {
     if (!query.data?.metaServerSettings) return;
     setMetaTestEventCode(query.data.metaServerSettings.testEventCode);
     setSavedMetaTestEventCode(query.data.metaServerSettings.testEventCode);
-    setMetaAccessToken("");
-    setClearMetaAccessToken(false);
   }, [query.data?.metaServerSettings]);
 
   const save = trpc.funnel.saveConfig.useMutation({
@@ -46,8 +42,6 @@ export default function Settings() {
   });
   const saveMetaServer = trpc.funnel.saveMetaServerSettings.useMutation({
     onSuccess: async saved => {
-      setMetaAccessToken("");
-      setClearMetaAccessToken(false);
       setMetaTestEventCode(saved.testEventCode);
       setSavedMetaTestEventCode(saved.testEventCode);
       await utils.funnel.adminConfig.invalidate({ id: funnelId });
@@ -119,7 +113,7 @@ export default function Settings() {
   const customPublicUrl = readyCustomHost ? `https://${readyCustomHost.hostname}/` : null;
   const dirty = Boolean(draft && savedConfig && JSON.stringify(draft) !== JSON.stringify(savedConfig));
   const imprintValid = Boolean(draft?.legal.imprintTitle.trim() && draft?.legal.imprintContent.trim());
-  const metaServerDirty = Boolean(metaAccessToken.trim() || clearMetaAccessToken || metaTestEventCode !== savedMetaTestEventCode);
+  const metaServerDirty = Boolean(metaTestEventCode !== savedMetaTestEventCode);
   const embedCode = useMemo(() => `<iframe id="recruiting-funnel" src="${directUrl}" title="Karriere-Bewerbung" loading="lazy" style="width:100%;min-height:780px;border:0;border-radius:16px" allow="clipboard-write"></iframe>\n<script>\nwindow.addEventListener("message",function(event){\n  if(event.origin!==new URL("${directUrl}").origin)return;\n  if(event.data?.type!=="social-recruiting-funnel:resize")return;\n  document.getElementById("recruiting-funnel").style.height=event.data.height+"px";\n});\n</script>`, [directUrl]);
 
   const copy = async (value: string, key: "url" | "embed") => {
@@ -155,8 +149,7 @@ export default function Settings() {
       if (dirty) await save.mutateAsync({ ...draft, isPublished: draft.status === "published" });
       if (metaServerDirty) await saveMetaServer.mutateAsync({
         funnelId: draft.id,
-        ...(metaAccessToken.trim() ? { accessToken: metaAccessToken.trim() } : {}),
-        clearAccessToken: clearMetaAccessToken,
+        clearAccessToken: false,
         testEventCode: metaTestEventCode,
       });
       toast.success("Einstellungen gespeichert");
@@ -212,9 +205,9 @@ export default function Settings() {
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Target className="size-5" /></span><div><h2 className="font-bold">Meta Conversion Tracking</h2><p className="text-xs text-muted-foreground">Browser-Pixel und optional serverseitige Conversions API pro Funnel konfigurieren.</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Target className="size-5" /></span><div><h2 className="font-bold">Meta Conversion Tracking</h2><p className="text-xs text-muted-foreground">Browser-Pixel hier, serverseitige CAPI über die Meta-Verbindung im Adbot-Portal.</p></div></div>
         <div className="mt-6 space-y-5">
-          <div className="flex items-center justify-between gap-4 rounded-xl border p-4"><div><Label htmlFor="meta-enabled">Meta-Tracking aktiv</Label><p className="mt-1 text-xs leading-5 text-muted-foreground">Lädt den Browser-Pixel automatisch und meldet Conversions gemäß dem gewählten Zeitpunkt. Mit hinterlegtem Token wird dasselbe Ereignis zusätzlich serverseitig gesendet.</p></div><Switch id="meta-enabled" checked={draft.metaTracking.enabled} onCheckedChange={enabled => setDraft({ ...draft, metaTracking: { ...draft.metaTracking, enabled } })} /></div>
+          <div className="flex items-center justify-between gap-4 rounded-xl border p-4"><div><Label htmlFor="meta-enabled">Meta-Tracking aktiv</Label><p className="mt-1 text-xs leading-5 text-muted-foreground">Lädt den Browser-Pixel automatisch und meldet Conversions gemäß dem gewählten Zeitpunkt. Serverseitige CAPI (Lead und Gut/Schlecht) geht über die Meta-Verbindung im Adbot-Portal — ohne Events-Manager-Token.</p></div><Switch id="meta-enabled" checked={draft.metaTracking.enabled} onCheckedChange={enabled => setDraft({ ...draft, metaTracking: { ...draft.metaTracking, enabled } })} /></div>
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2"><Label htmlFor="meta-pixel-id">Meta Pixel-ID</Label><Input id="meta-pixel-id" inputMode="numeric" placeholder="123456789012345" value={draft.metaTracking.pixelId} onChange={event => setDraft({ ...draft, metaTracking: { ...draft.metaTracking, pixelId: event.target.value.replace(/\D/g, "").slice(0, 25) } })} /><p className="text-xs text-muted-foreground">Nur Ziffern; gilt für Browser-Pixel und Conversions API. Wird automatisch aus dem Adbot-Portal übernommen, wenn das Feld leer ist.</p></div>
             <div className="space-y-2"><Label htmlFor="meta-event-name">Conversion-Event</Label><Input id="meta-event-name" value={draft.metaTracking.eventName} onChange={event => setDraft({ ...draft, metaTracking: { ...draft.metaTracking, eventName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") } })} /><p className="text-xs text-muted-foreground">Empfohlenes Standardereignis für Bewerbungen: <code>Lead</code>.</p></div>
@@ -228,11 +221,23 @@ export default function Settings() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-start gap-3"><KeyRound className="mt-0.5 size-5 shrink-0 text-[#0165c3]" aria-hidden="true" /><div><h3 className="text-sm font-bold">Conversions API – serverseitig</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Für Lead-Kampagnen mit Meta-Optimierung empfohlen. Ohne Token arbeitet der Funnel im Browser-only-Modus (Adblocker können Events schlucken). Mit Token wird dieselbe Conversion zusätzlich serverseitig mit gemeinsamer Event-ID gemeldet; kurze Netzfehler werden begrenzt wiederholt. DOI-Trigger sendet beim Absenden noch kein Event.</p></div></div>
+            <div className="flex items-start gap-3"><KeyRound className="mt-0.5 size-5 shrink-0 text-[#0165c3]" aria-hidden="true" /><div><h3 className="text-sm font-bold">Conversions API – über die Meta-Verbindung</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Der Kundenweg: Pixel unter Adbot → Tracking aus dem verbundenen Werbekonto wählen und CAPI prüfen. Adbot sendet Lead und Gut/Schlecht dann mit dem Connection-Token — das Events-Manager-Token ist nicht der Kundenweg und wird für Portal-Konten nicht verwendet. DOI-Trigger sendet beim Absenden noch kein Event.</p></div></div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2"><Label htmlFor="meta-access-token">Zugangstoken</Label><Input id="meta-access-token" type="password" autoComplete="new-password" placeholder={query.data.metaServerSettings.hasAccessToken && !clearMetaAccessToken ? "Verschlüsseltes Token gespeichert – nur zum Ersetzen neu einfügen" : "Meta Conversions API Access Token"} value={metaAccessToken} onChange={event => { setMetaAccessToken(event.target.value); setClearMetaAccessToken(false); }} /><p className="text-xs text-muted-foreground">Das Token wird AES-256-GCM-verschlüsselt gespeichert, nie an Besucher ausgeliefert und hier nicht wieder angezeigt.</p></div>
               <div className="space-y-2"><Label htmlFor="meta-test-code">Test-Event-Code <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="meta-test-code" placeholder="TEST12345" value={metaTestEventCode} onChange={event => setMetaTestEventCode(event.target.value.slice(0, 160))} /><p className="text-xs text-muted-foreground">Nur für „Test Events“ im Meta Events Manager; vor Produktivbetrieb leeren.</p></div>
-              <div className="flex items-end"><Button type="button" variant={clearMetaAccessToken ? "destructive" : "outline"} disabled={!query.data.metaServerSettings.hasAccessToken && !metaAccessToken} onClick={() => { setMetaAccessToken(""); setClearMetaAccessToken(current => !current); }}>{clearMetaAccessToken ? "Entfernen vorgemerkt" : "Gespeichertes Token entfernen"}</Button></div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-bold">Lead-Qualität und Werte</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">Antwortoptionen können im Editor einen Euro-Wert bekommen. Dieser Wert geht automatisch mit der Bewerbung als Lead an Meta. Zusätzlich kannst du einzelne Bewerbungen unter Bewerbungen mit Gut oder Schlecht bewerten — das sendet ein zweites Ereignis (`Subscribe` bzw. `DisqualifiedLead`) über die Meta-Verbindung im Portal.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="meta-quality-good">Wert für gute Leads (€)</Label>
+                <Input id="meta-quality-good" inputMode="decimal" placeholder="100" value={draft.metaTracking.qualityGoodValue ?? ""} onChange={event => { const raw = event.target.value.trim().replace(",", "."); const next = raw === "" ? undefined : Number(raw); setDraft({ ...draft, metaTracking: { ...draft.metaTracking, qualityGoodValue: next !== undefined && Number.isFinite(next) && next >= 0 && next <= 10000 ? Math.round(next * 100) / 100 : undefined } }); }} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="meta-quality-bad">Wert für schlechte Leads (€)</Label>
+                <Input id="meta-quality-bad" inputMode="decimal" placeholder="0" value={draft.metaTracking.qualityBadValue ?? ""} onChange={event => { const raw = event.target.value.trim().replace(",", "."); const next = raw === "" ? undefined : Number(raw); setDraft({ ...draft, metaTracking: { ...draft.metaTracking, qualityBadValue: next !== undefined && Number.isFinite(next) && next >= 0 && next <= 10000 ? Math.round(next * 100) / 100 : undefined } }); }} />
+              </div>
             </div>
           </div>
           <div className="flex justify-end"><Button className="bg-[#0165c3] hover:bg-[#0154a3]" disabled={save.isPending || saveMetaServer.isPending || (!dirty && !metaServerDirty)} aria-busy={save.isPending || saveMetaServer.isPending} onClick={persistSettings}>{save.isPending || saveMetaServer.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}{save.isPending || saveMetaServer.isPending ? "Wird gespeichert …" : "Tracking-Einstellungen speichern"}</Button></div>

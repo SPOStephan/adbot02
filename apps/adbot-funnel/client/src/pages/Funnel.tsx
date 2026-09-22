@@ -109,8 +109,15 @@ function FunnelView({
       sourceUrl: window.location.href,
       utm,
       resume: resume ? { fileName: resume.file.name, mimeType: resume.file.type as "application/pdf", size: resume.file.size, dataBase64: resume.dataBase64 } : undefined,
-    }, { onSuccess: () => {
-      if (metaEventId) trackMetaConversion(config.metaTracking.pixelId, config.metaTracking.eventName, metaEventId);
+    }, { onSuccess: result => {
+      if (metaEventId) {
+        trackMetaConversion(
+          config.metaTracking.pixelId,
+          config.metaTracking.eventName,
+          metaEventId,
+          result.leadValue !== undefined ? { value: result.leadValue, currency: "EUR" } : undefined,
+        );
+      }
       pendingMetaEventId.current = undefined;
       applyPostSubmitAction(config.postSubmit, () => setSubmitted(true));
     }, onError: error => setValidationError(error.message) });

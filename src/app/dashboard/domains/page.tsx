@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { CustomDomainBinding } from "@/components/CustomDomainBinding";
+import { LiveSetupChecklist } from "@/components/LiveSetupGuide";
 import {
   DashboardContentSkeleton,
   DashboardPageHeader,
@@ -41,6 +42,7 @@ async function DomainsBody() {
 
   return (
     <div className="mt-8 space-y-6">
+      <LiveSetupChecklist currentId="domain" />
       {loadError ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
           {loadError}

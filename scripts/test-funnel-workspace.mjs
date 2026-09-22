@@ -45,6 +45,7 @@ assert.match(card, /Meta Pixel global unter Tracking/);
 assert.match(card, /Custom Domain global unter Domains/);
 assert.match(card, /\/dashboard\/tracking/);
 assert.match(card, /\/dashboard\/domains/);
+assert.match(card, /\/dashboard\/hilfe/);
 
 assert.match(migration, /owner_user_id uuid/);
 assert.match(migration, /owner_email text/);
@@ -58,7 +59,13 @@ assert.match(settings, /conversionTrigger: "doi"/);
 assert.match(settings, /automatisch aus dem Adbot-Portal/);
 assert.match(settings, /DNS prüfen/);
 assert.match(settings, /Custom Domain URL/);
+assert.match(settings, /Lead-Qualität und Werte/);
 assert.match(metaConversions, /awaiting_doi/);
+assert.match(metaConversions, /sendMetaLeadQualityEvent/);
+assert.match(
+  readFileSync(join(root, "apps/adbot-funnel/shared/leadValue.ts"), "utf8"),
+  /DisqualifiedLead/,
+);
 
 const portalMetaSync = readFileSync(
   join(root, "apps/adbot-funnel/server/_core/portalMetaSyncRoute.ts"),

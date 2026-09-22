@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { HelpCircle, Settings } from "lucide-react";
 
 import { CreditsSidebarBalance } from "@/components/CreditsSidebarBalance";
@@ -37,10 +38,13 @@ export async function DashboardAsideChrome() {
           planName={creditBalance?.planName ?? null}
           periodEnd={creditBalance?.periodEnd ?? null}
         />
-        <span className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-500">
+        <Link
+          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
+          href="/dashboard/hilfe"
+        >
           <HelpCircle className="size-5" />
           Hilfe
-        </span>
+        </Link>
         <span className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-500">
           <Settings className="size-5" />
           Einstellungen

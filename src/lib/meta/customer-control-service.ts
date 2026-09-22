@@ -45,6 +45,14 @@ import {
 import { ensureLaunchMarketingReady } from "@/lib/meta/launch-marketing-ensure";
 import { pushSoftMetaPixelToFunnel } from "@/lib/funnel-meta-sync";
 import { pushSoftMetaPixelToFreebie } from "@/lib/freebie-meta-sync";
+import {
+  isConnectionCapiLoadError,
+  listConnectionAdAccountPixels,
+  listPixelsEmptyMessage,
+  loadConnectionCapiCredentials,
+  probeConnectionCapi,
+} from "@/lib/meta/connection-capi";
+import type { ConnectionPixel } from "@/lib/meta/conversions-api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -757,17 +765,105 @@ export async function applyCustomerDomainCommand(
   return { domainId: data, status: "VERIFIED" };
 }
 
+export type PixelCommandResult =
+  | {
+      action: "list";
+      adAccountId: string;
+      pixels: ConnectionPixel[];
+      message?: string;
+    }
+  | {
+      action: "probe";
+      pixelId: string;
+      capiViaConnection: boolean;
+      capiProbeStatus: "ok" | "denied" | "error";
+      message: string;
+      eventsReceived?: number;
+    }
+  | {
+      action: "confirm";
+      pixelRowId: string;
+      status: "CONFIRMED";
+      pixelId: string;
+      customEventType: string;
+      capiViaConnection: boolean;
+      capiProbeStatus: "ok";
+      message: string;
+    }
+  | {
+      action: "revoke";
+      pixelRowId: string;
+      status: "REVOKED";
+    };
+
+async function requireConnectionCapiCredentials(customer: MetaCustomer) {
+  const credentials = await loadConnectionCapiCredentials({
+    userId: customer.userId,
+    platformAccountId: customer.platformAccountId,
+  });
+  if (isConnectionCapiLoadError(credentials)) {
+    serviceError(credentials.error, 409, credentials.message);
+  }
+  return credentials;
+}
+
 export async function applyCustomerPixelCommand(
   customer: MetaCustomer,
   command: PixelCommand,
-): Promise<{
-  pixelRowId: string;
-  status: "CONFIRMED" | "REVOKED";
-  pixelId?: string;
-  customEventType?: string;
-}> {
+): Promise<PixelCommandResult> {
   const admin = createAdminClient();
+
+  if (command.action === "list") {
+    const credentials = await requireConnectionCapiCredentials(customer);
+    const listed = await listConnectionAdAccountPixels(credentials);
+    if (!listed.ok) {
+      serviceError(
+        listed.status === "denied" ? "capi_pixels_denied" : "capi_pixels_error",
+        409,
+        listed.message,
+      );
+    }
+    return {
+      action: "list",
+      adAccountId: listed.adAccountId,
+      pixels: listed.pixels,
+      message:
+        listed.pixels.length === 0 ? listPixelsEmptyMessage() : undefined,
+    };
+  }
+
+  if (command.action === "probe") {
+    const credentials = await requireConnectionCapiCredentials(customer);
+    const probed = await probeConnectionCapi({
+      credentials,
+      pixelId: command.pixelId,
+      testEventCode: command.testEventCode || undefined,
+    });
+    return {
+      action: "probe",
+      pixelId: probed.pixelId,
+      capiViaConnection: probed.status === "ok",
+      capiProbeStatus: probed.status,
+      message: probed.message,
+      eventsReceived: probed.eventsReceived,
+    };
+  }
+
   if (command.action === "confirm") {
+    const credentials = await requireConnectionCapiCredentials(customer);
+    const probed = await probeConnectionCapi({
+      credentials,
+      pixelId: command.pixelId,
+      testEventCode: command.testEventCode || undefined,
+    });
+    if (probed.status !== "ok") {
+      serviceError(
+        probed.status === "denied" ? "capi_via_connection_denied" : "capi_via_connection_error",
+        409,
+        probed.message,
+      );
+    }
+
     const { data, error } = await admin.rpc("confirm_meta_pixel", {
       p_user_id: customer.userId,
       p_platform_account_id: customer.platformAccountId,
@@ -777,6 +873,22 @@ export async function applyCustomerPixelCommand(
     });
     if (error || typeof data !== "string") {
       rpcFailure("Die Pixel-Bestätigung");
+    }
+
+    const { error: capiUpdateError } = await admin
+      .from("meta_confirmed_pixels")
+      .update({
+        capi_via_connection: true,
+        capi_probe_status: "ok",
+        capi_probe_at: new Date().toISOString(),
+        capi_probe_code: null,
+        capi_probe_detail: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data)
+      .eq("user_id", customer.userId);
+    if (capiUpdateError) {
+      console.warn("[pixel-capi] Konnte CAPI-Status nicht speichern", capiUpdateError);
     }
 
     // Soft-apply into Funnel/Freebie workspaces (never fail the Adbot confirm).
@@ -794,10 +906,14 @@ export async function applyCustomerPixelCommand(
     ]);
 
     return {
+      action: "confirm",
       pixelRowId: data,
       status: "CONFIRMED",
       pixelId: command.pixelId,
       customEventType: command.customEventType,
+      capiViaConnection: true,
+      capiProbeStatus: "ok",
+      message: probed.message,
     };
   }
 
@@ -809,7 +925,7 @@ export async function applyCustomerPixelCommand(
   if (error || typeof data !== "string") {
     rpcFailure("Das Zurückziehen der Pixel-Bindung");
   }
-  return { pixelRowId: data, status: "REVOKED" };
+  return { action: "revoke", pixelRowId: data, status: "REVOKED" };
 }
 
 /**
