@@ -7,6 +7,7 @@ import { getChatGPTAdLibraryCrawlStatus } from "@/lib/chatgpt-ad-library/crawl-s
 import { CHATGPT_AD_LIBRARY_PAGE_SIZE } from "@/lib/chatgpt-ad-library/import-constants";
 import { loadChatGPTAdLibraryPage } from "@/lib/chatgpt-ad-library/retrieval";
 import { loadAdIntelligenceCorpusSummary } from "@/lib/ad-intelligence/corpus";
+import { loadInspirationMemorySnapshot } from "@/lib/ad-learning/retrieve";
 import { EMPTY_COLLECTOR_COUNTS } from "@/lib/ad-library-collector/types";
 import { loadCollectorInbox } from "@/lib/ad-library-collector/service";
 import { loadAdExamplesPage } from "@/lib/ad-examples/service";
@@ -46,7 +47,7 @@ export default async function AdExampleLibraryPage() {
     redirect("/dashboard");
   }
 
-  const [examples, corpus, crawlResult, vaultPage, collectorInbox] = await Promise.all([
+  const [examples, corpus, crawlResult, vaultPage, collectorInbox, memory] = await Promise.all([
     withTimeout(loadAdExamplesPage({ page: 1 }), 12_000, {
       examples: [],
       total: 0,
@@ -86,6 +87,11 @@ export default async function AdExampleLibraryPage() {
         migrationNeeded: true,
       },
     ),
+    withTimeout(
+      loadInspirationMemorySnapshot({ limit: 1 }).then((snapshot) => snapshot.census),
+      12_000,
+      null,
+    ),
   ]);
   const importedCount = crawlResult.status?.vaultCount ?? vaultPage.total;
 
@@ -100,11 +106,12 @@ export default async function AdExampleLibraryPage() {
         </h1>
         <p className="mt-2 max-w-3xl text-slate-500">
           Reale Anzeigen strukturiert nach Branche, Werbeziel, Funnel-Stufe,
-          Plattform und Evidenz erfassen. Die Bibliothek ist intern, für Kunden
-          unsichtbar und technisch von Kampagnen-Uploads getrennt. Copy- und
-          Creative-Vorschläge ziehen passende Muster plus First-Party-Winner
-          aus diesem Korpus — ohne fremde Anzeigen zu kopieren oder deren
-          Sichtbarkeit als Erfolg zu werten.
+          Plattform und Evidenz erfassen — für jede Branche, Hotel und SaaS
+          sind nur Beispiele. Die Bibliothek ist intern, für Kunden unsichtbar
+          und technisch von Kampagnen-Uploads getrennt. Copy- und
+          Creative-Vorschläge scannen den ganzen Vault und ziehen passende
+          Muster plus First-Party-Winner — ohne fremde Anzeigen zu kopieren
+          oder deren Sichtbarkeit als Erfolg zu werten.
         </p>
       </div>
 
@@ -133,7 +140,10 @@ export default async function AdExampleLibraryPage() {
       ) : null}
 
       <div className="mt-8 space-y-8">
-        <AdLibraryCollectorSandbox initialInbox={collectorInbox} />
+        <AdLibraryCollectorSandbox
+          initialInbox={collectorInbox}
+          initialCensus={memory}
+        />
         <ChatGPTAdLibraryImportPanel
           initialCrawl={crawlResult.status}
           initialCrawlError={crawlResult.error}
