@@ -102,6 +102,7 @@ Ein eingefrorener Vault-Zähler (z. B. 2458) ist **kein Code-Limit**. Häufige
 - Importierte IDs werden über den `external_id`-Index geprüft, nicht über einen 1000-Zeilen-Scan. Discover hängt keine schon importierten IDs wieder vor die Queue.
 - Der Inspiration-Vault registriert Dateien per SHA-256. Viele ChatGPT-Ads teilen ein Creative — ohne Suffix würde `register_inspiration_vault_asset` die alte Zeile zurückgeben, der Sofortlauf „39 neu“ sagen und **Im Vault** stehen bleiben. Der Import legt in dem Fall eine eigene Zeile an.
 - Vault bleibt stehen, Queue 0, letzter Plan = Katalog (`18, 21, 22, …`): nicht Stau/Lease klicken. Discover lief nur über die 2h-GitHub-Action; der Minuten-Cron hat den schon importierten Katalog wiederholt. Jetzt holt ein leerer Drain zuerst den nächsten Sitemap-Shard und plant danach die Sequenz-Probe.
+- Discover darf fehlende IDs nicht einzeln gegen den Vault prüfen — ein Sitemap-Shard hat Tausende neue IDs, das hängt die Cron-Funktion und damit `/dashboard/inspiration`. Es gilt der gebündelte `external_id`-Lookup, plus 10-Minuten-Pause zwischen Discovers.
 
 ## KI-Nutzung
 

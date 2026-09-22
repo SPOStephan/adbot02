@@ -3,7 +3,7 @@ import "server-only";
 import {
   claimChatGPTAdLibraryScrapeLease,
   enqueueChatGPTAdLibraryIds,
-  getChatGPTAdLibraryCrawlStatus,
+  peekChatGPTAdLibraryCrawl,
   markChatGPTAdLibraryDiscoverDone,
   markChatGPTAdLibraryIdsSkipped,
   planChatGPTAdLibraryScrapeBatch,
@@ -29,6 +29,7 @@ import {
   loadChatGPTAdLibraryForInternalIntelligence,
 } from "@/lib/chatgpt-ad-library/retrieval";
 import {
+  CHATGPT_AD_LIBRARY_DISCOVER_COOLDOWN_MS,
   CHATGPT_AD_LIBRARY_DISCOVER_DEFER_PENDING,
   CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
   CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT,
@@ -337,15 +338,15 @@ export async function scrapeChatGPTAdLibraryUnlockDiscover(): Promise<{
     };
   }
 
-  const status = await getChatGPTAdLibraryCrawlStatus();
-  const shard = status.nextDiscoverShard % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
-  if (status.pendingCount >= CHATGPT_AD_LIBRARY_DISCOVER_DEFER_PENDING) {
+  const peek = await peekChatGPTAdLibraryCrawl();
+  const shard = peek.nextDiscoverShard % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
+  if (peek.pendingCount >= CHATGPT_AD_LIBRARY_DISCOVER_DEFER_PENDING) {
     return {
       mode: "unlock_discover",
       configured: true,
       shard,
       added: 0,
-      pendingCount: status.pendingCount,
+      pendingCount: peek.pendingCount,
       ids: [],
       blocked: false,
     };
@@ -553,8 +554,14 @@ export async function scrapeChatGPTAdLibraryUnlockDrain(input?: {
     20,
   );
   if (isChatGPTAdLibraryUnlockerConfigured()) {
-    const before = await getChatGPTAdLibraryCrawlStatus().catch(() => null);
-    if (before && before.pendingCount < 1) {
+    const before = await peekChatGPTAdLibraryCrawl().catch(() => null);
+    const lastDiscoverMs = before?.lastDiscoverAt
+      ? Date.parse(before.lastDiscoverAt)
+      : Number.NaN;
+    const discoverCool =
+      Number.isFinite(lastDiscoverMs) &&
+      Date.now() - lastDiscoverMs < CHATGPT_AD_LIBRARY_DISCOVER_COOLDOWN_MS;
+    if (before && before.pendingCount < 1 && !discoverCool) {
       await scrapeChatGPTAdLibraryUnlockDiscover().catch(() => undefined);
     }
   }
