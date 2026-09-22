@@ -156,7 +156,7 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
           aria-hidden
           className="size-8 rounded-lg"
           height={32}
-          src="/kiready-favicon.png"
+          src="/kiready-favicon-v2.png"
           width={32}
         />
         Mit KIready anmelden
