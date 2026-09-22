@@ -13,13 +13,16 @@ import {
   scrapeChatGPTAdLibraryUnlockDiscover,
   scrapeChatGPTAdLibraryUnlockDrain,
 } from "@/lib/chatgpt-ad-library/scrape";
-import { CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX } from "@/lib/chatgpt-ad-library/scrape-constants";
+import {
+  CHATGPT_AD_LIBRARY_SCRAPE_BATCH_MAX,
+  CHATGPT_AD_LIBRARY_UNLOCK_ACTION_BUDGET_MS,
+} from "@/lib/chatgpt-ad-library/scrape-constants";
 import { ChatGPTAdLibraryImportError } from "@/lib/chatgpt-ad-library/import";
 import { constantTimeEqual } from "@/lib/meta/crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 800;
+export const maxDuration = 120;
 
 const NO_STORE = {
   "Cache-Control": "private, no-store, max-age=0",
@@ -79,7 +82,9 @@ export async function GET(request: Request) {
     }
 
     if (mode === "unlock") {
-      const result = await scrapeChatGPTAdLibraryUnlockDrain();
+      const result = await scrapeChatGPTAdLibraryUnlockDrain({
+        budgetMs: CHATGPT_AD_LIBRARY_UNLOCK_ACTION_BUDGET_MS,
+      });
       return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
     }
 

@@ -117,9 +117,13 @@ jobs:
             fi
             return 0
           }
+          # Short calls only. The cron route now kills itself at 120s —
+          # a 180s curl used to leave an 800s drain running after timeout.
           call unlock_discover 90 || true
-          call unlock 180 || true
-          call unlock 180 || true
+          call unlock 100 || true
+          call unlock 100 || true
+          call unlock 100 || true
+          call unlock 100 || true
 
       - name: Install Playwright
         if: steps.unlocker.outputs.configured != 'true'
