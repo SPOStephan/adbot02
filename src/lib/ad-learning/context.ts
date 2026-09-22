@@ -2,6 +2,8 @@ import {
   EMPTY_AD_LEARNING_CONTEXT,
   type AdLearningContext,
   type CustomerCreativeSignal,
+  type InspirationCorpusBucket,
+  type InspirationCorpusCensus,
   type InspirationPattern,
   type TrainingGroundSignal,
 } from "./types";
@@ -36,6 +38,122 @@ export function isInspirationLearningEligible(input: {
       input.whyItWorks ||
       input.triggeringPrompts.length > 0,
   );
+}
+
+export function inspirationRowHasImage(input: {
+  storagePath?: string | null;
+  mimeType?: string | null;
+  metadata?: unknown;
+}): boolean {
+  if (text(input.storagePath)) return true;
+  if (text(input.mimeType).startsWith("image/")) return true;
+  const metadata =
+    input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
+      ? (input.metadata as Record<string, unknown>)
+      : {};
+  const example =
+    metadata.ad_example &&
+    typeof metadata.ad_example === "object" &&
+    !Array.isArray(metadata.ad_example)
+      ? (metadata.ad_example as Record<string, unknown>)
+      : {};
+  const external =
+    metadata.external_source &&
+    typeof metadata.external_source === "object" &&
+    !Array.isArray(metadata.external_source)
+      ? (metadata.external_source as Record<string, unknown>)
+      : {};
+  return Boolean(
+    text(example.image_url) ||
+      text(external.image_url) ||
+      text(example.preview_url) ||
+      text(external.source_image_url),
+  );
+}
+
+function bumpCorpusBucket(
+  map: Map<string, InspirationCorpusBucket>,
+  name: string,
+  input: { withText: boolean; hasImage: boolean },
+) {
+  const key = name.trim() || "(ohne Zuordnung)";
+  const current = map.get(key) ?? {
+    name: key,
+    total: 0,
+    withText: 0,
+    imageAndText: 0,
+  };
+  current.total += 1;
+  if (input.withText) current.withText += 1;
+  if (input.withText && input.hasImage) current.imageAndText += 1;
+  map.set(key, current);
+}
+
+function sortCorpusBuckets(
+  map: Map<string, InspirationCorpusBucket>,
+): InspirationCorpusBucket[] {
+  return [...map.values()].sort((a, b) => {
+    if (b.imageAndText !== a.imageAndText) return b.imageAndText - a.imageAndText;
+    if (b.withText !== a.withText) return b.withText - a.withText;
+    return b.total - a.total;
+  });
+}
+
+export function summarizeInspirationCorpus(
+  rows: Array<{
+    pattern: InspirationPattern | null;
+    hasImage: boolean;
+    industry?: string;
+    platform?: string;
+    objective?: string;
+  }>,
+): InspirationCorpusCensus {
+  const industries = new Map<string, InspirationCorpusBucket>();
+  const platforms = new Map<string, InspirationCorpusBucket>();
+  const objectives = new Map<string, InspirationCorpusBucket>();
+  let learningEligible = 0;
+  let imageAndText = 0;
+  let textOnly = 0;
+  let imageOnly = 0;
+  let neither = 0;
+
+  for (const row of rows) {
+    const withText = Boolean(row.pattern);
+    if (withText) learningEligible += 1;
+    if (withText && row.hasImage) imageAndText += 1;
+    else if (withText) textOnly += 1;
+    else if (row.hasImage) imageOnly += 1;
+    else neither += 1;
+
+    const flags = { withText, hasImage: row.hasImage };
+    bumpCorpusBucket(
+      industries,
+      row.pattern?.industry || row.industry || "",
+      flags,
+    );
+    bumpCorpusBucket(
+      platforms,
+      row.pattern?.platform || row.platform || "",
+      flags,
+    );
+    bumpCorpusBucket(
+      objectives,
+      row.pattern?.objective || row.objective || "",
+      flags,
+    );
+  }
+
+  return {
+    scanned: rows.length,
+    learningEligible,
+    imageAndText,
+    textOnly,
+    imageOnly,
+    neither,
+    industries: sortCorpusBuckets(industries),
+    platforms: sortCorpusBuckets(platforms),
+    objectives: sortCorpusBuckets(objectives),
+  };
 }
 
 export function scoreInspirationMatch(

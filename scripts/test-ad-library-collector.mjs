@@ -151,6 +151,43 @@ assert.equal(preview.sandboxMatches.length, 1);
 assert.equal(preview.sandboxMatches[0].wouldEnterLiveMemory, true);
 assert.match(preview.livePromptBlock, /Live-Hook/);
 assert.match(preview.mergedPromptIfImported, /Zimmerpreis ohne Buchungsgebühr/);
+assert.equal(preview.census.scanned, 0);
+
+const censusPreview = buildCollectorMemoryPreview({
+  platform: "",
+  objective: "",
+  industry: "",
+  livePatterns: [
+    {
+      brandAssetId: "clinic-1",
+      platform: "openai_ads",
+      objective: "leads",
+      industry: "Zahnklinik",
+      hookText: "Termin diese Woche",
+      bodyText: "Erstberatung ohne Überweisung.",
+      whyItWorks: "",
+      evidenceLevel: "public_transparency",
+      triggeringPrompts: [],
+      qualityRating: 3,
+    },
+  ],
+  stagedItems: [],
+  census: {
+    scanned: 6075,
+    learningEligible: 4200,
+    imageAndText: 3100,
+    textOnly: 1100,
+    imageOnly: 1800,
+    neither: 75,
+    industries: [{ name: "Zahnklinik", total: 40, withText: 30, imageAndText: 22 }],
+    platforms: [{ name: "openai_ads", total: 6075, withText: 4200, imageAndText: 3100 }],
+    objectives: [{ name: "leads", total: 900, withText: 700, imageAndText: 500 }],
+  },
+});
+assert.equal(censusPreview.query.industry, "");
+assert.equal(censusPreview.liveMatches[0].industry, "Zahnklinik");
+assert.equal(censusPreview.census.imageAndText, 3100);
+assert.equal(censusPreview.census.scanned, 6075);
 
 const migration = read("supabase/migrations/20260916120000_ad_library_collector_items.sql");
 assert.match(migration, /create table if not exists public.ad_library_collector_items/);
@@ -177,13 +214,24 @@ assert.match(service, /uploadInspirationVaultImage/);
 
 const retrieve = read("src/lib/ad-learning/retrieve.ts");
 assert.match(retrieve, /loadInspirationLearningPreview/);
+assert.match(retrieve, /loadInspirationMemorySnapshot/);
+assert.match(retrieve, /INSPIRATION_LIBRARY_SCAN_PAGE_SIZE/);
+assert.doesNotMatch(retrieve, /\.limit\(500\)/);
 
 const page = read("src/app/dashboard/inspiration/page.tsx");
 assert.match(page, /AdLibraryCollectorSandbox/);
+assert.match(page, /loadInspirationMemorySnapshot/);
+assert.match(page, /initialCensus/);
+assert.match(page, /für jede Branche/);
 
 const client = read("src/components/AdLibraryCollectorSandbox.tsx");
 assert.match(client, /Korpus-Sandbox/);
 assert.match(client, /Gedächtnis-Probe/);
 assert.match(client, /ad_library_collector_items/);
+assert.match(client, /Bild \+ Text/);
+assert.match(client, /leer = alle Branchen/);
+assert.match(client, /für jede Branche/);
+assert.match(client, /CensusMetric/);
+assert.match(client, /Tausende echte ChatGPT Ads/);
 
 console.log("test-ad-library-collector: ok");

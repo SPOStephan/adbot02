@@ -29,6 +29,25 @@ export type InspirationPattern = {
   qualityRating: number;
 };
 
+export type InspirationCorpusBucket = {
+  name: string;
+  total: number;
+  withText: number;
+  imageAndText: number;
+};
+
+export type InspirationCorpusCensus = {
+  scanned: number;
+  learningEligible: number;
+  imageAndText: number;
+  textOnly: number;
+  imageOnly: number;
+  neither: number;
+  industries: InspirationCorpusBucket[];
+  platforms: InspirationCorpusBucket[];
+  objectives: InspirationCorpusBucket[];
+};
+
 export type CustomerCreativeSignal = {
   brandAssetId: string;
   trainingStatus: "marked_good" | "performance_winner";
@@ -57,4 +76,16 @@ export const EMPTY_AD_LEARNING_CONTEXT: AdLearningContext = {
   inspirationPatterns: [],
   customerSignals: [],
   trainingSignals: [],
+};
+
+export const EMPTY_INSPIRATION_CORPUS_CENSUS: InspirationCorpusCensus = {
+  scanned: 0,
+  learningEligible: 0,
+  imageAndText: 0,
+  textOnly: 0,
+  imageOnly: 0,
+  neither: 0,
+  industries: [],
+  platforms: [],
+  objectives: [],
 };
