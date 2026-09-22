@@ -23,6 +23,9 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { Inbox, LayoutGrid, LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { isAllowedFunnelAdminPath } from "@shared/funnelAdminPaths";
+import { isSharedFunnelHost } from "@/lib/funnelHost";
+import { portalFunnelSsoUrl } from "@/lib/portalUrl";
 import { AdminLoginForm } from "./AdminLoginForm";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
@@ -47,17 +50,44 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  const [location] = useLocation();
+  const sharedHost = isSharedFunnelHost();
+  const ssoError =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("sso_error")
+      : null;
+  const nextPath = isAllowedFunnelAdminPath(location)
+    ? location
+    : "/admin/applications";
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    if (loading || user || sharedHost || ssoError) return;
+    window.location.replace(portalFunnelSsoUrl(nextPath));
+  }, [loading, user, sharedHost, ssoError, nextPath]);
 
   if (loading) {
     return <DashboardLayoutSkeleton />
   }
 
   if (!user) {
-    return <AdminLoginForm />;
+    if (!sharedHost && !ssoError) {
+      return (
+        <div className="grid min-h-screen place-items-center px-4 text-sm text-muted-foreground">
+          Weiterleitung zur Adbot-Anmeldung …
+        </div>
+      );
+    }
+    return (
+      <AdminLoginForm
+        mode={sharedHost ? "ops" : "customer"}
+        nextPath={nextPath}
+        ssoError={ssoError}
+      />
+    );
   }
 
   return (

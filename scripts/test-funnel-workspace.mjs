@@ -30,7 +30,8 @@ assert.match(siteUrls, /DEFAULT_FUNNEL_SITE_URL = "https:\/\/funnel\.adbot\.one"
 assert.match(siteUrls, /export const FUNNEL_SITE_URL/);
 assert.match(siteUrls, /export function createFunnelAdminUrl/);
 assert.match(siteUrls, /export function createFunnelSsoEntryPath/);
-assert.match(siteUrls, /return "\/api\/funnel\/sso"/);
+assert.match(siteUrls, /\/api\/funnel\/sso/);
+assert.match(siteUrls, /createFunnelSsoEntryPath\(nextPath/);
 assert.match(envExample, /NEXT_PUBLIC_FUNNEL_URL=https:\/\/funnel\.adbot\.one/);
 assert.match(envExample, /FUNNEL_SSO_SECRET=/);
 
@@ -41,6 +42,8 @@ assert.match(dashboard, /external: true/);
 assert.match(card, /id="funnel"/);
 assert.match(card, /FUNNEL_SITE_URL/);
 assert.match(card, /createFunnelSsoEntryPath/);
+assert.match(card, /adminHostname/);
+assert.match(card, /\/admin\/applications/);
 assert.match(card, /Meta Pixel global unter Tracking/);
 assert.match(card, /Custom Domain global unter Domains/);
 assert.match(card, /\/dashboard\/tracking/);

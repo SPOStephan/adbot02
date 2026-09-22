@@ -85,6 +85,7 @@ test("portal wiring for global domains", () => {
   assert.match(dns, /cnameMatchesExpected/);
   assert.match(freebieCard, /\/dashboard\/domains/);
   assert.match(page, /Funnel \/ Freebie/);
+  assert.match(page, /Bewerbungsübersicht und Verwaltung/);
 
   const bindingMigration = readFileSync(
     join(

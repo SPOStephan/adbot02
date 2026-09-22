@@ -53,7 +53,7 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
     actionLabel: "Zu Domains",
     details: [
       "Unter Domains eine eigene Domain anlegen oder im Funnel hinterlegen. Adbot setzt SSL und Hosting; du trägst nur den CNAME beim Domain-Anbieter ein.",
-      "DNS prüfen, bis der Status READY ist. Root-URL zeigt dann den gebundenen Funnel.",
+      "DNS prüfen, bis der Status READY ist. Root-URL zeigt den gebundenen Funnel. Bewerbungsübersicht und Verwaltung liegen danach auf derselben Domain.",
       "Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden.",
     ],
   },
@@ -88,7 +88,7 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
     title: "Gute und schlechte Leads bewerten",
     summary:
       "Einzelne Bewerbungen mit Gut oder Schlecht bewerten. Zusätzlich können zentrale Antworten automatisch einen höheren oder niedrigeren Wert bekommen.",
-    href: "/api/funnel/sso",
+    href: "/api/funnel/sso?next=/admin/applications",
     external: true,
     actionLabel: "Bewerbungen öffnen",
     details: [
