@@ -46,6 +46,7 @@ import { ensureLaunchMarketingReady } from "@/lib/meta/launch-marketing-ensure";
 import { pushSoftMetaPixelToFunnel } from "@/lib/funnel-meta-sync";
 import { pushSoftMetaPixelToFreebie } from "@/lib/freebie-meta-sync";
 import {
+  isConnectionCapiLoadError,
   listConnectionAdAccountPixels,
   listPixelsEmptyMessage,
   loadConnectionCapiCredentials,
@@ -800,7 +801,7 @@ async function requireConnectionCapiCredentials(customer: MetaCustomer) {
     userId: customer.userId,
     platformAccountId: customer.platformAccountId,
   });
-  if ("ok" in credentials && credentials.ok === false) {
+  if (isConnectionCapiLoadError(credentials)) {
     serviceError(credentials.error, 409, credentials.message);
   }
   return credentials;

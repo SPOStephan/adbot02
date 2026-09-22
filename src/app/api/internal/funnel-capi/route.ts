@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  isConnectionCapiLoadError,
   loadConnectionCapiCredentials,
   sendConnectionCapiEvent,
 } from "@/lib/meta/connection-capi";
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
     userId: payload.sub,
     platformAccountId: account.id,
   });
-  if ("ok" in credentials && credentials.ok === false) {
+  if (isConnectionCapiLoadError(credentials)) {
     return json(
       { ok: false, reason: credentials.error, message: credentials.message },
       409,

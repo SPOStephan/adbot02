@@ -39,6 +39,12 @@ export type ConnectionCapiLoadError = {
   message: string;
 };
 
+export function isConnectionCapiLoadError(
+  value: ConnectionCapiCredentials | ConnectionCapiLoadError,
+): value is ConnectionCapiLoadError {
+  return "ok" in value && value.ok === false;
+}
+
 export type ConnectionCapiProbeResult = {
   pixelId: string;
   status: Exclude<CapiProbeStatus, "untested">;
