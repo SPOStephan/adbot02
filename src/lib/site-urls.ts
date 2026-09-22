@@ -82,8 +82,9 @@ export function createFunnelAdminUrl() {
 }
 
 /** Adbot-SSO-Einstieg (gleicher Origin wie das Portal). Leitet nach Funnel weiter. */
-export function createFunnelSsoEntryPath() {
-  return "/api/funnel/sso";
+export function createFunnelSsoEntryPath(nextPath = "/admin") {
+  if (!nextPath || nextPath === "/admin") return "/api/funnel/sso";
+  return `/api/funnel/sso?next=${encodeURIComponent(nextPath)}`;
 }
 
 export function createFreebieUrl(pathname = "/", search = "") {

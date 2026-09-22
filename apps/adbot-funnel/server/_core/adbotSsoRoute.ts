@@ -6,6 +6,7 @@ import {
   buildAdbotSsoRedirectError,
   verifyAdbotSsoToken,
 } from "./adbotSso";
+import { resolveFunnelAdminNextPath } from "../../shared/funnelAdminPaths";
 import { buildTenantUser, createSessionToken } from "./session";
 
 export function registerAdbotSsoRoute(app: Express) {
@@ -29,7 +30,7 @@ export function registerAdbotSsoRoute(app: Express) {
       return;
     }
 
-    const payload = verifyAdbotSsoToken(token, secret);
+    const payload = verifyAdbotSsoToken(token, secret, Date.now(), req.hostname);
     if (!payload) {
       res.redirect(302, buildAdbotSsoRedirectError("Token ungültig oder abgelaufen"));
       return;
@@ -43,7 +44,8 @@ export function registerAdbotSsoRoute(app: Express) {
         ...cookieOptions,
         maxAge: ONE_YEAR_MS,
       });
-      res.redirect(302, "/admin");
+      const nextPath = resolveFunnelAdminNextPath(req.query.next, "/admin");
+      res.redirect(302, nextPath);
     } catch (error) {
       console.error("[adbot-sso] Session konnte nicht erzeugt werden", error);
       res.redirect(302, buildAdbotSsoRedirectError("Session fehlgeschlagen"));

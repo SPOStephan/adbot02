@@ -5,10 +5,17 @@ import { FUNNEL_SITE_URL, createFunnelSsoEntryPath } from "@/lib/site-urls";
 
 type FunnelWorkspaceCardProps = {
   userEmail?: string | null;
+  adminHostname?: string | null;
 };
 
-export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
-  const ssoUrl = createFunnelSsoEntryPath();
+export function FunnelWorkspaceCard({
+  userEmail,
+  adminHostname = null,
+}: FunnelWorkspaceCardProps) {
+  const ssoUrl = createFunnelSsoEntryPath(
+    adminHostname ? "/admin/applications" : "/admin",
+  );
+  const adminHost = adminHostname || FUNNEL_SITE_URL.replace(/^https?:\/\//, "");
 
   return (
     <section
@@ -33,12 +40,21 @@ export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
             Lead- und Bewerbungsfunnel verwalten
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Der Funnel-Builder läuft unter{" "}
-            <span className="font-semibold text-slate-800">
-              {FUNNEL_SITE_URL.replace(/^https?:\/\//, "")}
-            </span>
-            . Du wirst automatisch mit deinem Adbot-Konto angemeldet und siehst
-            nur deine eigenen Funnel
+            {adminHostname ? (
+              <>
+                Funnel und Bewerbungsübersicht laufen unter{" "}
+                <span className="font-semibold text-slate-800">{adminHost}</span>
+                . Du wirst mit deinem Adbot-Konto angemeldet und landest auf der
+                Inbox dieser Domain
+              </>
+            ) : (
+              <>
+                Solange keine eigene Domain READY und an einen Funnel gebunden
+                ist, öffnet der Admin unter{" "}
+                <span className="font-semibold text-slate-800">{adminHost}</span>
+                . Mit eigener Domain liegen Übersicht und Verwaltung dort
+              </>
+            )}
             {userEmail ? (
               <>
                 {" "}

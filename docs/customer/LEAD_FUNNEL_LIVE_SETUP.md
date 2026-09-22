@@ -22,8 +22,9 @@ Funnel und Freebie übernehmen die ID automatisch, wenn dort noch keine andere s
 
 1. Unter **Domains** eine eigene HTTPS-Domain anlegen oder sie im Funnel hinterlegen.
 2. Nur den CNAME beim Domain-Anbieter setzen. SSL und Hosting legt Adbot an.
-3. DNS prüfen, bis der Status **READY** ist.
+3. DNS prüfen, bis der Status **READY** ist. Root-URL zeigt den Funnel.
 4. Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden.
+5. Ist die Domain an den Funnel gebunden, liegen Bewerbungsübersicht und Verwaltung auf genau dieser Domain (`/admin/applications`). „Funnel öffnen“ im Portal meldet dich dort an.
 
 ## 4. Lead-Canary starten
 

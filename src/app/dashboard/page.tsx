@@ -17,6 +17,8 @@ import {
 
 import { FreebieWorkspaceCard } from "@/components/FreebieWorkspaceCard";
 import { FunnelWorkspaceCard } from "@/components/FunnelWorkspaceCard";
+import { listCustomerCustomDomains } from "@/lib/custom-domains/service";
+import { resolveCustomerFunnelAdminHostname } from "@/lib/funnel-admin-host";
 import {
   DashboardContentSkeleton,
   DashboardPageHeader,
@@ -118,6 +120,14 @@ async function OverviewBodyInner({
     sideEffects: false,
     organicBoostEnsure: false,
   });
+
+  let funnelAdminHostname: string | null = null;
+  try {
+    const domains = await listCustomerCustomDomains(user.id);
+    funnelAdminHostname = resolveCustomerFunnelAdminHostname(domains);
+  } catch {
+    funnelAdminHostname = null;
+  }
 
   after(() => {
     void loadCustomerDashboard(user, query, {
@@ -340,7 +350,10 @@ async function OverviewBodyInner({
       </section>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <FunnelWorkspaceCard userEmail={user.email} />
+        <FunnelWorkspaceCard
+          adminHostname={funnelAdminHostname}
+          userEmail={user.email}
+        />
         <FreebieWorkspaceCard userEmail={user.email} />
       </div>
     </>
