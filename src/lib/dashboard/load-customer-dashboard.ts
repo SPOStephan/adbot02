@@ -55,6 +55,10 @@ import {
 import { planAndDrainOrganicBoostForAccount } from "@/lib/meta/organic-boost-ensure";
 import { refreshMarketingSnapshotForAccount } from "@/lib/meta/launch-marketing-ensure";
 import { getPlatformCatalog } from "@/lib/platforms/catalog";
+import {
+  summarizeConnectedAssetGroups,
+  type PlatformConnectedAssetGroup,
+} from "@/lib/platforms/connected-assets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -196,6 +200,41 @@ function formatInteger(value: number | null) {
   return new Intl.NumberFormat("de-DE", {
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function stripAssetLabelPrefix(label: string): string {
+  return label.replace(/^(Facebook|Instagram|Werbekonto):\s*/u, "").trim();
+}
+
+function connectedAssetGroupsFromMetaViews(
+  views: readonly MetaConnectedAssetView[],
+): PlatformConnectedAssetGroup[] {
+  const groups: Array<{
+    assetType: MetaConnectedAssetView["assetType"];
+    label: string;
+    pluralLabel: string;
+  }> = [
+    { assetType: "ad_account", label: "Werbekonto", pluralLabel: "Werbekonten" },
+    { assetType: "facebook_page", label: "Facebook-Seite", pluralLabel: "Facebook-Seiten" },
+    {
+      assetType: "instagram_account",
+      label: "Instagram-Profil",
+      pluralLabel: "Instagram-Profile",
+    },
+  ];
+  return groups
+    .map((group) => ({
+      label: group.label,
+      pluralLabel: group.pluralLabel,
+      items: views
+        .filter((view) => view.assetType === group.assetType)
+        .map((view) => ({
+          id: view.id,
+          name: stripAssetLabelPrefix(view.label) || view.label,
+          badge: view.selectedForAds ? "Ads" : undefined,
+        })),
+    }))
+    .filter((group) => group.items.length > 0);
 }
 
 function formatPercent(value: number | null) {
@@ -2035,10 +2074,46 @@ async function loadCustomerDashboardImpl(
     spend: toFiniteNumber(row.spend) ?? 0,
   }));
 
+  const openaiConnectedAccounts =
+    connectedAccounts?.filter(
+      (account) => account.platform === "openai_ads" && !account.revoked_at,
+    ) ?? [];
+  const openaiAssetGroups: PlatformConnectedAssetGroup[] =
+    openaiConnectedAccounts.length > 0
+      ? [
+          {
+            label: "Werbekonto",
+            pluralLabel: "Werbekonten",
+            items: openaiConnectedAccounts.map((account) => ({
+              id: account.id,
+              name: account.account_name?.trim() || "ChatGPT Ads",
+            })),
+          },
+        ]
+      : [];
+  const metaAssetGroups = connectedAssetGroupsFromMetaViews(connectedAssetViews);
+  const platformsWithAssets = platforms.map((platform) => {
+    const connectedAssets =
+      platform.id === "meta"
+        ? metaAssetGroups
+        : platform.id === "openai_ads"
+          ? openaiAssetGroups
+          : [];
+    const assetSummary = summarizeConnectedAssetGroups(connectedAssets);
+    return {
+      ...platform,
+      connectedAssets,
+      status:
+        platform.id === "meta" && platform.connected && assetSummary
+          ? `Verbunden · ${assetSummary}`
+          : platform.status,
+    };
+  });
+
   return {
     isAdmin,
     creditBalance,
-    platforms,
+    platforms: platformsWithAssets,
     hasConnectedPlatform,
     platformAccountReadFailed,
     metaAccount: metaAccount ?? null,
