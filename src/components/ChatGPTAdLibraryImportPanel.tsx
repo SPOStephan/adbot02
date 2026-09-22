@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, FlaskConical, LoaderCircle, RefreshCw, Upload } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { InspirationPager } from "@/components/InspirationPager";
 import {
@@ -153,6 +153,8 @@ export function ChatGPTAdLibraryImportPanel({
   const [paging, setPaging] = useState(false);
   const [workerHint, setWorkerHint] = useState<string | null>(null);
   const [probe, setProbe] = useState<UnlockerProbe | null>(null);
+  const pendingRef = useRef(false);
+  pendingRef.current = pending;
 
   const applyHitsPage = useCallback(
     (payload: {
@@ -224,6 +226,39 @@ export function ChatGPTAdLibraryImportPanel({
     },
     [applyHitsPage],
   );
+
+  const refreshCrawlStatus = useCallback(async () => {
+    const crawlRes = await fetch("/api/admin/chatgpt-ad-library/crawl", {
+      credentials: "same-origin",
+    });
+    const crawlPayload = (await crawlRes.json().catch(() => ({}))) as {
+      ok?: boolean;
+      status?: CrawlStatus;
+      workerHint?: string;
+    };
+    if (!crawlRes.ok || !crawlPayload.ok || !crawlPayload.status) return;
+    setCrawl(crawlPayload.status);
+    setWorkerHint(crawlPayload.workerHint ?? null);
+    if (typeof crawlPayload.status.vaultCount === "number") {
+      setImportedCount(crawlPayload.status.vaultCount);
+    }
+  }, []);
+
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible" || pendingRef.current) return;
+      void refreshCrawlStatus();
+    };
+    const timer = window.setInterval(tick, 20_000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [refreshCrawlStatus]);
 
   async function loadHitsPage(nextPage: number) {
     if (paging) return;
@@ -479,7 +514,7 @@ export function ChatGPTAdLibraryImportPanel({
           (payload.unstick?.requeuedSkipped
             ? `, ${payload.unstick.requeuedSkipped} zuvor übersprungene IDs zurückgeholt`
             : "") +
-          ". Danach „Jetzt einen Lauf“ oder den Minuten-Cron abwarten.",
+          ". Danach „Jetzt einen Lauf“ oder den 15-Minuten-Cron / die 2h-Action abwarten.",
       );
       await refreshCrawl();
     } catch (caught) {
@@ -603,16 +638,15 @@ export function ChatGPTAdLibraryImportPanel({
               Automatisch · kleine Mengen
             </p>
             <h2 className="mt-2 text-lg font-extrabold text-emerald-950">
-              Wiederkehrender Scrape (max. {crawl?.scrapeBatchMax ?? 5}/Lauf)
+              Wiederkehrender Scrape (max. {crawl?.scrapeBatchMax ?? CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX}/Runde)
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-950/80">
-              Die Queue hat Vorrang. Unlocker: bis {crawl?.scrapeBatchMax ?? CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX} IDs pro
-              Runde, 12 parallel, Cron jede Minute, ein Lauf füllt das 800-Sekunden-Fenster.
-              „Jetzt einen Lauf“ holt bis {CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS} Runden
-              ({CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS * CHATGPT_AD_LIBRARY_UNLOCK_BATCH_MAX} IDs) in einem Klick.
-              ScrapingBee-Credits sind keine Bremse — Tarif upgraden, wenn sie leer sind.
-              Tote IDs (404/ohne Copy) werden übersprungen, nicht endlos wiederholt.
-              „Neu“ zählt nur neue Vault-Zeilen — gleiches Bild einer anderen ID legt eine eigene Zeile an.
+              Queue und Vault bewegen sich nur nach einem <strong>fertigen Unlock</strong>,
+              nicht beim Klick selbst. Vercel alle 15 Minuten: ein kurzer Unlock (~50s).
+              GitHub Action alle 2 Stunden: Discover plus mehrere Runden.
+              „Jetzt einen Lauf“ startet sofort bis {CHATGPT_AD_LIBRARY_RUN_NOW_ROUNDS} Runden
+              und braucht oft 2–4 Minuten — erst danach sinkt „Queue wartend“.
+              „Stau auflösen“ importiert nichts. Vault steigt nur bei Bild+Text als gültiges JPEG.
             </p>
             {workerHint ? <p className="mt-2 text-xs text-emerald-900/70">{workerHint}</p> : null}
             {crawl?.unlockerConfigured ? (
@@ -708,7 +742,7 @@ export function ChatGPTAdLibraryImportPanel({
           <p className="mt-3 rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-950">
             Queue leer — nicht „Stau auflösen“ und nicht „Leases freigeben“. Der Katalog ist
             schon im Vault, deshalb stagniert die Zahl. Discover holt den nächsten
-            Sitemap-Shard; „Jetzt einen Lauf“ oder den Minuten-Cron abwarten.
+            Sitemap-Shard; „Jetzt einen Lauf“ oder den 15-Minuten-Cron / die 2h-Action abwarten.
           </p>
         ) : null}
         <p className="mt-3 text-xs text-emerald-900/70">
@@ -1176,6 +1210,11 @@ function LastRunBox({
             : ""}
         {` · Vault gesamt ${imported}`}
       </p>
+      {lastImported === 0 && (lastFailed ?? 0) > 0 ? (
+        <p className="mt-2 font-semibold text-amber-950">
+          Unlock hat IDs verarbeitet, aber keine neue Vault-Zeile. Queue kann sinken, Im Vault bleibt.
+        </p>
+      ) : null}
       {failureErrors ? (
         <p className="mt-2 font-mono text-xs leading-5 text-emerald-900/80">{failureErrors}</p>
       ) : null}
