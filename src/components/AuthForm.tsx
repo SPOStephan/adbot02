@@ -1,5 +1,6 @@
 'use client';
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -150,12 +151,14 @@ export function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
         className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
         href={kireadyHref}
       >
-        <span
+        <Image
+          alt=""
           aria-hidden
-          className="grid size-6 place-items-center rounded-md bg-slate-900 text-[11px] font-extrabold text-white"
-        >
-          KI
-        </span>
+          className="size-8 rounded-lg"
+          height={32}
+          src="/kiready-fav.png"
+          width={32}
+        />
         Mit KIready anmelden
       </a>
 
