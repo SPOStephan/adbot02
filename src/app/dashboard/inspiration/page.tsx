@@ -5,10 +5,7 @@ import { AdLibraryCollectorSandbox } from "@/components/AdLibraryCollectorSandbo
 import { ChatGPTAdLibraryImportPanel } from "@/components/ChatGPTAdLibraryImportPanel";
 import { getChatGPTAdLibraryCrawlStatus } from "@/lib/chatgpt-ad-library/crawl-state";
 import { CHATGPT_AD_LIBRARY_PAGE_SIZE } from "@/lib/chatgpt-ad-library/import-constants";
-import {
-  countChatGPTAdLibraryImports,
-  loadChatGPTAdLibraryPage,
-} from "@/lib/chatgpt-ad-library/retrieval";
+import { loadChatGPTAdLibraryPage } from "@/lib/chatgpt-ad-library/retrieval";
 import { loadAdIntelligenceCorpusSummary } from "@/lib/ad-intelligence/corpus";
 import { EMPTY_COLLECTOR_COUNTS } from "@/lib/ad-library-collector/types";
 import { loadCollectorInbox } from "@/lib/ad-library-collector/service";
@@ -19,6 +16,22 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
+}
 
 export default async function AdExampleLibraryPage() {
   const supabase = await createClient();
@@ -33,10 +46,16 @@ export default async function AdExampleLibraryPage() {
     redirect("/dashboard");
   }
 
-  const [examples, corpus, crawlResult, vaultPage, importedCount, collectorInbox] =
-    await Promise.all([
-      loadAdExamplesPage({ page: 1 }),
-      loadAdIntelligenceCorpusSummary(),
+  const [examples, corpus, crawlResult, vaultPage, collectorInbox] = await Promise.all([
+    withTimeout(loadAdExamplesPage({ page: 1 }), 12_000, {
+      examples: [],
+      total: 0,
+      page: 1,
+      pageSize: 24,
+      pageCount: 1,
+    }),
+    withTimeout(loadAdIntelligenceCorpusSummary(), 12_000, null),
+    withTimeout(
       getChatGPTAdLibraryCrawlStatus()
         .then((status) => ({ status, error: null as string | null }))
         .catch((error: unknown) => ({
@@ -44,22 +63,31 @@ export default async function AdExampleLibraryPage() {
           error:
             error instanceof Error ? error.message : "Crawl-Status nicht verfügbar.",
         })),
-      loadChatGPTAdLibraryPage({ limit: CHATGPT_AD_LIBRARY_PAGE_SIZE, offset: 0 }).catch(
-        () => ({
-          hits: [],
-          total: 0,
-          offset: 0,
-          limit: CHATGPT_AD_LIBRARY_PAGE_SIZE,
-        }),
-      ),
-      countChatGPTAdLibraryImports().catch(() => 0),
-      loadCollectorInbox().catch(() => ({
+      12_000,
+      { status: null, error: "Crawl-Status hat zu lange gedauert." },
+    ),
+    withTimeout(
+      loadChatGPTAdLibraryPage({ limit: CHATGPT_AD_LIBRARY_PAGE_SIZE, offset: 0 }),
+      12_000,
+      {
+        hits: [],
+        total: 0,
+        offset: 0,
+        limit: CHATGPT_AD_LIBRARY_PAGE_SIZE,
+      },
+    ),
+    withTimeout(
+      loadCollectorInbox(),
+      12_000,
+      {
         items: [],
         counts: { ...EMPTY_COLLECTOR_COUNTS },
         lastBatchId: null,
         migrationNeeded: true,
-      })),
-    ]);
+      },
+    ),
+  ]);
+  const importedCount = crawlResult.status?.vaultCount ?? vaultPage.total;
 
   return (
     <>

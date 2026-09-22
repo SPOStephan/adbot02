@@ -127,6 +127,19 @@ async function loadRow(): Promise<CrawlRow> {
   return data as CrawlRow;
 }
 
+export async function peekChatGPTAdLibraryCrawl(): Promise<{
+  pendingCount: number;
+  nextDiscoverShard: number;
+  lastDiscoverAt: string | null;
+}> {
+  const row = await loadRow();
+  return {
+    pendingCount: asIdList(row.pending_ids).length,
+    nextDiscoverShard: Number(row.next_discover_shard) || 0,
+    lastDiscoverAt: row.last_discover_at,
+  };
+}
+
 export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibraryCrawlStatus> {
   const row = await loadRow();
   const runSummary = summary(row.last_run_summary);
@@ -143,7 +156,11 @@ export async function getChatGPTAdLibraryCrawlStatus(): Promise<ChatGPTAdLibrary
     pending.length > 20 &&
     lastPlanIds.length > 0 &&
     lastPlanIds.every((id) => catalogSet.has(id));
-  const vaultCount = await countChatGPTAdLibraryImports().catch(() => 0);
+  const cachedVault = Number(runSummary.vault_count);
+  const vaultCount =
+    Number.isFinite(cachedVault) && cachedVault >= 0
+      ? cachedVault
+      : await countChatGPTAdLibraryImports().catch(() => 0);
   const leases = activeLeases(runSummary);
   return {
     enabled: row.enabled === true,
@@ -279,19 +296,6 @@ async function alreadyImportedExternalIds(ids: string[]): Promise<Set<string>> {
       const externalId = externalIdFromMetadata(row.metadata);
       if (externalId) found.add(externalId);
     }
-    const missing = slice.filter((id) => !found.has(id));
-    for (const id of missing) {
-      const one = await admin
-        .from("brand_assets")
-        .select("id")
-        .eq("library_scope", "INSPIRATION")
-        .neq("status", "REVOKED")
-        .filter("metadata->external_source->>provider", "eq", CHATGPT_AD_LIBRARY_PROVIDER)
-        .filter("metadata->external_source->>external_id", "eq", id)
-        .limit(1)
-        .maybeSingle();
-      if (one.data?.id) found.add(id);
-    }
   }
   return found;
 }
@@ -337,14 +341,13 @@ export async function planChatGPTAdLibraryScrapeBatch(input?: {
     ...lookahead,
     ...CHATGPT_AD_LIBRARY_SYSTEM_IDS,
   ]);
-  const vaultCount = await countChatGPTAdLibraryImports().catch(() => 0);
   const pick = selectScrapeBatch({
     pending,
     skipped,
     imported,
     nextProbeId: probeCursor(runSummary),
     limit,
-    skipCatalog: vaultCount > 0,
+    skipCatalog: Number(row.total_imported) > 0,
   });
   const discoverShard = Number(row.next_discover_shard) % CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT;
   const nextSummary = {
@@ -523,6 +526,11 @@ export async function recordChatGPTAdLibraryIngestSummary(input: {
         last_imported: input.imported,
         last_skipped_duplicate: input.skippedDuplicate,
         last_failed: input.failed,
+        ...(() => {
+          const previous = Number(summary(row.last_run_summary).vault_count);
+          if (!Number.isFinite(previous) || previous < 0) return {};
+          return { vault_count: previous + Math.max(0, input.imported) };
+        })(),
       },
       updated_at: new Date().toISOString(),
     })

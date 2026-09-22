@@ -11,6 +11,8 @@ export const CHATGPT_AD_LIBRARY_UNLOCK_LEASE_MAX = 2;
 export const CHATGPT_AD_LIBRARY_UNLOCK_LEASE_TTL_MS = 14 * 60_000;
 /** Skip sitemap discover while the pending queue is already large. */
 export const CHATGPT_AD_LIBRARY_DISCOVER_DEFER_PENDING = 250;
+/** Do not start another sitemap unlock just because the queue drained. */
+export const CHATGPT_AD_LIBRARY_DISCOVER_COOLDOWN_MS = 10 * 60_000;
 export const CHATGPT_AD_LIBRARY_SITEMAP_SHARD_COUNT = 4;
 
 /** Sequential probe ceiling when live HTML discover is checkpointed. */
