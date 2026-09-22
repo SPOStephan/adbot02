@@ -46,7 +46,6 @@ assert.match(crawlState, /skipped_ids/);
 assert.match(crawlState, /queueStarved/);
 assert.match(crawlState, /skipCatalog/);
 assert.match(crawlState, /peekChatGPTAdLibraryCrawl/);
-assert.match(scrape, /pendingCount < 1/);
 assert.match(scrape, /scrapeChatGPTAdLibraryUnlockDiscover/);
 assert.match(scrape, /CHATGPT_AD_LIBRARY_DISCOVER_COOLDOWN_MS/);
 assert.match(scrape, /peekChatGPTAdLibraryCrawl/);
@@ -78,7 +77,7 @@ assert.match(panel, /Leases freigeben/);
 assert.match(panel, /leaseBusy[\s\S]*Stau auflösen/);
 assert.match(panel, /Jetzt einen Lauf/);
 assert.match(panel, /Queue wartend/);
-assert.match(vercel, /chatgpt-ad-library-scrape",\s*"schedule": "\* \* \* \* \*"/);
+assert.match(vercel, /chatgpt-ad-library-scrape",\s*"schedule": "\*\/15 \* \* \* \*"/);
 assert.match(scrape, /bot_checkpoint_429/);
 assert.match(scrape, /skippedPlan/);
 assert.match(scrape, /discoverChatGPTAdLibraryIds/);
@@ -152,9 +151,15 @@ assert.match(adminCrawl, /import_seed/);
 assert.match(adminCrawl, /probe_unlocker/);
 assert.match(adminCrawl, /maxDuration = 300/);
 assert.match(cron, /maxDuration = 800/);
+assert.match(cron, /short batch/);
 assert.match(crawlState, /claimChatGPTAdLibraryScrapeLease/);
 assert.match(scrape, /importUnlockedRecords|IMPORT_BATCH_MAX/);
 assert.match(scrape, /scrapeChatGPTAdLibraryUnlockDrain/);
+assert.match(scrape, /budgetMs: 50_000/);
+assert.doesNotMatch(
+  scrape.slice(scrape.indexOf("scrapeChatGPTAdLibraryHttpBatch")),
+  /return scrapeChatGPTAdLibraryUnlockDrain\(\);/,
+);
 assert.match(scrape, /requireLease/);
 assert.match(scrape, /budgetMs/);
 assert.match(scrape, /mapPool/);
