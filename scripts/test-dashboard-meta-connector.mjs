@@ -46,6 +46,10 @@ const cardSource = await readFile(
   join(projectRoot, "src/components/PlatformStatusCard.tsx"),
   "utf8",
 );
+const connectedAssetsSource = await readFile(
+  join(projectRoot, "src/lib/platforms/connected-assets.ts"),
+  "utf8",
+);
 const syncButtonSource = await readFile(
   join(projectRoot, "src/components/MetaSyncButton.tsx"),
   "utf8",
@@ -400,6 +404,19 @@ assert.match(shellSource, /DashboardShell/);
 assert.match(dashboardLayoutSource, /DashboardShell/);
 assert.match(dashboardSource, /id="plattformen"/);
 assert.match(dashboardSource, /PlatformStatusCard/);
+assert.match(dashboardSource, /connectedAssets/);
+assert.match(cardSource, /Verbundene Assets/);
+assert.match(cardSource, /connectedAssets/);
+assert.match(loaderSource, /connectedAssetGroupsFromMetaViews/);
+assert.match(loaderSource, /summarizeConnectedAssetGroups/);
+assert.match(loaderSource, /platformsWithAssets/);
+assert.match(loaderSource, /Instagram-Profil/);
+assert.match(loaderSource, /Facebook-Seite/);
+assert.match(loaderSource, /Werbekonto/);
+assert.match(connectedAssetsSource, /export function summarizeConnectedAssetGroups/);
+assert.match(connectedAssetsSource, /pluralLabel/);
+assert.match(loaderSource, /planAndDrainOrganicBoostForAccount/);
+assert.match(dashboardSource, /organicBoostEnsure:\s*true/);
 assert.match(beitraegeSource, /MetaContentSyncPanel/);
 assert.match(beitraegeSource, /organicBoostEnsure:\s*false/);
 assert.match(beitraegeSource, /organicBoostEnsure:\s*true/);

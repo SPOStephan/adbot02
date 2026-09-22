@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { MetaConnectionActions } from "@/components/MetaConnectionActions";
+import type { PlatformConnectedAssetGroup } from "@/lib/platforms/connected-assets";
 
 export type PlatformStatusCardProps = {
   name: string;
@@ -23,6 +24,8 @@ export type PlatformStatusCardProps = {
   manageHref?: string;
   manageLabel?: string;
   showMetaConnectionActions?: boolean;
+  connectedAssets?: PlatformConnectedAssetGroup[];
+  className?: string;
 };
 
 export function PlatformStatusCard({
@@ -39,12 +42,19 @@ export function PlatformStatusCard({
   manageHref,
   manageLabel,
   showMetaConnectionActions = false,
+  connectedAssets = [],
+  className,
 }: PlatformStatusCardProps) {
   const canConnect = Boolean(actionHref && actionLabel && !connected);
   const isMetaConnect = actionHref === "/api/connectors/meta/start";
+  const visibleAssetGroups = connectedAssets.filter((group) => group.items.length > 0);
 
   return (
-    <article className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <article
+      className={`group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md${
+        className ? ` ${className}` : ""
+      }`}
+    >
       <div className="flex items-start justify-between gap-4">
         <span className={`grid size-11 place-items-center rounded-xl ${accentClass}`}>
           <Icon className="size-5" />
@@ -74,6 +84,41 @@ export function PlatformStatusCard({
           <LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-blue-600" />
           <p>{helperText}</p>
         </div>
+      ) : null}
+
+      {connected && visibleAssetGroups.length > 0 ? (
+        <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
+            Verbundene Assets
+          </p>
+          {visibleAssetGroups.map((group) => (
+            <div key={group.label}>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                {group.items.length === 1 ? group.label : group.pluralLabel}
+              </p>
+              <ul className="mt-1 space-y-1">
+                {group.items.map((item) => (
+                  <li
+                    className="flex min-w-0 items-center justify-between gap-2 text-sm font-semibold text-slate-800"
+                    key={item.id}
+                  >
+                    <span className="min-w-0 truncate">{item.name}</span>
+                    {item.badge ? (
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+                        {item.badge}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : connected && showMetaConnectionActions ? (
+        <p className="mt-4 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">
+          Noch keine Seiten, Profile oder Werbekonten gelesen. Unter Beiträge prüfen
+          oder Assets erweitern.
+        </p>
       ) : null}
 
       <div className="mt-auto pt-5">

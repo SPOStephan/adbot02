@@ -242,8 +242,17 @@ async function OverviewBodyInner({
           </p>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {platforms.map(({ id, ...platform }) => (
-            <PlatformStatusCard key={id} {...platform} />
+          {platforms.map(({ id, connectedAssets, ...platform }) => (
+            <PlatformStatusCard
+              key={id}
+              className={
+                connectedAssets && connectedAssets.length > 0
+                  ? "sm:col-span-2"
+                  : undefined
+              }
+              connectedAssets={connectedAssets}
+              {...platform}
+            />
           ))}
         </div>
       </section>
