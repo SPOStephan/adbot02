@@ -56,6 +56,8 @@ assert.match(importService, /uniquifyJpegBytes/);
 assert.match(importService, /reusedExisting/);
 assert.match(importService, /vault_sha_collision/);
 assert.match(read("src/lib/chatgpt-ad-library/jpeg-uniquify.ts"), /ADBOTCHATGPT/);
+assert.match(read("src/lib/chatgpt-ad-library/jpeg-uniquify.ts"), /0xfe/);
+assert.match(read("src/lib/chatgpt-ad-library/jpeg-uniquify.ts"), /before.*EOI|COM segment/i);
 assert.match(read("src/lib/media-library/upload.ts"), /reusedExisting/);
 assert.match(retrieval, /use_for_internal_intelligence/);
 assert.match(retrieval, /customerVisible: false/);
