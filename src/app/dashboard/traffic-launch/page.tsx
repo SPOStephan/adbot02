@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { LeadLaunchCanary } from "@/components/LeadLaunchCanary";
+import { LiveSetupChecklist } from "@/components/LiveSetupGuide";
 import {
   TrafficLaunchCanary,
 } from "@/components/TrafficLaunchCanary";
@@ -69,17 +70,21 @@ async function TrafficLaunchBody({
 
   if (!metaConnected || !metaAccount) {
     return (
-      <section className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
-        <p className="font-bold">Meta ist noch nicht verbunden.</p>
-        <p className="mt-1 text-sm leading-6">
-          Verbinde Meta auf der Übersicht, bevor du Launches vorbereitest.
-        </p>
-      </section>
+      <div className="mt-8 space-y-6">
+        <LiveSetupChecklist currentId="canary" />
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
+          <p className="font-bold">Meta ist noch nicht verbunden.</p>
+          <p className="mt-1 text-sm leading-6">
+            Verbinde Meta auf der Übersicht, bevor du Launches vorbereitest.
+          </p>
+        </section>
+      </div>
     );
   }
 
   return (
     <div className="mt-8 space-y-8">
+      <LiveSetupChecklist currentId="canary" />
       <TrafficLaunchCanary
         brandProfileId={brandProfileView?.id ?? null}
         currency={marketingCurrency}

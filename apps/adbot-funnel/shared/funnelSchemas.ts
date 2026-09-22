@@ -10,6 +10,7 @@ const optionSchema = z.object({
   value: z.string().min(1).max(160),
   icon: iconSchema,
   description: z.string().max(500).optional(),
+  leadValue: z.number().min(0).max(10_000).optional(),
 });
 
 const pageBaseSchema = z.object({
@@ -111,6 +112,8 @@ export const funnelConfigSchema = z
       pixelId: z.union([z.literal(""), z.string().regex(/^\d{5,25}$/, "Die Pixel-ID muss aus 5 bis 25 Ziffern bestehen.")]),
       eventName: z.string().trim().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_]*$/, "Der Eventname darf nur Buchstaben, Ziffern und Unterstriche enthalten."),
       conversionTrigger: z.enum(META_CONVERSION_TRIGGERS).default("submit"),
+      qualityGoodValue: z.number().min(0).max(10_000).optional(),
+      qualityBadValue: z.number().min(0).max(10_000).optional(),
     }),
     pages: z.array(funnelPageSchema).min(2).max(40),
   })
@@ -185,3 +188,4 @@ export const applicationSubmissionSchema = z
   });
 
 export const applicationStatusSchema = z.enum(["new", "reviewing", "contacted", "rejected", "hired"]);
+export const leadQualitySchema = z.enum(["good", "bad"]);

@@ -47,6 +47,12 @@ export const DASHBOARD_PAGE_COPY = {
     description:
       "Meta Pixel einmal für Adbot verbinden — Funnel, Freebie und Kampagnen nutzen dieselbe ID.",
   },
+  hilfe: {
+    eyebrow: "Hilfe",
+    title: "Erste Schritte",
+    description:
+      "Einfache Anleitung für Pixel, Funnel-Tracking, Domain, Lead-Canary und Lead-Bewertung.",
+  },
   domains: {
     eyebrow: "Global",
     title: "Domains",

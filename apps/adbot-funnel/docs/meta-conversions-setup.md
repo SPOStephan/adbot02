@@ -29,6 +29,21 @@ Ohne Zugangstoken arbeitet der Funnel ausschließlich mit dem Browser-Pixel. Mit
 
 Die Conversions API übermittelt nur die für die Zuordnung vorgesehenen Daten. E-Mail-Adresse, Telefonnummer und Vorname werden vor dem Versand normalisiert und mit SHA-256 gehasht. Die interne Bewerbungs-ID wird ebenfalls gehasht. IP-Adresse, User-Agent sowie vorhandene Meta-Browserkennungen (`_fbp`/`_fbc`) werden im Serverereignis verwendet. Lebenslauf, Freitextantworten und vollständige Bewerbungsinhalte werden nicht an Meta gesendet.
 
+Haben Antwortoptionen einen Euro-Wert, addiert der Funnel die gewählten Werte und sendet sie mit dem Lead als `custom_data.value` und `currency: EUR`. So kann Meta später auf Wert statt nur auf Lead-Anzahl optimieren.
+
+## Lead-Qualität nach der Bewerbung
+
+Eigentümer und Admins können einzelne Bewerbungen mit **Gut** oder **Schlecht** bewerten. Das ändert keine Kampagne automatisch. Mit hinterlegtem Conversions-API-Token sendet Adbot ein zweites Serverereignis:
+
+| Bewertung | Ereignis | Typischer Wert | Zweck |
+|---|---|---|---|
+| Gut | `Subscribe` | 100 € oder der Antwort-Wert | Qualifizierter Lead; späteres Optimierungsziel |
+| Schlecht | `DisqualifiedLead` | 0 € | Reporting; nicht als Kampagnenziel wählen |
+
+Beide Ereignisse nutzen dieselbe gehashte Bewerbungs-ID (`external_id`) wie der ursprüngliche Lead, aber eine neue Event-ID. Ohne Token bleibt die Bewertung nur in Adbot gespeichert.
+
+Kundenseitige Kurzanleitung: [LEAD_FUNNEL_LIVE_SETUP.md](../../../docs/customer/LEAD_FUNNEL_LIVE_SETUP.md).
+
 ## Test im Meta Events Manager
 
 Erzeugen Sie im Meta Events Manager unter **Test Events** einen Test-Event-Code und speichern Sie ihn vorübergehend im Funnel. Aktivieren Sie Meta-Tracking und senden Sie danach eine eindeutig als Test markierte Bewerbung erfolgreich ab. Der Testcode allein erzeugt noch kein Ereignis. Im Events Manager sollte `Lead` mit Browser- und – bei vorhandenem Token – Serversignal erscheinen und anhand der gemeinsamen Event-ID dedupliziert werden.[2] [3] Entfernen Sie anschließend den Test-Event-Code und löschen Sie den Testdatensatz nach der fachlichen Kontrolle.

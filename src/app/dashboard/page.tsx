@@ -7,6 +7,7 @@ import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
+  HelpCircle,
   Megaphone,
   Camera,
   Crosshair,
@@ -147,6 +148,12 @@ async function OverviewBodyInner({
       label: "Tracking",
       description: "Meta Pixel global für Funnel, Freebie und Kampagnen",
       icon: Crosshair,
+    },
+    {
+      href: "/dashboard/hilfe",
+      label: "Hilfe",
+      description: "Pixel, Domain, Lead-Canary und Bewertungen Schritt für Schritt",
+      icon: HelpCircle,
     },
     {
       href: "/dashboard/autonomie",

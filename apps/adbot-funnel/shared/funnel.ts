@@ -109,6 +109,8 @@ export type FunnelOption = {
   value: string;
   icon: FunnelOptionIcon;
   description?: string;
+  /** Optional EUR value sent to Meta with the Lead event when this answer is selected. */
+  leadValue?: number;
 };
 
 export type ContactFieldKey = "name" | "company" | "email" | "phone" | "message";
@@ -200,6 +202,10 @@ export type FunnelMetaTracking = {
   eventName: string;
   /** Wann die Meta-Conversion gemeldet wird. Standard: beim Absenden. Optional erst nach DOI. */
   conversionTrigger: MetaConversionTrigger;
+  /** Optionaler EUR-Wert für manuell als gut bewertete Leads. */
+  qualityGoodValue?: number;
+  /** Optionaler EUR-Wert für manuell als schlecht bewertete Leads. */
+  qualityBadValue?: number;
 };
 
 export type FunnelConfig = {
@@ -266,6 +272,8 @@ export type ApplicationSubmission = {
 
 export type ApplicationStatus = "new" | "reviewing" | "contacted" | "rejected" | "hired";
 
+export type LeadQuality = "good" | "bad";
+
 export type ApplicationRecord = {
   id: string;
   funnelId: string;
@@ -276,6 +284,11 @@ export type ApplicationRecord = {
   consentAt: string;
   trackingConsentAt?: string;
   metaEventId?: string;
+  leadValue?: number;
+  leadQuality?: LeadQuality;
+  leadQualityAt?: string;
+  leadQualityEventId?: string;
+  leadQualityMetaStatus?: string;
   resume?: ResumeMetadata;
   sourceUrl?: string;
   utm: Record<string, string>;

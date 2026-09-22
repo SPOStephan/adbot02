@@ -67,6 +67,15 @@ export function FunnelWorkspaceCard({ userEmail }: FunnelWorkspaceCardProps) {
               </Link>{" "}
               — dann beim Lead-Launch als Ziel-URL wählbar.
             </li>
+            <li>
+              <Link
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                href="/dashboard/hilfe"
+              >
+                Einfache Anleitung für Pixel, Domain und Lead-Bewertung
+              </Link>{" "}
+              — inklusive Gut/Schlecht zurück an Meta.
+            </li>
           </ol>
         </div>
         <a

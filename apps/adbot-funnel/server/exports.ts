@@ -15,11 +15,13 @@ export function buildApplicationsCsv(applications: ApplicationRecord[], configs:
     resolveApplicationAnswers(configForApplication(configs, application), application.answers),
   ]));
   const answerLabels = Array.from(new Set(Array.from(resolvedAnswers.values()).flatMap(answers => answers.map(answer => answer.label))));
-  const headers = ["ID", "Eingang", "Status", "Name", "Firma", "E-Mail", "Telefon", "Nachricht", ...answerLabels, "Lebenslauf"];
+  const headers = ["ID", "Eingang", "Status", "Bewertung", "Lead-Wert", "Name", "Firma", "E-Mail", "Telefon", "Nachricht", ...answerLabels, "Lebenslauf"];
   const rows = applications.map(application => [
     application.id,
     application.createdAt,
     application.status,
+    application.leadQuality === "good" ? "gut" : application.leadQuality === "bad" ? "schlecht" : "",
+    application.leadValue ?? "",
     application.contact.name ?? "",
     application.contact.company ?? "",
     application.contact.email ?? "",

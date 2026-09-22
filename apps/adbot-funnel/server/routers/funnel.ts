@@ -9,6 +9,7 @@ import {
   funnelConfigSchema,
   funnelIdSchema,
   funnelStatusSchema,
+  leadQualitySchema,
   setFunnelOwnerSchema,
 } from "@shared/funnelSchemas";
 import type { ApplicationSubmission, FunnelConfig, ResumeMetadata } from "@shared/funnel";
@@ -34,11 +35,12 @@ import {
   getFunnelOwner,
   setFunnelOwner,
   slugifyFunnel,
+  updateApplicationLeadQuality,
   updateApplicationStatus,
 } from "../funnelStore";
 import { sendApplicationNotification } from "../mail";
 import { buildApplicationsCsv, buildApplicationsPdf } from "../exports";
-import { sendMetaApplicationConversion } from "../metaConversions";
+import { sendMetaApplicationConversion, sendMetaLeadQualityEvent } from "../metaConversions";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
 import {
   listCustomDomainsForFunnel,
@@ -230,7 +232,12 @@ export const funnelRouter = router({
       }),
       sendMetaApplicationConversion(config, application, submission, requestMetadata),
     ]);
-    return { id: application.id, notificationSent, metaConversion: metaConversion.status };
+    return {
+      id: application.id,
+      notificationSent,
+      metaConversion: metaConversion.status,
+      leadValue: application.leadValue,
+    };
   }),
 
   funnels: adminProcedure.query(({ ctx }) => {
@@ -616,6 +623,36 @@ export const funnelRouter = router({
       const application = await updateApplicationStatus(input.id, input.status);
       if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
       return application;
+    }),
+
+  rateLeadQuality: adminProcedure
+    .input(z.object({ id: z.string().uuid(), quality: leadQualitySchema }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await getApplication(input.id);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      const config = await requireOwnedFunnel(existing.funnelId, ctx.user);
+      const ratedAt = new Date().toISOString();
+      const eventId =
+        existing.leadQuality === input.quality && existing.leadQualityEventId
+          ? existing.leadQualityEventId
+          : crypto.randomUUID();
+      const sameRating = existing.leadQuality === input.quality && existing.leadQualityEventId;
+      const metaQuality = sameRating
+        ? { status: existing.leadQualityMetaStatus === "sent" ? "sent" as const : "skipped" as const, reason: "already_rated" }
+        : await sendMetaLeadQualityEvent(config, { ...existing, leadQuality: input.quality }, input.quality, eventId, ratedAt);
+      const application = await updateApplicationLeadQuality(input.id, {
+        quality: input.quality,
+        eventId,
+        metaStatus: metaQuality.status,
+        ratedAt: sameRating ? existing.leadQualityAt ?? ratedAt : ratedAt,
+      });
+      if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      return {
+        ...application,
+        displayAnswers: resolveApplicationAnswers(config, application.answers),
+        metaQuality: metaQuality.status,
+        metaQualityReason: "reason" in metaQuality ? metaQuality.reason : undefined,
+      };
     }),
 
   exportCsv: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input, ctx }) => {

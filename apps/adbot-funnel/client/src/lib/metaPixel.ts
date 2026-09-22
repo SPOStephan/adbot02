@@ -52,14 +52,22 @@ export function loadMetaPixel(pixelId: string) {
   return true;
 }
 
-export function trackMetaConversion(pixelId: string, eventName: string, eventId: string) {
+export function trackMetaConversion(
+  pixelId: string,
+  eventName: string,
+  eventId: string,
+  extras?: { value?: number; currency?: string },
+) {
   if (!loadMetaPixel(pixelId) || !window.fbq) return false;
-  window.fbq(
-    "track",
-    eventName,
-    { content_category: "Recruiting", content_name: "Completed application" },
-    { eventID: eventId },
-  );
+  const payload: Record<string, string | number> = {
+    content_category: "Recruiting",
+    content_name: "Completed application",
+  };
+  if (extras?.value !== undefined) {
+    payload.value = extras.value;
+    payload.currency = extras.currency ?? "EUR";
+  }
+  window.fbq("track", eventName, payload, { eventID: eventId });
   return true;
 }
 

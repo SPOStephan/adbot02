@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download, FileDown, Inbox, Loader2, Search, SlidersHorizontal } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
-import type { ApplicationRecord, ApplicationStatus } from "@shared/funnel";
+import type { ApplicationRecord, ApplicationStatus, LeadQuality } from "@shared/funnel";
+import { LEAD_QUALITY_LABELS } from "@shared/leadValue";
 import { filterApplications, getApplicationTotals, type ApplicationFilter } from "@shared/applicationFilters";
 import { trpc } from "@/lib/trpc";
 import { downloadBase64File } from "@/lib/download";
@@ -29,6 +30,27 @@ const statusClasses: Record<ApplicationStatus, string> = {
 
 export function StatusBadge({ status }: { status: ApplicationStatus }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusClasses[status]}`}>{statusLabels[status]}</span>;
+}
+
+const qualityClasses: Record<LeadQuality, string> = {
+  good: "bg-emerald-50 text-emerald-700 ring-emerald-600/10",
+  bad: "bg-rose-50 text-rose-700 ring-rose-600/10",
+};
+
+export function QualityBadge({ quality, value }: { quality?: LeadQuality; value?: number }) {
+  if (!quality && value === undefined) {
+    return <span className="text-xs text-muted-foreground">Offen</span>;
+  }
+  return (
+    <span className="inline-flex flex-col items-start gap-1">
+      {quality ? (
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${qualityClasses[quality]}`}>
+          {LEAD_QUALITY_LABELS[quality]}
+        </span>
+      ) : null}
+      {value !== undefined ? <span className="text-[11px] text-muted-foreground">{value.toLocaleString("de-DE")} €</span> : null}
+    </span>
+  );
 }
 
 export default function Applications() {
@@ -75,8 +97,8 @@ export default function Applications() {
         </div>
 
         {query.isLoading ? <div className="grid min-h-72 place-items-center" role="status" aria-live="polite"><span className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin text-[#0165c3]" aria-hidden="true" />Bewerbungen werden geladen …</span></div> : query.error ? <div className="p-8 text-center text-destructive" role="alert">{query.error.message}</div> : applications.length === 0 ? <EmptyState hasAny={(query.data?.length ?? 0) > 0} /> : <>
-          <div className="hidden md:block"><Table><TableHeader><TableRow><TableHead>Bewerber</TableHead>{!routedFunnelId && <TableHead>Funnel</TableHead>}<TableHead>Kontakt</TableHead><TableHead>Eingang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Antworten</TableHead></TableRow></TableHeader><TableBody>{applications.map(application => <ApplicationRow key={application.id} application={application} funnelTitle={funnelTitles.get(application.funnelSlug)} showFunnel={!routedFunnelId} onOpen={() => openApplication(application)} />)}</TableBody></Table></div>
-          <div className="divide-y md:hidden">{applications.map(application => <button key={application.id} className="block w-full p-4 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0165c3]" onClick={() => openApplication(application)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="block truncate">{application.contact.name || "Ohne Namen"}</strong><span className="mt-1 block truncate text-xs text-muted-foreground">{application.contact.email || application.contact.phone || "Keine Kontaktdaten"}</span>{!routedFunnelId && <span className="mt-1 block truncate text-xs font-semibold text-[#0165c3]">{funnelTitles.get(application.funnelSlug) ?? application.funnelSlug}</span>}</div><StatusBadge status={application.status} /></div><div className="mt-3 flex items-center justify-between text-xs text-muted-foreground"><span>{new Date(application.createdAt).toLocaleDateString("de-DE")}</span><span>{Object.keys(application.answers).length} Antworten</span></div></button>)}</div>
+          <div className="hidden md:block"><Table><TableHeader><TableRow><TableHead>Bewerber</TableHead>{!routedFunnelId && <TableHead>Funnel</TableHead>}<TableHead>Kontakt</TableHead><TableHead>Eingang</TableHead><TableHead>Status</TableHead><TableHead>Bewertung</TableHead><TableHead className="text-right">Antworten</TableHead></TableRow></TableHeader><TableBody>{applications.map(application => <ApplicationRow key={application.id} application={application} funnelTitle={funnelTitles.get(application.funnelSlug)} showFunnel={!routedFunnelId} onOpen={() => openApplication(application)} />)}</TableBody></Table></div>
+          <div className="divide-y md:hidden">{applications.map(application => <button key={application.id} className="block w-full p-4 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0165c3]" onClick={() => openApplication(application)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="block truncate">{application.contact.name || "Ohne Namen"}</strong><span className="mt-1 block truncate text-xs text-muted-foreground">{application.contact.email || application.contact.phone || "Keine Kontaktdaten"}</span>{!routedFunnelId && <span className="mt-1 block truncate text-xs font-semibold text-[#0165c3]">{funnelTitles.get(application.funnelSlug) ?? application.funnelSlug}</span>}</div><div className="flex flex-col items-end gap-2"><StatusBadge status={application.status} /><QualityBadge quality={application.leadQuality} value={application.leadValue} /></div></div><div className="mt-3 flex items-center justify-between text-xs text-muted-foreground"><span>{new Date(application.createdAt).toLocaleDateString("de-DE")}</span><span>{Object.keys(application.answers).length} Antworten</span></div></button>)}</div>
         </>}
       </section>
     </div>
@@ -88,7 +110,7 @@ function Stat({ label, value, active, onClick }: { label: string; value: number;
 }
 
 function ApplicationRow({ application, funnelTitle, showFunnel, onOpen }: { application: ApplicationRecord; funnelTitle?: string; showFunnel: boolean; onOpen: () => void }) {
-  return <TableRow className="cursor-pointer" onClick={onOpen}><TableCell><button type="button" className="rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3]" aria-label={`Bewerbung von ${application.contact.name || "unbekannt"} öffnen`} onClick={event => { event.stopPropagation(); onOpen(); }}><strong className="block">{application.contact.name || "Ohne Namen"}</strong><span className="text-xs text-muted-foreground">{application.contact.company || "–"}</span></button></TableCell>{showFunnel && <TableCell><span className="block max-w-44 truncate text-sm font-semibold">{funnelTitle ?? application.funnelSlug}</span><span className="font-mono text-[10px] text-muted-foreground">/f/{application.funnelSlug}</span></TableCell>}<TableCell><span className="block text-sm">{application.contact.email || "–"}</span><span className="text-xs text-muted-foreground">{application.contact.phone || ""}</span></TableCell><TableCell><span className="block text-sm">{new Date(application.createdAt).toLocaleDateString("de-DE")}</span><span className="text-xs text-muted-foreground">{new Date(application.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span></TableCell><TableCell><StatusBadge status={application.status} /></TableCell><TableCell className="text-right font-semibold">{Object.keys(application.answers).length}</TableCell></TableRow>;
+  return <TableRow className="cursor-pointer" onClick={onOpen}><TableCell><button type="button" className="rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3]" aria-label={`Bewerbung von ${application.contact.name || "unbekannt"} öffnen`} onClick={event => { event.stopPropagation(); onOpen(); }}><strong className="block">{application.contact.name || "Ohne Namen"}</strong><span className="text-xs text-muted-foreground">{application.contact.company || "–"}</span></button></TableCell>{showFunnel && <TableCell><span className="block max-w-44 truncate text-sm font-semibold">{funnelTitle ?? application.funnelSlug}</span><span className="font-mono text-[10px] text-muted-foreground">/f/{application.funnelSlug}</span></TableCell>}<TableCell><span className="block text-sm">{application.contact.email || "–"}</span><span className="text-xs text-muted-foreground">{application.contact.phone || ""}</span></TableCell><TableCell><span className="block text-sm">{new Date(application.createdAt).toLocaleDateString("de-DE")}</span><span className="text-xs text-muted-foreground">{new Date(application.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span></TableCell><TableCell><StatusBadge status={application.status} /></TableCell><TableCell><QualityBadge quality={application.leadQuality} value={application.leadValue} /></TableCell><TableCell className="text-right font-semibold">{Object.keys(application.answers).length}</TableCell></TableRow>;
 }
 
 function EmptyState({ hasAny }: { hasAny: boolean }) {

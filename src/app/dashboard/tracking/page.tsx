@@ -6,6 +6,7 @@ import {
   DashboardContentSkeleton,
   DashboardPageHeader,
 } from "@/components/DashboardPageHeader";
+import { LiveSetupChecklist } from "@/components/LiveSetupGuide";
 import { MetaPixelBinding } from "@/components/MetaPixelBinding";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
@@ -51,6 +52,7 @@ async function TrackingBody() {
 
   return (
     <div className="mt-8 space-y-6">
+      <LiveSetupChecklist currentId="pixel" />
       <MetaPixelBinding pixels={onboardingData.pixels} standalone />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

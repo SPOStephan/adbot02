@@ -235,6 +235,20 @@ export default function Settings() {
               <div className="flex items-end"><Button type="button" variant={clearMetaAccessToken ? "destructive" : "outline"} disabled={!query.data.metaServerSettings.hasAccessToken && !metaAccessToken} onClick={() => { setMetaAccessToken(""); setClearMetaAccessToken(current => !current); }}>{clearMetaAccessToken ? "Entfernen vorgemerkt" : "Gespeichertes Token entfernen"}</Button></div>
             </div>
           </div>
+          <div className="rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-bold">Lead-Qualität und Werte</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">Antwortoptionen können im Editor einen Euro-Wert bekommen. Dieser Wert geht automatisch mit der Bewerbung als Lead an Meta. Zusätzlich kannst du einzelne Bewerbungen unter Bewerbungen mit Gut oder Schlecht bewerten — das sendet ein zweites Ereignis (`Subscribe` bzw. `DisqualifiedLead`). Dafür ist das Conversions-API-Token nötig.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="meta-quality-good">Wert für gute Leads (€)</Label>
+                <Input id="meta-quality-good" inputMode="decimal" placeholder="100" value={draft.metaTracking.qualityGoodValue ?? ""} onChange={event => { const raw = event.target.value.trim().replace(",", "."); const next = raw === "" ? undefined : Number(raw); setDraft({ ...draft, metaTracking: { ...draft.metaTracking, qualityGoodValue: next !== undefined && Number.isFinite(next) && next >= 0 && next <= 10000 ? Math.round(next * 100) / 100 : undefined } }); }} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="meta-quality-bad">Wert für schlechte Leads (€)</Label>
+                <Input id="meta-quality-bad" inputMode="decimal" placeholder="0" value={draft.metaTracking.qualityBadValue ?? ""} onChange={event => { const raw = event.target.value.trim().replace(",", "."); const next = raw === "" ? undefined : Number(raw); setDraft({ ...draft, metaTracking: { ...draft.metaTracking, qualityBadValue: next !== undefined && Number.isFinite(next) && next >= 0 && next <= 10000 ? Math.round(next * 100) / 100 : undefined } }); }} />
+              </div>
+            </div>
+          </div>
           <div className="flex justify-end"><Button className="bg-[#0165c3] hover:bg-[#0154a3]" disabled={save.isPending || saveMetaServer.isPending || (!dirty && !metaServerDirty)} aria-busy={save.isPending || saveMetaServer.isPending} onClick={persistSettings}>{save.isPending || saveMetaServer.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}{save.isPending || saveMetaServer.isPending ? "Wird gespeichert …" : "Tracking-Einstellungen speichern"}</Button></div>
         </div>
       </section>

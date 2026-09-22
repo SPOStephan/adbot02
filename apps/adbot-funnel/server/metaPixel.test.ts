@@ -25,11 +25,11 @@ describe("Automatische Meta-Pixel-Runtime", () => {
     expect(loadMetaPixel("123456789012345")).toBe(true);
     expect(loadMetaPixel("123456789012345")).toBe(true);
     expect(elements.get("meta-pixel-script")?.src).toBe("https://connect.facebook.net/en_US/fbevents.js");
-    expect(trackMetaConversion("123456789012345", "Lead", "10000000-0000-4000-8000-000000000099")).toBe(true);
+    expect(trackMetaConversion("123456789012345", "Lead", "10000000-0000-4000-8000-000000000099", { value: 150, currency: "EUR" })).toBe(true);
     const queue = (window.fbq?.queue ?? []) as unknown[][];
     expect(queue.filter(call => call[0] === "init")).toHaveLength(1);
     expect(queue.filter(call => call[0] === "track" && call[1] === "PageView")).toHaveLength(1);
-    expect(queue.at(-1)).toEqual(["track", "Lead", expect.any(Object), { eventID: "10000000-0000-4000-8000-000000000099" }]);
+    expect(queue.at(-1)).toEqual(["track", "Lead", { content_category: "Recruiting", content_name: "Completed application", value: 150, currency: "EUR" }, { eventID: "10000000-0000-4000-8000-000000000099" }]);
     expect(readMetaBrowserIdentifiers()).toEqual({ metaFbp: "fb.1.123.456", metaFbc: "fb.1.123.click" });
   });
 
