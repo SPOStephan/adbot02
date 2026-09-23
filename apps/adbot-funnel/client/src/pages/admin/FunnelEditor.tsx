@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, Copy, ExternalLink, GripVertical, ImageIcon, Loader2, Save, Search, Settings2, Trash2, UploadCloud, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
-import { FUNNEL_OPTION_ICON_LABELS, FUNNEL_OPTION_ICONS } from "@shared/funnel";
-import type { ContactPage, FunnelConfig, FunnelOptionIcon, FunnelPage } from "@shared/funnel";
+import type { ContactPage, FunnelConfig, FunnelPage, StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage } from "@shared/funnelEditor";
+import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { EditorPreview } from "@/components/admin/EditorPreview";
-import { FunnelIcon } from "@/components/funnel/FunnelIcon";
+import { IconColorField } from "@/components/admin/IconColorField";
+import { IconPicker } from "@/components/admin/IconPicker";
+import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
 import { formatHexColorDraft, normalizeHexColor } from "@/lib/hexColor";
-import { getNextIconGridIndex, isIconActivationKey } from "@/lib/iconKeyboard";
 
 const pageLabels: Record<FunnelPage["type"], string> = { start: "Startseite", "choice-grid": "Symbolkacheln", "choice-list": "Buttonliste", contact: "Kontaktformular" };
 
@@ -35,41 +35,6 @@ function ColorField({ label, value, onChange, hint }: { label: string; value: st
     if (normalized && normalized !== value.toUpperCase()) onChange(normalized);
   };
   return <FormRow label={label} hint={hint}><div className={`grid gap-1.5 rounded-xl border bg-slate-50 p-2 ${draft && !valid ? "border-amber-400" : ""}`}><div className="flex items-center gap-2"><Input className="h-10 w-12 shrink-0 cursor-pointer border-0 bg-transparent p-0" type="color" value={value} aria-label={`${label} visuell auswählen`} onChange={event => onChange(event.target.value.toUpperCase())} /><Input className="h-10 min-w-0 bg-white font-mono text-sm font-semibold uppercase" value={draft} placeholder="#0165C3" maxLength={7} spellCheck={false} inputMode="text" aria-label={`${label} als Hexwert`} aria-invalid={Boolean(draft && !valid)} onChange={event => updateDraft(event.target.value)} onBlur={() => setDraft(value.toUpperCase())} /></div>{draft && !valid && <p className="px-1 text-[11px] font-medium text-amber-700" role="status">Vollständigen Hexwert im Format #RRGGBB eingeben.</p>}</div></FormRow>;
-}
-
-function IconPicker({ value, onChange }: { value: FunnelOptionIcon; onChange: (value: FunnelOptionIcon) => void }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const iconButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const normalizedSearch = search.trim().toLocaleLowerCase("de");
-  const filteredIcons = FUNNEL_OPTION_ICONS.filter(icon => `${FUNNEL_OPTION_ICON_LABELS[icon]} ${icon}`.toLocaleLowerCase("de").includes(normalizedSearch));
-  const selectIcon = (icon: FunnelOptionIcon) => { onChange(icon); setOpen(false); };
-  const handleIconKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number, icon: FunnelOptionIcon) => {
-    if (isIconActivationKey(event.key)) {
-      event.preventDefault();
-      selectIcon(icon);
-      return;
-    }
-    const grid = event.currentTarget.parentElement;
-    const columnCount = grid ? window.getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length : 3;
-    const nextIndex = getNextIconGridIndex({ currentIndex: index, key: event.key, itemCount: filteredIcons.length, columnCount });
-    if (nextIndex === null || nextIndex === index) return;
-    event.preventDefault();
-    iconButtonRefs.current[nextIndex]?.focus();
-  };
-  return (
-    <Popover open={open} onOpenChange={next => { setOpen(next); if (!next) setSearch(""); }}>
-      <PopoverTrigger asChild><Button type="button" variant="outline" className="h-9 min-w-0 justify-between gap-2 bg-white px-2.5" aria-label={`Icon auswählen, aktuell ${FUNNEL_OPTION_ICON_LABELS[value]}`}><span className="flex min-w-0 items-center gap-2"><FunnelIcon name={value} className="size-4 shrink-0 text-[#0165c3]" /><span className="truncate text-xs">{FUNNEL_OPTION_ICON_LABELS[value]}</span></span><ChevronDown className="size-3.5 shrink-0 text-muted-foreground" /></Button></PopoverTrigger>
-      <PopoverContent align="end" className="w-[min(92vw,430px)] p-3">
-        <div className="mb-3"><p className="font-semibold">Icon auswählen</p><p className="text-xs text-muted-foreground">{FUNNEL_OPTION_ICONS.length} Symbole mit direkter Vorschau</p></div>
-        <div className="relative mb-3"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input autoFocus className="pl-9" value={search} placeholder="Icon suchen …" aria-label="Icons durchsuchen" onChange={event => setSearch(event.target.value)} /></div>
-        <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4" role="group" aria-label="Verfügbare Icons">
-          {filteredIcons.map((icon, index) => <button key={icon} ref={element => { iconButtonRefs.current[index] = element; }} type="button" aria-label={`${FUNNEL_OPTION_ICON_LABELS[icon]} auswählen`} aria-pressed={value === icon} title={FUNNEL_OPTION_ICON_LABELS[icon]} onClick={() => selectIcon(icon)} onKeyDown={event => handleIconKeyDown(event, index, icon)} className={`grid min-h-20 place-items-center gap-1 rounded-xl border p-2 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3] ${value === icon ? "border-[#0165c3] bg-[#0165c3]/10 text-[#0165c3] shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-[#0165c3]/40 hover:bg-slate-50"}`}><FunnelIcon name={icon} className="size-6" /><span className="line-clamp-2 text-[10px] font-semibold leading-tight">{FUNNEL_OPTION_ICON_LABELS[icon]}</span></button>)}
-        </div>
-        {filteredIcons.length === 0 && <p className="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-muted-foreground">Kein passendes Icon gefunden.</p>}
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 export default function FunnelEditor() {
@@ -189,11 +154,13 @@ export default function FunnelEditor() {
               <FormRow label="Beschreibung"><Textarea value={selectedPage.description} rows={3} onChange={event => patchPage({ description: event.target.value })} /></FormRow>
               <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value })} /></FormRow>
 
-              {selectedPage.type === "start" && <>
-                <FormRow label="Bild-URL" hint="Leer lassen, um die neutrale Illustration zu verwenden."><Input value={selectedPage.heroImageUrl} onChange={event => patchPage({ heroImageUrl: event.target.value } as Partial<FunnelPage>)} /></FormRow>
-                <FormRow label="Vorteile – eine Zeile pro Punkt"><Textarea value={selectedPage.bullets.join("\n")} rows={4} onChange={event => patchPage({ bullets: event.target.value.split("\n").filter(Boolean) } as Partial<FunnelPage>)} /></FormRow>
-                <FormRow label="Hinweis unter dem Button"><Input value={selectedPage.trustNote} onChange={event => patchPage({ trustNote: event.target.value } as Partial<FunnelPage>)} /></FormRow>
-              </>}
+              {selectedPage.type === "start" && (
+                <StartPageFields
+                  page={selectedPage}
+                  brandColor={config.brand.accentColor}
+                  patch={patchPage}
+                />
+              )}
 
               {(selectedPage.type === "choice-grid" || selectedPage.type === "choice-list") && <>
                 <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Mehrfachauswahl</strong><small className="text-muted-foreground">Mehrere Antworten erlauben</small></span><Switch checked={selectedPage.allowMultiple} onCheckedChange={checked => patchPage({ allowMultiple: checked } as Partial<FunnelPage>)} /></label>
@@ -243,6 +210,93 @@ export default function FunnelEditor() {
         <aside className="bg-slate-100 p-5"><div className="sticky top-24"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Live-Vorschau</p><p className="text-sm font-semibold">Mobil · 390 px</p></div><span className="h-2 w-2 rounded-full bg-emerald-500" /></div><EditorPreview config={config} page={selectedPage} /></div></aside>
       </div>
     </div>
+  );
+}
+
+function StartPageFields({
+  page,
+  brandColor,
+  patch,
+}: {
+  page: StartPage;
+  brandColor: string;
+  patch: (value: Partial<FunnelPage>) => void;
+}) {
+  const layout = resolveStartLayout(page);
+  return (
+    <>
+      <StartLayoutPicker
+        value={layout}
+        onChange={next => {
+          const seeded = next === "benefits" && page.benefits.length === 0
+            ? benefitsFromBullets(page.bullets)
+            : page.benefits;
+          const bandTitle = next === "benefits" && !page.benefitsBandTitle.trim()
+            ? "Deine Vorteile"
+            : page.benefitsBandTitle;
+          patch({ layout: next, benefits: seeded, benefitsBandTitle: bandTitle } as Partial<FunnelPage>);
+        }}
+      />
+      <FormRow label="Bild-URL" hint="Leer lassen, um die neutrale Illustration bzw. den reinen Text-Hero zu verwenden.">
+        <Input value={page.heroImageUrl} onChange={event => patch({ heroImageUrl: event.target.value } as Partial<FunnelPage>)} />
+      </FormRow>
+
+      {layout === "classic" && (
+        <>
+          <FormRow label="Vorteile – eine Zeile pro Punkt">
+            <Textarea value={page.bullets.join("\n")} rows={4} onChange={event => patch({ bullets: event.target.value.split("\n").filter(Boolean) } as Partial<FunnelPage>)} />
+          </FormRow>
+          <FormRow label="Hinweis unter dem Button">
+            <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>)} />
+          </FormRow>
+        </>
+      )}
+
+      {layout === "benefits" && (
+        <>
+          <FormRow label="Trenner-Überschrift" hint="Volle Fläche in der Brandingfarbe, z. B. „Deine Vorteile bei uns“.">
+            <Input value={page.benefitsBandTitle} onChange={event => patch({ benefitsBandTitle: event.target.value } as Partial<FunnelPage>)} />
+          </FormRow>
+          <FormRow label="Hinweis unter dem oberen Button">
+            <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>)} />
+          </FormRow>
+          <FormRow label="Unterer Button" hint="Leer = gleiche Beschriftung wie der Button oben.">
+            <Input value={page.secondaryButtonLabel} placeholder={page.buttonLabel} onChange={event => patch({ secondaryButtonLabel: event.target.value } as Partial<FunnelPage>)} />
+          </FormRow>
+          <div className="grid gap-3">
+            <div className="flex items-center justify-between">
+              <Label>Icon-Kacheln</Label>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page.benefits.length >= MAX_START_BENEFITS}
+                onClick={() => patch({ benefits: [...page.benefits, emptyStartBenefit()] } as Partial<FunnelPage>)}
+              >
+                Vorteil hinzufügen
+              </Button>
+            </div>
+            {page.benefits.map((benefit, index) => (
+              <div className="grid gap-3 rounded-xl border bg-slate-50 p-3" key={benefit.id}>
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto]">
+                  <Input value={benefit.title} onChange={event => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, title: event.target.value } : item) } as Partial<FunnelPage>)} />
+                  <IconPicker value={benefit.icon} color={benefit.color || brandColor} onChange={icon => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, icon } : item) } as Partial<FunnelPage>)} />
+                  <Button size="icon" variant="ghost" className="shrink-0 text-destructive" aria-label={`Vorteil ${benefit.title} löschen`} onClick={() => patch({ benefits: page.benefits.filter((_, itemIndex) => itemIndex !== index) } as Partial<FunnelPage>)}>
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+                <Textarea rows={2} placeholder="Kurzer Erklärtext" value={benefit.text} onChange={event => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, text: event.target.value } : item) } as Partial<FunnelPage>)} />
+                <IconColorField
+                  label="Iconfarbe"
+                  value={benefit.color}
+                  brandColor={brandColor}
+                  onChange={color => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, color } : item) } as Partial<FunnelPage>)}
+                />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

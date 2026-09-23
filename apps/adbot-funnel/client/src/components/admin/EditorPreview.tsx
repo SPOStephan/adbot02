@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ContactPage, FunnelConfig, FunnelPage } from "@shared/funnel";
+import { resolveStartLayout } from "@shared/startLayout";
 import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
 import { ChoiceStep } from "@/components/funnel/ChoiceStep";
@@ -14,9 +15,9 @@ export function EditorPreview({ config, page }: { config: FunnelConfig; page: Fu
   });
   return (
     <div className="admin-live-preview">
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={`/f/${config.slug}/impressum`} step={step} totalSteps={config.pages.length} showProgress>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={`/f/${config.slug}/impressum`} step={step} totalSteps={config.pages.length} showProgress fullBleed={page.type === "start" && resolveStartLayout(page) === "benefits"}>
         {page.type === "start" ? (
-          <StartStep page={page} onContinue={() => undefined} />
+          <StartStep page={page} brand={config.brand} onContinue={() => undefined} />
         ) : page.type === "choice-grid" || page.type === "choice-list" ? (
           <ChoiceStep page={page} selected={answers[page.questionKey] ?? []} onSelect={value => choose(page.questionKey, value, page.allowMultiple)} onBack={() => undefined} onContinue={() => undefined} />
         ) : (

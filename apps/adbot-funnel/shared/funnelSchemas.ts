@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES } from "./funnel";
+import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, START_PAGE_LAYOUTS } from "./funnel";
+import { MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.enum(FUNNEL_OPTION_ICONS);
 const optionalHttpsUrlSchema = z.string().max(2048).refine(value => value === "" || /^https:\/\//i.test(value), "Es ist nur eine absolute HTTPS-Adresse zulässig.");
@@ -23,11 +24,28 @@ const pageBaseSchema = z.object({
   buttonLabel: z.string().min(1).max(100),
 });
 
+const optionalHexColorSchema = z.string().max(16).refine(
+  value => value === "" || /^#[0-9a-fA-F]{6}$/.test(value),
+  "Farbwert muss #RRGGBB sein oder leer bleiben.",
+);
+
+const startBenefitSchema = z.object({
+  id: z.string().min(1),
+  icon: iconSchema,
+  title: z.string().min(1).max(120),
+  text: z.string().max(400),
+  color: optionalHexColorSchema.optional(),
+});
+
 const startPageSchema = pageBaseSchema.extend({
   type: z.literal("start"),
+  layout: z.enum(START_PAGE_LAYOUTS).default("classic"),
   heroImageUrl: z.string().max(2048),
   bullets: z.array(z.string().min(1).max(240)).max(8),
   trustNote: z.string().max(300),
+  benefitsBandTitle: z.string().max(200).default(""),
+  secondaryButtonLabel: z.string().max(100).default(""),
+  benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
 });
 
 const choicePageSchema = pageBaseSchema.extend({
