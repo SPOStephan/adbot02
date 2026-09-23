@@ -17,6 +17,7 @@ type FunnelChromeProps = PropsWithChildren<{
   progress?: FunnelConfig["progress"];
   onBack?: () => void;
   onForward?: () => void;
+  wordmark?: string;
 }>;
 
 export function FunnelChrome({
@@ -33,6 +34,7 @@ export function FunnelChrome({
   progress,
   onBack,
   onForward,
+  wordmark = "Dein Unternehmen",
   children,
 }: FunnelChromeProps) {
   const brandStyle = {
@@ -59,7 +61,7 @@ export function FunnelChrome({
           ) : (
             <div className="funnel-wordmark" aria-label={brand.logoAlt}>
               <span className="funnel-wordmark-mark">ME</span>
-              <span>Dein Unternehmen</span>
+              <span>{wordmark}</span>
             </div>
           )}
         </div>

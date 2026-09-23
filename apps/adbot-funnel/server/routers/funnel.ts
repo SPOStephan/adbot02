@@ -12,6 +12,7 @@ import {
   leadQualitySchema,
   setFunnelOwnerSchema,
 } from "@shared/funnelSchemas";
+import { funnelUiCopy, resolveAddressForm } from "@shared/addressForm";
 import type { ApplicationSubmission, FunnelConfig, ResumeMetadata } from "@shared/funnel";
 import type { User } from "../../drizzle/schema";
 import { isBunnyConfigured, uploadFunnelBytesToBunny } from "../bunny";
@@ -73,7 +74,7 @@ function validateSubmission(config: FunnelConfig, submission: z.infer<typeof app
   for (const page of config.pages) {
     if (page.type !== "choice-grid" && page.type !== "choice-list") continue;
     const values = submission.answers[page.questionKey] ?? [];
-    if (values.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Bitte beantworte: ${page.title}` });
+    if (values.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: funnelUiCopy(resolveAddressForm(config.addressForm)).answerRequired(page.title) });
     if (!page.allowMultiple && values.length > 1) throw new TRPCError({ code: "BAD_REQUEST", message: `Für „${page.title}“ ist nur eine Antwort zulässig.` });
     const allowedValues = new Set(page.options.map(option => option.value));
     if (values.some(value => !allowedValues.has(value))) throw new TRPCError({ code: "BAD_REQUEST", message: `Ungültige Antwort für „${page.title}“.` });
@@ -85,7 +86,7 @@ function validateSubmission(config: FunnelConfig, submission: z.infer<typeof app
     }
   }
   if (contactPage.resumeEnabled && contactPage.resumeRequired && !submission.resume) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Bitte lade deinen Lebenslauf hoch." });
+    throw new TRPCError({ code: "BAD_REQUEST", message: funnelUiCopy(resolveAddressForm(config.addressForm)).resumeRequired });
   }
 }
 
@@ -289,6 +290,12 @@ export const funnelRouter = router({
       metaConversion: metaConversion.status,
       leadValue: application.leadValue,
     };
+  }),
+
+  handoffTarget: publicProcedure.input(z.object({ id: funnelIdSchema })).query(async ({ input }) => {
+    const config = await getFunnelById(input.id);
+    if (!config || config.status !== "published") return null;
+    return { id: config.id, slug: config.slug, title: config.title };
   }),
 
   funnels: adminProcedure.query(({ ctx }) => {

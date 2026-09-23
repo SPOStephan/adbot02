@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
-import type { ContactPage, FunnelConfig, FunnelPage, StartPage } from "@shared/funnel";
+import type { ContactPage, FunnelConfig, FunnelOption, FunnelPage, StartPage } from "@shared/funnel";
+import { applyAddressFormToConfig, resolveAddressForm } from "@shared/addressForm";
+import { DEFAULT_FUNNEL_GATE } from "@shared/funnelGate";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage } from "@shared/funnelEditor";
 import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveStartLayout } from "@shared/startLayout";
@@ -20,6 +22,7 @@ import { IconColorField } from "@/components/admin/IconColorField";
 import { IconPicker } from "@/components/admin/IconPicker";
 import { ProgressLayoutPicker } from "@/components/admin/ProgressLayoutPicker";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
+import { VisibilityToggle } from "@/components/admin/VisibilityToggle";
 import { useFunnelEditorHistory } from "@/hooks/useFunnelEditorHistory";
 
 const pageLabels: Record<FunnelPage["type"], string> = { start: "Startseite", "choice-grid": "Symbolkacheln", "choice-list": "Buttonliste", contact: "Kontaktformular" };
@@ -32,6 +35,7 @@ export default function FunnelEditor() {
   const { id: funnelId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const query = trpc.funnel.adminConfig.useQuery(funnelId ? { id: funnelId } : undefined, { enabled: Boolean(funnelId) });
+  const funnelsQuery = trpc.funnel.funnels.useQuery();
   const utils = trpc.useUtils();
   const save = trpc.funnel.saveConfig.useMutation({
     onError: error => toast.error(error.message),
@@ -219,9 +223,28 @@ export default function FunnelEditor() {
                 />
               )}
               <FormRow label="Interner Seitenname"><Input value={selectedPage.name} onChange={event => patchPage({ name: event.target.value }, false)} /></FormRow>
-              <FormRow label="Überzeile (optional)" hint="Leer lassen, um diesen Bereich vollständig auszublenden."><Input value={selectedPage.eyebrow} placeholder="Zum Beispiel: Kurze Frage" onChange={event => patchPage({ eyebrow: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
-              <FormRow label="Überschrift"><Textarea value={selectedPage.title} rows={2} onChange={event => patchPage({ title: event.target.value }, false)} /></FormRow>
-              <FormRow label="Beschreibung"><Textarea value={selectedPage.description} rows={3} onChange={event => patchPage({ description: event.target.value }, false)} /></FormRow>
+              <CopyVisibilityField
+                label="Überzeile"
+                visible={selectedPage.showEyebrow !== false}
+                onVisibleChange={showEyebrow => patchPage({ showEyebrow } as Partial<FunnelPage>)}
+                hint="Kleines Auge blendet die Zeile im Funnel aus, der Text bleibt gespeichert."
+              >
+                <Input value={selectedPage.eyebrow} placeholder="Zum Beispiel: Kurze Frage" onChange={event => patchPage({ eyebrow: event.target.value } as Partial<FunnelPage>, false)} />
+              </CopyVisibilityField>
+              <CopyVisibilityField
+                label="Überschrift"
+                visible={selectedPage.showTitle !== false}
+                onVisibleChange={showTitle => patchPage({ showTitle } as Partial<FunnelPage>)}
+              >
+                <Textarea value={selectedPage.title} rows={2} onChange={event => patchPage({ title: event.target.value }, false)} />
+              </CopyVisibilityField>
+              <CopyVisibilityField
+                label="Beschreibung"
+                visible={selectedPage.showDescription !== false}
+                onVisibleChange={showDescription => patchPage({ showDescription } as Partial<FunnelPage>)}
+              >
+                <Textarea value={selectedPage.description} rows={3} onChange={event => patchPage({ description: event.target.value }, false)} />
+              </CopyVisibilityField>
               <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
               <div className="grid gap-3 rounded-2xl border p-4">
                 <div>
@@ -250,8 +273,8 @@ export default function FunnelEditor() {
 
               {(selectedPage.type === "choice-grid" || selectedPage.type === "choice-list") && <>
                 <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Mehrfachauswahl</strong><small className="text-muted-foreground">Mehrere Antworten erlauben</small></span><Switch checked={selectedPage.allowMultiple} onCheckedChange={checked => patchPage({ allowMultiple: checked } as Partial<FunnelPage>)} /></label>
-                <div className="grid gap-3"><div className="flex items-center justify-between"><Label>Antwortoptionen</Label><Button size="sm" variant="outline" onClick={() => patchPage({ options: [...selectedPage.options, { id: crypto.randomUUID(), label: "Neue Option", value: `option-${selectedPage.options.length + 1}`, icon: "sparkles" }] } as Partial<FunnelPage>)}>Option hinzufügen</Button></div>
-                  {selectedPage.options.map((option, optionIndex) => <div className="grid gap-2 rounded-xl border bg-slate-50 p-3" key={option.id}><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto]"><Input value={option.label} onChange={event => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, label: event.target.value, value: event.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || item.value } : item) } as Partial<FunnelPage>)} /><IconPicker value={option.icon} onChange={icon => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, icon } : item) } as Partial<FunnelPage>)} /><Button size="icon" variant="ghost" className="shrink-0 text-destructive" aria-label={`Option ${option.label} löschen`} disabled={selectedPage.options.length <= 2} onClick={() => patchPage({ options: selectedPage.options.filter((_, index) => index !== optionIndex) } as Partial<FunnelPage>)}><Trash2 className="size-4" /></Button></div><Input placeholder="Optionale Kurzbeschreibung" value={option.description ?? ""} onChange={event => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, description: event.target.value } : item) } as Partial<FunnelPage>)} /><FormRow label="Wert für Meta (€)" hint="Leer = kein Extra-Wert. Gute Antworten höher, schwache niedriger. Summe geht mit dem Lead an Meta."><Input inputMode="decimal" placeholder="z. B. 80" value={option.leadValue ?? ""} onChange={event => { const raw = event.target.value.trim().replace(",", "."); const nextValue = raw === "" ? undefined : Number(raw); patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, leadValue: nextValue !== undefined && Number.isFinite(nextValue) && nextValue >= 0 && nextValue <= 10000 ? Math.round(nextValue * 100) / 100 : undefined } : item) } as Partial<FunnelPage>); }} /></FormRow></div>)}
+                <div className="grid gap-3"><div className="flex items-center justify-between"><Label>Antwortoptionen</Label><Button size="sm" variant="outline" onClick={() => patchPage({ options: [...selectedPage.options, { id: crypto.randomUUID(), label: "Neue Option", value: `option-${selectedPage.options.length + 1}`, icon: "sparkles", knockout: false, knockoutAction: "exit", handoffFunnelId: "" }] } as Partial<FunnelPage>)}>Option hinzufügen</Button></div>
+                  {selectedPage.options.map((option, optionIndex) => <div className="grid gap-2 rounded-xl border bg-slate-50 p-3" key={option.id}><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto]"><Input value={option.label} onChange={event => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, label: event.target.value, value: event.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || item.value } : item) } as Partial<FunnelPage>)} /><IconPicker value={option.icon} onChange={icon => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, icon } : item) } as Partial<FunnelPage>)} /><Button size="icon" variant="ghost" className="shrink-0 text-destructive" aria-label={`Option ${option.label} löschen`} disabled={selectedPage.options.length <= 2} onClick={() => patchPage({ options: selectedPage.options.filter((_, index) => index !== optionIndex) } as Partial<FunnelPage>)}><Trash2 className="size-4" /></Button></div><Input placeholder="Optionale Kurzbeschreibung" value={option.description ?? ""} onChange={event => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, description: event.target.value } : item) } as Partial<FunnelPage>)} /><FormRow label="Wert für Meta (€)" hint="Leer = kein Extra-Wert. Gute Antworten höher, schwache niedriger. Summe geht mit dem Lead an Meta."><Input inputMode="decimal" placeholder="z. B. 80" value={option.leadValue ?? ""} onChange={event => { const raw = event.target.value.trim().replace(",", "."); const nextValue = raw === "" ? undefined : Number(raw); patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, leadValue: nextValue !== undefined && Number.isFinite(nextValue) && nextValue >= 0 && nextValue <= 10000 ? Math.round(nextValue * 100) / 100 : undefined } : item) } as Partial<FunnelPage>); }} /></FormRow><KnockoutFields option={option} options={selectedPage.options} publishedFunnels={(funnelsQuery.data ?? []).filter(item => item.status === "published" && item.id !== config.id)} patchPage={patchPage} /></div>)}
                 </div>
               </>}
 
@@ -262,6 +285,7 @@ export default function FunnelEditor() {
               <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Funnel veröffentlicht</strong><small className="text-muted-foreground">Öffentliche URL aktivieren; Ausschalten pausiert einen laufenden Funnel</small></span><Switch checked={config.status === "published"} disabled={config.status === "archived"} onCheckedChange={checked => changeConfig(current => ({ ...current, status: checked ? "published" : current.status === "published" ? "paused" : current.status, isPublished: checked }))} /></label>
               <FormRow label="Funnel-Titel"><Input value={config.title} onChange={event => changeConfig(current => ({ ...current, title: event.target.value }))} /></FormRow>
               <FormRow label="URL-Slug"><Input value={config.slug} onChange={event => changeConfig(current => ({ ...current, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))} /></FormRow>
+              <AddressAndGateSettings config={config} changeConfig={changeConfig} />
               <ProgressSettings config={config} changeConfig={changeConfig} />
               <div className="grid gap-4 rounded-2xl border bg-slate-50/70 p-4">
                 <div><p className="text-sm font-bold">Logo & Browser-Icon</p><p className="text-xs text-muted-foreground">Diese Angaben gelten nur für diesen Funnel.</p></div>
@@ -425,6 +449,126 @@ function ProgressSettings({
         <OptionalProgressColor label="Stufentext" value={progress.colors.text} fallback={resolved.text} onChange={value => patchColor("text", value)} />
         <OptionalProgressColor label="Nebentext" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
       </div>
+    </div>
+  );
+}
+
+function CopyVisibilityField({
+  label,
+  visible,
+  onVisibleChange,
+  hint,
+  children,
+}: {
+  label: string;
+  visible: boolean;
+  onVisibleChange: (visible: boolean) => void;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        <VisibilityToggle label={label} visible={visible} onChange={onVisibleChange} />
+      </div>
+      {children}
+      <p className="text-xs text-muted-foreground">{!visible ? "Im Funnel ausgeblendet." : hint}</p>
+    </div>
+  );
+}
+
+function KnockoutFields({
+  option,
+  options,
+  publishedFunnels,
+  patchPage,
+}: {
+  option: FunnelOption;
+  options: FunnelOption[];
+  publishedFunnels: Array<{ id: string; title: string; slug: string }>;
+  patchPage: (value: Partial<FunnelPage>) => void;
+}) {
+  const patchOption = (patch: Partial<FunnelOption>) => {
+    patchPage({ options: options.map(item => item.id === option.id ? { ...item, ...patch } : item) } as Partial<FunnelPage>);
+  };
+  return (
+    <div className="grid gap-2 rounded-lg border bg-white p-3">
+      <label className="flex items-center justify-between gap-3">
+        <span>
+          <strong className="block text-sm">KO-Kriterium</strong>
+          <small className="text-muted-foreground">Diese Antwort beendet den Funnel oder übergibt an eine andere Stelle.</small>
+        </span>
+        <Switch checked={option.knockout === true} onCheckedChange={knockout => patchOption({ knockout, knockoutAction: knockout ? option.knockoutAction || "exit" : "exit", handoffFunnelId: knockout ? option.handoffFunnelId : "" })} />
+      </label>
+      {option.knockout ? (
+        <>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Wenn diese Antwort gewählt wird</span>
+            <select
+              className="h-9 rounded-md border bg-white px-3 text-sm"
+              value={option.knockoutAction === "handoff" ? "handoff" : "exit"}
+              onChange={event => patchOption({ knockoutAction: event.target.value === "handoff" ? "handoff" : "exit" })}
+            >
+              <option value="exit">Exit-Seite zeigen</option>
+              <option value="handoff" disabled={publishedFunnels.length === 0}>An anderen Funnel übergeben</option>
+            </select>
+          </label>
+          {option.knockoutAction === "handoff" ? (
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">Ziel-Funnel</span>
+              <select
+                className="h-9 rounded-md border bg-white px-3 text-sm"
+                value={option.handoffFunnelId}
+                onChange={event => patchOption({ handoffFunnelId: event.target.value })}
+              >
+                <option value="">Bitte wählen</option>
+                {publishedFunnels.map(funnel => (
+                  <option key={funnel.id} value={funnel.id}>{funnel.title} · /f/{funnel.slug}</option>
+                ))}
+              </select>
+              {publishedFunnels.length === 0 ? <small className="text-muted-foreground">Es gibt aktuell keinen weiteren veröffentlichten Funnel.</small> : null}
+            </label>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function AddressAndGateSettings({
+  config,
+  changeConfig,
+}: {
+  config: FunnelConfig;
+  changeConfig: (updater: (current: FunnelConfig) => FunnelConfig, immediate?: boolean) => void;
+}) {
+  const form = resolveAddressForm(config.addressForm);
+  const gate = config.gate ?? DEFAULT_FUNNEL_GATE;
+  return (
+    <div className="grid gap-4 rounded-2xl border p-4">
+      <div>
+        <p className="text-sm font-bold">Anrede</p>
+        <p className="text-xs text-muted-foreground">Duzen ist Standard. Beim Umschalten werden die Funnel-Texte automatisch angepasst.</p>
+      </div>
+      <label className="flex items-center justify-between rounded-xl border p-3">
+        <span>
+          <strong className="block text-sm">Bewerber siezen</strong>
+          <small className="text-muted-foreground">Aktuell: {form === "sie" ? "Sie" : "Du"}</small>
+        </span>
+        <Switch
+          checked={form === "sie"}
+          onCheckedChange={checked => changeConfig(current => applyAddressFormToConfig({ ...current, gate: current.gate ?? DEFAULT_FUNNEL_GATE }, checked ? "sie" : "du"))}
+        />
+      </label>
+      <div>
+        <p className="text-sm font-bold">Wenn-/dann-Ausgang</p>
+        <p className="text-xs text-muted-foreground">Texte für KO-Antworten. Platzhalter {"{targetTitle}"} wird durch den Namen des Ziel-Funnels ersetzt.</p>
+      </div>
+      <FormRow label="Exit-Überschrift"><Input value={gate.exitTitle} onChange={event => changeConfig(current => ({ ...current, gate: { ...(current.gate ?? DEFAULT_FUNNEL_GATE), exitTitle: event.target.value } }), false)} /></FormRow>
+      <FormRow label="Exit-Text"><Textarea rows={3} value={gate.exitText} onChange={event => changeConfig(current => ({ ...current, gate: { ...(current.gate ?? DEFAULT_FUNNEL_GATE), exitText: event.target.value } }), false)} /></FormRow>
+      <FormRow label="Übergabe-Überschrift"><Input value={gate.handoffTitle} onChange={event => changeConfig(current => ({ ...current, gate: { ...(current.gate ?? DEFAULT_FUNNEL_GATE), handoffTitle: event.target.value } }), false)} /></FormRow>
+      <FormRow label="Übergabe-Text"><Textarea rows={3} value={gate.handoffText} onChange={event => changeConfig(current => ({ ...current, gate: { ...(current.gate ?? DEFAULT_FUNNEL_GATE), handoffText: event.target.value } }), false)} /></FormRow>
     </div>
   );
 }

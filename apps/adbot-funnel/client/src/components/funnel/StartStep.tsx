@@ -1,4 +1,5 @@
 import type { FunnelBrand, StartPage } from "@shared/funnel";
+import { pageShowsDescription, pageShowsEyebrow, pageShowsTitle } from "@shared/pageCopy";
 import { contrastOnAccent, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
@@ -19,9 +20,9 @@ export function StartStep({
   return (
     <section className="funnel-step funnel-start-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-copy">
-        {page.eyebrow && <p className="funnel-eyebrow">{page.eyebrow}</p>}
-        <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
-        <p className="funnel-description">{page.description}</p>
+        {pageShowsEyebrow(page) && <p className="funnel-eyebrow">{page.eyebrow}</p>}
+        <h1 id={`${page.id}-title`} tabIndex={-1} className={pageShowsTitle(page) ? undefined : "sr-only"}>{page.title}</h1>
+        {pageShowsDescription(page) && <p className="funnel-description">{page.description}</p>}
         <ul className="funnel-benefits">
           {page.bullets.map(bullet => <li key={bullet}><Check size={17} />{bullet}</li>)}
         </ul>
@@ -75,9 +76,9 @@ function BenefitsStartStep({
         )}
         {page.heroImageUrl ? <img className="funnel-start-benefits-hero-photo" src={page.heroImageUrl} alt="" /> : <div className="funnel-start-benefits-hero-fallback" aria-hidden="true" />}
         <div className="funnel-start-benefits-hero-copy">
-          {page.eyebrow && <p className="funnel-start-benefits-kicker">{page.eyebrow}</p>}
-          <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
-          {page.description.trim() && <p className="funnel-start-benefits-lead">{page.description}</p>}
+          {pageShowsEyebrow(page) && <p className="funnel-start-benefits-kicker">{page.eyebrow}</p>}
+          <h1 id={`${page.id}-title`} tabIndex={-1} className={pageShowsTitle(page) ? undefined : "sr-only"}>{page.title}</h1>
+          {pageShowsDescription(page) && <p className="funnel-start-benefits-lead">{page.description}</p>}
           <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
             {page.buttonLabel}
           </button>

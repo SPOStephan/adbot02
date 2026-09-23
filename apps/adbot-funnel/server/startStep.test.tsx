@@ -19,6 +19,15 @@ describe("StartStep Layouts", () => {
     expect(html).toContain(getStartPage().buttonLabel);
   });
 
+  it("blendet Überzeile, Überschrift und Beschreibung per Auge aus", () => {
+    const page: StartPage = { ...getStartPage(), showEyebrow: false, showTitle: false, showDescription: false };
+    const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(html).not.toContain("funnel-eyebrow");
+    expect(html).not.toContain("funnel-description");
+    expect(html).toContain("sr-only");
+    expect(html).toContain(page.title);
+  });
+
   it("rendert die Vorteile-Variante mit zwei-Spalten-Kacheln und Branding-Trenner", () => {
     const page: StartPage = {
       ...getStartPage(),

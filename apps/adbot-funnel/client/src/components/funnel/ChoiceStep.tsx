@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ChoicePage } from "@shared/funnel";
+import { pageShowsDescription, pageShowsEyebrow, pageShowsTitle } from "@shared/pageCopy";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 
@@ -27,11 +28,11 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
   return (
     <section className="funnel-step funnel-question-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-question-copy">
-        {page.eyebrow && <p className="funnel-eyebrow">{page.eyebrow}</p>}
-        <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
-        <p id={`${page.id}-description`} className="funnel-description">{page.description}</p>
+        {pageShowsEyebrow(page) && <p className="funnel-eyebrow">{page.eyebrow}</p>}
+        <h1 id={`${page.id}-title`} tabIndex={-1} className={pageShowsTitle(page) ? undefined : "sr-only"}>{page.title}</h1>
+        {pageShowsDescription(page) && <p id={`${page.id}-description`} className="funnel-description">{page.description}</p>}
       </div>
-      <div className={page.type === "choice-grid" ? "funnel-choice-grid" : "funnel-choice-list"} role={page.allowMultiple ? "group" : "radiogroup"} aria-labelledby={`${page.id}-title`} aria-describedby={`${page.id}-description`}>
+      <div className={page.type === "choice-grid" ? "funnel-choice-grid" : "funnel-choice-list"} role={page.allowMultiple ? "group" : "radiogroup"} aria-labelledby={`${page.id}-title`} aria-describedby={pageShowsDescription(page) ? `${page.id}-description` : undefined}>
         {page.options.map((option, index) => {
           const active = selected.includes(option.value);
           return (

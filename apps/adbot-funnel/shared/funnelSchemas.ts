@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { ADDRESS_FORMS, FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, KNOCKOUT_ACTIONS, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { DEFAULT_ADDRESS_FORM } from "./addressForm";
+import { DEFAULT_FUNNEL_GATE } from "./funnelGate";
 import { DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS } from "./progressLayout";
 import { DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BENEFITS } from "./startLayout";
 
@@ -13,6 +15,9 @@ const optionSchema = z.object({
   icon: iconSchema,
   description: z.string().max(500).optional(),
   leadValue: z.number().min(0).max(10_000).optional(),
+  knockout: z.boolean().default(false),
+  knockoutAction: z.enum(KNOCKOUT_ACTIONS).default("exit"),
+  handoffFunnelId: z.string().max(80).default(""),
 });
 
 const pageBaseSchema = z.object({
@@ -26,6 +31,9 @@ const pageBaseSchema = z.object({
   progressTitle: z.string().max(80).default(""),
   progressHint: z.string().max(160).default(""),
   progressIcon: iconSchema.default("sparkles"),
+  showEyebrow: z.boolean().default(true),
+  showTitle: z.boolean().default(true),
+  showDescription: z.boolean().default(true),
 });
 
 const optionalHexColorSchema = z.string().max(16).refine(
@@ -109,6 +117,13 @@ export const funnelConfigSchema = z
     isPublished: z.boolean(),
     notificationEmail: z.union([z.literal(""), z.string().email()]),
     allowedEmbedOrigins: z.array(z.string().url()).max(20),
+    addressForm: z.enum(ADDRESS_FORMS).default(DEFAULT_ADDRESS_FORM),
+    gate: z.object({
+      exitTitle: z.string().min(1).max(300).default(DEFAULT_FUNNEL_GATE.exitTitle),
+      exitText: z.string().min(1).max(1200).default(DEFAULT_FUNNEL_GATE.exitText),
+      handoffTitle: z.string().min(1).max(300).default(DEFAULT_FUNNEL_GATE.handoffTitle),
+      handoffText: z.string().min(1).max(1200).default(DEFAULT_FUNNEL_GATE.handoffText),
+    }).default(DEFAULT_FUNNEL_GATE),
     progress: z.object({
       layout: z.enum(PROGRESS_LAYOUTS).default(DEFAULT_PROGRESS_LAYOUT),
       colors: z.object({

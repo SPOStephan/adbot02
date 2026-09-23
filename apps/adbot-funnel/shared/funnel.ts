@@ -1,6 +1,8 @@
 export const PAGE_TYPES = ["start", "choice-grid", "choice-list", "contact"] as const;
 export const FUNNEL_STATUSES = ["draft", "published", "paused", "archived"] as const;
 export const START_PAGE_LAYOUTS = ["classic", "benefits"] as const;
+export const ADDRESS_FORMS = ["du", "sie"] as const;
+export const KNOCKOUT_ACTIONS = ["exit", "handoff"] as const;
 export const PROGRESS_LAYOUTS = [
   "percent",
   "minimal",
@@ -90,6 +92,8 @@ export type FunnelPageType = (typeof PAGE_TYPES)[number];
 export type FunnelStatus = (typeof FUNNEL_STATUSES)[number];
 export type StartPageLayout = (typeof START_PAGE_LAYOUTS)[number];
 export type ProgressLayout = (typeof PROGRESS_LAYOUTS)[number];
+export type AddressForm = (typeof ADDRESS_FORMS)[number];
+export type KnockoutAction = (typeof KNOCKOUT_ACTIONS)[number];
 
 export type FunnelOptionIcon = (typeof FUNNEL_OPTION_ICONS)[number];
 export type LucideFunnelIcon = (typeof LUCIDE_FUNNEL_ICONS)[number];
@@ -173,6 +177,11 @@ export type FunnelOption = {
   description?: string;
   /** Optional EUR value sent to Meta with the Lead event when this answer is selected. */
   leadValue?: number;
+  /** If true, this answer ends the current funnel (exit page or handoff). */
+  knockout: boolean;
+  knockoutAction: KnockoutAction;
+  /** Published funnel to continue in when knockoutAction is handoff. */
+  handoffFunnelId: string;
 };
 
 export type ContactFieldKey = "name" | "company" | "email" | "phone" | "message";
@@ -199,6 +208,9 @@ type FunnelPageBase = {
   /** Optional second line under the progress title. */
   progressHint: string;
   progressIcon: FunnelOptionIcon;
+  showEyebrow: boolean;
+  showTitle: boolean;
+  showDescription: boolean;
 };
 
 export type StartBenefit = {
@@ -287,6 +299,13 @@ export type FunnelProgress = {
   colors: FunnelProgressColors;
 };
 
+export type FunnelGate = {
+  exitTitle: string;
+  exitText: string;
+  handoffTitle: string;
+  handoffText: string;
+};
+
 export type FunnelSocialProof = {
   enabled: boolean;
   eyebrow: string;
@@ -329,6 +348,8 @@ export type FunnelConfig = {
   allowedEmbedOrigins: string[];
   brand: FunnelBrand;
   progress: FunnelProgress;
+  addressForm: AddressForm;
+  gate: FunnelGate;
   socialProof: FunnelSocialProof;
   privacyUrl: string;
   privacyLabel: string;
