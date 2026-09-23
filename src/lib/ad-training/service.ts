@@ -199,7 +199,6 @@ export async function generateTrainingAd(input: {
       : "meta") as AdIntelligencePlatform,
     industry,
     skipCredits: true,
-    industry,
   });
 
   const runId = randomUUID();

@@ -41,8 +41,8 @@ export function isInspirationLearningEligible(input: {
 export function scoreInspirationMatch(
   pattern: Pick<
     InspirationPattern,
-    "platform" | "objective" | "industry" | "qualityRating" | "tags"
-  >,
+    "platform" | "objective" | "industry" | "qualityRating"
+  > & { tags?: string[] },
   query: { platform?: string; objective?: string; industry?: string; tags?: string[] },
 ): number {
   let score = Number.isFinite(pattern.qualityRating) ? pattern.qualityRating : 0;

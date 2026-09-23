@@ -147,7 +147,7 @@ async function loadTrainingGroundSignals(input: {
       .in("verdict", ["keep", "reject"])
       .order("rated_at", { ascending: false })
       .limit(80);
-    data = fallback.data;
+    data = (fallback.data ?? null) as typeof data;
     error = fallback.error;
   }
   if (error || !Array.isArray(data)) return [];
@@ -156,6 +156,9 @@ async function loadTrainingGroundSignals(input: {
     .map((row) => {
       const verdict = row.verdict === "reject" ? "reject" : row.verdict === "keep" ? "keep" : null;
       if (!verdict) return null;
+      const tags = "tags" in row && Array.isArray(row.tags)
+        ? row.tags.filter((item): item is string => typeof item === "string")
+        : [];
       const signal: TrainingGroundSignal = {
         runId: String(row.id),
         verdict,
@@ -166,9 +169,7 @@ async function loadTrainingGroundSignals(input: {
         headline: String(row.headline ?? ""),
         primaryText: String(row.primary_text ?? ""),
         note: String(row.verdict_note ?? ""),
-        tags: Array.isArray(row.tags)
-          ? row.tags.filter((item): item is string => typeof item === "string")
-          : [],
+        tags,
       };
       return {
         signal,

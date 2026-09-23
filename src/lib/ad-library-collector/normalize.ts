@@ -258,7 +258,7 @@ export function assertReadyForImport(input: {
 }
 
 export function scoreCollectorDraft(
-  draft: Pick<CollectorDraft, "platform" | "objective" | "industry" | "qualityRating">,
+  draft: Pick<CollectorDraft, "platform" | "objective" | "industry" | "qualityRating" | "tags">,
   query: { platform?: string; objective?: string; industry?: string },
 ): number {
   return scoreInspirationMatch(
@@ -267,6 +267,7 @@ export function scoreCollectorDraft(
       objective: draft.objective,
       industry: draft.industry,
       qualityRating: draft.qualityRating,
+      tags: draft.tags,
     },
     query,
   );

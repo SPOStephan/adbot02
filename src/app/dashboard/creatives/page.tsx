@@ -75,7 +75,7 @@ export default async function CreativesPage() {
 
   const assets: MediaLibraryAssetRow[] = assetsResult.error
     ? []
-    : ((assetsResult.data ?? []) as MediaLibraryAssetRow[]);
+    : ((assetsResult.data ?? []) as unknown as MediaLibraryAssetRow[]);
 
   return (
     <>
