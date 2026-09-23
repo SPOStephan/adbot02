@@ -257,8 +257,19 @@
   .funnel-progress-stepper-illustrated .funnel-progress-dot { background: color-mix(in srgb, var(--fp-active, var(--funnel-accent)) 14%, #fff); border-color: transparent; }
   .funnel-progress-stepper-illustrated li[data-state="upcoming"] .funnel-progress-dot { background: var(--fp-upcoming, #eef3f7); }
   .funnel-progress-stepper-illustrated li[data-state="current"] .funnel-progress-dot,
-  .funnel-progress-stepper-illustrated li[data-state="completed"] .funnel-progress-dot { background: color-mix(in srgb, var(--fp-active, var(--funnel-accent)) 16%, #fff); }
-  .funnel-progress-stepper-brand .funnel-progress-dot { background: transparent; border: 0; width: 28px; height: 28px; }
+  .funnel-progress-stepper-illustrated li[data-state="completed"] .funnel-progress-dot {
+    background: color-mix(in srgb, var(--fp-active, var(--funnel-accent)) 16%, #fff);
+    border-color: transparent;
+    color: var(--fp-active, var(--funnel-accent));
+  }
+  .funnel-progress-stepper-brand .funnel-progress-dot,
+  .funnel-progress-stepper-brand li[data-state="current"] .funnel-progress-dot,
+  .funnel-progress-stepper-brand li[data-state="completed"] .funnel-progress-dot {
+    background: transparent;
+    border: 0;
+    width: 28px;
+    height: 28px;
+  }
   .funnel-progress-stepper-brand li + li::before { top: 13px; }
   .funnel-progress-chips { display: flex; gap: 8px; margin: 0; padding: 4px 0; list-style: none; overflow-x: auto; }
   .funnel-progress-chips li { flex: 1 1 0; min-width: 110px; display: grid; gap: 2px; padding: 10px 12px; border-radius: 16px; background: #fff; border: 1px solid #e6eef5; }
