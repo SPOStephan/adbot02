@@ -18,9 +18,10 @@ import type {
   StartBenefit,
   StartPage,
 } from "@shared/funnel";
-import { resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundOpacity, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
+import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
 
 const PAGE_SIZE = 1_000;
 const memoryStartedAt = new Date().toISOString();
@@ -142,6 +143,10 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         layout: resolveStartLayout(startPage),
         benefitsBandTitle: typeof startPage.benefitsBandTitle === "string" ? startPage.benefitsBandTitle : "",
         secondaryButtonLabel: typeof startPage.secondaryButtonLabel === "string" ? startPage.secondaryButtonLabel : "",
+        heroBackgroundAssetId: typeof startPage.heroBackgroundAssetId === "string" ? startPage.heroBackgroundAssetId : "",
+        heroBackgroundDesktopUrl: typeof startPage.heroBackgroundDesktopUrl === "string" ? startPage.heroBackgroundDesktopUrl : "",
+        heroBackgroundMobileUrl: typeof startPage.heroBackgroundMobileUrl === "string" ? startPage.heroBackgroundMobileUrl : "",
+        heroBackgroundOpacity: clampHeroBackgroundOpacity(startPage.heroBackgroundOpacity),
         benefits: Array.isArray(startPage.benefits)
           ? startPage.benefits.slice(0, 12).map(benefit => ({
             id: benefit.id || randomUUID(),
@@ -769,4 +774,5 @@ export function resetMemoryStoreForTests() {
   memoryApplications.splice(0, memoryApplications.length);
   memoryMetaServerSettings.clear();
   client = undefined;
+  resetFunnelMediaStoreForTests();
 }

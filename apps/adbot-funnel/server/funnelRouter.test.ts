@@ -188,6 +188,22 @@ describe("Funnel-Router", () => {
     expect((await publicCaller.funnel.publicConfig({ slug: config.slug })).brand.faviconUrl).toBe(stored.url);
   });
 
+  it("nimmt zugeschnittene Hintergrundbilder in die Kundenbibliothek auf", async () => {
+    const admin = appRouter.createCaller(adminContext);
+    const config = await admin.funnel.adminConfig({ id: "10000000-0000-4000-8000-000000000001" }).then(result => result.config);
+    const tiny = Buffer.from("d2VicA==", "base64");
+    const asset = await admin.funnel.uploadHeroBackground({
+      funnelId: config.id,
+      fileName: "hero.jpg",
+      desktop: { dataBase64: tiny.toString("base64"), mimeType: "image/webp", size: tiny.byteLength },
+      mobile: { dataBase64: tiny.toString("base64"), mimeType: "image/webp", size: tiny.byteLength },
+    });
+    expect(asset.desktopUrl.length).toBeGreaterThan(0);
+    expect(asset.mobileUrl.length).toBeGreaterThan(0);
+    const library = await admin.funnel.mediaLibrary({ funnelId: config.id });
+    expect(library.some(item => item.id === asset.id)).toBe(true);
+  });
+
   it("erstellt, dupliziert und filtert mehrere Funnel ohne Bewerbungen zu kopieren", async () => {
     const admin = appRouter.createCaller(adminContext);
     const publicCaller = appRouter.createCaller(publicContext);

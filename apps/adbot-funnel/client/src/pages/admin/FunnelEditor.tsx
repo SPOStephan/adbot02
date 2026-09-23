@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, UploadCloud, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
 import type { ContactPage, FunnelConfig, FunnelPage, StartPage } from "@shared/funnel";
@@ -12,29 +12,18 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BrandColorField } from "@/components/admin/BrandColorField";
 import { EditorPreview } from "@/components/admin/EditorPreview";
+import { HeroBackgroundField } from "@/components/admin/HeroBackgroundField";
 import { IconColorField } from "@/components/admin/IconColorField";
 import { IconPicker } from "@/components/admin/IconPicker";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
-import { formatHexColorDraft, normalizeHexColor } from "@/lib/hexColor";
+import { useFunnelEditorHistory } from "@/hooks/useFunnelEditorHistory";
 
 const pageLabels: Record<FunnelPage["type"], string> = { start: "Startseite", "choice-grid": "Symbolkacheln", "choice-list": "Buttonliste", contact: "Kontaktformular" };
 
 function FormRow({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return <div className="grid gap-2"><Label>{label}</Label>{children}{hint && <p className="text-xs text-muted-foreground">{hint}</p>}</div>;
-}
-
-function ColorField({ label, value, onChange, hint }: { label: string; value: string; onChange: (value: string) => void; hint?: string }) {
-  const [draft, setDraft] = useState(value.toUpperCase());
-  useEffect(() => setDraft(value.toUpperCase()), [value]);
-  const valid = normalizeHexColor(draft);
-  const updateDraft = (input: string) => {
-    const next = formatHexColorDraft(input);
-    setDraft(next);
-    const normalized = normalizeHexColor(next);
-    if (normalized && normalized !== value.toUpperCase()) onChange(normalized);
-  };
-  return <FormRow label={label} hint={hint}><div className={`grid gap-1.5 rounded-xl border bg-slate-50 p-2 ${draft && !valid ? "border-amber-400" : ""}`}><div className="flex items-center gap-2"><Input className="h-10 w-12 shrink-0 cursor-pointer border-0 bg-transparent p-0" type="color" value={value} aria-label={`${label} visuell auswählen`} onChange={event => onChange(event.target.value.toUpperCase())} /><Input className="h-10 min-w-0 bg-white font-mono text-sm font-semibold uppercase" value={draft} placeholder="#0165C3" maxLength={7} spellCheck={false} inputMode="text" aria-label={`${label} als Hexwert`} aria-invalid={Boolean(draft && !valid)} onChange={event => updateDraft(event.target.value)} onBlur={() => setDraft(value.toUpperCase())} /></div>{draft && !valid && <p className="px-1 text-[11px] font-medium text-amber-700" role="status">Vollständigen Hexwert im Format #RRGGBB eingeben.</p>}</div></FormRow>;
 }
 
 export default function FunnelEditor() {
@@ -43,12 +32,19 @@ export default function FunnelEditor() {
   const query = trpc.funnel.adminConfig.useQuery(funnelId ? { id: funnelId } : undefined, { enabled: Boolean(funnelId) });
   const utils = trpc.useUtils();
   const save = trpc.funnel.saveConfig.useMutation({
-    onSuccess: async saved => { setConfig(saved); setDirty(false); await Promise.all([utils.funnel.adminConfig.invalidate({ id: saved.id }), utils.funnel.funnels.invalidate()]); toast.success("Funnel gespeichert"); },
     onError: error => toast.error(error.message),
   });
   const [config, setConfig] = useState<FunnelConfig>();
   const [selectedId, setSelectedId] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [autosaveLabel, setAutosaveLabel] = useState("");
+  const history = useFunnelEditorHistory();
+  const loadedIdRef = useRef<string | null>(null);
+  const configRef = useRef<FunnelConfig | undefined>(undefined);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
+
+  useEffect(() => { configRef.current = config; }, [config]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -59,20 +55,63 @@ export default function FunnelEditor() {
 
   useEffect(() => {
     if (!query.data?.config) return;
+    if (loadedIdRef.current === query.data.config.id && configRef.current) return;
+    loadedIdRef.current = query.data.config.id;
     setConfig(query.data.config);
     setSelectedId(query.data.config.pages[0]?.id ?? "");
     setDirty(false);
+    history.reset();
+    setAutosaveLabel("");
   }, [query.data?.config]);
 
+  const persist = (next: FunnelConfig, silent: boolean) => {
+    save.mutate(next, {
+      onSuccess: async () => {
+        setDirty(false);
+        setAutosaveLabel(silent ? "Automatisch gespeichert" : "Gespeichert");
+        if (!silent) {
+          toast.success("Funnel gespeichert");
+          await utils.funnel.funnels.invalidate();
+        }
+      },
+    });
+  };
+
+  const scheduleAutosave = () => {
+    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = window.setTimeout(() => {
+      const next = configRef.current;
+      if (!next || save.isPending) return;
+      persist(next, true);
+    }, 1500);
+  };
+
+  useEffect(() => {
+    intervalRef.current = window.setInterval(() => {
+      const next = configRef.current;
+      if (!next || !dirty || save.isPending) return;
+      persist(next, true);
+    }, 60_000);
+    return () => {
+      if (intervalRef.current) window.clearInterval(intervalRef.current);
+      if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    };
+  }, [dirty, save.isPending]);
+
   const selectedPage = useMemo(() => config?.pages.find(page => page.id === selectedId) ?? config?.pages[0], [config, selectedId]);
-  const changeConfig = (updater: (current: FunnelConfig) => FunnelConfig) => {
-    setConfig(current => current ? updater(current) : current);
+  const changeConfig = (updater: (current: FunnelConfig) => FunnelConfig, immediate = true) => {
+    setConfig(current => {
+      if (!current) return current;
+      history.record(current, immediate);
+      return updater(current);
+    });
     setDirty(true);
+    scheduleAutosave();
   };
   const faviconUpload = trpc.funnel.uploadFavicon.useMutation({
     onSuccess: uploaded => {
       changeConfig(current => ({ ...current, brand: { ...current.brand, faviconUrl: uploaded.url } }));
-      toast.success("Favicon hochgeladen – bitte den Funnel noch speichern.");
+      toast.success("Favicon hochgeladen.");
     },
     onError: error => toast.error(error.message),
   });
@@ -93,7 +132,7 @@ export default function FunnelEditor() {
       toast.error("Die Favicon-Datei konnte nicht gelesen werden.");
     }
   };
-  const patchPage = (patch: Partial<FunnelPage>) => changeConfig(current => ({ ...current, pages: current.pages.map(page => page.id === selectedId ? ({ ...page, ...patch } as FunnelPage) : page) }));
+  const patchPage = (patch: Partial<FunnelPage>, immediate = true) => changeConfig(current => ({ ...current, pages: current.pages.map(page => page.id === selectedId ? ({ ...page, ...patch } as FunnelPage) : page) }), immediate);
   const navigateSafely = (path: string) => {
     if (dirty && !window.confirm("Ungespeicherte Änderungen verwerfen?")) return;
     setLocation(path);
@@ -104,29 +143,44 @@ export default function FunnelEditor() {
   if (query.isLoading || !config || !selectedPage) return <div className="min-h-[60vh] grid place-items-center text-muted-foreground" role="status" aria-live="polite"><span className="flex items-center gap-2 text-sm"><Loader2 className="animate-spin" aria-hidden="true" />Editor wird geladen …</span></div>;
 
   const selectedIndex = config.pages.findIndex(page => page.id === selectedPage.id);
+  const undoLast = () => {
+    const previous = history.undo();
+    if (!previous) return;
+    setConfig(previous);
+    setSelectedId(current => previous.pages.some(page => page.id === current) ? current : previous.pages[0]?.id ?? "");
+    setDirty(true);
+    scheduleAutosave();
+  };
   const duplicate = () => {
-    const next = duplicateFunnelPage(config, selectedPage.id);
-    const newPage = next.pages[selectedIndex + 1];
-    setConfig(next); setSelectedId(newPage?.id ?? selectedId); setDirty(true);
+    changeConfig(current => {
+      const next = duplicateFunnelPage(current, selectedPage.id);
+      const newPage = next.pages[selectedIndex + 1];
+      if (newPage) setSelectedId(newPage.id);
+      return next;
+    });
   };
   const remove = () => {
     if (!window.confirm(`Seite „${selectedPage.name}“ wirklich löschen?`)) return;
-    const next = deleteFunnelPage(config, selectedPage.id);
-    if (next === config) { toast.error("Start- und Kontaktseite können nicht gelöscht werden."); return; }
-    setConfig(next); setSelectedId(next.pages[Math.max(0, selectedIndex - 1)]?.id ?? ""); setDirty(true);
+    changeConfig(current => {
+      const next = deleteFunnelPage(current, selectedPage.id);
+      if (next === current) { toast.error("Start- und Kontaktseite können nicht gelöscht werden."); return current; }
+      setSelectedId(next.pages[Math.max(0, selectedIndex - 1)]?.id ?? "");
+      return next;
+    });
   };
-  const move = (direction: -1 | 1) => { setConfig(moveFunnelPage(config, selectedPage.id, direction)); setDirty(true); };
+  const move = (direction: -1 | 1) => { changeConfig(current => moveFunnelPage(current, selectedPage.id, direction)); };
 
   return (
     <div className="min-h-[calc(100vh-2rem)] -m-4 bg-slate-50">
       <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-5 py-3 backdrop-blur">
         <div className="flex min-w-0 items-center gap-3"><Button variant="ghost" size="icon" aria-label="Zur Funnel-Bibliothek" onClick={() => navigateSafely("/admin")}><ArrowLeft className="size-4" /></Button><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.14em] text-[#0165c3]">Funnel Studio</p><h1 className="truncate text-lg font-bold tracking-tight">{config.title}</h1></div></div>
         <div className="flex items-center gap-2">
-          {dirty && <span className="hidden text-xs text-amber-700 sm:inline">Ungespeicherte Änderungen</span>}
+          {dirty ? <span className="hidden text-xs text-amber-700 sm:inline">Ungespeicherte Änderungen</span> : autosaveLabel && <span className="hidden text-xs text-emerald-700 sm:inline">{autosaveLabel}</span>}
           {save.error && <span className="hidden max-w-52 truncate text-xs text-destructive lg:inline" role="alert">{save.error.message}</span>}
+          <Button type="button" size="icon" className="size-10 rounded-full border bg-white shadow-sm" variant="outline" aria-label="Letzten Schritt rückgängig machen" title="Rückgängig" disabled={!history.canUndo} onClick={undoLast}><Undo2 className="size-5" /></Button>
           <Button variant="outline" onClick={() => navigateSafely(`/admin/funnels/${config.id}/settings`)}><Settings2 className="size-4" />Einstellungen</Button>
           <Button variant="outline" asChild={config.status === "published"} disabled={config.status !== "published"}>{config.status === "published" ? <a href={`/f/${config.slug}`} target="_blank" rel="noreferrer"><ExternalLink className="size-4" />Öffnen</a> : <span title="Veröffentliche den Funnel zuerst"><ExternalLink className="size-4" />Nicht öffentlich</span>}</Button>
-          <Button className="bg-[#0165c3] hover:bg-[#004d98]" disabled={!dirty || save.isPending} aria-busy={save.isPending} onClick={() => save.mutate(config)}>{save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}Speichern</Button>
+          <Button className="bg-[#0165c3] hover:bg-[#004d98]" disabled={!dirty || save.isPending} aria-busy={save.isPending} onClick={() => persist(config, false)}>{save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}Speichern</Button>
         </div>
       </header>
 
@@ -148,14 +202,29 @@ export default function FunnelEditor() {
             <TabsList className="mb-5 grid w-full grid-cols-2"><TabsTrigger value="page">Seite</TabsTrigger><TabsTrigger value="global"><Settings2 className="size-3.5" />Global</TabsTrigger></TabsList>
             <TabsContent value="page" className="mt-0 grid gap-5">
               <div className="flex items-center justify-between gap-2"><div><p className="text-xs text-muted-foreground">{pageLabels[selectedPage.type]}</p><h2 className="font-bold">{selectedPage.name}</h2></div><div className="flex gap-1"><Button size="icon" variant="ghost" title="Nach oben" disabled={selectedIndex <= 1 || selectedPage.type === "contact"} onClick={() => move(-1)}><ArrowUp className="size-4" /></Button><Button size="icon" variant="ghost" title="Nach unten" disabled={selectedIndex >= config.pages.length - 2 || selectedPage.type === "start"} onClick={() => move(1)}><ArrowDown className="size-4" /></Button><Button size="icon" variant="ghost" title="Duplizieren" onClick={duplicate}><Copy className="size-4" /></Button><Button size="icon" variant="ghost" className="text-destructive" title="Löschen" disabled={selectedPage.type === "start" || selectedPage.type === "contact"} onClick={remove}><Trash2 className="size-4" /></Button></div></div>
-              <FormRow label="Interner Seitenname"><Input value={selectedPage.name} onChange={event => patchPage({ name: event.target.value })} /></FormRow>
-              <FormRow label="Überzeile (optional)" hint="Leer lassen, um diesen Bereich vollständig auszublenden."><Input value={selectedPage.eyebrow} placeholder="Zum Beispiel: Kurze Frage" onChange={event => patchPage({ eyebrow: event.target.value } as Partial<FunnelPage>)} /></FormRow>
-              <FormRow label="Überschrift"><Textarea value={selectedPage.title} rows={2} onChange={event => patchPage({ title: event.target.value })} /></FormRow>
-              <FormRow label="Beschreibung"><Textarea value={selectedPage.description} rows={3} onChange={event => patchPage({ description: event.target.value })} /></FormRow>
-              <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value })} /></FormRow>
+              {selectedPage.type === "start" && (
+                <StartLayoutPicker
+                  value={resolveStartLayout(selectedPage)}
+                  onChange={next => {
+                    const seeded = next === "benefits" && selectedPage.benefits.length === 0
+                      ? benefitsFromBullets(selectedPage.bullets)
+                      : selectedPage.benefits;
+                    const bandTitle = next === "benefits" && !selectedPage.benefitsBandTitle.trim()
+                      ? "Deine Vorteile"
+                      : selectedPage.benefitsBandTitle;
+                    patchPage({ layout: next, benefits: seeded, benefitsBandTitle: bandTitle } as Partial<FunnelPage>);
+                  }}
+                />
+              )}
+              <FormRow label="Interner Seitenname"><Input value={selectedPage.name} onChange={event => patchPage({ name: event.target.value }, false)} /></FormRow>
+              <FormRow label="Überzeile (optional)" hint="Leer lassen, um diesen Bereich vollständig auszublenden."><Input value={selectedPage.eyebrow} placeholder="Zum Beispiel: Kurze Frage" onChange={event => patchPage({ eyebrow: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
+              <FormRow label="Überschrift"><Textarea value={selectedPage.title} rows={2} onChange={event => patchPage({ title: event.target.value }, false)} /></FormRow>
+              <FormRow label="Beschreibung"><Textarea value={selectedPage.description} rows={3} onChange={event => patchPage({ description: event.target.value }, false)} /></FormRow>
+              <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
 
               {selectedPage.type === "start" && (
                 <StartPageFields
+                  funnelId={config.id}
                   page={selectedPage}
                   brandColor={config.brand.accentColor}
                   patch={patchPage}
@@ -191,11 +260,11 @@ export default function FunnelEditor() {
               <div className="grid gap-4 rounded-2xl border p-4">
                 <div><p className="text-sm font-bold">Grundfarben</p><p className="text-xs text-muted-foreground">Hintergrund und Text des gesamten Funnels.</p></div>
                 <FormRow label="Akzentfarbe" hint="Verbindliche Markenfarbe für Buttons und Fortschritt."><div className="flex items-center gap-3"><span className="size-10 rounded-xl border shadow-sm" style={{ background: "#0165c3" }} /><Input value="#0165c3" readOnly /></div></FormRow>
-                <div className="grid grid-cols-2 gap-3"><ColorField label="Hintergrund" value={config.brand.backgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, backgroundColor: value } }))} /><ColorField label="Textfarbe" value={config.brand.textColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, textColor: value } }))} /></div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><BrandColorField label="Hintergrund" value={config.brand.backgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, backgroundColor: value } }))} /><BrandColorField label="Textfarbe" value={config.brand.textColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, textColor: value } }))} /></div>
               </div>
               <div className="grid gap-4 rounded-2xl border p-4">
                 <div><p className="text-sm font-bold">Klickbare Antwortkästen</p><p className="text-xs text-muted-foreground">Normale und ausgewählte Zustände lassen sich getrennt gestalten. In der Vorschau können Sie eine Antwort anklicken.</p></div>
-                <div className="grid grid-cols-2 gap-3"><ColorField label="Kasten" value={config.brand.choiceBackgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceBackgroundColor: value } }))} /><ColorField label="Kasten-Text" value={config.brand.choiceTextColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceTextColor: value } }))} /><ColorField label="Auswahl" value={config.brand.choiceSelectedBackgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceSelectedBackgroundColor: value } }))} /><ColorField label="Auswahl-Text" value={config.brand.choiceSelectedTextColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceSelectedTextColor: value } }))} /><ColorField label="Auswahl-Rahmen" value={config.brand.choiceSelectedBorderColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceSelectedBorderColor: value } }))} /></div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><BrandColorField label="Kasten" value={config.brand.choiceBackgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceBackgroundColor: value } }))} /><BrandColorField label="Kasten-Text" value={config.brand.choiceTextColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceTextColor: value } }))} /><BrandColorField label="Auswahl" value={config.brand.choiceSelectedBackgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceSelectedBackgroundColor: value } }))} /><BrandColorField label="Auswahl-Text" value={config.brand.choiceSelectedTextColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceSelectedTextColor: value } }))} /><BrandColorField label="Auswahl-Rahmen" value={config.brand.choiceSelectedBorderColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, choiceSelectedBorderColor: value } }))} /></div>
               </div>
               <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Social Proof anzeigen</strong><small className="text-muted-foreground">Vertrauenshinweis im Footer</small></span><Switch checked={config.socialProof.enabled} onCheckedChange={checked => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, enabled: checked } }))} /></label>
               <FormRow label="Social-Proof-Überschrift"><Input value={config.socialProof.eyebrow} onChange={event => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, eyebrow: event.target.value } }))} /></FormRow>
@@ -214,54 +283,45 @@ export default function FunnelEditor() {
 }
 
 function StartPageFields({
+  funnelId,
   page,
   brandColor,
   patch,
 }: {
+  funnelId: string;
   page: StartPage;
   brandColor: string;
-  patch: (value: Partial<FunnelPage>) => void;
+  patch: (value: Partial<FunnelPage>, immediate?: boolean) => void;
 }) {
   const layout = resolveStartLayout(page);
   return (
     <>
-      <StartLayoutPicker
-        value={layout}
-        onChange={next => {
-          const seeded = next === "benefits" && page.benefits.length === 0
-            ? benefitsFromBullets(page.bullets)
-            : page.benefits;
-          const bandTitle = next === "benefits" && !page.benefitsBandTitle.trim()
-            ? "Deine Vorteile"
-            : page.benefitsBandTitle;
-          patch({ layout: next, benefits: seeded, benefitsBandTitle: bandTitle } as Partial<FunnelPage>);
-        }}
-      />
       <FormRow label="Bild-URL" hint="Leer lassen, um die neutrale Illustration bzw. den reinen Text-Hero zu verwenden.">
-        <Input value={page.heroImageUrl} onChange={event => patch({ heroImageUrl: event.target.value } as Partial<FunnelPage>)} />
+        <Input value={page.heroImageUrl} onChange={event => patch({ heroImageUrl: event.target.value } as Partial<FunnelPage>, false)} />
       </FormRow>
 
       {layout === "classic" && (
         <>
           <FormRow label="Vorteile – eine Zeile pro Punkt">
-            <Textarea value={page.bullets.join("\n")} rows={4} onChange={event => patch({ bullets: event.target.value.split("\n").filter(Boolean) } as Partial<FunnelPage>)} />
+            <Textarea value={page.bullets.join("\n")} rows={4} onChange={event => patch({ bullets: event.target.value.split("\n").filter(Boolean) } as Partial<FunnelPage>, false)} />
           </FormRow>
           <FormRow label="Hinweis unter dem Button">
-            <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>)} />
+            <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
         </>
       )}
 
       {layout === "benefits" && (
         <>
+          <HeroBackgroundField funnelId={funnelId} page={page} onChange={next => patch(next as Partial<FunnelPage>)} />
           <FormRow label="Trenner-Überschrift" hint="Volle Fläche in der Brandingfarbe, z. B. „Deine Vorteile bei uns“.">
-            <Input value={page.benefitsBandTitle} onChange={event => patch({ benefitsBandTitle: event.target.value } as Partial<FunnelPage>)} />
+            <Input value={page.benefitsBandTitle} onChange={event => patch({ benefitsBandTitle: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
           <FormRow label="Hinweis unter dem oberen Button">
-            <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>)} />
+            <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
           <FormRow label="Unterer Button" hint="Leer = gleiche Beschriftung wie der Button oben.">
-            <Input value={page.secondaryButtonLabel} placeholder={page.buttonLabel} onChange={event => patch({ secondaryButtonLabel: event.target.value } as Partial<FunnelPage>)} />
+            <Input value={page.secondaryButtonLabel} placeholder={page.buttonLabel} onChange={event => patch({ secondaryButtonLabel: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
           <div className="grid gap-3">
             <div className="flex items-center justify-between">

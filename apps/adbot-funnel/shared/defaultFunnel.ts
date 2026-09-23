@@ -63,6 +63,10 @@ export const defaultFunnel: FunnelConfig = {
       benefitsBandTitle: "Deine Vorteile",
       secondaryButtonLabel: "",
       benefits: [],
+      heroBackgroundAssetId: "",
+      heroBackgroundDesktopUrl: "",
+      heroBackgroundMobileUrl: "",
+      heroBackgroundOpacity: 15,
     },
     {
       id: "page-role",
