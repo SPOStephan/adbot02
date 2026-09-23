@@ -19,7 +19,7 @@ const routes = [
   ["src/app/api/connectors/meta/disconnect/route.ts", "request.headers.get(\"content-type\")"],
   ["src/app/api/connectors/meta/assets/select-ad-account/route.ts", "request.headers.get(\"content-type\")"],
   ["src/app/api/connectors/meta/assets/prune/route.ts", "request.headers.get(\"content-type\")"],
-  ["src/app/api/meta/automation/asset-upload/route.ts", "authenticateMetaCustomer()"],
+  ["src/app/api/meta/automation/asset-upload/route.ts", "authenticateLibraryCustomer()"],
 ];
 
 for (const [path, mutationBoundary] of routes) {

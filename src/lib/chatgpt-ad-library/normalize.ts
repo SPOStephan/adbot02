@@ -168,6 +168,8 @@ export function toAdExampleInput(record: ChatGPTAdLibraryRecord): AdExampleInput
     qualityRating: 3,
     // Never auto-enable for customer-facing creative generation.
     useForGeneration: false,
+    structureKind: "none",
+    structureSlotsText: "",
   };
 }
 

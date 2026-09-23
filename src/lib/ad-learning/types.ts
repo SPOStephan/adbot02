@@ -16,6 +16,14 @@ export type AdLearningObjective =
   | "retention"
   | "other";
 
+export type InspirationStructureSlot = {
+  key: string;
+  role: string;
+  placement: string;
+  maxChars: number;
+  notes: string;
+};
+
 export type InspirationPattern = {
   brandAssetId: string;
   platform: string;
@@ -27,6 +35,9 @@ export type InspirationPattern = {
   evidenceLevel: string;
   triggeringPrompts: string[];
   qualityRating: number;
+  tags: string[];
+  structureKind: string;
+  structureSlots: InspirationStructureSlot[];
 };
 
 export type InspirationCorpusBucket = {
@@ -64,6 +75,7 @@ export type TrainingGroundSignal = {
   headline: string;
   primaryText: string;
   note: string;
+  tags: string[];
 };
 
 export type AdLearningContext = {

@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { formatLabelForDimensions } from "@/lib/media-library/meta-formats";
+import { describeFormatStep } from "@/lib/media-library/platform-formats";
 import { parseAssetUploadResponse } from "@/lib/media-library/parse-upload-response";
 
 export type MediaLibraryAssetView = {
@@ -46,11 +47,13 @@ export function MediaLibraryClient({
   assets: initialAssets,
   brandProfiles,
   metaConnected,
+  connectedPlatforms = [],
   loadError = null,
 }: {
   assets: MediaLibraryAssetView[];
   brandProfiles: BrandProfileOption[];
   metaConnected: boolean;
+  connectedPlatforms?: string[];
   /** Set when the server list query failed — never imply an empty library. */
   loadError?: string | null;
 }) {
@@ -88,7 +91,6 @@ export function MediaLibraryClient({
   }, [brandProfileId, brandProfiles]);
 
   useEffect(() => {
-    if (!metaConnected) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -124,7 +126,7 @@ export function MediaLibraryClient({
     return () => {
       cancelled = true;
     };
-  }, [metaConnected]);
+  }, []);
 
   const lockedPhotoOptions = useMemo(
     () =>
@@ -321,9 +323,6 @@ export function MediaLibraryClient({
     setGenError(null);
     setGenMessage(null);
     try {
-      if (!brandProfileId) {
-        throw new Error("Für KI-Generierung brauchst du ein aktives Brand-Profil.");
-      }
       if (!genConfig?.configured || !genConfig.providerKey || !genModelId) {
         throw new Error(
           "KI-Generierung ist noch nicht konfiguriert (Provider/Modell).",
@@ -409,17 +408,10 @@ export function MediaLibraryClient({
               Creative hochladen
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              PNG/JPEG (256–4096px). Ein Bild: Adbot schneidet nur fehlende
-              Meta-Formate zu (1:1, 4:5, 9:16). Fertige Formate kannst du im
-              Creative-Dialog beim Launch einzeln hochladen. Brand-Profil ist
-              optional — für Active Launch reicht die Zuordnung zum Launch.
+              PNG/JPEG (256–4096px). Zuerst die Mastergrafik — Formate kommen
+              danach nur für verbundene Plattformen. {describeFormatStep(connectedPlatforms)}
             </p>
-            {!metaConnected ? (
-              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                Bitte zuerst ein Meta-Werbekonto verbinden.
-              </p>
-            ) : (
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
                 {brandProfiles.length ? (
                   <label className="grid flex-1 gap-1 text-sm font-medium">
                     Brand-Profil (optional)
@@ -456,7 +448,6 @@ export function MediaLibraryClient({
                   />
                 </label>
               </div>
-            )}
             {loadError ? (
               <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
                 {loadError}
@@ -476,8 +467,7 @@ export function MediaLibraryClient({
         </div>
       </section>
 
-      {metaConnected ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-start gap-3">
             <span className="grid size-10 place-items-center rounded-xl bg-slate-900 text-white">
               <Sparkles className="size-5" />
@@ -487,20 +477,16 @@ export function MediaLibraryClient({
                 KI-Creative erzeugen
               </h2>
               <p className="mt-1 text-sm text-slate-600">
-                Free: vollständiges KI-Bild. Locked Photo: KI-Hintergrund mit
-                unverändert eingebettetem Foto. Optional Style-Referenzen aus
-                markierten Beispielen (max. 4). Ergebnis erscheint nach dem
-                Worker-Lauf in der Library.
+                Mastergrafik zuerst, unabhängig von Meta. {describeFormatStep(connectedPlatforms)}
+                {genConfig?.configured && genConfig.defaultModelId
+                  ? ` Bildmodell: ${genConfig.defaultModelId} über ${genConfig.providerKey === "openrouter" ? "OpenRouter" : genConfig.providerKey}.`
+                  : ""}
               </p>
 
               {!genConfig?.configured ? (
                 <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   KI-Provider ist noch nicht konfiguriert. Sobald OpenRouter (oder
                   HTTP) live ist, kannst du hier generieren.
-                </p>
-              ) : !brandProfiles.length ? (
-                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Aktives Brand-Profil im Control Center nötig.
                 </p>
               ) : (
                 <div className="mt-4 grid gap-3">
@@ -531,23 +517,26 @@ export function MediaLibraryClient({
                     </button>
                   </div>
 
-                  <label className="grid gap-1 text-sm font-medium">
-                    Brand-Profil
-                    <select
-                      className="h-10 rounded-lg border border-slate-200 px-3"
-                      disabled={busy}
-                      onChange={(event) => setBrandProfileId(event.target.value)}
-                      value={brandProfileId}
-                    >
-                      {brandProfiles.map((profile) => (
-                        <option key={profile.id} value={profile.id}>
-                          {profile.brandName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {brandProfiles.length ? (
+                    <label className="grid gap-1 text-sm font-medium">
+                      Brand-Profil (optional)
+                      <select
+                        className="h-10 rounded-lg border border-slate-200 px-3"
+                        disabled={busy}
+                        onChange={(event) => setBrandProfileId(event.target.value)}
+                        value={brandProfileId}
+                      >
+                        <option value="">Ohne Profil</option>
+                        {brandProfiles.map((profile) => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.brandName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
 
-                  {genConfig.modelAllowlist.length > 1 ? (
+                  {genConfig.modelAllowlist.length > 0 ? (
                     <label className="grid gap-1 text-sm font-medium">
                       Modell
                       <select
@@ -693,7 +682,6 @@ export function MediaLibraryClient({
             </div>
           </div>
         </section>
-      ) : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-extrabold tracking-tight">Deine Creatives</h2>

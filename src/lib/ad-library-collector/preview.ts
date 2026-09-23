@@ -80,6 +80,9 @@ export function buildCollectorMemoryPreview(input: {
         evidenceLevel: item.evidenceLevel,
         triggeringPrompts: [],
         qualityRating: item.qualityRating,
+        tags: item.tags ?? [],
+        structureKind: "none",
+        structureSlots: [],
       })),
   ]
     .map((pattern) => ({ pattern, score: scoreInspirationMatch(pattern, query) }))

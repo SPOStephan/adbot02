@@ -5,10 +5,9 @@ import {
   MediaLibraryError,
   uploadCustomerLibraryImage,
 } from "@/lib/media-library/upload";
-import {
-  CustomerControlServiceError,
-  authenticateMetaCustomer,
-} from "@/lib/meta/customer-control-service";
+import { authenticateLibraryCustomer } from "@/lib/creative-assets/library-customer";
+import { CustomerControlServiceError } from "@/lib/meta/customer-control-service";
+import { registerCustomerLibraryImage } from "@/lib/creative-assets/library-generate";
 import { isDashboardSameOriginRequest } from "@/lib/meta/customer-control-route";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -44,7 +43,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const customer = await authenticateMetaCustomer();
+    const customer = await authenticateLibraryCustomer();
 
     let form: FormData;
     try {
@@ -76,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     // Brand profile is optional for Media Library storage. If the customer
     // picks one, verify it belongs to this Meta account; otherwise store unbound.
-    if (brandProfileId) {
+    if (brandProfileId && customer.platformAccountId) {
       const admin = createAdminClient();
       const { data: profile } = await admin
         .from("brand_profiles")
@@ -125,6 +124,26 @@ export async function POST(request: NextRequest) {
     const mimeType =
       typeof file.type === "string" && file.type.trim() ? file.type : null;
 
+    if (!customer.platformAccountId) {
+      const brandAssetId = await registerCustomerLibraryImage({
+        userId: customer.userId,
+        platformAccountId: null,
+        fileName,
+        bytes,
+        sourceType: "UPLOADED",
+        metadata: { contract_version: 1, library: "customer", source_kind: "customer_upload" },
+      });
+      return NextResponse.json({
+        ok: true,
+        brandAssetId,
+        originalFilename: fileName,
+        preferredLaunchAssetId: brandAssetId,
+        assets: [{ brandAssetId, originalFilename: fileName, role: "original" }],
+        cropsGenerated: 0,
+        cropsSkipped: 0,
+      });
+    }
+
     const result = await uploadCustomerLibraryImage({
       userId: customer.userId,
       platformAccountId: customer.platformAccountId,
@@ -132,8 +151,8 @@ export async function POST(request: NextRequest) {
       fileName,
       mimeType,
       bytes,
-      // Dedicated format slots skip auto-crop; free upload uses smart crops.
-      generateMetaCrops: metaFormatKey ? false : generateMetaCrops,
+      generateMetaCrops:
+        metaFormatKey || !customer.metaConnected ? false : generateMetaCrops,
       metaFormatKey,
     });
 

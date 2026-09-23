@@ -848,7 +848,7 @@ begin
 end;
 $$;
 
--- A pending job remains untouched while the account kill-switch blocks writes.
+-- Generation is not a Meta write: enqueue + claim stay open while kill-switch freezes launches.
 insert into creative_test_ids (key, id)
 select 'frozen_job', public.enqueue_creative_asset_job(
   '10000000-0000-4000-8000-000000000001',
@@ -873,10 +873,10 @@ do $$
 declare
   v_failed boolean := false;
 begin
-  if exists (select 1 from creative_frozen_claim)
-    or (select status from public.creative_asset_jobs where id =
-      (select id from creative_test_ids where key = 'frozen_job')) <> 'PENDING' then
-    raise exception 'Kill-switch did not block creative claim';
+  if not exists (select 1 from creative_frozen_claim)
+    or (select job_id from creative_frozen_claim) <>
+      (select id from creative_test_ids where key = 'frozen_job') then
+    raise exception 'Creative claim must not depend on kill-switch';
   end if;
 
   begin
@@ -885,15 +885,21 @@ begin
       '20000000-0000-4000-8000-000000000001',
       (select id from creative_test_ids where key = 'owner_profile_v2'),
       'customer_http', 'image-model-v1', null,
-      '{"prompt":"Must not enqueue while frozen"}'::jsonb, 3
+      '{"prompt":"May enqueue while frozen — generation is not a Meta write"}'::jsonb, 3
     );
   exception when others then v_failed := true;
   end;
-  if not v_failed then
-    raise exception 'Creative job enqueued while kill-switch was frozen';
+  if v_failed then
+    raise exception 'Creative job enqueue must not depend on kill-switch';
   end if;
 end;
 $$;
+
+select public.fail_creative_asset_job(
+  (select job_id from creative_frozen_claim),
+  (select lease_token from creative_frozen_claim),
+  'PRE_DISPATCH', 'test_cleanup', 'Test cleanup', false, 60, null
+);
 
 select public.append_meta_kill_switch_state(
   'ACCOUNT',
@@ -901,24 +907,6 @@ select public.append_meta_kill_switch_state(
   '20000000-0000-4000-8000-000000000001',
   null, 'ALLOW', 'Creative test resume',
   'CUSTOMER', '10000000-0000-4000-8000-000000000001'
-);
-
-create temporary table creative_resumed_claim on commit drop as
-select * from public.claim_creative_asset_job('creative-worker-resumed', 180);
-
-do $$
-begin
-  if (select job_id from creative_resumed_claim) <>
-      (select id from creative_test_ids where key = 'frozen_job') then
-    raise exception 'Creative queue did not resume after ALLOW';
-  end if;
-end;
-$$;
-
-select public.fail_creative_asset_job(
-  (select job_id from creative_resumed_claim),
-  (select lease_token from creative_resumed_claim),
-  'PRE_DISPATCH', 'test_cleanup', 'Test cleanup', false, 60, null
 );
 
 -- Every account audit stream remains a contiguous SHA-256 chain.

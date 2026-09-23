@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getPublicCreativeGenerationConfig } from "@/lib/creative-assets/env";
-import {
-  CustomerControlServiceError,
-  authenticateMetaCustomer,
-} from "@/lib/meta/customer-control-service";
+import { authenticateLibraryCustomer } from "@/lib/creative-assets/library-customer";
+import { CustomerControlServiceError } from "@/lib/meta/customer-control-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +18,7 @@ const NO_STORE = {
  */
 export async function GET() {
   try {
-    await authenticateMetaCustomer();
+    await authenticateLibraryCustomer();
     const config = getPublicCreativeGenerationConfig();
     return NextResponse.json(
       {

@@ -33,27 +33,26 @@ export default async function CreativesPage() {
     redirect("/login?next=/dashboard/creatives");
   }
 
-  const { data: metaAccount } = await supabase
+  const { data: accounts } = await supabase
     .from("platform_accounts")
-    .select("id")
+    .select("id,platform")
     .eq("user_id", user.id)
-    .eq("platform", "meta")
     .is("revoked_at", null)
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
+
+  const accountRows = Array.isArray(accounts) ? accounts : [];
+  const metaAccount = accountRows.find((row) => row.platform === "meta") ?? null;
+  const connectedPlatforms = accountRows.map((row) => String(row.platform ?? ""));
 
   const [assetsResult, profilesResult] = await Promise.all([
-    metaAccount
-      ? supabase
-          .from("brand_assets")
-          .select(MEDIA_LIBRARY_ASSET_LIST_SELECT)
-          .eq("user_id", user.id)
-          .eq("platform_account_id", metaAccount.id)
-          .eq("library_scope", "CUSTOMER")
-          .neq("status", "REVOKED")
-          .order("created_at", { ascending: false })
-          .limit(100)
-      : Promise.resolve({ data: [] as MediaLibraryAssetRow[], error: null }),
+    supabase
+      .from("brand_assets")
+      .select(MEDIA_LIBRARY_ASSET_LIST_SELECT)
+      .eq("user_id", user.id)
+      .eq("library_scope", "CUSTOMER")
+      .neq("status", "REVOKED")
+      .order("created_at", { ascending: false })
+      .limit(100),
     metaAccount
       ? supabase
           .from("brand_profiles")
@@ -76,7 +75,7 @@ export default async function CreativesPage() {
 
   const assets: MediaLibraryAssetRow[] = assetsResult.error
     ? []
-    : ((assetsResult.data ?? []) as MediaLibraryAssetRow[]);
+    : ((assetsResult.data ?? []) as unknown as MediaLibraryAssetRow[]);
 
   return (
     <>
@@ -86,7 +85,8 @@ export default async function CreativesPage() {
         </p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Creatives</h1>
         <p className="mt-2 max-w-2xl text-slate-500">
-          Hochgeladene und generierte Assets für Meta-Launches und Beitrag-Push.
+          Hochgeladene und generierte Mastergrafiken — unabhängig von Meta.
+          Formatzuschnitte folgen im zweiten Schritt für die verbundenen Plattformen.
         </p>
       </div>
 
@@ -114,6 +114,7 @@ export default async function CreativesPage() {
           }))}
           loadError={loadError}
           metaConnected={Boolean(metaAccount)}
+          connectedPlatforms={connectedPlatforms}
         />
       </div>
     </>

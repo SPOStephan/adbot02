@@ -4,6 +4,7 @@ import {
   EMPTY_AD_LEARNING_CONTEXT,
   type AdLearningContext,
   type CustomerCreativeSignal,
+  type InspirationCorpusCensus,
   type InspirationPattern,
   type TrainingGroundSignal,
 } from "@/lib/ad-learning/types";
@@ -15,7 +16,6 @@ import {
   scoreTrainingGroundMatch,
   summarizeInspirationCorpus,
 } from "@/lib/ad-learning/context";
-import type { InspirationCorpusCensus } from "@/lib/ad-learning/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type LoadAdLearningContextInput = {
@@ -24,6 +24,7 @@ export type LoadAdLearningContextInput = {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[];
   landingHostname?: string;
   inspirationLimit?: number;
   customerLimit?: number;
@@ -46,6 +47,14 @@ type InspirationScanRow = {
   metadata: unknown;
   storage_path?: string | null;
   mime_type?: string | null;
+};
+
+type InspirationPickInput = {
+  platform?: string;
+  objective?: string;
+  industry?: string;
+  tags?: string[];
+  limit: number;
 };
 
 function exampleField(metadata: unknown, key: string): string {
@@ -85,7 +94,7 @@ async function scanInspirationLibraryRows(): Promise<InspirationScanRow[]> {
 
 function pickInspirationPatterns(
   rows: InspirationScanRow[],
-  input: { platform?: string; objective?: string; industry?: string; limit: number },
+  input: InspirationPickInput,
 ): InspirationPattern[] {
   return rows
     .map((row) => {
@@ -101,6 +110,7 @@ function pickInspirationPatterns(
           platform: input.platform,
           objective: input.objective,
           industry: input.industry,
+          tags: input.tags,
         }),
       };
     })
@@ -132,12 +142,9 @@ function censusFromScanRows(rows: InspirationScanRow[]): InspirationCorpusCensus
   );
 }
 
-async function loadInspirationPatterns(input: {
-  platform?: string;
-  objective?: string;
-  industry?: string;
-  limit: number;
-}): Promise<InspirationPattern[]> {
+async function loadInspirationPatterns(
+  input: InspirationPickInput,
+): Promise<InspirationPattern[]> {
   const rows = await scanInspirationLibraryRows();
   return pickInspirationPatterns(rows, input);
 }
@@ -146,6 +153,7 @@ export async function loadInspirationMemorySnapshot(input: {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[];
   limit?: number;
 }): Promise<{
   patterns: InspirationPattern[];
@@ -157,6 +165,7 @@ export async function loadInspirationMemorySnapshot(input: {
       platform: input.platform,
       objective: mapObjective(input.objective),
       industry: input.industry,
+      tags: input.tags,
       limit: Math.min(Math.max(input.limit ?? 8, 0), 8),
     }),
     census: censusFromScanRows(rows),
@@ -207,25 +216,42 @@ async function loadTrainingGroundSignals(input: {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[];
   landingHostname?: string;
   limit: number;
 }): Promise<TrainingGroundSignal[]> {
   if (input.limit < 1) return [];
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let query = admin
     .from("adbot_training_runs")
     .select(
-      "id,platform,objective,industry,landing_hostname,headline,primary_text,verdict,verdict_note,rated_at",
+      "id,platform,objective,industry,landing_hostname,headline,primary_text,verdict,verdict_note,rated_at,tags",
     )
     .in("verdict", ["keep", "reject"])
     .order("rated_at", { ascending: false })
     .limit(80);
+  let { data, error } = await query;
+  if (error) {
+    const fallback = await admin
+      .from("adbot_training_runs")
+      .select(
+        "id,platform,objective,industry,landing_hostname,headline,primary_text,verdict,verdict_note,rated_at",
+      )
+      .in("verdict", ["keep", "reject"])
+      .order("rated_at", { ascending: false })
+      .limit(80);
+    data = (fallback.data ?? null) as typeof data;
+    error = fallback.error;
+  }
   if (error || !Array.isArray(data)) return [];
 
   return data
     .map((row) => {
       const verdict = row.verdict === "reject" ? "reject" : row.verdict === "keep" ? "keep" : null;
       if (!verdict) return null;
+      const tags = "tags" in row && Array.isArray(row.tags)
+        ? row.tags.filter((item): item is string => typeof item === "string")
+        : [];
       const signal: TrainingGroundSignal = {
         runId: String(row.id),
         verdict,
@@ -236,6 +262,7 @@ async function loadTrainingGroundSignals(input: {
         headline: String(row.headline ?? ""),
         primaryText: String(row.primary_text ?? ""),
         note: String(row.verdict_note ?? ""),
+        tags,
       };
       return {
         signal,
@@ -244,6 +271,7 @@ async function loadTrainingGroundSignals(input: {
           objective: input.objective,
           industry: input.industry,
           landingHostname: input.landingHostname,
+          tags: input.tags,
         }),
       };
     })
@@ -257,6 +285,7 @@ export async function loadInspirationLearningPreview(input: {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[];
   limit?: number;
 }): Promise<InspirationPattern[]> {
   const snapshot = await loadInspirationMemorySnapshot(input);
@@ -275,6 +304,7 @@ export async function loadAdLearningContext(
         platform: input.platform,
         objective: mapObjective(input.objective),
         industry: input.industry,
+        tags: input.tags,
         limit: inspirationLimit,
       }),
       loadCustomerSignals({
@@ -286,6 +316,7 @@ export async function loadAdLearningContext(
         platform: input.platform,
         objective: mapObjective(input.objective),
         industry: input.industry,
+        tags: input.tags,
         landingHostname: input.landingHostname,
         limit: trainingLimit,
       }),

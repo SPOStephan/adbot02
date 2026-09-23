@@ -59,6 +59,7 @@ import {
   pushFunnelDomainRevokeToPortal,
   pushFunnelDomainUpsertToPortal,
 } from "../portalDomainSync";
+import { pushFunnelCreativeHandoffToPortal } from "../portalCreativeHandoff";
 import {
   attachDomainToVercelProject,
   removeDomainFromVercelProject,
@@ -673,7 +674,23 @@ export const funnelRouter = router({
     .input(z.object({ id: funnelIdSchema, status: funnelStatusSchema }))
     .mutation(async ({ input, ctx }) => {
       const config = await requireOwnedFunnel(input.id, ctx.user);
-      return saveFunnel({ ...config, status: input.status, isPublished: input.status === "published" });
+      const saved = await saveFunnel({ ...config, status: input.status, isPublished: input.status === "published" });
+      if (input.status === "published" && config.status !== "published") {
+        const owner = await getFunnelOwner(input.id);
+        const domains = await listCustomDomainsForFunnel(input.id).catch(() => []);
+        const ready = domains.find(domain => domain.status === "READY");
+        const start = config.pages.find(page => page.type === "start");
+        void pushFunnelCreativeHandoffToPortal({
+          ownerUserId: owner?.userId ?? getTenantOwnerUserId(ctx.user),
+          funnelId: saved.id,
+          slug: saved.slug,
+          title: saved.title,
+          readyHostname: ready?.hostname ?? null,
+          jobTitle: start && start.type === "start" ? start.title : saved.title,
+          jobDescription: start && start.type === "start" ? start.description : "",
+        });
+      }
+      return saved;
     }),
 
   applications: adminProcedure.input(optionalFunnelFilter).query(async ({ input, ctx }) => {

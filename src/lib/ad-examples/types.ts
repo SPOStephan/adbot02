@@ -81,6 +81,8 @@ export type AdExampleInput = {
   tags: string[];
   qualityRating: number;
   useForGeneration: boolean;
+  structureKind: "none" | "job" | "product" | "lead";
+  structureSlotsText: string;
 };
 
 export type AdExampleView = AdExampleInput & {

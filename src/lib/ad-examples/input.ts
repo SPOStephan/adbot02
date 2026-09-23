@@ -1,4 +1,8 @@
 import {
+  resolveAdStructureTemplate,
+  serializeStructureSlots,
+} from "@/lib/ad-examples/structure";
+import {
   AD_EXAMPLE_EVIDENCE_LEVELS,
   AD_EXAMPLE_FUNNEL_STAGES,
   AD_EXAMPLE_OBJECTIVES,
@@ -139,6 +143,18 @@ export function parseAdExampleInput(source: Record<string, unknown>): AdExampleI
     tags: tags(source.tags),
     qualityRating: rating,
     useForGeneration: booleanValue(source.useForGeneration),
+    structureKind: resolveAdStructureTemplate({
+      kind: source.structureKind,
+      slots: source.structureSlotsText ?? source.structureSlots,
+      tags: tags(source.tags),
+    }).kind,
+    structureSlotsText: serializeStructureSlots(
+      resolveAdStructureTemplate({
+        kind: source.structureKind,
+        slots: source.structureSlotsText ?? source.structureSlots,
+        tags: tags(source.tags),
+      }).slots,
+    ),
   };
 }
 
@@ -173,6 +189,14 @@ export function adExampleMetadata(input: AdExampleInput): Record<string, unknown
       tags: input.tags,
       quality_rating: input.qualityRating,
       use_for_generation: input.useForGeneration,
+      structure: {
+        kind: input.structureKind,
+        slots: resolveAdStructureTemplate({
+          kind: input.structureKind,
+          slots: input.structureSlotsText,
+          tags: input.tags,
+        }).slots,
+      },
     },
   };
 }

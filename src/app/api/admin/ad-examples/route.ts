@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
       platform: url.searchParams.get("platform") ?? "all",
       objective: url.searchParams.get("objective") ?? "all",
       industry: url.searchParams.get("industry") ?? "all",
+      tag: url.searchParams.get("tag") ?? "all",
     });
     return json({ ok: true, ...result });
   } catch (error) {
@@ -111,6 +112,8 @@ function formValues(form: FormData): Record<string, unknown> {
     tags: form.get("tags"),
     qualityRating: form.get("qualityRating"),
     useForGeneration: form.get("useForGeneration"),
+    structureKind: form.get("structureKind"),
+    structureSlotsText: form.get("structureSlotsText"),
   };
 }
 

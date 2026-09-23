@@ -157,14 +157,24 @@ export function summarizeInspirationCorpus(
 }
 
 export function scoreInspirationMatch(
-  pattern: Pick<InspirationPattern, "platform" | "objective" | "industry" | "qualityRating">,
-  query: { platform?: string; objective?: string; industry?: string },
+  pattern: Pick<
+    InspirationPattern,
+    "platform" | "objective" | "industry" | "qualityRating"
+  > & { tags?: string[] },
+  query: { platform?: string; objective?: string; industry?: string; tags?: string[] },
 ): number {
   let score = Number.isFinite(pattern.qualityRating) ? pattern.qualityRating : 0;
   if (query.platform && pattern.platform === query.platform) score += 10;
   if (query.objective && pattern.objective === query.objective) score += 8;
   const industry = (query.industry ?? "").trim().toLowerCase();
   if (industry && pattern.industry.toLowerCase().includes(industry)) score += 5;
+  const wanted = (query.tags ?? []).map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+  if (wanted.length > 0) {
+    const have = new Set((pattern.tags ?? []).map((tag) => tag.trim().toLowerCase()));
+    const hits = wanted.filter((tag) => have.has(tag)).length;
+    if (hits > 0) score += Math.min(24, hits * 12);
+    else score -= 6;
+  }
   return score;
 }
 
@@ -207,6 +217,11 @@ export function inspirationPatternFromMetadata(input: {
     return null;
   }
   const quality = Number(example.quality_rating);
+  const structure =
+    example.structure && typeof example.structure === "object" && !Array.isArray(example.structure)
+      ? (example.structure as Record<string, unknown>)
+      : {};
+  const slots = Array.isArray(structure.slots) ? structure.slots : [];
   return {
     brandAssetId: input.brandAssetId,
     platform: text(example.platform) || "other",
@@ -218,19 +233,40 @@ export function inspirationPatternFromMetadata(input: {
     evidenceLevel: text(example.evidence_level) || "visual_only",
     triggeringPrompts,
     qualityRating: Number.isFinite(quality) ? quality : 0,
+    tags: stringArray(example.tags).map((tag) => tag.toLowerCase()),
+    structureKind: text(structure.kind) || text(example.structure_kind),
+    structureSlots: slots
+      .slice(0, 12)
+      .map((item) => {
+        const row =
+          item && typeof item === "object" && !Array.isArray(item)
+            ? (item as Record<string, unknown>)
+            : {};
+        return {
+          key: text(row.key).slice(0, 40),
+          role: text(row.role).slice(0, 40),
+          placement: text(row.placement).slice(0, 80),
+          maxChars: Number.isFinite(Number(row.maxChars ?? row.max_chars))
+            ? Math.max(0, Math.trunc(Number(row.maxChars ?? row.max_chars)))
+            : 0,
+          notes: text(row.notes).slice(0, 200),
+        };
+      })
+      .filter((slot) => slot.key.length > 0),
   };
 }
 
 export function scoreTrainingGroundMatch(
   signal: Pick<
     TrainingGroundSignal,
-    "platform" | "objective" | "industry" | "landingHostname"
+    "platform" | "objective" | "industry" | "landingHostname" | "tags"
   >,
   query: {
     platform?: string;
     objective?: string;
     industry?: string;
     landingHostname?: string;
+    tags?: string[];
   },
 ): number {
   let score = 1;
@@ -240,6 +276,13 @@ export function scoreTrainingGroundMatch(
   if (industry && signal.industry.toLowerCase().includes(industry)) score += 5;
   const host = (query.landingHostname ?? "").trim().toLowerCase();
   if (host && signal.landingHostname.toLowerCase() === host) score += 12;
+  const wanted = (query.tags ?? []).map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+  if (wanted.length > 0) {
+    const have = new Set((signal.tags ?? []).map((tag) => tag.trim().toLowerCase()));
+    const hits = wanted.filter((tag) => have.has(tag)).length;
+    if (hits > 0) score += Math.min(24, hits * 12);
+    else score -= 6;
+  }
   return score;
 }
 
@@ -264,6 +307,13 @@ export function formatAdLearningPromptBlock(context: AdLearningContext): string 
         item.bodyText ? `Text: ${item.bodyText.slice(0, 280)}` : "",
         item.triggeringPrompts[0]
           ? `Trigger: ${item.triggeringPrompts.slice(0, 3).join(" · ").slice(0, 220)}`
+          : "",
+        item.tags?.length ? `Tags: ${item.tags.slice(0, 6).join(", ")}` : "",
+        item.structureSlots?.length
+          ? `Struktur: ${item.structureSlots
+              .slice(0, 6)
+              .map((slot) => `${slot.key}@${slot.placement || "frei"}`)
+              .join("; ")}`
           : "",
         item.evidenceLevel === "first_party_performance" && item.whyItWorks
           ? `First-Party-Hinweis: ${item.whyItWorks.slice(0, 180)}`
