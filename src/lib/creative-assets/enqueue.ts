@@ -169,13 +169,12 @@ export async function enqueueCreativeAssetGenerationJob(input: {
     );
   }
 
-  const referenceAssetIds = input.customer.platformAccountId
-    ? await attachCustomerWinnerStyleRefs({
-        userId: input.customer.userId,
-        platformAccountId: input.customer.platformAccountId,
-        referenceAssetIds: input.generation.reference_asset_ids,
-      })
-    : [...input.generation.reference_asset_ids];
+  const referenceAssetIds = await attachCustomerWinnerStyleRefs({
+    userId: input.customer.userId,
+    platformAccountId: input.customer.platformAccountId,
+    referenceAssetIds: input.generation.reference_asset_ids,
+    prompt: input.generation.prompt,
+  });
   const generation = {
     ...input.generation,
     reference_asset_ids: referenceAssetIds,

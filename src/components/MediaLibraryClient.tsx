@@ -408,8 +408,11 @@ export function MediaLibraryClient({
               Creative hochladen
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              PNG/JPEG (256–4096px). Zuerst die Mastergrafik — Formate kommen
-              danach nur für verbundene Plattformen. {describeFormatStep(connectedPlatforms)}
+              PNG/JPEG (256–4096px). Nur dein Account sieht und nutzt diese
+              Dateien — kein anderes Kundenkonto erhält Zugriff. Adbot darf sie
+              1:1 übernehmen oder nach Bedarf anpassen. Zuerst die Mastergrafik —
+              Formate kommen danach nur für verbundene Plattformen.{" "}
+              {describeFormatStep(connectedPlatforms)}
             </p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
                 {brandProfiles.length ? (
@@ -686,8 +689,8 @@ export function MediaLibraryClient({
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-extrabold tracking-tight">Deine Creatives</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Stern = gutes Beispiel für späteres Lernen. Schloss = Locked Photo
-          (unverändert einbetten).
+          Isoliert auf deinen Account. Stern = gutes Beispiel für späteres
+          Lernen. Schloss = Locked Photo (unverändert einbetten).
         </p>
         {loadError ? (
           <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">

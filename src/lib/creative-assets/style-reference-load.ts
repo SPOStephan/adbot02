@@ -19,7 +19,8 @@ export type StyleReferenceAsset = {
     | "customer_marked_good"
     | "customer_performance_winner"
     | "customer_style_reference"
-    | "inspiration_vault";
+    | "inspiration_vault"
+    | "platform_motif_library";
 };
 
 function classifySource(row: {
@@ -27,6 +28,9 @@ function classifySource(row: {
   asset_role: string;
   training_status: string;
 }): StyleReferenceAsset["source"] {
+  if (row.library_scope === "PLATFORM") {
+    return "platform_motif_library";
+  }
   if (row.library_scope === "INSPIRATION") {
     return "inspiration_vault";
   }
@@ -43,7 +47,8 @@ function classifySource(row: {
  * Load style references for generation.
  * Allowed:
  * - CUSTOMER owned by user: READY/APPROVED + (marked_good | performance_winner | STYLE_REFERENCE)
- * - INSPIRATION vault: READY/APPROVED + STYLE_REFERENCE (global style corpus)
+ * - INSPIRATION vault: READY/APPROVED + STYLE_REFERENCE (inspiration only)
+ * - PLATFORM motif library: READY/APPROVED + UPLOAD_EDITABLE (1:1 or restyle)
  */
 export async function loadVerifiedStyleReferenceAssets(input: {
   userId: string;
@@ -139,6 +144,8 @@ export async function loadVerifiedStyleReferenceAssets(input: {
       libraryScope === "INSPIRATION" &&
       assetRole === "STYLE_REFERENCE" &&
       (!isStructuredAdExample || adExample.use_for_generation === true);
+    const isPlatformMotif =
+      libraryScope === "PLATFORM" && assetRole === "UPLOAD_EDITABLE";
     const isCustomerEligible =
       libraryScope === "CUSTOMER" &&
       ownerUserId === input.userId &&
@@ -147,11 +154,11 @@ export async function loadVerifiedStyleReferenceAssets(input: {
         trainingStatus === "performance_winner" ||
         assetRole === "STYLE_REFERENCE");
 
-    if (!isInspiration && !isCustomerEligible) {
+    if (!isInspiration && !isPlatformMotif && !isCustomerEligible) {
       throw new CreativeAssetProviderError({
         code: "style_reference_not_allowed",
         message:
-          "Style-Referenz muss ein ausdrücklich freigegebenes Inspiration-Asset oder ein eigenes marked_good/performance_winner Asset sein.",
+          "Style-Referenz muss ein Adbot-Motiv, ein ausdrücklich freigegebenes Inspiration-Asset oder ein eigenes marked_good/performance_winner Asset sein.",
         failureMode: "PRE_DISPATCH",
         safeToRetry: false,
       });

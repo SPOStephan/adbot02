@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Short-lived signed preview URL. Customers only for CUSTOMER scope; admins also for vault. */
+/** Short-lived signed preview URL. Customers only own CUSTOMER rows; admins also INSPIRATION + PLATFORM. */
 export async function GET(request: NextRequest) {
   const assetId = request.nextUrl.searchParams.get("assetId")?.trim() ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(assetId)) {
@@ -43,8 +43,10 @@ export async function GET(request: NextRequest) {
     asset.library_scope === "CUSTOMER" && asset.user_id === user.id;
   const isVaultAdmin =
     asset.library_scope === "INSPIRATION" && siteAdmin;
+  const isPlatformAdmin =
+    asset.library_scope === "PLATFORM" && siteAdmin;
 
-  if (!isCustomerOwn && !isVaultAdmin) {
+  if (!isCustomerOwn && !isVaultAdmin && !isPlatformAdmin) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
