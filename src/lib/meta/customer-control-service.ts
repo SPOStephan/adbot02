@@ -42,6 +42,10 @@ import {
   describeCustomerLaunchParseGaps,
   enrichCustomerLaunchRpcData,
 } from "@/lib/meta/launch-prepare-result";
+import {
+  resolveDynamicCreativeAssetIds,
+  type LaunchLibraryAsset,
+} from "@/lib/meta/creative-image-variants";
 import { ensureLaunchMarketingReady } from "@/lib/meta/launch-marketing-ensure";
 import { pushSoftMetaPixelToFunnel } from "@/lib/funnel-meta-sync";
 import { pushSoftMetaPixelToFreebie } from "@/lib/freebie-meta-sync";
@@ -1504,6 +1508,78 @@ async function restoreKillSwitchAfterLaunchPrepare(
  * ACTIVE brand profile supplies Meta page_id / Instagram actor for creatives.
  * Prefer the customer's explicit page/IG choice from the launch form.
  */
+function metadataString(
+  metadata: unknown,
+  key: string,
+): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function resolveCustomerLaunchBrandAssetIds(
+  customer: MetaCustomer,
+  command: LaunchCommand,
+): Promise<string[]> {
+  const extras = command.launchInputs.dynamic_creative_asset_ids ?? [];
+  const optedIn = command.launchInputs.use_dynamic_creative_images === true;
+  if (!optedIn) {
+    return [command.brandAssetId];
+  }
+
+  const includeSiblings = command.launchInputs.include_format_siblings !== false;
+  let library: LaunchLibraryAsset[] = [];
+  if (includeSiblings || extras.length > 0) {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("brand_assets")
+      .select("id,width,height,metadata")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("library_scope", "CUSTOMER")
+      .eq("status", "READY")
+      .eq("moderation_status", "APPROVED")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) {
+      serviceError(
+        "launch_assets_lookup_failed",
+        500,
+        "Die Library-Motive konnten nicht sicher geprüft werden.",
+      );
+    }
+    library = (data ?? []).flatMap((row) => {
+      const id = typeof row.id === "string" ? row.id : "";
+      if (!id) return [];
+      const formatKey =
+        metadataString(row.metadata, "meta_format_key") ??
+        metadataString(row.metadata, "role");
+      return [
+        {
+          id,
+          parentAssetId: metadataString(row.metadata, "parent_asset_id"),
+          metaFormatKey: formatKey,
+          width: typeof row.width === "number" ? row.width : null,
+          height: typeof row.height === "number" ? row.height : null,
+        },
+      ];
+    });
+  }
+
+  const resolved = resolveDynamicCreativeAssetIds({
+    primaryId: command.brandAssetId,
+    extraIds: extras,
+    library,
+    includeFormatSiblings: includeSiblings,
+  });
+  if (resolved.assetIds.length < 1) {
+    return [command.brandAssetId];
+  }
+  return resolved.assetIds;
+}
+
 async function ensureActiveBrandProfileForLaunch(
   customer: MetaCustomer,
   preferredId: string | null,
@@ -1792,6 +1868,11 @@ export async function materializeCustomerLaunch(
   let result: CustomerLaunchResult | null = null;
   try {
     const admin = createAdminClient();
+    const brandAssetIds = await resolveCustomerLaunchBrandAssetIds(
+      readyCustomer,
+      command,
+    );
+    const extraBrandAssetIds = brandAssetIds.slice(1);
     const brandProfileId = await ensureActiveBrandProfileForLaunch(
       readyCustomer,
       command.brandProfileId,
@@ -1805,29 +1886,31 @@ export async function materializeCustomerLaunch(
 
     // Library uploads may arrive before onboarding creates a brand profile.
     // Bind unbound CUSTOMER assets to the launch profile at prepare-time.
-    const { error: bindError } = await admin.rpc(
-      "bind_unbound_customer_brand_asset_for_launch",
-      {
-        p_user_id: readyCustomer.userId,
-        p_platform_account_id: readyCustomer.platformAccountId,
-        p_brand_profile_id: brandProfileId,
-        p_brand_asset_id: command.brandAssetId,
-      },
-    );
-    if (bindError) {
-      console.error("launch_bind_failed", {
-        message: bindError.message,
-        details: bindError.details,
-        hint: bindError.hint,
-      });
-      serviceError(
-        "launch_preparation_not_ready",
-        409,
-        withLaunchFailureDetail(
-          launchPreparationFailureMessage(bindError),
-          bindError,
-        ),
+    for (const brandAssetId of brandAssetIds) {
+      const { error: bindError } = await admin.rpc(
+        "bind_unbound_customer_brand_asset_for_launch",
+        {
+          p_user_id: readyCustomer.userId,
+          p_platform_account_id: readyCustomer.platformAccountId,
+          p_brand_profile_id: brandProfileId,
+          p_brand_asset_id: brandAssetId,
+        },
       );
+      if (bindError) {
+        console.error("launch_bind_failed", {
+          message: bindError.message,
+          details: bindError.details,
+          hint: bindError.hint,
+        });
+        serviceError(
+          "launch_preparation_not_ready",
+          409,
+          withLaunchFailureDetail(
+            launchPreparationFailureMessage(bindError),
+            bindError,
+          ),
+        );
+      }
     }
     // Omit p_planned_at so Postgres uses now() — Vercel clock skew against
     // marketing_last_success_at (DB now) was failing the 2h freshness gate.
@@ -1843,6 +1926,12 @@ export async function materializeCustomerLaunch(
       p_launch_inputs: {
         ...command.launchInputs,
         preparation_reason: command.reason,
+        ...(extraBrandAssetIds.length > 0
+          ? {
+              use_dynamic_creative_images: true,
+              dynamic_creative_asset_ids: extraBrandAssetIds,
+            }
+          : {}),
       },
     };
     const { data, error } =
@@ -1874,6 +1963,7 @@ export async function materializeCustomerLaunch(
     result = parseCustomerLaunchResult(
       enrichCustomerLaunchRpcData(data, {
         brandAssetId: command.brandAssetId,
+        brandAssetIds,
         budgetType: command.budgetType,
       }),
     );

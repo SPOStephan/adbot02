@@ -1009,6 +1009,12 @@ type LaunchCommon = {
     /** 1 = two ads in one ad set; 2 = two ad sets with one ad each. Requires structural_ad_count=2. */
     structural_ad_set_count?: 1 | 2;
     structural_ads?: StructuralLaunchAd[];
+    /** Opt-in: multiple library images in one Dynamic Creative. */
+    use_dynamic_creative_images?: boolean;
+    /** Extra brand assets besides brandAssetId. Requires use_dynamic_creative_images. */
+    dynamic_creative_asset_ids?: string[];
+    /** Adbot may add same-motif format siblings (1:1 / 4:5 / 9:16). Default true when opted in. */
+    include_format_siblings?: boolean;
   };
 };
 
@@ -1167,6 +1173,66 @@ function parseStructuralLaunchAds(body: Record<string, unknown>): {
   };
 }
 
+function parseDynamicCreativeImages(body: Record<string, unknown>): {
+  use_dynamic_creative_images?: boolean;
+  dynamic_creative_asset_ids?: string[];
+  include_format_siblings?: boolean;
+} {
+  const rawFlag = body.useDynamicCreativeImages;
+  const rawExtras = body.extraBrandAssetIds;
+  const rawSiblings = body.includeFormatSiblings;
+  const hasFlag = rawFlag !== undefined && rawFlag !== null;
+  const hasExtras = rawExtras !== undefined && rawExtras !== null;
+  const hasSiblings = rawSiblings !== undefined && rawSiblings !== null;
+
+  if (!hasFlag && !hasExtras && !hasSiblings) {
+    return {};
+  }
+
+  const optedIn = hasFlag ? requiredBoolean(rawFlag, "Dynamic Creative Bilder") : hasExtras;
+  if (!optedIn) {
+    if (hasExtras) {
+      inputError(
+        "dynamic_creative_images_required",
+        "Zusätzliche Motive erfordern useDynamicCreativeImages=true.",
+      );
+    }
+    return {
+      use_dynamic_creative_images: false,
+      ...(hasSiblings
+        ? {
+            include_format_siblings: requiredBoolean(
+              rawSiblings,
+              "Format-Geschwister",
+            ),
+          }
+        : {}),
+    };
+  }
+
+  let extras: string[] = [];
+  if (hasExtras) {
+    if (!Array.isArray(rawExtras) || rawExtras.length > 9) {
+      inputError(
+        "invalid_dynamic_creative_assets",
+        "Dynamic Creative erlaubt höchstens 9 zusätzliche Motive (10 Bilder gesamt).",
+      );
+    }
+    extras = rawExtras.map((entry, index) =>
+      requiredUuid(entry, `Zusätzliches Motiv ${index + 1}`),
+    );
+    extras = [...new Set(extras)];
+  }
+
+  return {
+    use_dynamic_creative_images: true,
+    ...(extras.length > 0 ? { dynamic_creative_asset_ids: extras } : {}),
+    include_format_siblings: hasSiblings
+      ? requiredBoolean(rawSiblings, "Format-Geschwister")
+      : true,
+  };
+}
+
 export function parseLaunchCommand(value: unknown): LaunchCommand {
   const body = asJsonObject(value);
   const budgetType =
@@ -1196,6 +1262,10 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     "structuralAdCount",
     "structuralAdSetCount",
     "structuralAds",
+    // Optional multi-image Dynamic Creative (mutually exclusive with structural).
+    "useDynamicCreativeImages",
+    "extraBrandAssetIds",
+    "includeFormatSiblings",
   ];
   assertExactKeys(
     body,
@@ -1234,6 +1304,16 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
   }
 
   const structural = parseStructuralLaunchAds(body);
+  const dynamicImages = parseDynamicCreativeImages(body);
+  if (
+    structural.structural_ad_count === 2 &&
+    dynamicImages.use_dynamic_creative_images
+  ) {
+    inputError(
+      "dynamic_creative_images_structural_conflict",
+      "Mehrere Motive in einer Dynamic Creative sind nicht mit dem Struktur-Test kombinierbar.",
+    );
+  }
 
   const structuralLaunchInputs =
     structural.structural_ad_count === 2
@@ -1274,6 +1354,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       ad_name: optionalLaunchName(body.adName, "Der Anzeigenname"),
       ...(promotedObject ? { promoted_object: promotedObject } : {}),
       ...structuralLaunchInputs,
+      ...dynamicImages,
     },
   };
   const budgetOwnerType = requiredEnum(

@@ -62,6 +62,19 @@ try {
   assert.equal(multi.assetFeedSpec.descriptions.length, 1);
   assert.deepEqual(multi.objectStorySpec, {});
 
+  const forced = mod.buildLinkCreativeBlueprintParts({
+    primaryTexts: ["Nur einer"],
+    headlines: ["Titel"],
+    descriptions: [""],
+    callToActionType: "LEARN_MORE",
+    defaultPrimary: "Mehr erfahren.",
+    defaultHeadline: "Jetzt mehr erfahren",
+    forceDynamicCreative: true,
+  });
+  assert.equal(forced.useDynamicCreative, true);
+  assert.ok(forced.assetFeedSpec);
+  assert.deepEqual(forced.objectStorySpec, {});
+
   const traffic = await readFile(
     join(root, "src/components/TrafficLaunchCanary.tsx"),
     "utf8",

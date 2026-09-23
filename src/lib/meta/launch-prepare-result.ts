@@ -10,6 +10,7 @@ export function enrichCustomerLaunchRpcData(
   data: unknown,
   input: {
     brandAssetId: string;
+    brandAssetIds?: readonly string[];
     budgetType: LaunchPrepareBudgetType;
     preparedAt?: string;
   },
@@ -26,9 +27,14 @@ export function enrichCustomerLaunchRpcData(
           typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id),
       )
     : [];
+  const fallbackIds = (input.brandAssetIds ?? [input.brandAssetId]).filter(
+    (id): id is string =>
+      typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id),
+  );
 
   if (existingIds.length < 1) {
-    record.brand_asset_ids = [input.brandAssetId];
+    record.brand_asset_ids =
+      fallbackIds.length > 0 ? fallbackIds : [input.brandAssetId];
   } else {
     record.brand_asset_ids = existingIds;
   }
