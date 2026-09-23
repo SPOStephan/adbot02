@@ -1,6 +1,7 @@
 import type { CSSProperties, PropsWithChildren } from "react";
-import type { FunnelBrand, FunnelSocialProof } from "@shared/funnel";
+import type { FunnelBrand, FunnelConfig, FunnelSocialProof } from "@shared/funnel";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { FunnelProgress } from "./FunnelProgress";
 
 type FunnelChromeProps = PropsWithChildren<{
   brand: FunnelBrand;
@@ -12,6 +13,10 @@ type FunnelChromeProps = PropsWithChildren<{
   totalSteps: number;
   showProgress: boolean;
   fullBleed?: boolean;
+  pages?: FunnelConfig["pages"];
+  progress?: FunnelConfig["progress"];
+  onBack?: () => void;
+  onForward?: () => void;
 }>;
 
 export function FunnelChrome({
@@ -24,9 +29,12 @@ export function FunnelChrome({
   totalSteps,
   showProgress,
   fullBleed = false,
+  pages,
+  progress,
+  onBack,
+  onForward,
   children,
 }: FunnelChromeProps) {
-  const progress = totalSteps <= 1 ? 100 : Math.round((step / (totalSteps - 1)) * 100);
   const brandStyle = {
     backgroundColor: brand.backgroundColor,
     color: brand.textColor,
@@ -58,15 +66,16 @@ export function FunnelChrome({
         <div className="funnel-security"><LockKeyhole size={14} /> SSL-verschlüsselt</div>
       </header>
 
-      {showProgress && (
-        <div className="funnel-progress" role="progressbar" aria-label="Bewerbungsfortschritt" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-          <div className="funnel-progress-meta">
-            <span>Schritt {Math.min(step + 1, totalSteps)} von {totalSteps}</span>
-            <span>{progress}%</span>
-          </div>
-          <div className="funnel-progress-track" aria-hidden="true"><div className="funnel-progress-value" style={{ width: `${progress}%` }} /></div>
-        </div>
-      )}
+      {showProgress && pages ? (
+        <FunnelProgress
+          brand={brand}
+          progress={progress ?? { layout: "percent", colors: { active: "", completed: "", upcoming: "", text: "", muted: "", track: "" } }}
+          pages={pages}
+          step={step}
+          onBack={onBack}
+          onForward={onForward}
+        />
+      ) : null}
 
       <main id="funnel-content" className="funnel-main">{children}</main>
 

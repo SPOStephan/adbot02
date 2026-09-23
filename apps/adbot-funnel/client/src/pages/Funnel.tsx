@@ -127,7 +127,7 @@ function FunnelView({
   return (
     <div ref={topRef}>
       <EmbedHeightReporter />
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={paths.imprintUrl} step={step} totalSteps={config.pages.length} showProgress={!submitted} fullBleed={!submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits"}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={paths.imprintUrl} step={step} totalSteps={config.pages.length} showProgress={!submitted} pages={config.pages} progress={config.progress} onBack={back} onForward={next} fullBleed={!submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits"}>
         {submitted && contactPage?.type === "contact" ? (
           <section className="funnel-success" aria-live="polite" aria-labelledby="funnel-success-title"><span className="funnel-success-icon" aria-hidden="true"><CircleCheckBig /></span><p className="funnel-eyebrow">Erfolgreich übermittelt</p><h1 id="funnel-success-title" tabIndex={-1}>{contactPage.successTitle}</h1><p>{contactPage.successText}</p></section>
         ) : currentPage?.type === "start" ? (

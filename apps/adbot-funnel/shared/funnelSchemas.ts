@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, START_PAGE_LAYOUTS } from "./funnel";
+import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS } from "./progressLayout";
 import { DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.enum(FUNNEL_OPTION_ICONS);
@@ -22,6 +23,9 @@ const pageBaseSchema = z.object({
   title: z.string().min(1).max(300),
   description: z.string().max(1200),
   buttonLabel: z.string().min(1).max(100),
+  progressTitle: z.string().max(80).default(""),
+  progressHint: z.string().max(160).default(""),
+  progressIcon: iconSchema.default("sparkles"),
 });
 
 const optionalHexColorSchema = z.string().max(16).refine(
@@ -105,6 +109,17 @@ export const funnelConfigSchema = z
     isPublished: z.boolean(),
     notificationEmail: z.union([z.literal(""), z.string().email()]),
     allowedEmbedOrigins: z.array(z.string().url()).max(20),
+    progress: z.object({
+      layout: z.enum(PROGRESS_LAYOUTS).default(DEFAULT_PROGRESS_LAYOUT),
+      colors: z.object({
+        active: optionalHexColorSchema.default(""),
+        completed: optionalHexColorSchema.default(""),
+        upcoming: optionalHexColorSchema.default(""),
+        text: optionalHexColorSchema.default(""),
+        muted: optionalHexColorSchema.default(""),
+        track: optionalHexColorSchema.default(""),
+      }).default(EMPTY_PROGRESS_COLORS),
+    }).default({ layout: DEFAULT_PROGRESS_LAYOUT, colors: EMPTY_PROGRESS_COLORS }),
     brand: z.object({
       logoUrl: z.string().max(2048),
       logoAlt: z.string().min(1).max(160),
