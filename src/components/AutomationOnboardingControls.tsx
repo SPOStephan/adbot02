@@ -51,6 +51,8 @@ export type ReadyBrandAssetView = {
   width: number | null;
   height: number | null;
   metaImageHashPresent: boolean;
+  parentAssetId: string | null;
+  metaFormatKey: string | null;
 };
 
 export type SyncedCreativeView = {

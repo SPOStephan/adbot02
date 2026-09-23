@@ -21,7 +21,12 @@ import {
   type PickerAsset,
 } from "@/components/CreativePickerModal";
 import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
+import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
+import {
+  resolveDynamicCreativeAssetIds,
+  type LaunchLibraryAsset,
+} from "@/lib/meta/creative-image-variants";
 
 type Notice = { tone: "success" | "error"; message: string } | null;
 
@@ -48,6 +53,7 @@ type HeldPlan = {
     name: string;
     description: string;
   }>;
+  dynamicCreativeImages?: boolean;
 };
 
 function objectiveLabel(objective: string): string {
@@ -243,6 +249,7 @@ function toHeldFromRecent(plan: RecentLaunchPlanView): HeldPlan | null {
     descriptions: plan.description ? [plan.description] : [""],
     structuralAdCount: 1,
     structuralAdSetCount: 1,
+    dynamicCreativeImages: plan.brandAssetIds.length > 1,
   };
 }
 
@@ -286,6 +293,9 @@ export function TrafficLaunchCanary({
     "off" | "two_ads" | "two_ad_sets"
   >("off");
   const structuralOn = structuralMode !== "off";
+  const [dynamicCreativeImages, setDynamicCreativeImages] = useState(false);
+  const [includeFormatSiblings, setIncludeFormatSiblings] = useState(true);
+  const [extraAssetIds, setExtraAssetIds] = useState<string[]>([]);
   const [ad2Primary, setAd2Primary] = useState("Mehr erfahren — Variante B.");
   const [ad2Headline, setAd2Headline] = useState("Jetzt entdecken");
   const [ad2Description, setAd2Description] = useState("");
@@ -304,6 +314,23 @@ export function TrafficLaunchCanary({
       ? initialAssetId
       : (data.brandAssets[0]?.id ?? ""),
   );
+  const libraryAssets: LaunchLibraryAsset[] = pickerAssets.map((asset) => {
+    const fromDashboard = data.brandAssets.find((row) => row.id === asset.id);
+    return {
+      id: asset.id,
+      originalFilename: asset.originalFilename,
+      width: asset.width,
+      height: asset.height,
+      parentAssetId: fromDashboard?.parentAssetId ?? null,
+      metaFormatKey: fromDashboard?.metaFormatKey ?? null,
+    };
+  });
+  const resolvedDynamicAssets = resolveDynamicCreativeAssetIds({
+    primaryId: assetId,
+    extraIds: extraAssetIds,
+    library: libraryAssets,
+    includeFormatSiblings: dynamicCreativeImages && includeFormatSiblings,
+  });
   const selectedAsset =
     pickerAssets.find((asset) => asset.id === assetId) ?? null;
   const [heldPlan, setHeldPlan] = useState<HeldPlan | null>(() => {
@@ -435,6 +462,10 @@ export function TrafficLaunchCanary({
       callToActionType: "LEARN_MORE",
       defaultPrimary: "Mehr erfahren.",
       defaultHeadline: "Jetzt mehr erfahren",
+      forceDynamicCreative:
+        !structuralOn &&
+        dynamicCreativeImages &&
+        resolvedDynamicAssets.assetIds.length > 1,
     });
     template.creative.object_story_spec = parts.objectStorySpec as typeof template.creative.object_story_spec;
     if (!structuralOn && parts.assetFeedSpec) {
@@ -599,7 +630,15 @@ export function TrafficLaunchCanary({
               structuralAdSetCount,
               structuralAds,
             }
-          : {}),
+          : dynamicCreativeImages
+            ? {
+                useDynamicCreativeImages: true,
+                extraBrandAssetIds: extraAssetIds.filter(
+                  (id) => id !== assetId,
+                ),
+                includeFormatSiblings,
+              }
+            : {}),
       });
 
       if (
@@ -649,6 +688,9 @@ export function TrafficLaunchCanary({
           ? { structuralAdSetCount: structuralAdSetCount as 1 | 2 }
           : {}),
         ...(structuralOn ? { structuralAds } : {}),
+        dynamicCreativeImages:
+          !structuralOn &&
+          (dynamicCreativeImages || result.brandAssetIds.length > 1),
       });
       setNotice({
         tone: "success",
@@ -973,7 +1015,7 @@ export function TrafficLaunchCanary({
           </legend>
           <p className="mt-1 text-xs font-medium text-slate-500">
             Opt-in für getrennte Anzeigen statt Dynamic Creative. Standard bleibt
-            eine Anzeige.
+            eine Anzeige. Nicht kombinierbar mit mehreren Motiven.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-4">
             {(
@@ -990,9 +1032,18 @@ export function TrafficLaunchCanary({
                 <input
                   checked={structuralMode === option.value}
                   className="size-4 border-slate-300 text-blue-700 focus:ring-blue-500"
-                  disabled={pending || Boolean(heldPlan)}
+                  disabled={
+                    pending ||
+                    Boolean(heldPlan) ||
+                    (dynamicCreativeImages && option.value !== "off")
+                  }
                   name="structural-mode"
-                  onChange={() => setStructuralMode(option.value)}
+                  onChange={() => {
+                    setStructuralMode(option.value);
+                    if (option.value !== "off") {
+                      setDynamicCreativeImages(false);
+                    }
+                  }}
                   type="radio"
                   value={option.value}
                 />
@@ -1016,6 +1067,19 @@ export function TrafficLaunchCanary({
             </p>
           ) : null}
         </fieldset>
+        {!structuralOn ? (
+          <DynamicCreativeImagesField
+            assets={libraryAssets}
+            disabled={pending || Boolean(heldPlan)}
+            enabled={dynamicCreativeImages}
+            extraAssetIds={extraAssetIds}
+            includeFormatSiblings={includeFormatSiblings}
+            onEnabledChange={setDynamicCreativeImages}
+            onExtraAssetIdsChange={setExtraAssetIds}
+            onIncludeFormatSiblingsChange={setIncludeFormatSiblings}
+            primaryAssetId={assetId}
+          />
+        ) : null}
         {structuralOn ? (
           <>
             <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 lg:col-span-2">
@@ -1265,13 +1329,38 @@ export function TrafficLaunchCanary({
           </p>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                alt="Creative-Vorschau"
-                className="aspect-square w-full object-cover"
-                src={`/api/media-library/preview?assetId=${heldPlan.brandAssetIds[0]}`}
-              />
+            <div className="space-y-2">
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt="Creative-Vorschau"
+                  className="aspect-square w-full object-cover"
+                  src={`/api/media-library/preview?assetId=${heldPlan.brandAssetIds[0]}`}
+                />
+              </div>
+              {heldPlan.brandAssetIds.length > 1 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {heldPlan.brandAssetIds.slice(1).map((id) => (
+                    <div
+                      className="overflow-hidden rounded-lg border border-slate-200 bg-white"
+                      key={id}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        alt="Weiteres Motiv"
+                        className="aspect-square w-full object-cover"
+                        src={`/api/media-library/preview?assetId=${id}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {heldPlan.dynamicCreativeImages ||
+              heldPlan.brandAssetIds.length > 1 ? (
+                <p className="text-xs font-semibold text-slate-600">
+                  Dynamic Creative: {heldPlan.brandAssetIds.length} Motive
+                </p>
+              ) : null}
             </div>
             <div className="min-w-0 space-y-4">
               {heldPlan.structuralAdCount === 2 && heldPlan.structuralAds ? (
