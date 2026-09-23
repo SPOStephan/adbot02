@@ -194,6 +194,21 @@ export type StartPage = FunnelPageBase & {
   benefitsBandTitle: string;
   secondaryButtonLabel: string;
   benefits: StartBenefit[];
+  heroBackgroundAssetId: string;
+  heroBackgroundDesktopUrl: string;
+  heroBackgroundMobileUrl: string;
+  heroBackgroundOpacity: number;
+};
+
+export type FunnelMediaAsset = {
+  id: string;
+  ownerUserId: string | null;
+  funnelId: string;
+  kind: "hero-background";
+  filename: string;
+  desktopUrl: string;
+  mobileUrl: string;
+  createdAt: string;
 };
 
 export type ChoicePage = FunnelPageBase & {

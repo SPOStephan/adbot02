@@ -2,6 +2,7 @@ import type { FunnelOptionIcon, StartBenefit, StartPage, StartPageLayout } from 
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
 export const MAX_START_BENEFITS = 12;
+export const DEFAULT_HERO_BACKGROUND_OPACITY = 15;
 
 const DEFAULT_BENEFIT_SEEDS: Array<Pick<StartBenefit, "icon" | "title" | "text">> = [
   { icon: "adbot-vacation-days", title: "30 Tage Urlaub", text: "Ausreichend Zeit für Erholung, Familie und alles, was dir wichtig ist." },
@@ -42,6 +43,12 @@ export function benefitsFromBullets(bullets: string[], createId = () => crypto.r
 
 export function emptyStartBenefit(createId = () => crypto.randomUUID()): StartBenefit {
   return { id: createId(), icon: "sparkles", title: "Neuer Vorteil", text: "" };
+}
+
+export function clampHeroBackgroundOpacity(value: unknown) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_HERO_BACKGROUND_OPACITY;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
 export function contrastOnAccent(accentColor: string) {

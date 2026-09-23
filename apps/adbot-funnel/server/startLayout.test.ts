@@ -61,6 +61,8 @@ describe("Startseiten-Layouts", () => {
       expect(page.benefits).toEqual([]);
       expect(page.benefitsBandTitle).toBe("");
       expect(page.secondaryButtonLabel).toBe("");
+      expect(page.heroBackgroundOpacity).toBe(15);
+      expect(page.heroBackgroundDesktopUrl).toBe("");
     }
   });
 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, START_PAGE_LAYOUTS } from "./funnel";
-import { MAX_START_BENEFITS } from "./startLayout";
+import { DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.enum(FUNNEL_OPTION_ICONS);
 const optionalHttpsUrlSchema = z.string().max(2048).refine(value => value === "" || /^https:\/\//i.test(value), "Es ist nur eine absolute HTTPS-Adresse zulässig.");
@@ -37,6 +37,11 @@ const startBenefitSchema = z.object({
   color: optionalHexColorSchema.optional(),
 });
 
+const optionalAssetUrlSchema = z.string().max(2048).refine(
+  value => value === "" || value.startsWith("/") || /^https:\/\//i.test(value),
+  "Es ist nur eine interne oder HTTPS-Adresse zulässig.",
+);
+
 const startPageSchema = pageBaseSchema.extend({
   type: z.literal("start"),
   layout: z.enum(START_PAGE_LAYOUTS).default("classic"),
@@ -46,6 +51,10 @@ const startPageSchema = pageBaseSchema.extend({
   benefitsBandTitle: z.string().max(200).default(""),
   secondaryButtonLabel: z.string().max(100).default(""),
   benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
+  heroBackgroundAssetId: z.string().max(80).default(""),
+  heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),
+  heroBackgroundMobileUrl: optionalAssetUrlSchema.default(""),
+  heroBackgroundOpacity: z.number().min(0).max(100).default(DEFAULT_HERO_BACKGROUND_OPACITY),
 });
 
 const choicePageSchema = pageBaseSchema.extend({
