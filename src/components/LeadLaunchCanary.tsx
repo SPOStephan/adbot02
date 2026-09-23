@@ -793,7 +793,13 @@ export function LeadLaunchCanary({
             >
               Tracking
             </a>
-            — Funnel meldet Absenden selbst als Lead an Meta.
+            — Funnel meldet Absenden selbst als Lead an Meta.{" "}
+            <a
+              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+              href="/dashboard/hilfe"
+            >
+              Schritt-für-Schritt-Anleitung
+            </a>
           </p>
         </div>
       </div>

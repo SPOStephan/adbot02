@@ -4,14 +4,17 @@ import {
   EMPTY_AD_LEARNING_CONTEXT,
   type AdLearningContext,
   type CustomerCreativeSignal,
+  type InspirationCorpusCensus,
   type InspirationPattern,
   type TrainingGroundSignal,
 } from "@/lib/ad-learning/types";
 import {
   customerSignalFromAsset,
   inspirationPatternFromMetadata,
+  inspirationRowHasImage,
   scoreInspirationMatch,
   scoreTrainingGroundMatch,
+  summarizeInspirationCorpus,
 } from "@/lib/ad-learning/context";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -35,29 +38,69 @@ function mapObjective(value?: string): string | undefined {
   return value;
 }
 
-async function loadInspirationPatterns(input: {
+/** PostgREST often caps one response at 1000 rows — page until the vault is complete. */
+export const INSPIRATION_LIBRARY_SCAN_PAGE_SIZE = 1000;
+
+type InspirationScanRow = {
+  id: string;
+  library_scope: string;
+  metadata: unknown;
+  storage_path?: string | null;
+  mime_type?: string | null;
+};
+
+type InspirationPickInput = {
   platform?: string;
   objective?: string;
   industry?: string;
   tags?: string[];
   limit: number;
-}): Promise<InspirationPattern[]> {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("brand_assets")
-    .select("id,library_scope,metadata,updated_at")
-    .eq("library_scope", "INSPIRATION")
-    .neq("status", "REVOKED")
-    .filter("metadata->>library", "eq", "ad_example_library")
-    .order("updated_at", { ascending: false })
-    .limit(500);
-  if (error || !Array.isArray(data)) return [];
+};
 
-  const scored = data
+function exampleField(metadata: unknown, key: string): string {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+  const example = (metadata as Record<string, unknown>).ad_example;
+  if (!example || typeof example !== "object" || Array.isArray(example)) return "";
+  const value = (example as Record<string, unknown>)[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function scanInspirationLibraryRows(): Promise<InspirationScanRow[]> {
+  const admin = createAdminClient();
+  const rows: InspirationScanRow[] = [];
+  for (let from = 0; from < 200_000; from += INSPIRATION_LIBRARY_SCAN_PAGE_SIZE) {
+    const { data, error } = await admin
+      .from("brand_assets")
+      .select("id,library_scope,metadata,storage_path,mime_type")
+      .eq("library_scope", "INSPIRATION")
+      .neq("status", "REVOKED")
+      .filter("metadata->>library", "eq", "ad_example_library")
+      .order("id", { ascending: true })
+      .range(from, from + INSPIRATION_LIBRARY_SCAN_PAGE_SIZE - 1);
+    if (error || !Array.isArray(data) || data.length < 1) break;
+    for (const row of data) {
+      rows.push({
+        id: String(row.id),
+        library_scope: String(row.library_scope ?? ""),
+        metadata: row.metadata,
+        storage_path: typeof row.storage_path === "string" ? row.storage_path : null,
+        mime_type: typeof row.mime_type === "string" ? row.mime_type : null,
+      });
+    }
+    if (data.length < INSPIRATION_LIBRARY_SCAN_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+function pickInspirationPatterns(
+  rows: InspirationScanRow[],
+  input: InspirationPickInput,
+): InspirationPattern[] {
+  return rows
     .map((row) => {
       const pattern = inspirationPatternFromMetadata({
-        brandAssetId: String(row.id),
-        libraryScope: String(row.library_scope ?? ""),
+        brandAssetId: row.id,
+        libraryScope: row.library_scope,
         metadata: row.metadata,
       });
       if (!pattern) return null;
@@ -74,9 +117,59 @@ async function loadInspirationPatterns(input: {
     .filter((item): item is { pattern: InspirationPattern; score: number } =>
       Boolean(item),
     )
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .slice(0, input.limit)
+    .map((item) => item.pattern);
+}
 
-  return scored.slice(0, input.limit).map((item) => item.pattern);
+function censusFromScanRows(rows: InspirationScanRow[]): InspirationCorpusCensus {
+  return summarizeInspirationCorpus(
+    rows.map((row) => ({
+      pattern: inspirationPatternFromMetadata({
+        brandAssetId: row.id,
+        libraryScope: row.library_scope,
+        metadata: row.metadata,
+      }),
+      hasImage: inspirationRowHasImage({
+        storagePath: row.storage_path,
+        mimeType: row.mime_type,
+        metadata: row.metadata,
+      }),
+      industry: exampleField(row.metadata, "industry"),
+      platform: exampleField(row.metadata, "platform"),
+      objective: exampleField(row.metadata, "objective"),
+    })),
+  );
+}
+
+async function loadInspirationPatterns(
+  input: InspirationPickInput,
+): Promise<InspirationPattern[]> {
+  const rows = await scanInspirationLibraryRows();
+  return pickInspirationPatterns(rows, input);
+}
+
+export async function loadInspirationMemorySnapshot(input: {
+  platform?: string;
+  objective?: string;
+  industry?: string;
+  tags?: string[];
+  limit?: number;
+}): Promise<{
+  patterns: InspirationPattern[];
+  census: InspirationCorpusCensus;
+}> {
+  const rows = await scanInspirationLibraryRows();
+  return {
+    patterns: pickInspirationPatterns(rows, {
+      platform: input.platform,
+      objective: mapObjective(input.objective),
+      industry: input.industry,
+      tags: input.tags,
+      limit: Math.min(Math.max(input.limit ?? 8, 0), 8),
+    }),
+    census: censusFromScanRows(rows),
+  };
 }
 
 async function loadCustomerSignals(input: {
@@ -195,13 +288,8 @@ export async function loadInspirationLearningPreview(input: {
   tags?: string[];
   limit?: number;
 }): Promise<InspirationPattern[]> {
-  return loadInspirationPatterns({
-    platform: input.platform,
-    objective: mapObjective(input.objective),
-    industry: input.industry,
-    tags: input.tags,
-    limit: Math.min(Math.max(input.limit ?? 8, 0), 8),
-  });
+  const snapshot = await loadInspirationMemorySnapshot(input);
+  return snapshot.patterns;
 }
 
 export async function loadAdLearningContext(

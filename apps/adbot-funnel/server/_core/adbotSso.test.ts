@@ -31,6 +31,20 @@ describe("verifyAdbotSsoToken", () => {
     expect(verifyAdbotSsoToken(token, SECRET)).toBeNull();
   });
 
+  it("bindet das Token an den Host, wenn aud gesetzt ist", () => {
+    const token = mintToken({ aud: "karriere.kunde.de" });
+    expect(
+      verifyAdbotSsoToken(token, SECRET, Date.now(), "karriere.kunde.de"),
+    ).toMatchObject({ email: "kunde@example.org" });
+    const replay = mintToken({
+      aud: "karriere.kunde.de",
+      nonce: "other-nonce-for-host-mismatch",
+    });
+    expect(
+      verifyAdbotSsoToken(replay, SECRET, Date.now(), "funnel.adbot.one"),
+    ).toBeNull();
+  });
+
   it("lehnt abgelaufene und manipulierte Tokens ab", () => {
     const expired = mintToken({
       iat: Math.floor(Date.now() / 1000) - 1000,

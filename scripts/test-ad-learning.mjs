@@ -26,9 +26,11 @@ const {
   customerSignalFromAsset,
   formatAdLearningPromptBlock,
   inspirationPatternFromMetadata,
+  inspirationRowHasImage,
   isInspirationLearningEligible,
   mergeStyleReferenceIds,
   scoreInspirationMatch,
+  summarizeInspirationCorpus,
 } = await loadContext();
 void root;
 
@@ -105,6 +107,64 @@ assert.ok(
   scoreInspirationMatch(pattern, { platform: "openai_ads", objective: "traffic" }) >
     scoreInspirationMatch(pattern, { platform: "meta", objective: "leads" }),
 );
+assert.ok(
+  scoreInspirationMatch(pattern, { platform: "openai_ads" }) >
+    scoreInspirationMatch(pattern, { platform: "meta" }),
+);
+assert.equal(
+  scoreInspirationMatch(pattern, {}),
+  pattern.qualityRating,
+);
+
+const clinic = inspirationPatternFromMetadata({
+  brandAssetId: "asset-clinic",
+  libraryScope: "INSPIRATION",
+  metadata: {
+    library: "ad_example_library",
+    ad_example: {
+      platform: "openai_ads",
+      objective: "leads",
+      industry: "Zahnklinik",
+      hook_text: "Termin noch diese Woche",
+      body_text: "Erstberatung ohne Überweisung.",
+      evidence_level: "public_transparency",
+      quality_rating: 2,
+    },
+    external_source: { customer_visible: false },
+  },
+});
+assert.ok(clinic);
+assert.ok(
+  scoreInspirationMatch(clinic, { industry: "klinik" }) >
+    scoreInspirationMatch(pattern, { industry: "klinik" }),
+);
+
+assert.equal(
+  inspirationRowHasImage({ storagePath: "inspiration/a.jpg", mimeType: "image/jpeg" }),
+  true,
+);
+assert.equal(
+  inspirationRowHasImage({
+    metadata: { ad_example: { image_url: "https://cdn.example.com/ad.jpg" } },
+  }),
+  true,
+);
+assert.equal(inspirationRowHasImage({ metadata: { ad_example: {} } }), false);
+
+const census = summarizeInspirationCorpus([
+  { pattern, hasImage: true, industry: "SaaS", platform: "openai_ads", objective: "traffic" },
+  { pattern: clinic, hasImage: true, industry: "Zahnklinik", platform: "openai_ads", objective: "leads" },
+  { pattern: null, hasImage: true, industry: "Handwerk", platform: "meta", objective: "traffic" },
+  { pattern: null, hasImage: false, industry: "", platform: "meta", objective: "" },
+]);
+assert.equal(census.scanned, 4);
+assert.equal(census.learningEligible, 2);
+assert.equal(census.imageAndText, 2);
+assert.equal(census.textOnly, 0);
+assert.equal(census.imageOnly, 1);
+assert.equal(census.neither, 1);
+assert.ok(census.industries.some((item) => item.name === "Zahnklinik" && item.imageAndText === 1));
+assert.ok(census.industries.some((item) => item.name === "Handwerk" && item.total === 1 && item.imageAndText === 0));
 
 const prompt = formatAdLearningPromptBlock({
   inspirationPatterns: [pattern],
@@ -197,17 +257,26 @@ const suggest = read("src/lib/ad-copy/suggest.ts");
 const openai = read("src/lib/ad-copy/providers/openai.ts");
 const together = read("src/lib/ad-copy/providers/together.ts");
 const enqueue = read("src/lib/creative-assets/enqueue.ts");
+const retrieve = read("src/lib/ad-learning/retrieve.ts");
 const docs = read("docs/ad-intelligence/LEARNING_SYSTEM.md");
 assert.match(suggest, /loadAdLearningContext/);
 assert.match(openai, /formatAdLearningPromptBlock/);
 assert.match(together, /formatAdLearningPromptBlock/);
 assert.match(enqueue, /attachCustomerWinnerStyleRefs/);
+assert.match(retrieve, /INSPIRATION_LIBRARY_SCAN_PAGE_SIZE/);
+assert.match(retrieve, /loadInspirationMemorySnapshot/);
+assert.match(retrieve, /\.range\(/);
+assert.doesNotMatch(retrieve, /\.limit\(500\)/);
 assert.match(docs, /Phase 1/);
 assert.match(docs, /Hunderttausenden/);
 assert.match(docs, /nicht.*fine-getuned|nicht.*Fine-Tune/i);
+assert.match(docs, /Tausenden echten ChatGPT Ads/);
+assert.match(docs, /keine Aussage über Tausende \*\*eigene\*\* Kampagnen/i);
+assert.match(docs, /branchenoffen/);
+assert.match(docs, /ganzen.*Vault|ganzen Inspiration-Vault/i);
 assert.match(docs, /Tags/);
 assert.match(read("src/lib/ad-learning/context.ts"), /structureSlots/);
-assert.match(read("src/lib/ad-learning/retrieve.ts"), /tags: input.tags/);
+assert.match(retrieve, /tags: input.tags/);
 
 const jobPattern = inspirationPatternFromMetadata({
   brandAssetId: "job-1",

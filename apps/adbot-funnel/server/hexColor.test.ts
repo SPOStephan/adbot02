@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHexColorDraft, normalizeHexColor } from "../client/src/lib/hexColor";
+import { formatHexColorDraft, hexToRgb, normalizeHexColor, parseRgbComponent, rgbToHex } from "../client/src/lib/hexColor";
 
 describe("direkte Hex-Farbeingabe", () => {
   it("akzeptiert eingefügte Werte mit und ohne Raute und normalisiert Großschreibung", () => {
@@ -17,5 +17,13 @@ describe("direkte Hex-Farbeingabe", () => {
     expect(formatHexColorDraft("#GG12zz34")).toBe("#1234");
     expect(formatHexColorDraft(" ")).toBe("");
     expect(normalizeHexColor("")).toBeNull();
+  });
+
+  it("wandelt Hex und RGB in beide Richtungen um", () => {
+    expect(hexToRgb("#0165C3")).toEqual({ r: 1, g: 101, b: 195 });
+    expect(rgbToHex(1, 101, 195)).toBe("#0165C3");
+    expect(parseRgbComponent("255")).toBe(255);
+    expect(parseRgbComponent("256")).toBeNull();
+    expect(parseRgbComponent("")).toBeNull();
   });
 });

@@ -15,6 +15,10 @@ import {
   AD_EXAMPLE_SOURCE_KINDS,
 } from "@/lib/ad-examples/types";
 import {
+  EMPTY_INSPIRATION_CORPUS_CENSUS,
+  type InspirationCorpusCensus,
+} from "@/lib/ad-learning/types";
+import {
   COLLECTOR_IMPORT_BATCH_MAX,
   COLLECTOR_PROVIDERS,
   COLLECTOR_STATUSES,
@@ -27,6 +31,7 @@ import { collectorStatusLabel } from "@/lib/ad-library-collector/status";
 
 type PanelProps = {
   initialInbox: CollectorInbox;
+  initialCensus?: InspirationCorpusCensus | null;
 };
 
 type ApiResponse = {
@@ -49,7 +54,10 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
+export function AdLibraryCollectorSandbox({
+  initialInbox,
+  initialCensus = null,
+}: PanelProps) {
   const [inbox, setInbox] = useState(initialInbox);
   const [filter, setFilter] = useState<CollectorStatus | "all">("all");
   const [pending, setPending] = useState<string | null>(null);
@@ -58,10 +66,11 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
   const [jsonl, setJsonl] = useState("");
   const [preview, setPreview] = useState<CollectorMemoryPreview | null>(null);
   const [probe, setProbe] = useState({
-    platform: "meta",
-    objective: "sales",
+    platform: "openai_ads",
+    objective: "",
     industry: "",
   });
+  const census = preview?.census ?? initialCensus ?? EMPTY_INSPIRATION_CORPUS_CENSUS;
 
   const visible = useMemo(
     () =>
@@ -211,9 +220,9 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
             Hier landen Beispiele, bevor sie die KI wirklich sieht. Live-Gedächtnis
-            ist der Inspiration-Vault (`brand_assets`, `library_scope=INSPIRATION`).
-            First-Party-Winner bleiben am Kundenkonto. Diese Inbox ist die gemeinsame
-            Andockstelle für manuelle Beispiele und spätere Meta/Google/TikTok-Collector.
+            ist der Inspiration-Vault (`brand_assets`, `library_scope=INSPIRATION`) —
+            für jede Branche, nicht nur Hotels oder SaaS. Copy-Vorschläge scannen
+            den ganzen Vault. First-Party-Winner bleiben am Kundenkonto.
           </p>
         </div>
         <button
@@ -257,13 +266,60 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
         ))}
       </div>
 
+      <div className="mt-6 rounded-2xl border border-violet-100 bg-white p-4">
+        <p className="text-xs font-bold uppercase tracking-wide text-violet-700">
+          Live-Gedächtnis · ganzer Vault
+        </p>
+        <p className="mt-1 text-sm text-slate-600">
+          Scan ohne 500er-Deckel. „Bild + Text“ sind die Zeilen, aus denen die KI
+          Muster ziehen kann — unabhängig von der Branche.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <CensusMetric label="Gescannt" value={census.scanned} />
+          <CensusMetric label="Mit Text" value={census.learningEligible} />
+          <CensusMetric label="Bild + Text" value={census.imageAndText} />
+          <CensusMetric label="Nur Text" value={census.textOnly} />
+          <CensusMetric label="Nur Bild" value={census.imageOnly} />
+        </div>
+        {census.scanned > 0 ? (
+          <p className="mt-3 text-sm font-semibold text-violet-950">
+            {census.imageAndText >= 1000
+              ? `Zahlenbasis für „Tausende echte ChatGPT Ads“: ${census.imageAndText} mit Bild und Text im Gedächtnis.`
+              : `Noch keine Tausender-Basis: ${census.imageAndText} mit Bild und Text, ${census.learningEligible} mit Text.`}
+          </p>
+        ) : (
+          <p className="mt-3 text-sm text-slate-500">
+            Zahlen erscheinen nach der ersten Probe oder wenn der Server-Scan fertig ist.
+          </p>
+        )}
+        {census.industries.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {census.industries.slice(0, 16).map((item) => (
+              <button
+                key={item.name}
+                className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-950 hover:bg-violet-100"
+                onClick={() =>
+                  setProbe((current) => ({
+                    ...current,
+                    industry: item.name === "(ohne Zuordnung)" ? "" : item.name,
+                  }))
+                }
+                type="button"
+              >
+                {item.name} · {item.imageAndText}/{item.total}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
       <form
         className="mt-6 grid gap-3 rounded-2xl border border-violet-100 bg-white p-4 md:grid-cols-4"
         onSubmit={runPreview}
       >
         <div className="md:col-span-4 flex items-center gap-2 text-sm font-bold text-violet-900">
           <FlaskConical className="size-4" />
-          Gedächtnis-Probe — was die KI für eine Situation ziehen würde
+          Gedächtnis-Probe — was die KI für eine beliebige Branche ziehen würde
         </div>
         <label className="grid gap-1">
           <FieldLabel>Plattform</FieldLabel>
@@ -272,6 +328,7 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
             onChange={(event) => setProbe((current) => ({ ...current, platform: event.target.value }))}
             value={probe.platform}
           >
+            <option value="">Alle Plattformen</option>
             {AD_EXAMPLE_PLATFORMS.map((item) => (
               <option key={item.value} value={item.value}>{item.label}</option>
             ))}
@@ -284,6 +341,7 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
             onChange={(event) => setProbe((current) => ({ ...current, objective: event.target.value }))}
             value={probe.objective}
           >
+            <option value="">Alle Ziele</option>
             {AD_EXAMPLE_OBJECTIVES.map((item) => (
               <option key={item.value} value={item.value}>{item.label}</option>
             ))}
@@ -294,7 +352,7 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
           <input
             className="h-11 rounded-xl border border-slate-300 px-3"
             onChange={(event) => setProbe((current) => ({ ...current, industry: event.target.value }))}
-            placeholder="Hotels, SaaS, Beauty…"
+            placeholder="beliebig — leer = alle Branchen"
             value={probe.industry}
           />
         </label>
@@ -386,7 +444,7 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
         </label>
         <label className="grid gap-1">
           <FieldLabel>Branche</FieldLabel>
-          <input className="h-11 rounded-xl border border-slate-300 px-3" name="industry" placeholder="Hotels & Reisen" required />
+          <input className="h-11 rounded-xl border border-slate-300 px-3" name="industry" placeholder="beliebig — z. B. Handwerk, Klinik, Shop" required />
         </label>
         <label className="grid gap-1">
           <FieldLabel>Werbeziel</FieldLabel>
@@ -461,7 +519,7 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
         <textarea
           className="mt-3 min-h-32 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"
           onChange={(event) => setJsonl(event.target.value)}
-          placeholder='{"provider":"meta","external_id":"123","title":"…","advertiser_name":"…","platform":"meta","industry":"SaaS","hook_text":"…","body_text":"…","source_url":"https://…","image_url":"https://…"}'
+          placeholder='{"provider":"meta","external_id":"123","title":"…","advertiser_name":"…","platform":"meta","industry":"Handwerk","hook_text":"…","body_text":"…","source_url":"https://…","image_url":"https://…"}'
           value={jsonl}
         />
         <button
@@ -545,5 +603,18 @@ export function AdLibraryCollectorSandbox({ initialInbox }: PanelProps) {
         ))}
       </ul>
     </section>
+  );
+}
+
+function CensusMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-3">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-extrabold tabular-nums text-slate-950">
+        {value}
+      </p>
+    </div>
   );
 }

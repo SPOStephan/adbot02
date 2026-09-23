@@ -11,6 +11,7 @@ export type FunnelSsoPayload = {
   sub: string;
   email: string;
   name: string;
+  aud?: string;
   nonce: string;
   iat: number;
   exp: number;
@@ -51,16 +52,19 @@ export function createFunnelSsoToken(input: {
   userId: string;
   email: string;
   name?: string | null;
+  audienceHostname?: string | null;
   now?: number;
 }): string {
   const secret = getFunnelSsoSecret();
   const issuedAt = Math.floor((input.now ?? Date.now()) / 1000);
+  const audience = input.audienceHostname?.trim().toLowerCase() || undefined;
   const payload: FunnelSsoPayload = {
     v: 1,
     purpose: PURPOSE,
     sub: input.userId,
     email: input.email.trim().toLowerCase(),
     name: (input.name ?? "").trim() || input.email.trim(),
+    ...(audience ? { aud: audience } : {}),
     nonce: randomBytes(24).toString("base64url"),
     iat: issuedAt,
     exp: issuedAt + SSO_TTL_SECONDS,

@@ -56,9 +56,17 @@ export const defaultFunnel: FunnelConfig = {
       description:
         "Beantworte wenige kurze Fragen und lerne uns unverbindlich kennen. Deine Angaben behandeln wir selbstverständlich vertraulich.",
       buttonLabel: "Jetzt starten",
+      layout: "classic",
       heroImageUrl: "",
       bullets: ["Kein Anschreiben nötig", "Mobil in wenigen Minuten", "Schnelle persönliche Rückmeldung"],
       trustNote: "Kostenlos · Unverbindlich · Datenschutzkonform",
+      benefitsBandTitle: "Deine Vorteile",
+      secondaryButtonLabel: "",
+      benefits: [],
+      heroBackgroundAssetId: "",
+      heroBackgroundDesktopUrl: "",
+      heroBackgroundMobileUrl: "",
+      heroBackgroundOpacity: 15,
     },
     {
       id: "page-role",
@@ -71,10 +79,10 @@ export const defaultFunnel: FunnelConfig = {
       questionKey: "arbeitsbereich",
       allowMultiple: false,
       options: [
-        { id: "role-sales", label: "Vertrieb", value: "vertrieb", icon: "target" },
-        { id: "role-office", label: "Office", value: "office", icon: "building" },
-        { id: "role-tech", label: "Technik", value: "technik", icon: "rocket" },
-        { id: "role-other", label: "Andere Rolle", value: "andere", icon: "sparkles" },
+        { id: "role-sales", label: "Vertrieb", value: "vertrieb", icon: "target", leadValue: 70 },
+        { id: "role-office", label: "Office", value: "office", icon: "building", leadValue: 40 },
+        { id: "role-tech", label: "Technik", value: "technik", icon: "rocket", leadValue: 55 },
+        { id: "role-other", label: "Andere Rolle", value: "andere", icon: "sparkles", leadValue: 25 },
       ],
     },
     {
@@ -88,10 +96,10 @@ export const defaultFunnel: FunnelConfig = {
       questionKey: "berufserfahrung",
       allowMultiple: false,
       options: [
-        { id: "exp-entry", label: "Ich starte gerade erst", value: "einstieg", icon: "graduation-cap" },
-        { id: "exp-junior", label: "1–3 Jahre", value: "1-3", icon: "calendar" },
-        { id: "exp-senior", label: "Mehr als 3 Jahre", value: "3-plus", icon: "star" },
-        { id: "exp-change", label: "Ich bin Quereinsteiger:in", value: "quereinstieg", icon: "sparkles" },
+        { id: "exp-entry", label: "Ich starte gerade erst", value: "einstieg", icon: "graduation-cap", leadValue: 15 },
+        { id: "exp-junior", label: "1–3 Jahre", value: "1-3", icon: "calendar", leadValue: 40 },
+        { id: "exp-senior", label: "Mehr als 3 Jahre", value: "3-plus", icon: "star", leadValue: 80 },
+        { id: "exp-change", label: "Ich bin Quereinsteiger:in", value: "quereinstieg", icon: "sparkles", leadValue: 35 },
       ],
     },
     {

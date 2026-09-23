@@ -11,6 +11,7 @@ type FunnelChromeProps = PropsWithChildren<{
   step: number;
   totalSteps: number;
   showProgress: boolean;
+  fullBleed?: boolean;
 }>;
 
 export function FunnelChrome({
@@ -22,6 +23,7 @@ export function FunnelChrome({
   step,
   totalSteps,
   showProgress,
+  fullBleed = false,
   children,
 }: FunnelChromeProps) {
   const progress = totalSteps <= 1 ? 100 : Math.round((step / (totalSteps - 1)) * 100);
@@ -40,7 +42,7 @@ export function FunnelChrome({
     "--funnel-choice-selected-border": brand.choiceSelectedBorderColor,
   } as CSSProperties;
   return (
-    <div className="funnel-canvas" style={brandStyle}>
+    <div className={`funnel-canvas${fullBleed ? " funnel-canvas-benefits" : ""}`} style={brandStyle}>
       <a className="funnel-skip-link" href="#funnel-content">Zum Hauptinhalt springen</a>
       <header className="funnel-header" aria-label="Funnel-Kopfbereich">
         <div className="funnel-logo-wrap">

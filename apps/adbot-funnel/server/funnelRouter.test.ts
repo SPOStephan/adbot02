@@ -79,6 +79,25 @@ describe("Funnel-Router", () => {
 
     expect(result.id).toMatch(/^[0-9a-f-]{36}$/i);
     expect(result.notificationSent).toBe(false);
+    expect(result.leadValue).toBe(150);
+  });
+
+  it("speichert eine manuelle Gut-Bewertung auch ohne CAPI-Token", async () => {
+    const admin = appRouter.createCaller(adminContext);
+    const publicCaller = appRouter.createCaller(publicContext);
+    const submitted = await publicCaller.funnel.submit({
+      funnelSlug: "karriere",
+      answers: { arbeitsbereich: ["vertrieb"], berufserfahrung: ["3-plus"] },
+      contact: { name: "Erika Muster", email: "erika@example.org", phone: "+49 123" },
+      consent: true,
+    });
+    const rated = await admin.funnel.rateLeadQuality({ id: submitted.id, quality: "good" });
+    expect(rated.leadQuality).toBe("good");
+    expect(rated.leadValue).toBe(150);
+    expect(rated.metaQuality).toBe("skipped");
+    expect(rated.metaQualityReason).toBe("tracking_disabled");
+    const again = await admin.funnel.rateLeadQuality({ id: submitted.id, quality: "good" });
+    expect(again.metaQualityReason).toBe("already_rated");
   });
 
   it("liefert im Bewerbungs-Dashboard interne Seitennamen statt technischer Question-IDs", async () => {
@@ -167,6 +186,22 @@ describe("Funnel-Router", () => {
 
     await admin.funnel.saveConfig({ ...config, brand: { ...config.brand, faviconUrl: stored.url } });
     expect((await publicCaller.funnel.publicConfig({ slug: config.slug })).brand.faviconUrl).toBe(stored.url);
+  });
+
+  it("nimmt zugeschnittene Hintergrundbilder in die Kundenbibliothek auf", async () => {
+    const admin = appRouter.createCaller(adminContext);
+    const config = await admin.funnel.adminConfig({ id: "10000000-0000-4000-8000-000000000001" }).then(result => result.config);
+    const tiny = Buffer.from("d2VicA==", "base64");
+    const asset = await admin.funnel.uploadHeroBackground({
+      funnelId: config.id,
+      fileName: "hero.jpg",
+      desktop: { dataBase64: tiny.toString("base64"), mimeType: "image/webp", size: tiny.byteLength },
+      mobile: { dataBase64: tiny.toString("base64"), mimeType: "image/webp", size: tiny.byteLength },
+    });
+    expect(asset.desktopUrl.length).toBeGreaterThan(0);
+    expect(asset.mobileUrl.length).toBeGreaterThan(0);
+    const library = await admin.funnel.mediaLibrary({ funnelId: config.id });
+    expect(library.some(item => item.id === asset.id)).toBe(true);
   });
 
   it("erstellt, dupliziert und filtert mehrere Funnel ohne Bewerbungen zu kopieren", async () => {

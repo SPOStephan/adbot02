@@ -1,6 +1,8 @@
 import {
   EMPTY_AD_LEARNING_CONTEXT,
+  EMPTY_INSPIRATION_CORPUS_CENSUS,
   type AdLearningContext,
+  type InspirationCorpusCensus,
   type InspirationPattern,
 } from "@/lib/ad-learning/types";
 import { formatAdLearningPromptBlock, scoreInspirationMatch } from "@/lib/ad-learning/context";
@@ -16,6 +18,7 @@ export function buildCollectorMemoryPreview(input: {
   industry?: string;
   livePatterns: InspirationPattern[];
   stagedItems: CollectorItemView[];
+  census?: InspirationCorpusCensus;
 }): CollectorMemoryPreview {
   const query = {
     platform: (input.platform ?? "").trim(),
@@ -89,6 +92,7 @@ export function buildCollectorMemoryPreview(input: {
 
   return {
     query,
+    census: input.census ?? EMPTY_INSPIRATION_CORPUS_CENSUS,
     livePromptBlock: formatAdLearningPromptBlock(liveContext),
     liveMatches,
     sandboxMatches,
@@ -111,6 +115,7 @@ export function emptyCollectorMemoryPreview(query: {
       objective: query.objective ?? "",
       industry: query.industry ?? "",
     },
+    census: EMPTY_INSPIRATION_CORPUS_CENSUS,
     livePromptBlock: formatAdLearningPromptBlock(EMPTY_AD_LEARNING_CONTEXT),
     liveMatches: [],
     sandboxMatches: [],

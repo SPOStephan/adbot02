@@ -27,6 +27,18 @@ export const ENV = {
   get funnelSsoSecret() {
     return readEnv("FUNNEL_SSO_SECRET").trim();
   },
+  get bunnyStorageZone() {
+    return readEnv("BUNNY_STORAGE_ZONE").trim();
+  },
+  get bunnyStorageApiKey() {
+    return readEnv("BUNNY_STORAGE_API_KEY").trim();
+  },
+  get bunnyStorageRegion() {
+    return readEnv("BUNNY_STORAGE_REGION").trim() || "de";
+  },
+  get bunnyCdnHostname() {
+    return readEnv("BUNNY_CDN_HOSTNAME").trim();
+  },
   get isProduction() {
     return process.env.NODE_ENV === "production";
   },

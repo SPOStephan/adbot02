@@ -9,6 +9,7 @@ export type FunnelSsoPayload = {
   sub: string;
   email: string;
   name: string;
+  aud?: string;
   nonce: string;
   iat: number;
   exp: number;
@@ -48,6 +49,7 @@ export function verifyAdbotSsoToken(
   token: string,
   secret: string,
   now = Date.now(),
+  expectedHostname?: string | null,
 ): FunnelSsoPayload | null {
   const parts = token.split(".");
   if (parts.length !== 2) return null;
@@ -90,6 +92,11 @@ export function verifyAdbotSsoToken(
   const typed = payload as FunnelSsoPayload;
   if (!/^[0-9a-f-]{36}$/i.test(typed.sub)) return null;
   if (!typed.email.includes("@")) return null;
+  if (typeof typed.aud === "string" && typed.aud.trim()) {
+    const audience = typed.aud.trim().toLowerCase();
+    const host = (expectedHostname ?? "").trim().toLowerCase().replace(/:\d+$/, "");
+    if (!host || audience !== host) return null;
+  }
 
   const nowSeconds = Math.floor(now / 1000);
   if (nowSeconds > typed.exp || typed.exp - typed.iat > SSO_TTL_SECONDS + 30) {

@@ -1,6 +1,7 @@
 export const PAGE_TYPES = ["start", "choice-grid", "choice-list", "contact"] as const;
 export const FUNNEL_STATUSES = ["draft", "published", "paused", "archived"] as const;
-export const FUNNEL_OPTION_ICONS = [
+export const START_PAGE_LAYOUTS = ["classic", "benefits"] as const;
+export const LUCIDE_FUNNEL_ICONS = [
   "badge-check",
   "banknote",
   "bell",
@@ -49,10 +50,33 @@ export const FUNNEL_OPTION_ICONS = [
   "zap",
 ] as const;
 
+/** Eigene Adbot-Icons (Lucide-Strichstil). Neue Symbole hier + Label + SVG ablegen. */
+export const ADBOT_FUNNEL_ICONS = [
+  "adbot-annual-hours",
+  "adbot-company-car",
+  "adbot-corporate-perks",
+  "adbot-flex-hours",
+  "adbot-health-care",
+  "adbot-home-office",
+  "adbot-insurance-cover",
+  "adbot-mobile-work",
+  "adbot-modern-workplace",
+  "adbot-profit-share",
+  "adbot-team-together",
+  "adbot-training-path",
+  "adbot-travel-equals-work",
+  "adbot-vacation-days",
+] as const;
+
+export const FUNNEL_OPTION_ICONS = [...LUCIDE_FUNNEL_ICONS, ...ADBOT_FUNNEL_ICONS] as const;
+
 export type FunnelPageType = (typeof PAGE_TYPES)[number];
 export type FunnelStatus = (typeof FUNNEL_STATUSES)[number];
+export type StartPageLayout = (typeof START_PAGE_LAYOUTS)[number];
 
 export type FunnelOptionIcon = (typeof FUNNEL_OPTION_ICONS)[number];
+export type LucideFunnelIcon = (typeof LUCIDE_FUNNEL_ICONS)[number];
+export type AdbotFunnelIcon = (typeof ADBOT_FUNNEL_ICONS)[number];
 
 export const FUNNEL_OPTION_ICON_LABELS: Record<FunnelOptionIcon, string> = {
   "badge-check": "Auszeichnung",
@@ -101,7 +125,25 @@ export const FUNNEL_OPTION_ICON_LABELS: Record<FunnelOptionIcon, string> = {
   users: "Team",
   wrench: "Werkzeug",
   zap: "Energie",
+  "adbot-annual-hours": "Jahresarbeitszeit",
+  "adbot-company-car": "Firmenwagen",
+  "adbot-corporate-perks": "Corporate Benefits",
+  "adbot-flex-hours": "Gleitzeit",
+  "adbot-health-care": "Gesundheit",
+  "adbot-home-office": "Homeoffice",
+  "adbot-insurance-cover": "Versicherung",
+  "adbot-mobile-work": "Mobiles Arbeiten",
+  "adbot-modern-workplace": "Moderner Arbeitsplatz",
+  "adbot-profit-share": "Ergebnisbeteiligung",
+  "adbot-team-together": "Gemeinschaft",
+  "adbot-training-path": "Weiterbildung",
+  "adbot-travel-equals-work": "Reisezeit",
+  "adbot-vacation-days": "Urlaubstage",
 };
+
+export function isAdbotFunnelIcon(icon: string): icon is AdbotFunnelIcon {
+  return (ADBOT_FUNNEL_ICONS as readonly string[]).includes(icon);
+}
 
 export type FunnelOption = {
   id: string;
@@ -109,6 +151,8 @@ export type FunnelOption = {
   value: string;
   icon: FunnelOptionIcon;
   description?: string;
+  /** Optional EUR value sent to Meta with the Lead event when this answer is selected. */
+  leadValue?: number;
 };
 
 export type ContactFieldKey = "name" | "company" | "email" | "phone" | "message";
@@ -132,11 +176,39 @@ type FunnelPageBase = {
   buttonLabel: string;
 };
 
+export type StartBenefit = {
+  id: string;
+  icon: FunnelOptionIcon;
+  title: string;
+  text: string;
+  /** Optional hex override. Empty/undefined uses the branding accent. */
+  color?: string;
+};
+
 export type StartPage = FunnelPageBase & {
   type: "start";
+  layout: StartPageLayout;
   heroImageUrl: string;
   bullets: string[];
   trustNote: string;
+  benefitsBandTitle: string;
+  secondaryButtonLabel: string;
+  benefits: StartBenefit[];
+  heroBackgroundAssetId: string;
+  heroBackgroundDesktopUrl: string;
+  heroBackgroundMobileUrl: string;
+  heroBackgroundOpacity: number;
+};
+
+export type FunnelMediaAsset = {
+  id: string;
+  ownerUserId: string | null;
+  funnelId: string;
+  kind: "hero-background";
+  filename: string;
+  desktopUrl: string;
+  mobileUrl: string;
+  createdAt: string;
 };
 
 export type ChoicePage = FunnelPageBase & {
@@ -200,6 +272,10 @@ export type FunnelMetaTracking = {
   eventName: string;
   /** Wann die Meta-Conversion gemeldet wird. Standard: beim Absenden. Optional erst nach DOI. */
   conversionTrigger: MetaConversionTrigger;
+  /** Optionaler EUR-Wert für manuell als gut bewertete Leads. */
+  qualityGoodValue?: number;
+  /** Optionaler EUR-Wert für manuell als schlecht bewertete Leads. */
+  qualityBadValue?: number;
 };
 
 export type FunnelConfig = {
@@ -266,6 +342,8 @@ export type ApplicationSubmission = {
 
 export type ApplicationStatus = "new" | "reviewing" | "contacted" | "rejected" | "hired";
 
+export type LeadQuality = "good" | "bad";
+
 export type ApplicationRecord = {
   id: string;
   funnelId: string;
@@ -276,6 +354,11 @@ export type ApplicationRecord = {
   consentAt: string;
   trackingConsentAt?: string;
   metaEventId?: string;
+  leadValue?: number;
+  leadQuality?: LeadQuality;
+  leadQualityAt?: string;
+  leadQualityEventId?: string;
+  leadQualityMetaStatus?: string;
   resume?: ResumeMetadata;
   sourceUrl?: string;
   utm: Record<string, string>;

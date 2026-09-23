@@ -1,3 +1,5 @@
+import type { InspirationCorpusCensus } from "@/lib/ad-learning/types";
+
 export const COLLECTOR_PROVIDERS = [
   { value: "manual", label: "Manuell / Sandbox" },
   { value: "chatgpt_ad_library", label: "ChatGPT Ad Library" },
@@ -83,6 +85,7 @@ export type CollectorInbox = {
 
 export type CollectorMemoryPreview = {
   query: { platform: string; objective: string; industry: string };
+  census: InspirationCorpusCensus;
   livePromptBlock: string;
   liveMatches: Array<{
     brandAssetId: string;

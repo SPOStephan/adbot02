@@ -1,12 +1,23 @@
 # Adbot Learning System
 
-**Stand:** 16. September 2026
+**Stand:** 22. September 2026
 
 ## Was „schlauer werden“ hier heißt
 
-Adbot wird **nicht** bei jedem Import neu fine-getuned. Jedes eingespeiste Werbemittel und jedes First-Party-Leistungssignal landet in einem internen Korpus. Vor Copy- und Creative-Vorschlägen holt die KI passende Beispiele und Signale in den Prompt (**Retrieval**). Fine-Tuning ist eine spätere, getrennte Stufe.
+Adbot wird **nicht** bei jedem Import neu fine-getuned. Jedes eingespeiste Werbemittel und jedes First-Party-Leistungssignal landet in einem internen Korpus. Vor Copy- und Creative-Vorschlägen holt die KI passende Beispiele und Signale in den Prompt (**Retrieval**). Der Scan geht über den **ganzen** Inspiration-Vault (Seiten à 1000, kein 500er-Deckel). Fine-Tuning ist eine spätere, getrennte Stufe.
 
-„Mit Hunderttausenden Werbemitteln trainiert“ darf erst gesagt werden, wenn diese Menge **tatsächlich im Korpus** liegt **und** entweder Retrieval in dieser Größenordnung oder ein bestandenes Fine-Tune/Eval vorliegt. Bis dahin: wachsende interne Bibliothek + First-Party-Feedback, kein Marketing-Claim.
+Adbot ist **branchenoffen**. Hotel, SaaS, Beauty oder E-Commerce sind nur Beispiele für Zellen im Korpus — dasselbe Retrieval gilt für Handwerk, Klinik, Shop, Lokales, B2B, alles, was im Vault oder im Briefing steht. Die Gedächtnis-Probe unter `/dashboard/inspiration` lässt Plattform, Ziel und Branche leer = alle.
+
+## Marketing-Formulierungen
+
+Retrieval-Material aus der öffentlichen ChatGPT Ad Library ist **Trainingsmaterial**, keine Fine-Tune-Gewichte und keine eigenen Kampagnen.
+
+| Satz | Wann die Zahlenbasis stimmt | Was er nicht heißt |
+| --- | --- | --- |
+| „trainiert mit Tausenden echten ChatGPT Ads“ | Census `imageAndText` im Vault ≥ 1000 (Bild **und** Text) **und** Copy-Retrieval scannt den ganzen Vault. Eine Handvoll eigener ChatGPT-Ads-Kampagnen darf daneben laufen — sie sind nicht die Mengenbasis. | Keine Aussage über Tausende **eigene** Kampagnen. Kein Fine-Tune. Library-Ads sind Muster (`public_transparency`), keine Winner. |
+| „mit Hunderttausenden Werbemitteln trainiert“ | Diese Menge liegt **tatsächlich** im Korpus **und** entweder Retrieval in dieser Größenordnung oder ein bestandenes Fine-Tune/Eval. | Unverändert gesperrt, bis Korpusgröße und Retrieval/Eval belegt sind. |
+
+Die Live-Zahlen stehen in der Korpus-Sandbox (`Gescannt` / `Mit Text` / `Bild + Text`). Ohne genug Bild+Text-Kombinationen bleibt der Tausender-Satz stehen.
 
 ## Zwei getrennte Signalquellen
 
@@ -30,7 +41,7 @@ Success-Control (Pausen, Budget-Umschichtung) bleibt die **operative** Auswertun
 - Offizielle Collector für Meta Ad Library, Google Transparency, TikTok (eigene Apps, nicht das Kunden-Token). Bau- und Zugangsplan: `docs/ad-examples/COLLECTOR_BUILD.md`.
 - Explizites Underperformer-Label aus Success-Control (nicht nur Winner).
 - OpenAI-Ads-Insights analog zu Meta-Winners verdrahten.
-- Semantische Suche (Embeddings), sobald der Vault größer wird als ein Scan.
+- Semantische Suche (Embeddings), sobald der paginierte Vollscan zu grob wird (Heuristik Plattform/Ziel/Branche verfehlt passende Texte).
 
 ### Phase 3 — Echtes Training
 
@@ -57,17 +68,17 @@ Kein paralleles „alles auf einmal“. Zuerst den Retrieval-Loop füttern und m
 | Wer | Was | Fertig wenn |
 | --- | --- | --- |
 | Stephan | PR Korpus-Sandbox mergen. Migration `20260916120000_ad_library_collector_items.sql` im produktiven Supabase. | `/dashboard/inspiration` zeigt die Korpus-Sandbox ohne Migrationshinweis. |
-| Stephan | Erste eigenen Beispiele **in die Sandbox**, nicht direkt in die alte Upload-Maske. Review → bereit → Vault. | Gedächtnis-Probe für eine Kernbranche zeigt die neuen Texte erst **nach** Import im Live-Block. |
+| Stephan | Erste eigenen Beispiele **in die Sandbox**, nicht direkt in die alte Upload-Maske. Review → bereit → Vault. | Gedächtnis-Probe (Branche leer = alle) zeigt die neuen Texte erst **nach** Import im Live-Block. |
 
 Ohne diesen Schritt bleibt jeder weitere Import ein Direktschreiben ins Gedächtnis. Die Sandbox ist die Qualitätsklappe.
 
 ### Schritt 1 — Korpus füllen, bis Retrieval greift
 
-Ziel ist nicht „viele Ads“, sondern **abdeckende Textmuster**. Pro Kernbranche (zuerst Hotels/Reisen, SaaS, Beauty, lokale Dienstleistung, E-Commerce) mindestens drei Ziele (Traffic, Leads, Sales) und pro Zelle mehrere unterschiedliche Hooks.
+Ziel ist nicht „viele Ads“, sondern **abdeckende Textmuster über beliebige Branchen**. Hotel/SaaS/Beauty/Lokal/E-Commerce sind Startzellen, kein Produkt-Scope. Pro Zelle mindestens drei Ziele (Traffic, Leads, Sales) und mehrere unterschiedliche Hooks.
 
 | Wer | Was | Fertig wenn |
 | --- | --- | --- |
-| Stephan | Beispiele weiter sammeln: Screenshot + Hook/Body + Branche/Ziel + Quelllink. ChatGPT-Library nur über den bestehenden Unlocker, nicht per Hand-ID. | Vault hat nutzbaren Text (nicht nur Bilder). Probe für 5 typische Briefings liefert jeweils ≥ 3 Live-Treffer. |
+| Stephan | Beispiele weiter sammeln: Screenshot + Hook/Body + Branche/Ziel + Quelllink. ChatGPT-Library nur über den bestehenden Unlocker, nicht per Hand-ID. | Vault hat nutzbaren Text (nicht nur Bilder). Probe für 5 typische Briefings — verschiedene Branchen, nicht nur Hotel/SaaS — liefert jeweils ≥ 3 Live-Treffer. |
 | Code | Optional: Probe-Ergebnis als fester Qualitätscheck nach jedem Import-Batch (schon in der Sandbox-UI). | Du siehst vor dem nächsten Stapel, welche Zellen noch leer sind. |
 
 Gate A: **Retrieval wirkt.** Copy-Vorschläge für ein bekanntes Briefing enthalten abstrahierte Muster aus dem Vault (im Prompt-Block sichtbar), ohne fremde Marken zu wiederholen. Erst dann Volumen-Collector.
@@ -114,7 +125,7 @@ Gate C: Eval bestanden **und** interner Canary ohne Policy-/Faktenbruch. Erst da
 ### Schritt 5 — Erst dann kontinuierlich / Embeddings
 
 - Regelmäßiger Export → Train → Eval → Deploy, nur First-Party in die Weights.
-- Embeddings erst, wenn der Vault größer ist als der Scan (heute 500) **und** die Probe offensichtlich passende Texte verfehlt, weil die Heuristik (Plattform/Ziel/Branche) zu grob ist.
+- Embeddings erst, wenn der paginierte Vollscan (`INSPIRATION_LIBRARY_SCAN_PAGE_SIZE=1000`) die passenden Texte verfehlt, weil die Heuristik (Plattform/Ziel/Branche) zu grob ist.
 - Embeddings bleiben ein zweites Ranking, kein Ersatz für Evidenz und kein Training.
 
 ### Bewusst nicht

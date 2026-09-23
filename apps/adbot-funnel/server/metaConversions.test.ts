@@ -12,10 +12,13 @@ import type { ApplicationRecord, ApplicationSubmission } from "@shared/funnel";
 import {
   resetMemoryStoreForTests,
   saveMetaServerSettings,
+  setFunnelOwner,
 } from "./funnelStore";
 import {
   buildMetaConversionEvent,
+  buildMetaLeadQualityEvent,
   sendMetaApplicationConversion,
+  sendMetaLeadQualityEvent,
 } from "./metaConversions";
 
 const originalSupabaseUrl = process.env.SUPABASE_URL;
@@ -53,6 +56,7 @@ const application: ApplicationRecord = {
   contact: submission.contact,
   consentAt: "2026-07-28T12:00:00.000Z",
   metaEventId: submission.metaEventId,
+  leadValue: 150,
   sourceUrl: submission.sourceUrl,
   utm: {},
   createdAt: "2026-07-28T12:00:00.000Z",
@@ -81,8 +85,27 @@ describe("Meta Conversions API", () => {
     expect(event.user_data.fbp).toBe(submission.metaFbp);
     expect(event.user_data.fbc).toBe(submission.metaFbc);
     expect(event.user_data.em?.[0]).toMatch(/^[0-9a-f]{64}$/);
+    expect(event.custom_data.value).toBe(150);
+    expect(event.custom_data.currency).toBe("EUR");
     expect(JSON.stringify(event)).not.toContain("Erika@Example.org");
     expect(JSON.stringify(event)).not.toContain("+49 123 456");
+  });
+
+  it("meldet eine manuelle Gut-Bewertung als Subscribe mit Wert", () => {
+    const event = buildMetaLeadQualityEvent(
+      config,
+      application,
+      "good",
+      "30000000-0000-4000-8000-000000000099",
+      "2026-07-28T13:00:00.000Z",
+    );
+    expect(event.event_name).toBe("Subscribe");
+    expect(event.event_id).toBe("30000000-0000-4000-8000-000000000099");
+    expect(event.action_source).toBe("system_generated");
+    expect(event.custom_data.lead_quality).toBe("good");
+    expect(event.custom_data.value).toBe(150);
+    expect(event.custom_data.lead_event_source).toBe("adbot");
+    expect(JSON.stringify(event)).not.toContain("Erika@Example.org");
   });
 
   it("sendet mit Token und Testcode an Graph API v25.0", async () => {
@@ -321,5 +344,78 @@ describe("Meta Conversions API", () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it("sendet bei Portal-Owner nur über das CAPI-Relay, nicht mit Events-Manager-Token", async () => {
+    const previousSecret = process.env.FUNNEL_SSO_SECRET;
+    const previousPortal = process.env.ADBOT_PORTAL_URL;
+    process.env.FUNNEL_SSO_SECRET = "funnel-sso-secret-for-capi-relay-tests-32";
+    process.env.ADBOT_PORTAL_URL = "https://portal.test";
+    try {
+      await setFunnelOwner(config.id, {
+        userId: "11111111-1111-4111-8111-111111111111",
+        email: "owner@example.org",
+      });
+      await saveMetaServerSettings(config.id, {
+        accessToken: "EAAB-should-never-leave-funnel",
+        clearAccessToken: false,
+        testEventCode: "TEST-CONN",
+      });
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true, eventsReceived: 1, attempts: 1 }), {
+          status: 200,
+        }),
+      );
+      await expect(
+        sendMetaApplicationConversion(
+          config,
+          application,
+          submission,
+          {},
+          fetchMock,
+        ),
+      ).resolves.toEqual({ status: "sent", eventsReceived: 1, attempts: 1 });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [url, request] = fetchMock.mock.calls[0]!;
+      expect(url).toBe("https://portal.test/api/internal/funnel-capi");
+      const body = JSON.parse(String(request.body));
+      expect(body.token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+      expect(body.event.event_id).toBe(submission.metaEventId);
+      expect(body.event.event_name).toBe("Lead");
+      expect(body.testEventCode).toBe("TEST-CONN");
+      expect(JSON.stringify(body)).not.toContain("EAAB-should-never-leave-funnel");
+      expect(String(url)).not.toContain("graph.facebook.com");
+    } finally {
+      if (previousSecret === undefined) delete process.env.FUNNEL_SSO_SECRET;
+      else process.env.FUNNEL_SSO_SECRET = previousSecret;
+      if (previousPortal === undefined) delete process.env.ADBOT_PORTAL_URL;
+      else process.env.ADBOT_PORTAL_URL = previousPortal;
+    }
+  });
+
+  it("sendet die Qualitätsbewertung an Graph API v25.0", async () => {
+    await saveMetaServerSettings(config.id, {
+      accessToken: "EAAB-server-token-long-value",
+      clearAccessToken: false,
+      testEventCode: "",
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ events_received: 1 }), { status: 200 }),
+      );
+    await expect(
+      sendMetaLeadQualityEvent(
+        config,
+        application,
+        "bad",
+        "40000000-0000-4000-8000-000000000099",
+        "2026-07-28T14:00:00.000Z",
+        fetchMock,
+      ),
+    ).resolves.toEqual({ status: "sent", eventsReceived: 1, attempts: 1 });
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1].body));
+    expect(body.data[0].event_name).toBe("DisqualifiedLead");
+    expect(body.data[0].custom_data.value).toBe(0);
   });
 });

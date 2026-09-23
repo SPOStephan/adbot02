@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES } from "./funnel";
+import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, START_PAGE_LAYOUTS } from "./funnel";
+import { DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.enum(FUNNEL_OPTION_ICONS);
 const optionalHttpsUrlSchema = z.string().max(2048).refine(value => value === "" || /^https:\/\//i.test(value), "Es ist nur eine absolute HTTPS-Adresse zulässig.");
@@ -10,6 +11,7 @@ const optionSchema = z.object({
   value: z.string().min(1).max(160),
   icon: iconSchema,
   description: z.string().max(500).optional(),
+  leadValue: z.number().min(0).max(10_000).optional(),
 });
 
 const pageBaseSchema = z.object({
@@ -22,11 +24,37 @@ const pageBaseSchema = z.object({
   buttonLabel: z.string().min(1).max(100),
 });
 
+const optionalHexColorSchema = z.string().max(16).refine(
+  value => value === "" || /^#[0-9a-fA-F]{6}$/.test(value),
+  "Farbwert muss #RRGGBB sein oder leer bleiben.",
+);
+
+const startBenefitSchema = z.object({
+  id: z.string().min(1),
+  icon: iconSchema,
+  title: z.string().min(1).max(120),
+  text: z.string().max(400),
+  color: optionalHexColorSchema.optional(),
+});
+
+const optionalAssetUrlSchema = z.string().max(2048).refine(
+  value => value === "" || value.startsWith("/") || /^https:\/\//i.test(value),
+  "Es ist nur eine interne oder HTTPS-Adresse zulässig.",
+);
+
 const startPageSchema = pageBaseSchema.extend({
   type: z.literal("start"),
+  layout: z.enum(START_PAGE_LAYOUTS).default("classic"),
   heroImageUrl: z.string().max(2048),
   bullets: z.array(z.string().min(1).max(240)).max(8),
   trustNote: z.string().max(300),
+  benefitsBandTitle: z.string().max(200).default(""),
+  secondaryButtonLabel: z.string().max(100).default(""),
+  benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
+  heroBackgroundAssetId: z.string().max(80).default(""),
+  heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),
+  heroBackgroundMobileUrl: optionalAssetUrlSchema.default(""),
+  heroBackgroundOpacity: z.number().min(0).max(100).default(DEFAULT_HERO_BACKGROUND_OPACITY),
 });
 
 const choicePageSchema = pageBaseSchema.extend({
@@ -111,6 +139,8 @@ export const funnelConfigSchema = z
       pixelId: z.union([z.literal(""), z.string().regex(/^\d{5,25}$/, "Die Pixel-ID muss aus 5 bis 25 Ziffern bestehen.")]),
       eventName: z.string().trim().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_]*$/, "Der Eventname darf nur Buchstaben, Ziffern und Unterstriche enthalten."),
       conversionTrigger: z.enum(META_CONVERSION_TRIGGERS).default("submit"),
+      qualityGoodValue: z.number().min(0).max(10_000).optional(),
+      qualityBadValue: z.number().min(0).max(10_000).optional(),
     }),
     pages: z.array(funnelPageSchema).min(2).max(40),
   })
@@ -185,3 +215,4 @@ export const applicationSubmissionSchema = z
   });
 
 export const applicationStatusSchema = z.enum(["new", "reviewing", "contacted", "rejected", "hired"]);
+export const leadQualitySchema = z.enum(["good", "bad"]);

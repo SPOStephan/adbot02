@@ -7,6 +7,7 @@ import { applyPostSubmitAction } from "@/lib/postSubmit";
 import { createMetaEventId, loadMetaPixel, readMetaBrowserIdentifiers, trackMetaConversion } from "@/lib/metaPixel";
 import { getBrowserHostname } from "@/lib/funnelHost";
 import type { ApplicationContact, FunnelAnswers, FunnelConfig } from "@shared/funnel";
+import { resolveStartLayout } from "@shared/startLayout";
 import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
 import { ChoiceStep } from "@/components/funnel/ChoiceStep";
@@ -109,8 +110,15 @@ function FunnelView({
       sourceUrl: window.location.href,
       utm,
       resume: resume ? { fileName: resume.file.name, mimeType: resume.file.type as "application/pdf", size: resume.file.size, dataBase64: resume.dataBase64 } : undefined,
-    }, { onSuccess: () => {
-      if (metaEventId) trackMetaConversion(config.metaTracking.pixelId, config.metaTracking.eventName, metaEventId);
+    }, { onSuccess: result => {
+      if (metaEventId) {
+        trackMetaConversion(
+          config.metaTracking.pixelId,
+          config.metaTracking.eventName,
+          metaEventId,
+          result.leadValue !== undefined ? { value: result.leadValue, currency: "EUR" } : undefined,
+        );
+      }
       pendingMetaEventId.current = undefined;
       applyPostSubmitAction(config.postSubmit, () => setSubmitted(true));
     }, onError: error => setValidationError(error.message) });
@@ -119,11 +127,11 @@ function FunnelView({
   return (
     <div ref={topRef}>
       <EmbedHeightReporter />
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={paths.imprintUrl} step={step} totalSteps={config.pages.length} showProgress={!submitted}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={paths.imprintUrl} step={step} totalSteps={config.pages.length} showProgress={!submitted} fullBleed={!submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits"}>
         {submitted && contactPage?.type === "contact" ? (
           <section className="funnel-success" aria-live="polite" aria-labelledby="funnel-success-title"><span className="funnel-success-icon" aria-hidden="true"><CircleCheckBig /></span><p className="funnel-eyebrow">Erfolgreich übermittelt</p><h1 id="funnel-success-title" tabIndex={-1}>{contactPage.successTitle}</h1><p>{contactPage.successText}</p></section>
         ) : currentPage?.type === "start" ? (
-          <StartStep page={currentPage} onContinue={next} />
+          <StartStep page={currentPage} brand={config.brand} onContinue={next} />
         ) : currentPage?.type === "choice-grid" || currentPage?.type === "choice-list" ? (
           <ChoiceStep page={currentPage} selected={answers[currentPage.questionKey] ?? []} onSelect={value => choose(currentPage.questionKey, value, currentPage.allowMultiple)} onBack={back} onContinue={next} />
         ) : currentPage?.type === "contact" ? (

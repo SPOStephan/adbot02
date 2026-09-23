@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 
 import { adExampleMetadata } from "@/lib/ad-examples/input";
-import { loadInspirationLearningPreview } from "@/lib/ad-learning/retrieve";
+import { loadInspirationMemorySnapshot } from "@/lib/ad-learning/retrieve";
 import { getCreativeAssetStorageBucket } from "@/lib/creative-assets/env";
 import { MediaLibraryError, uploadInspirationVaultImage } from "@/lib/media-library/upload";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -654,8 +654,8 @@ export async function previewCollectorMemory(input: {
   objective?: string;
   industry?: string;
 }): Promise<CollectorMemoryPreview> {
-  const [livePatterns, inbox] = await Promise.all([
-    loadInspirationLearningPreview({
+  const [snapshot, inbox] = await Promise.all([
+    loadInspirationMemorySnapshot({
       platform: input.platform,
       objective: input.objective,
       industry: input.industry,
@@ -667,7 +667,8 @@ export async function previewCollectorMemory(input: {
     platform: input.platform,
     objective: input.objective,
     industry: input.industry,
-    livePatterns,
+    livePatterns: snapshot.patterns,
+    census: snapshot.census,
     stagedItems: inbox.items,
   });
 }

@@ -25,8 +25,10 @@ describe("Funnel-Validierung", () => {
 
   it("akzeptiert neue Katalog-Icons und weist unbekannte Werte zurück", () => {
     const pagesWithWrench = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "wrench" as const } : option) } : page);
+    const pagesWithAdbotIcon = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "adbot-company-car" as const } : option) } : page);
     const pagesWithUnknownIcon = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "sondericon" } : option) } : page);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithWrench }).success).toBe(true);
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithAdbotIcon }).success).toBe(true);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithUnknownIcon }).success).toBe(false);
   });
 
@@ -49,6 +51,18 @@ describe("Funnel-Validierung", () => {
       ...defaultFunnel,
       metaTracking: { enabled: false, pixelId: "", eventName: "Lead" },
     }).metaTracking.conversionTrigger).toBe("submit");
+    expect(funnelConfigSchema.safeParse({
+      ...defaultFunnel,
+      metaTracking: { ...defaultFunnel.metaTracking, qualityGoodValue: 120, qualityBadValue: 5 },
+    }).success).toBe(true);
+    const pagesWithLeadValue = defaultFunnel.pages.map(page => page.type === "choice-grid"
+      ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, leadValue: 99.5 } : option) }
+      : page);
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithLeadValue }).success).toBe(true);
+    const pagesWithInvalidLeadValue = defaultFunnel.pages.map(page => page.type === "choice-grid"
+      ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, leadValue: -3 } : option) }
+      : page);
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithInvalidLeadValue }).success).toBe(false);
   });
 
   it("akzeptiert Meta-Kennungen ohne separates Checkbox-Feld und ignoriert den Legacy-Wert", () => {

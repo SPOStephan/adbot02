@@ -14,8 +14,14 @@ import type {
   FunnelPage,
   FunnelStatus,
   FunnelSummary,
+  LeadQuality,
+  StartBenefit,
+  StartPage,
 } from "@shared/funnel";
+import { clampHeroBackgroundOpacity, resolveStartLayout } from "@shared/startLayout";
+import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
+import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
 
 const PAGE_SIZE = 1_000;
 const memoryStartedAt = new Date().toISOString();
@@ -126,7 +132,30 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         options: page.options.map(option => ({
           ...option,
           icon: typeof option.icon === "string" && funnelOptionIconSet.has(option.icon) ? option.icon as FunnelOptionIcon : "sparkles",
+          leadValue: parseLeadValue(option.leadValue),
         })),
+      };
+    }
+    if (page.type === "start") {
+      const startPage = page as StartPage & { layout?: string; benefits?: StartBenefit[]; benefitsBandTitle?: string; secondaryButtonLabel?: string };
+      return {
+        ...normalizedPage,
+        layout: resolveStartLayout(startPage),
+        benefitsBandTitle: typeof startPage.benefitsBandTitle === "string" ? startPage.benefitsBandTitle : "",
+        secondaryButtonLabel: typeof startPage.secondaryButtonLabel === "string" ? startPage.secondaryButtonLabel : "",
+        heroBackgroundAssetId: typeof startPage.heroBackgroundAssetId === "string" ? startPage.heroBackgroundAssetId : "",
+        heroBackgroundDesktopUrl: typeof startPage.heroBackgroundDesktopUrl === "string" ? startPage.heroBackgroundDesktopUrl : "",
+        heroBackgroundMobileUrl: typeof startPage.heroBackgroundMobileUrl === "string" ? startPage.heroBackgroundMobileUrl : "",
+        heroBackgroundOpacity: clampHeroBackgroundOpacity(startPage.heroBackgroundOpacity),
+        benefits: Array.isArray(startPage.benefits)
+          ? startPage.benefits.slice(0, 12).map(benefit => ({
+            id: benefit.id || randomUUID(),
+            icon: typeof benefit.icon === "string" && funnelOptionIconSet.has(benefit.icon) ? benefit.icon as FunnelOptionIcon : "sparkles",
+            title: String(benefit.title ?? "").slice(0, 120) || "Vorteil",
+            text: String(benefit.text ?? "").slice(0, 400),
+            color: typeof benefit.color === "string" && /^#[0-9a-fA-F]{6}$/.test(benefit.color) ? benefit.color.toUpperCase() : undefined,
+          }))
+          : [],
       };
     }
     return normalizedPage;
@@ -136,7 +165,12 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
     brand: { ...defaultFunnel.brand, ...(config.brand ?? {}) },
     legal: { ...defaultFunnel.legal, ...(config.legal ?? {}) },
     postSubmit: { ...defaultFunnel.postSubmit, ...(config.postSubmit ?? {}) },
-    metaTracking: { ...defaultFunnel.metaTracking, ...(config.metaTracking ?? {}) },
+    metaTracking: {
+      ...defaultFunnel.metaTracking,
+      ...(config.metaTracking ?? {}),
+      qualityGoodValue: parseLeadValue(config.metaTracking?.qualityGoodValue),
+      qualityBadValue: parseLeadValue(config.metaTracking?.qualityBadValue),
+    },
     pages,
     status,
     isPublished: status === "published",
@@ -503,6 +537,12 @@ export async function setFunnelOwner(funnelId: string, owner: Partial<FunnelOwne
 function regeneratePages(config: FunnelConfig): FunnelConfig["pages"] {
   return config.pages.map(page => {
     const base = { ...structuredClone(page), id: randomUUID() };
+    if (base.type === "start") {
+      return {
+        ...base,
+        benefits: (base.benefits ?? []).map(benefit => ({ ...benefit, id: randomUUID() })),
+      };
+    }
     if (base.type !== "choice-grid" && base.type !== "choice-list") return base;
     return {
       ...base,
@@ -529,6 +569,7 @@ export async function createApplication(submission: ApplicationSubmission): Prom
   if (!funnel || funnel.status !== "published") throw new Error("Funnel nicht gefunden oder nicht veröffentlicht.");
 
   const now = new Date().toISOString();
+  const leadValue = computeApplicationLeadValue(funnel, submission.answers);
   const record: ApplicationRecord = {
     id: randomUUID(),
     funnelId: funnel.id,
@@ -538,6 +579,7 @@ export async function createApplication(submission: ApplicationSubmission): Prom
     contact: submission.contact,
     consentAt: now,
     metaEventId: submission.metaEventId,
+    leadValue,
     resume: submission.resume,
     sourceUrl: submission.sourceUrl,
     utm: submission.utm ?? {},
@@ -562,11 +604,7 @@ export async function createApplication(submission: ApplicationSubmission): Prom
       consent_at: record.consentAt,
       resume: record.resume ?? null,
       source_url: record.sourceUrl ?? null,
-      utm: {
-        ...record.utm,
-        ...(record.trackingConsentAt ? { __trackingConsentAt: record.trackingConsentAt } : {}),
-        ...(record.metaEventId ? { __metaEventId: record.metaEventId } : {}),
-      },
+      utm: encodeApplicationSidecar(record),
       created_at: record.createdAt,
     })
     .select("*")
@@ -575,9 +613,56 @@ export async function createApplication(submission: ApplicationSubmission): Prom
   return mapApplication(data);
 }
 
+const APPLICATION_SIDECAR_KEYS = [
+  "__trackingConsentAt",
+  "__metaEventId",
+  "__leadValue",
+  "__leadQuality",
+  "__leadQualityAt",
+  "__leadQualityEventId",
+  "__leadQualityMetaStatus",
+] as const;
+
+type ApplicationSidecar = Partial<Record<(typeof APPLICATION_SIDECAR_KEYS)[number], string>>;
+
+function encodeApplicationSidecar(record: ApplicationRecord): Record<string, string> {
+  return {
+    ...record.utm,
+    ...(record.trackingConsentAt ? { __trackingConsentAt: record.trackingConsentAt } : {}),
+    ...(record.metaEventId ? { __metaEventId: record.metaEventId } : {}),
+    ...(record.leadValue !== undefined ? { __leadValue: String(record.leadValue) } : {}),
+    ...(record.leadQuality ? { __leadQuality: record.leadQuality } : {}),
+    ...(record.leadQualityAt ? { __leadQualityAt: record.leadQualityAt } : {}),
+    ...(record.leadQualityEventId ? { __leadQualityEventId: record.leadQualityEventId } : {}),
+    ...(record.leadQualityMetaStatus
+      ? { __leadQualityMetaStatus: record.leadQualityMetaStatus }
+      : {}),
+  };
+}
+
+function decodeApplicationSidecar(stored: Record<string, string>): {
+  sidecar: ApplicationSidecar;
+  utm: Record<string, string>;
+} {
+  const sidecar: ApplicationSidecar = {};
+  const utm: Record<string, string> = {};
+  for (const [key, value] of Object.entries(stored)) {
+    if ((APPLICATION_SIDECAR_KEYS as readonly string[]).includes(key)) {
+      sidecar[key as keyof ApplicationSidecar] = value;
+    } else {
+      utm[key] = value;
+    }
+  }
+  return { sidecar, utm };
+}
+
 function mapApplication(row: Record<string, unknown>): ApplicationRecord {
   const storedUtm = (row.utm as Record<string, string>) ?? {};
-  const { __trackingConsentAt, __metaEventId, ...utm } = storedUtm;
+  const { sidecar, utm } = decodeApplicationSidecar(storedUtm);
+  const leadQuality =
+    sidecar.__leadQuality === "good" || sidecar.__leadQuality === "bad"
+      ? sidecar.__leadQuality
+      : undefined;
   return {
     id: String(row.id),
     funnelId: String(row.funnel_id),
@@ -586,8 +671,13 @@ function mapApplication(row: Record<string, unknown>): ApplicationRecord {
     answers: row.answers as ApplicationRecord["answers"],
     contact: row.contact as ApplicationRecord["contact"],
     consentAt: String(row.consent_at),
-    trackingConsentAt: __trackingConsentAt || undefined,
-    metaEventId: __metaEventId || undefined,
+    trackingConsentAt: sidecar.__trackingConsentAt || undefined,
+    metaEventId: sidecar.__metaEventId || undefined,
+    leadValue: parseLeadValue(sidecar.__leadValue),
+    leadQuality,
+    leadQualityAt: sidecar.__leadQualityAt || undefined,
+    leadQualityEventId: sidecar.__leadQualityEventId || undefined,
+    leadQualityMetaStatus: sidecar.__leadQualityMetaStatus || undefined,
     resume: (row.resume as ApplicationRecord["resume"]) ?? undefined,
     sourceUrl: row.source_url ? String(row.source_url) : undefined,
     utm,
@@ -636,6 +726,43 @@ export async function updateApplicationStatus(id: string, status: ApplicationSta
   return data ? mapApplication(data) : null;
 }
 
+export async function updateApplicationLeadQuality(
+  id: string,
+  input: {
+    quality: LeadQuality;
+    eventId: string;
+    metaStatus: string;
+    ratedAt: string;
+  },
+) {
+  const patch = {
+    leadQuality: input.quality,
+    leadQualityAt: input.ratedAt,
+    leadQualityEventId: input.eventId,
+    leadQualityMetaStatus: input.metaStatus,
+  };
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    const item = memoryApplications.find(application => application.id === id);
+    if (!item) return null;
+    Object.assign(item, patch);
+    return structuredClone(item);
+  }
+
+  const existing = await getApplication(id);
+  if (!existing) return null;
+  const next = { ...existing, ...patch };
+  const { data, error } = await supabase
+    .from("applications")
+    .update({ utm: encodeApplicationSidecar(next) })
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapApplication(data) : null;
+}
+
 export function resetMemoryStoreForTests() {
   const now = new Date().toISOString();
   memoryFunnels = [{
@@ -647,4 +774,5 @@ export function resetMemoryStoreForTests() {
   memoryApplications.splice(0, memoryApplications.length);
   memoryMetaServerSettings.clear();
   client = undefined;
+  resetFunnelMediaStoreForTests();
 }

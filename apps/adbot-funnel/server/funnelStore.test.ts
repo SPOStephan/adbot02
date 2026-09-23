@@ -16,6 +16,7 @@ import {
   saveFunnel,
   setFunnelOwner,
   slugifyFunnel,
+  updateApplicationLeadQuality,
   updateApplicationStatus,
 } from "./funnelStore";
 
@@ -54,6 +55,17 @@ describe("Mehr-Funnel-Speicher", () => {
     expect((await getApplication(created.id))?.contact.email).toBe("erika@example.org");
     expect((await listApplications()).some(item => item.id === created.id)).toBe(true);
     expect((await updateApplicationStatus(created.id, "contacted"))?.status).toBe("contacted");
+    expect(created.leadValue).toBe(70);
+    expect(
+      (
+        await updateApplicationLeadQuality(created.id, {
+          quality: "good",
+          eventId: "40000000-0000-4000-8000-000000000001",
+          metaStatus: "skipped",
+          ratedAt: "2026-07-27T12:00:00.000Z",
+        })
+      )?.leadQuality,
+    ).toBe("good");
   });
 
   it("erzeugt normalisierte und kollisionsfreie Slugs", async () => {

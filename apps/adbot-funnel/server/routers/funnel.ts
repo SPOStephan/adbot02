@@ -9,10 +9,13 @@ import {
   funnelConfigSchema,
   funnelIdSchema,
   funnelStatusSchema,
+  leadQualitySchema,
   setFunnelOwnerSchema,
 } from "@shared/funnelSchemas";
 import type { ApplicationSubmission, FunnelConfig, ResumeMetadata } from "@shared/funnel";
 import type { User } from "../../drizzle/schema";
+import { isBunnyConfigured, uploadFunnelBytesToBunny } from "../bunny";
+import { createFunnelMediaAsset, listFunnelMediaAssets } from "../funnelMediaStore";
 import { storagePut } from "../storage";
 import { adminProcedure, publicProcedure, router } from "../_core/trpc";
 import { getTenantOwnerUserId, isPlatformAdmin } from "../_core/session";
@@ -34,11 +37,12 @@ import {
   getFunnelOwner,
   setFunnelOwner,
   slugifyFunnel,
+  updateApplicationLeadQuality,
   updateApplicationStatus,
 } from "../funnelStore";
 import { sendApplicationNotification } from "../mail";
 import { buildApplicationsCsv, buildApplicationsPdf } from "../exports";
-import { sendMetaApplicationConversion } from "../metaConversions";
+import { sendMetaApplicationConversion, sendMetaLeadQualityEvent } from "../metaConversions";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
 import {
   listCustomDomainsForFunnel,
@@ -129,6 +133,19 @@ async function applicationsWithConfigs(funnelId: string | undefined, user: User)
 }
 
 const optionalFunnelFilter = z.object({ funnelId: funnelIdSchema.optional() }).optional();
+const heroBackgroundVariantSchema = z.object({
+  dataBase64: z.string().min(1).max(2_500_000),
+  mimeType: z.enum(["image/webp", "image/jpeg"]),
+  size: z.number().int().positive().max(1_800_000),
+});
+
+const heroBackgroundUploadSchema = z.object({
+  funnelId: funnelIdSchema,
+  fileName: z.string().min(1).max(160),
+  desktop: heroBackgroundVariantSchema,
+  mobile: heroBackgroundVariantSchema,
+});
+
 const faviconUploadSchema = z.object({
   funnelId: funnelIdSchema,
   fileName: z.string().min(1).max(160),
@@ -144,12 +161,47 @@ const metaServerSettingsSchema = z.object({
   testEventCode: z.string().trim().max(160).default(""),
 });
 
+async function storeHeroVariant(
+  ownerUserId: string | null,
+  funnelId: string,
+  variant: "desktop" | "mobile",
+  data: Buffer,
+  contentType: "image/webp" | "image/jpeg",
+) {
+  const extension = contentType === "image/webp" ? "webp" : "jpg";
+  if (isBunnyConfigured()) {
+    const stored = await uploadFunnelBytesToBunny({
+      ownerUserId,
+      filename: `${variant}.${extension}`,
+      contentType,
+      data,
+    });
+    return { url: stored.url, path: stored.bunnyPath };
+  }
+  try {
+    const stored = await storagePut(`funnels/${funnelId}/backgrounds/${variant}-${crypto.randomUUID()}.${extension}`, data, contentType);
+    return { url: stored.url, path: stored.key };
+  } catch {
+    const stored = await uploadFunnelBytesToBunny({
+      ownerUserId,
+      filename: `${variant}.${extension}`,
+      contentType,
+      data,
+    });
+    return { url: stored.url, path: stored.bunnyPath };
+  }
+}
+
 function hasValidFaviconSignature(buffer: Buffer, mimeType: z.infer<typeof faviconUploadSchema>["mimeType"]) {
   if (mimeType === "image/png") {
     const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
     return buffer.length >= signature.length && signature.every((value, index) => buffer[index] === value);
   }
   return buffer.length >= 4 && buffer[0] === 0 && buffer[1] === 0 && buffer[2] === 1 && buffer[3] === 0;
+}
+
+function asOwnerUserId(value?: string | null) {
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null;
 }
 
 function ownerFromUser(user: User) {
@@ -231,7 +283,12 @@ export const funnelRouter = router({
       }),
       sendMetaApplicationConversion(config, application, submission, requestMetadata),
     ]);
-    return { id: application.id, notificationSent, metaConversion: metaConversion.status };
+    return {
+      id: application.id,
+      notificationSent,
+      metaConversion: metaConversion.status,
+      leadValue: application.leadValue,
+    };
   }),
 
   funnels: adminProcedure.query(({ ctx }) => {
@@ -306,6 +363,37 @@ export const funnelRouter = router({
     const extension = input.mimeType === "image/png" ? "png" : "ico";
     const contentType = input.mimeType === "image/png" ? "image/png" : "image/x-icon";
     return storagePut(`funnels/${input.funnelId}/branding/favicon-${crypto.randomUUID()}.${extension}`, buffer, contentType);
+  }),
+
+  mediaLibrary: adminProcedure.input(z.object({ funnelId: funnelIdSchema })).query(async ({ input, ctx }) => {
+    await requireOwnedFunnel(input.funnelId, ctx.user);
+    const owner = await getFunnelOwner(input.funnelId);
+    return listFunnelMediaAssets({
+      funnelId: input.funnelId,
+      ownerUserId: asOwnerUserId(owner?.userId || getTenantOwnerUserId(ctx.user)),
+    });
+  }),
+
+  uploadHeroBackground: adminProcedure.input(heroBackgroundUploadSchema).mutation(async ({ input, ctx }) => {
+    await requireOwnedFunnel(input.funnelId, ctx.user);
+    const owner = await getFunnelOwner(input.funnelId);
+    const ownerUserId = asOwnerUserId(owner?.userId || getTenantOwnerUserId(ctx.user));
+    const desktop = Buffer.from(input.desktop.dataBase64, "base64");
+    const mobile = Buffer.from(input.mobile.dataBase64, "base64");
+    if (desktop.byteLength !== input.desktop.size || mobile.byteLength !== input.mobile.size) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Die Bilddatei ist beschädigt oder unvollständig." });
+    }
+    const storedDesktop = await storeHeroVariant(ownerUserId, input.funnelId, "desktop", desktop, input.desktop.mimeType);
+    const storedMobile = await storeHeroVariant(ownerUserId, input.funnelId, "mobile", mobile, input.mobile.mimeType);
+    return createFunnelMediaAsset({
+      ownerUserId,
+      funnelId: input.funnelId,
+      filename: input.fileName,
+      desktopUrl: storedDesktop.url,
+      mobileUrl: storedMobile.url,
+      bunnyPathDesktop: storedDesktop.path,
+      bunnyPathMobile: storedMobile.path,
+    });
   }),
 
   saveConfig: adminProcedure.input(funnelConfigSchema).mutation(async ({ input, ctx }) => {
@@ -633,6 +721,36 @@ export const funnelRouter = router({
       const application = await updateApplicationStatus(input.id, input.status);
       if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
       return application;
+    }),
+
+  rateLeadQuality: adminProcedure
+    .input(z.object({ id: z.string().uuid(), quality: leadQualitySchema }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await getApplication(input.id);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      const config = await requireOwnedFunnel(existing.funnelId, ctx.user);
+      const ratedAt = new Date().toISOString();
+      const eventId =
+        existing.leadQuality === input.quality && existing.leadQualityEventId
+          ? existing.leadQualityEventId
+          : crypto.randomUUID();
+      const sameRating = existing.leadQuality === input.quality && existing.leadQualityEventId;
+      const metaQuality = sameRating
+        ? { status: existing.leadQualityMetaStatus === "sent" ? "sent" as const : "skipped" as const, reason: "already_rated" }
+        : await sendMetaLeadQualityEvent(config, { ...existing, leadQuality: input.quality }, input.quality, eventId, ratedAt);
+      const application = await updateApplicationLeadQuality(input.id, {
+        quality: input.quality,
+        eventId,
+        metaStatus: metaQuality.status,
+        ratedAt: sameRating ? existing.leadQualityAt ?? ratedAt : ratedAt,
+      });
+      if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      return {
+        ...application,
+        displayAnswers: resolveApplicationAnswers(config, application.answers),
+        metaQuality: metaQuality.status,
+        metaQualityReason: "reason" in metaQuality ? metaQuality.reason : undefined,
+      };
     }),
 
   exportCsv: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input, ctx }) => {

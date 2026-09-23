@@ -7,6 +7,7 @@ import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
+  HelpCircle,
   Megaphone,
   Camera,
   Crosshair,
@@ -16,6 +17,8 @@ import {
 
 import { FreebieWorkspaceCard } from "@/components/FreebieWorkspaceCard";
 import { FunnelWorkspaceCard } from "@/components/FunnelWorkspaceCard";
+import { listCustomerCustomDomains } from "@/lib/custom-domains/service";
+import { resolveCustomerFunnelAdminHostname } from "@/lib/funnel-admin-host";
 import {
   DashboardContentSkeleton,
   DashboardPageHeader,
@@ -118,6 +121,14 @@ async function OverviewBodyInner({
     organicBoostEnsure: false,
   });
 
+  let funnelAdminHostname: string | null = null;
+  try {
+    const domains = await listCustomerCustomDomains(user.id);
+    funnelAdminHostname = resolveCustomerFunnelAdminHostname(domains);
+  } catch {
+    funnelAdminHostname = null;
+  }
+
   after(() => {
     void loadCustomerDashboard(user, query, {
       sideEffects: true,
@@ -147,6 +158,12 @@ async function OverviewBodyInner({
       label: "Tracking",
       description: "Meta Pixel global für Funnel, Freebie und Kampagnen",
       icon: Crosshair,
+    },
+    {
+      href: "/dashboard/hilfe",
+      label: "Hilfe",
+      description: "Pixel, Domain, Lead-Canary und Bewertungen Schritt für Schritt",
+      icon: HelpCircle,
     },
     {
       href: "/dashboard/autonomie",
@@ -242,8 +259,17 @@ async function OverviewBodyInner({
           </p>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {platforms.map(({ id, ...platform }) => (
-            <PlatformStatusCard key={id} {...platform} />
+          {platforms.map(({ id, connectedAssets, ...platform }) => (
+            <PlatformStatusCard
+              key={id}
+              className={
+                connectedAssets && connectedAssets.length > 0
+                  ? "sm:col-span-2"
+                  : undefined
+              }
+              connectedAssets={connectedAssets}
+              {...platform}
+            />
           ))}
         </div>
       </section>
@@ -324,7 +350,10 @@ async function OverviewBodyInner({
       </section>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <FunnelWorkspaceCard userEmail={user.email} />
+        <FunnelWorkspaceCard
+          adminHostname={funnelAdminHostname}
+          userEmail={user.email}
+        />
         <FreebieWorkspaceCard userEmail={user.email} />
       </div>
     </>
