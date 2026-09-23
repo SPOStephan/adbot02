@@ -908,7 +908,7 @@ async function loadCustomerDashboardImpl(
         supabase
           .from("brand_assets")
           .select(
-            "id,original_filename,source_meta_asset_id,width,height,meta_image_hash",
+            "id,original_filename,source_meta_asset_id,width,height,meta_image_hash,metadata",
           )
           .eq("user_id", user.id)
           .eq("platform_account_id", metaAccount.id)
@@ -1612,18 +1612,41 @@ async function loadCustomerDashboardImpl(
     ];
   });
   const brandAssetViews: ReadyBrandAssetView[] = (readyBrandAssets ?? []).map(
-    (asset) => ({
-      id: String(asset.id),
-      originalFilename: String(asset.original_filename),
-      sourceMetaAssetId: asset.source_meta_asset_id
-        ? String(asset.source_meta_asset_id)
-        : null,
-      width: toFiniteNumber(asset.width),
-      height: toFiniteNumber(asset.height),
-      metaImageHashPresent:
-        typeof asset.meta_image_hash === "string" &&
-        asset.meta_image_hash.length > 0,
-    }),
+    (asset) => {
+      const metadata =
+        asset.metadata &&
+        typeof asset.metadata === "object" &&
+        !Array.isArray(asset.metadata)
+          ? (asset.metadata as Record<string, unknown>)
+          : {};
+      const parentRaw = metadata.parent_asset_id;
+      const formatRaw =
+        typeof metadata.meta_format_key === "string"
+          ? metadata.meta_format_key
+          : typeof metadata.role === "string"
+            ? metadata.role
+            : null;
+      return {
+        id: String(asset.id),
+        originalFilename: String(asset.original_filename),
+        sourceMetaAssetId: asset.source_meta_asset_id
+          ? String(asset.source_meta_asset_id)
+          : null,
+        width: toFiniteNumber(asset.width),
+        height: toFiniteNumber(asset.height),
+        metaImageHashPresent:
+          typeof asset.meta_image_hash === "string" &&
+          asset.meta_image_hash.length > 0,
+        parentAssetId:
+          typeof parentRaw === "string" && parentRaw.trim()
+            ? parentRaw.trim()
+            : null,
+        metaFormatKey:
+          typeof formatRaw === "string" && formatRaw.trim()
+            ? formatRaw.trim()
+            : null,
+      };
+    },
   );
   const syncedCreativeViews: SyncedCreativeView[] = (syncedCreatives ?? []).map(
     (creative: {

@@ -57,6 +57,8 @@ export function buildLinkCreativeBlueprintParts(input: {
   callToActionType: string;
   defaultPrimary: string;
   defaultHeadline: string;
+  /** Also used when multiple library images share one Dynamic Creative. */
+  forceDynamicCreative?: boolean;
 }): LinkCreativeBlueprintParts {
   const bodies = normalizeCreativeTextVariants(input.primaryTexts, {
     fallback: input.defaultPrimary,
@@ -65,11 +67,13 @@ export function buildLinkCreativeBlueprintParts(input: {
     fallback: input.defaultHeadline,
   });
   const descriptions = normalizeCreativeTextVariants(input.descriptions ?? []);
-  const useDynamicCreative = usesDynamicCreativeText({
-    bodies,
-    titles,
-    descriptions,
-  });
+  const useDynamicCreative =
+    input.forceDynamicCreative === true ||
+    usesDynamicCreativeText({
+      bodies,
+      titles,
+      descriptions,
+    });
 
   if (!useDynamicCreative) {
     return {
