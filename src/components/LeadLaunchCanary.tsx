@@ -64,6 +64,8 @@ type HeldPlan = {
     description: string;
   }>;
   dynamicCreativeImages?: boolean;
+  variantDestinationUrl?: string;
+  useMetaExperiment?: boolean;
 };
 
 function objectiveLabel(objective: string): string {
@@ -304,9 +306,14 @@ export function LeadLaunchCanary({
   const [headlines, setHeadlines] = useState<string[]>(["Jetzt bewerben"]);
   const [descriptions, setDescriptions] = useState<string[]>([""]);
   const [structuralMode, setStructuralMode] = useState<
-    "off" | "two_ads" | "two_ad_sets"
+    "off" | "two_ads" | "two_ad_sets" | "funnel_split"
   >("off");
   const structuralOn = structuralMode !== "off";
+  const [variantDestinationUrl, setVariantDestinationUrl] = useState("");
+  const [useMetaExperiment, setUseMetaExperiment] = useState(false);
+  const [pendingStudyPlanId, setPendingStudyPlanId] = useState<string | null>(
+    null,
+  );
   const [dynamicCreativeImages, setDynamicCreativeImages] = useState(false);
   const [includeFormatSiblings, setIncludeFormatSiblings] = useState(true);
   const [extraAssetIds, setExtraAssetIds] = useState<string[]>([]);
@@ -573,10 +580,21 @@ export function LeadLaunchCanary({
       }
 
       const landing = parseLandingUrl(destinationUrl);
+      const variantLanding =
+        structuralMode === "funnel_split"
+          ? parseLandingUrl(variantDestinationUrl)
+          : null;
+      if (variantLanding && variantLanding.href === landing.href) {
+        throw new Error("Funnel B braucht eine andere URL als Funnel A.");
+      }
       // Do NOT freeze here: server prepare uses a transient FREEZE window and
       // restores Freigeben so Beitrag-Push AUTO is not stranded.
       const blueprintId = await ensureLeadBlueprint();
       const allowedDomainId = await ensureDomain(landing.hostname);
+      const variantAllowedDomainId =
+        variantLanding && variantLanding.hostname !== landing.hostname
+          ? await ensureDomain(variantLanding.hostname)
+          : undefined;
 
       const stamp = new Date()
         .toISOString()
@@ -634,12 +652,26 @@ export function LeadLaunchCanary({
           ? {
               structuralAdCount: 2,
               structuralAdSetCount:
-                structuralMode === "two_ad_sets"
+                structuralMode === "two_ad_sets" ||
+                structuralMode === "funnel_split"
                   ? 2
                   : structuralMode === "two_ads"
                     ? 1
                     : undefined,
               structuralAds,
+              ...(variantLanding
+                ? {
+                    variantDestinationUrl: variantLanding.href,
+                    ...(variantAllowedDomainId
+                      ? { variantAllowedDomainId }
+                      : {}),
+                  }
+                : {}),
+              ...(useMetaExperiment &&
+              (structuralMode === "two_ad_sets" ||
+                structuralMode === "funnel_split")
+                ? { useMetaExperiment: true }
+                : {}),
             }
           : dynamicCreativeImages
             ? {
@@ -706,6 +738,13 @@ export function LeadLaunchCanary({
         dynamicCreativeImages:
           !structuralOn &&
           (dynamicCreativeImages || result.brandAssetIds.length > 1),
+        ...(variantLanding
+          ? { variantDestinationUrl: variantLanding.href }
+          : {}),
+        ...(useMetaExperiment &&
+        (structuralMode === "two_ad_sets" || structuralMode === "funnel_split")
+          ? { useMetaExperiment: true }
+          : {}),
       });
       setNotice({
         tone: "success",
@@ -757,7 +796,32 @@ export function LeadLaunchCanary({
       if (!result.approvalId || result.planStatus !== "PENDING") {
         throw new Error("Freigabe wurde vom Server nicht bestätigt.");
       }
+      const studyPlanId = heldPlan.useMetaExperiment ? heldPlan.id : null;
       setHeldPlan(null);
+      let experimentNote = "";
+      if (studyPlanId) {
+        setPendingStudyPlanId(studyPlanId);
+        if (result.executorSucceeded === 1) {
+          try {
+            const study = await apiJson<{ studyId?: string }>(
+              "POST",
+              "/api/meta/automation/ad-study",
+              { planId: studyPlanId },
+            );
+            if (study.studyId) {
+              experimentNote = ` Meta-Experiment ${study.studyId} angelegt.`;
+              setPendingStudyPlanId(null);
+            }
+          } catch (error) {
+            experimentNote = ` Meta-Experiment noch nicht angelegt: ${
+              error instanceof Error ? error.message : "bitte später erneut versuchen"
+            }`;
+          }
+        } else {
+          experimentNote =
+            " Meta-Experiment folgt, sobald beide Ad Sets bei Meta stehen — Button unten.";
+        }
+      }
       if (
         typeof result.executionWarning === "string" &&
         result.executionWarning.trim()
@@ -765,21 +829,21 @@ export function LeadLaunchCanary({
         setLaunchSucceeded(false);
         setNotice({
           tone: "error",
-          message: result.executionWarning.trim(),
+          message: `${result.executionWarning.trim()}${experimentNote}`,
         });
       } else if (result.executorSucceeded === 1) {
         setLaunchSucceeded(true);
         setNotice({
           tone: "success",
           message:
-            "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.",
+            `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}`,
         });
       } else {
         setLaunchSucceeded(true);
         setNotice({
           tone: "success",
           message:
-            "Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.",
+            `Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.${experimentNote}`,
         });
       }
       refresh();
@@ -796,9 +860,40 @@ export function LeadLaunchCanary({
     }
   }
 
+  async function retryMetaExperiment() {
+    if (!pendingStudyPlanId) return;
+    setPending(true);
+    try {
+      const study = await apiJson<{ studyId?: string }>(
+        "POST",
+        "/api/meta/automation/ad-study",
+        { planId: pendingStudyPlanId },
+      );
+      if (!study.studyId) {
+        throw new Error("Meta hat keine Experiment-ID zurückgegeben.");
+      }
+      setPendingStudyPlanId(null);
+      setNotice({
+        tone: "success",
+        message: `Meta-Experiment ${study.studyId} angelegt.`,
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Meta-Experiment konnte nicht angelegt werden.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
   function startAnotherLeadCampaign() {
     setLaunchSucceeded(false);
     setHeldPlan(null);
+    setPendingStudyPlanId(null);
     setNotice(null);
   }
 
@@ -864,6 +959,21 @@ export function LeadLaunchCanary({
                   ? notice.message
                   : "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."}
               </p>
+              {pendingStudyPlanId ? (
+                <button
+                  className={`${buttonClass} mt-5`}
+                  disabled={pending}
+                  onClick={() => void retryMetaExperiment()}
+                  type="button"
+                >
+                  {pending ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <PlayCircle className="size-4" />
+                  )}
+                  Meta-Experiment erneut versuchen
+                </button>
+              ) : null}
               <button
                 className={`${buttonClass} mt-5`}
                 disabled={pending}
@@ -1123,6 +1233,10 @@ export function LeadLaunchCanary({
                 { value: "off" as const, label: "Aus" },
                 { value: "two_ads" as const, label: "2 Anzeigen" },
                 { value: "two_ad_sets" as const, label: "2 Ad Sets" },
+                {
+                  value: "funnel_split" as const,
+                  label: "Funnel-Splittest",
+                },
               ] as const
             ).map((option) => (
               <label
@@ -1165,6 +1279,49 @@ export function LeadLaunchCanary({
               Erfolg um (Summe bleibt gleich). Deaktiviert Textvarianten
               (Dynamic Creative).
             </p>
+          ) : null}
+          {structuralMode === "funnel_split" ? (
+            <p className="mt-2 text-xs font-medium text-slate-500">
+              Adbot-interner Splittest: eine Kampagne, zwei Ad Sets, je eine
+              Anzeige mit eigener Funnel-URL. Budget wie beim 2-Ad-Set-Test
+              hälftig, danach Erfolgsumschichtung. Deaktiviert Textvarianten
+              (Dynamic Creative).
+            </p>
+          ) : null}
+          {structuralMode === "funnel_split" ? (
+            <label className="mt-3 block text-sm font-bold text-slate-800">
+              Funnel B (HTTPS)
+              <input
+                className={inputClass}
+                disabled={pending || Boolean(heldPlan)}
+                onChange={(event) =>
+                  setVariantDestinationUrl(event.target.value)
+                }
+                placeholder={`${FUNNEL_SITE_URL}/f/variante-b`}
+                required
+                type="url"
+                value={variantDestinationUrl}
+              />
+            </label>
+          ) : null}
+          {structuralMode === "two_ad_sets" ||
+          structuralMode === "funnel_split" ? (
+            <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm font-semibold text-slate-800">
+              <input
+                checked={useMetaExperiment}
+                className="mt-0.5 size-4 border-slate-300 text-blue-700 focus:ring-blue-500"
+                disabled={pending || Boolean(heldPlan)}
+                onChange={(event) => setUseMetaExperiment(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                Offizielles Meta-Experiment nach dem Launch versuchen
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  Best effort: legt ein SPLIT_TEST um die beiden Ad Sets. Der
+                  Launch bleibt bestehen, wenn Meta das Experiment ablehnt.
+                </span>
+              </span>
+            </label>
           ) : null}
         </fieldset>
         {!structuralOn ? (
@@ -1467,7 +1624,9 @@ export function LeadLaunchCanary({
               {heldPlan.structuralAdCount === 2 && heldPlan.structuralAds ? (
                 <>
                   <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                    {heldPlan.structuralAdSetCount === 2
+                    {heldPlan.variantDestinationUrl
+                      ? "Funnel-Splittest: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige + eigene URL (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
+                      : heldPlan.structuralAdSetCount === 2
                       ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
                       : "Struktur: 1 Kampagne → 1 Anzeigengruppe → 2 Anzeigen"}
                   </p>
@@ -1545,9 +1704,21 @@ export function LeadLaunchCanary({
                 </div>
               )}
               {heldPlan.structuralAdCount === 2 ? (
-                <p className="break-all text-xs font-medium text-blue-700">
-                  {heldPlan.destinationUrl}
-                </p>
+                <div className="space-y-1">
+                  <p className="break-all text-xs font-medium text-blue-700">
+                    Funnel A: {heldPlan.destinationUrl}
+                  </p>
+                  {heldPlan.variantDestinationUrl ? (
+                    <p className="break-all text-xs font-medium text-blue-700">
+                      Funnel B: {heldPlan.variantDestinationUrl}
+                    </p>
+                  ) : null}
+                  {heldPlan.useMetaExperiment ? (
+                    <p className="text-xs font-semibold text-slate-600">
+                      Nach dem Start: Meta-Experiment (SPLIT_TEST) versuchen
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>

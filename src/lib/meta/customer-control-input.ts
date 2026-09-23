@@ -1015,6 +1015,12 @@ type LaunchCommon = {
     dynamic_creative_asset_ids?: string[];
     /** Adbot may add same-motif format siblings (1:1 / 4:5 / 9:16). Default true when opted in. */
     include_format_siblings?: boolean;
+    /** Funnel B URL for Ad Set 2. Requires structural_ad_set_count=2. */
+    variant_destination_url?: string;
+    /** Optional second verified domain when Funnel B uses another hostname. */
+    variant_allowed_domain_id?: string;
+    /** Request a post-launch Meta Ad Study (SPLIT_TEST) around the two ad sets. */
+    use_meta_experiment?: boolean;
   };
 };
 
@@ -1266,6 +1272,10 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     "useDynamicCreativeImages",
     "extraBrandAssetIds",
     "includeFormatSiblings",
+    // Optional funnel URL split + Meta Ad Study try.
+    "variantDestinationUrl",
+    "variantAllowedDomainId",
+    "useMetaExperiment",
   ];
   assertExactKeys(
     body,
@@ -1315,6 +1325,50 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     );
   }
 
+  const variantDestinationRaw =
+    typeof body.variantDestinationUrl === "string"
+      ? body.variantDestinationUrl.trim()
+      : body.variantDestinationUrl;
+  const hasVariantDestination =
+    variantDestinationRaw !== undefined &&
+    variantDestinationRaw !== null &&
+    variantDestinationRaw !== "";
+  const variantAllowedDomainId = optionalUuid(
+    body.variantAllowedDomainId,
+    "Die Funnel-B-Domain-ID",
+  );
+  const useMetaExperimentRaw = body.useMetaExperiment;
+  const hasMetaExperiment =
+    useMetaExperimentRaw !== undefined && useMetaExperimentRaw !== null;
+  const useMetaExperiment = hasMetaExperiment
+    ? requiredBoolean(useMetaExperimentRaw, "Meta-Experiment")
+    : undefined;
+  const destinationUrl = requiredHttpsUrl(body.destinationUrl);
+  const variantDestinationUrl = hasVariantDestination
+    ? requiredHttpsUrl(variantDestinationRaw)
+    : undefined;
+  if (variantDestinationUrl && variantDestinationUrl === destinationUrl) {
+    inputError(
+      "invalid_variant_destination_url",
+      "Funnel B braucht eine andere URL als Funnel A.",
+    );
+  }
+  if (
+    (variantDestinationUrl || useMetaExperiment) &&
+    (structural.structural_ad_set_count ?? 1) !== 2
+  ) {
+    inputError(
+      "funnel_split_requires_two_adsets",
+      "Funnel-Splittest und Meta-Experiment brauchen 2 Ad Sets.",
+    );
+  }
+  if (variantAllowedDomainId && !variantDestinationUrl) {
+    inputError(
+      "variant_destination_required",
+      "Eine zweite Domain braucht die Funnel-B-URL.",
+    );
+  }
+
   const structuralLaunchInputs =
     structural.structural_ad_count === 2
       ? {
@@ -1347,7 +1401,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     ),
     reason: requiredText(body.reason, "Die Begründung", 12, 500),
     launchInputs: {
-      destination_url: requiredHttpsUrl(body.destinationUrl),
+      destination_url: destinationUrl,
       campaign_name: optionalLaunchName(body.campaignName, "Der Kampagnenname"),
       ad_set_name: optionalLaunchName(body.adSetName, "Der Ad-Set-Name"),
       creative_name: optionalLaunchName(body.creativeName, "Der Creative-Name"),
@@ -1355,6 +1409,13 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       ...(promotedObject ? { promoted_object: promotedObject } : {}),
       ...structuralLaunchInputs,
       ...dynamicImages,
+      ...(variantDestinationUrl
+        ? { variant_destination_url: variantDestinationUrl }
+        : {}),
+      ...(variantAllowedDomainId
+        ? { variant_allowed_domain_id: variantAllowedDomainId }
+        : {}),
+      ...(useMetaExperiment ? { use_meta_experiment: true } : {}),
     },
   };
   const budgetOwnerType = requiredEnum(
@@ -1969,5 +2030,17 @@ export function parseOrganicBoostApprovalCommand(
     durationDays: requiredDurationDays(body.durationDays),
     destinationUrl: optionalHttpsUrl(body.destinationUrl),
     reason: requiredText(body.reason, "Die Begründung", 12, 500),
+  };
+}
+
+export type AdStudyCommand = {
+  planId: string;
+};
+
+export function parseAdStudyCommand(value: unknown): AdStudyCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(body, ["planId"], "Der Meta-Experiment-Befehl");
+  return {
+    planId: requiredUuid(body.planId, "Die Plan-ID"),
   };
 }

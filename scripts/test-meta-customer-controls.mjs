@@ -30,6 +30,7 @@ const {
   parseKillSwitchCommand,
   parseLaunchApprovalCommand,
   parseLaunchCommand,
+  parseAdStudyCommand,
   parsePixelCommand,
   parsePolicyCommand,
 } = await import(inputModuleUrl);
@@ -676,6 +677,35 @@ expectInputError(
       reason: "Kontrollierter Staging-Aktiv-Launch.",
       confirmation: "AKTIV-LAUNCH VORBEREITEN",
       readLeaseToken: "55555555-5555-4555-8555-555555555555",
+    }),
+  "unknown_field",
+);
+expectInputError(
+  () =>
+    parseLaunchCommand({
+      blueprintId: "22222222-2222-4222-8222-222222222222",
+      brandAssetId: "44444444-4444-4444-8444-444444444444",
+      allowedDomainId: "11111111-1111-4111-8111-111111111111",
+      budgetOwnerType: "AD_SET",
+      dailyBudget: "20.00",
+      destinationUrl: "https://www.example.de/funnel-a",
+      variantDestinationUrl: "https://www.example.de/funnel-b",
+      reason: "Funnel-Splittest ohne 2 Ad Sets.",
+      confirmation: "AKTIV-LAUNCH VORBEREITEN",
+    }),
+  "funnel_split_requires_two_adsets",
+);
+assert.equal(
+  parseAdStudyCommand({
+    planId: "66666666-6666-4666-8666-666666666666",
+  }).planId,
+  "66666666-6666-4666-8666-666666666666",
+);
+expectInputError(
+  () =>
+    parseAdStudyCommand({
+      planId: "66666666-6666-4666-8666-666666666666",
+      extra: true,
     }),
   "unknown_field",
 );
