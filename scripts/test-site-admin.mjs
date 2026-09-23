@@ -38,8 +38,10 @@ assert.match(dashboardChrome, /isAdmin/);
 assert.match(dashboardNav, /\/dashboard\/branding/);
 assert.match(dashboardNav, /\/dashboard\/rechtliches/);
 assert.match(dashboardNav, /Werbebeispiele/);
+assert.match(dashboardNav, /Motivbibliothek/);
 assert.match(dashboardNav, /KI-Training/);
 assert.match(dashboardNav, /\/dashboard\/training/);
+assert.match(dashboardNav, /\/dashboard\/motifs/);
 assert.match(dashboardNav, /\/dashboard\/inspiration/);
 assert.match(dashboardNav, /\/dashboard\/chatgpt-ads-anleitung/);
 

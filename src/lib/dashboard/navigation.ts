@@ -18,6 +18,7 @@ import {
   Sparkles,
   Target,
   GraduationCap,
+  Library,
   type LucideIcon,
 } from "lucide-react";
 
@@ -141,6 +142,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       icon: GraduationCap,
       href: "/dashboard/training",
       match: "/dashboard/training",
+    },
+    {
+      label: "Motivbibliothek",
+      icon: Library,
+      href: "/dashboard/motifs",
+      match: "/dashboard/motifs",
     },
     {
       label: "Werbebeispiele",

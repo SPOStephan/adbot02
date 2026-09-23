@@ -85,8 +85,10 @@ export default async function CreativesPage() {
         </p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Creatives</h1>
         <p className="mt-2 max-w-2xl text-slate-500">
-          Hochgeladene und generierte Mastergrafiken — unabhängig von Meta.
-          Formatzuschnitte folgen im zweiten Schritt für die verbundenen Plattformen.
+          Deine Kundenbibliothek: fertige Bilder und Grafiken nur für diesen
+          Account. Adbot darf sie 1:1 nutzen oder anpassen — niemals im Account
+          eines anderen Kunden. Formatzuschnitte folgen im zweiten Schritt für
+          die verbundenen Plattformen.
         </p>
       </div>
 
