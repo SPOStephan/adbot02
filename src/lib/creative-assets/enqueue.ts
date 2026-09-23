@@ -37,7 +37,8 @@ export type EnqueueCreativeAssetJobResult = {
 
 type EnqueueCustomer = {
   userId: string;
-  platformAccountId: string;
+  platformAccountId: string | null;
+  connectedPlatforms?: string[];
 };
 
 function requiredUuid(value: unknown, label: string): string {
@@ -59,7 +60,7 @@ function requiredUuid(value: unknown, label: string): string {
  * Parse enqueue body: generation contract fields + brandProfileId.
  */
 export function parseCreativeAssetEnqueueBody(body: unknown): {
-  brandProfileId: string;
+  brandProfileId: string | null;
   input: CreativeGenerationInput;
 } {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -69,10 +70,11 @@ export function parseCreativeAssetEnqueueBody(body: unknown): {
     );
   }
   const raw = body as Record<string, unknown>;
-  const brandProfileId = requiredUuid(
-    raw.brandProfileId,
-    "Die Brand-Profil-ID",
-  );
+  const brandProfileRaw =
+    typeof raw.brandProfileId === "string" ? raw.brandProfileId.trim() : "";
+  const brandProfileId = brandProfileRaw
+    ? requiredUuid(brandProfileRaw, "Die Brand-Profil-ID")
+    : null;
 
   const { brandProfileId: _ignored, ...generationFields } = raw;
   void _ignored;
@@ -115,8 +117,8 @@ export function parseCreativeAssetEnqueueBody(body: unknown): {
 
 function creditIdempotencyKey(input: {
   userId: string;
-  platformAccountId: string;
-  brandProfileId: string;
+  platformAccountId: string | null;
+  brandProfileId: string | null;
   generation: CreativeGenerationInput;
 }): string {
   return createHash("sha256")
@@ -124,8 +126,8 @@ function creditIdempotencyKey(input: {
       [
         "creative-generate-image",
         input.userId,
-        input.platformAccountId,
-        input.brandProfileId,
+        input.platformAccountId ?? "none",
+        input.brandProfileId ?? "none",
         input.generation.provider_key,
         input.generation.model_id,
         input.generation.mode,
@@ -137,7 +139,7 @@ function creditIdempotencyKey(input: {
 
 export async function enqueueCreativeAssetGenerationJob(input: {
   customer: EnqueueCustomer;
-  brandProfileId: string;
+  brandProfileId: string | null;
   generation: CreativeGenerationInput;
 }): Promise<EnqueueCreativeAssetJobResult> {
   if (!hasCreativeAssetProviderConfig()) {
@@ -167,15 +169,29 @@ export async function enqueueCreativeAssetGenerationJob(input: {
     );
   }
 
-  const referenceAssetIds = await attachCustomerWinnerStyleRefs({
-    userId: input.customer.userId,
-    platformAccountId: input.customer.platformAccountId,
-    referenceAssetIds: input.generation.reference_asset_ids,
-  });
+  const referenceAssetIds = input.customer.platformAccountId
+    ? await attachCustomerWinnerStyleRefs({
+        userId: input.customer.userId,
+        platformAccountId: input.customer.platformAccountId,
+        referenceAssetIds: input.generation.reference_asset_ids,
+      })
+    : [...input.generation.reference_asset_ids];
   const generation = {
     ...input.generation,
     reference_asset_ids: referenceAssetIds,
   };
+
+  if (!input.customer.platformAccountId || !input.brandProfileId) {
+    const { generateLibraryCreativeNow } = await import(
+      "@/lib/creative-assets/library-generate"
+    );
+    return generateLibraryCreativeNow({
+      userId: input.customer.userId,
+      platformAccountId: input.customer.platformAccountId,
+      connectedPlatforms: input.customer.connectedPlatforms ?? [],
+      prompt: input.generation.prompt || "Advertising image, no text, no logos.",
+    });
+  }
 
   const reservation = await reserveCredits({
     userId: input.customer.userId,

@@ -83,6 +83,12 @@ function inputFromMetadata(metadataValue: unknown): { input: AdExampleInput; leg
           tags: stringArray(details.tags),
           qualityRating: details.quality_rating,
           useForGeneration: details.use_for_generation,
+          structureKind: details.structure && typeof details.structure === "object"
+            ? (details.structure as { kind?: string }).kind
+            : details.structure_kind,
+          structureSlotsText: details.structure && typeof details.structure === "object"
+            ? (details.structure as { slots?: unknown }).slots
+            : details.structure_slots,
         }),
         legacy: false,
       };
@@ -117,6 +123,8 @@ function inputFromMetadata(metadataValue: unknown): { input: AdExampleInput; leg
       tags: [],
       qualityRating: 1,
       useForGeneration: false,
+      structureKind: "none",
+      structureSlotsText: "",
     },
     legacy: true,
   };
@@ -146,6 +154,7 @@ export async function loadAdExamplesPage(input?: {
   platform?: string;
   objective?: string;
   industry?: string;
+  tag?: string;
 }): Promise<{
   examples: AdExampleView[];
   total: number;
@@ -178,6 +187,10 @@ export async function loadAdExamplesPage(input?: {
   const industry = (input?.industry ?? "").trim();
   if (industry && industry !== "all") {
     query = query.filter("metadata->ad_example->>industry", "eq", industry);
+  }
+  const tag = (input?.tag ?? "").trim().toLowerCase();
+  if (tag && tag !== "all") {
+    query = query.filter("metadata->ad_example->>tags", "ilike", `%${tag.replace(/[%*,()]/g, "")}%`);
   }
   const needle = (input?.query ?? "").trim().replace(/[%*,()]/g, " ").slice(0, 80);
   if (needle) {

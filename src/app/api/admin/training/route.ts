@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await requireAdmin(request, "read");
     if ("error" in auth && auth.error) return auth.error;
-    const inbox = await loadTrainingInbox();
+    const tag = new URL(request.url).searchParams.get("tag") ?? "";
+    const inbox = await loadTrainingInbox({ tag });
     return json({ ok: true, ...inbox });
   } catch (error) {
     return errorResponse(error);
@@ -88,6 +89,8 @@ export async function POST(request: NextRequest) {
       platform: typeof body.platform === "string" ? body.platform : "meta",
       objective: typeof body.objective === "string" ? body.objective : "traffic",
       industry: typeof body.industry === "string" ? body.industry : "",
+      tags: typeof body.tags === "string" || Array.isArray(body.tags) ? body.tags as string[] | string : "",
+      brief: typeof body.brief === "string" ? body.brief : "",
     });
     return json({ ok: true, action: "generate", run });
   } catch (error) {

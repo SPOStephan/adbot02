@@ -50,11 +50,12 @@ export function isTrainingImageGenerationConfigured(): boolean {
   return hasCreativeAssetProviderConfig();
 }
 
-export async function generateTrainingAdImage(input: {
-  uploaderUserId: string;
+export async function generateMasterImageBytes(input: {
   prompt: string;
-  runId: string;
-}): Promise<{ brandAssetId: string } | { skipped: string }> {
+}): Promise<
+  | { bytes: Uint8Array; mimeType: "image/jpeg" | "image/png"; fileName: string; model: string }
+  | { skipped: string }
+> {
   if (!hasCreativeAssetProviderConfig()) {
     return { skipped: "Bildgenerierung ist nicht konfiguriert (OpenRouter)." };
   }
@@ -133,10 +134,10 @@ export async function generateTrainingAdImage(input: {
   }
 
   let mimeType: "image/jpeg" | "image/png" = "image/jpeg";
-  let fileName = `training-${input.runId.slice(0, 8)}.jpg`;
+  let fileName = "master.jpg";
   if (bytes[0] === 0x89 && bytes[1] === 0x50) {
     mimeType = "image/png";
-    fileName = `training-${input.runId.slice(0, 8)}.png`;
+    fileName = "master.png";
   } else if (!(bytes[0] === 0xff && bytes[1] === 0xd8)) {
     const sharp = (await import("sharp")).default;
     bytes = new Uint8Array(
@@ -147,11 +148,32 @@ export async function generateTrainingAdImage(input: {
     );
   }
 
+  return { bytes, mimeType, fileName, model };
+}
+
+export function resolveConfiguredImageModel(): string | null {
+  try {
+    const runtime = getCreativeAssetRuntimeConfig();
+    if (runtime.kind !== "openrouter") return runtime.kind === "http" ? "http-default" : null;
+    return runtime.provider.defaultModel ?? runtime.provider.modelAllowlist[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function generateTrainingAdImage(input: {
+  uploaderUserId: string;
+  prompt: string;
+  runId: string;
+}): Promise<{ brandAssetId: string } | { skipped: string }> {
+  const generated = await generateMasterImageBytes({ prompt: input.prompt });
+  if ("skipped" in generated) return generated;
+  const extension = generated.mimeType === "image/png" ? "png" : "jpg";
   const uploaded = await uploadInspirationVaultImage({
     uploaderUserId: input.uploaderUserId,
-    fileName,
-    mimeType,
-    bytes,
+    fileName: `training-${input.runId.slice(0, 8)}.${extension}`,
+    mimeType: generated.mimeType,
+    bytes: generated.bytes,
     metadata: {
       contract_version: 1,
       library: "adbot_training_ground",

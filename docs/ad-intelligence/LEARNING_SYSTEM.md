@@ -46,7 +46,7 @@ Success-Control (Pausen, Budget-Umschichtung) bleibt die **operative** Auswertun
 
 ## Tägliches Lernen: KI-Training (URL → Ad → Bewertung)
 
-Das ist **nicht** der Collector-Upload fremder Anzeigen. Site-Admin unter `/dashboard/training`: beliebige HTTPS-URL, Adbot erzeugt Text und Bild, Bewertung gut/schlecht. Jede Bewertung landet in `adbot_training_runs` und fließt **sofort** in `formatAdLearningPromptBlock` — auch in Kunden-Copy. Gewichte werden nicht stündlich neu trainiert; schlauer wird das System mit jedem Rating über Retrieval. Fine-Tune (Together) exportiert später genau diese Paare.
+Das ist **nicht** der Collector-Upload fremder Anzeigen. Site-Admin unter `/dashboard/training`: beliebige HTTPS-URL, optional Briefing und **Tags** (z. B. `jobs` für einen ganzen Trainingstag nur Job-Kampagnen). Adbot erzeugt Text und Bild, Bewertung gut/schlecht. Jede Bewertung landet in `adbot_training_runs` und fließt **sofort** in `formatAdLearningPromptBlock` — auch in Kunden-Copy. Tags steuern das Retrieval in den Inspirationen und den Trainingsläufen. Gewichte werden nicht stündlich neu trainiert; schlauer wird das System mit jedem Rating über Retrieval. Fine-Tune (Together) exportiert später genau diese Paare.
 
 ## Nächste Schritte (konkret, nach Vault + Sandbox)
 

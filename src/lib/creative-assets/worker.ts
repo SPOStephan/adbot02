@@ -326,8 +326,15 @@ export async function runCreativeAssetWorkerOnce(input: {
       metadata: sanitizedMetadata,
     });
 
-    // Best-effort Meta cover crops — never fail a successful generation.
+    // Step 2: placement crops only for connected platforms.
     try {
+      const { listConnectedPlatformsForUser } = await import(
+        "@/lib/creative-assets/library-customer"
+      );
+      const platforms = await listConnectedPlatformsForUser(job.userId);
+      if (!platforms.includes("meta")) {
+        console.info("[creative-assets] skip Meta crops — Meta not connected");
+      } else {
       const slots = await registerGeneratedMetaFormatSlots({
         job,
         parentAssetId: assetId,
@@ -344,6 +351,7 @@ export async function runCreativeAssetWorkerOnce(input: {
           "[creative-assets] format slots registered",
           formatSlotsMetadataSummary(slots),
         );
+      }
       }
     } catch (slotError) {
       console.error(

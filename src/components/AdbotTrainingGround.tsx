@@ -19,6 +19,8 @@ export function AdbotTrainingGround({ initialInbox }: Props) {
   const [platform, setPlatform] = useState("meta");
   const [objective, setObjective] = useState("traffic");
   const [industry, setIndustry] = useState("");
+  const [tags, setTags] = useState("jobs");
+  const [brief, setBrief] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -34,7 +36,7 @@ export function AdbotTrainingGround({ initialInbox }: Props) {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate", landingUrl, platform, objective, industry }),
+        body: JSON.stringify({ action: "generate", landingUrl, platform, objective, industry, tags, brief }),
       });
       const payload = (await response.json().catch(() => ({}))) as ApiResponse & TrainingInbox;
       if (!response.ok || !payload.ok || !payload.run) {
@@ -87,10 +89,10 @@ export function AdbotTrainingGround({ initialInbox }: Props) {
   return (
     <section className="space-y-6">
       <p className="max-w-3xl text-sm leading-6 text-slate-600">
-        Du spielst den fiktiven Kunden. URL eingeben, Adbot gestaltet Text und Bild.
-        Gut oder schlecht — die nächste Erzeugung sieht diese Bewertung sofort.
-        Das ist das tägliche Lernen. Ein Fine-Tune der Gewichte kommt später aus
-        genau diesen Paaren, nicht stündlich.
+        Du spielst den fiktiven oder echten Kunden. URL oder Briefing eingeben,
+        Adbot gestaltet Text und Bild. Gut oder schlecht — die nächste Erzeugung
+        sieht diese Bewertung sofort. Mit Tag z. B. „jobs“ trainierst du einen
+        ganzen Tag nur Job-Kampagnen; das Gedächtnis filtert Inspirationen danach.
       </p>
 
       {inbox.migrationNeeded ? (
@@ -136,13 +138,31 @@ export function AdbotTrainingGround({ initialInbox }: Props) {
             <option value="awareness">Bekanntheit</option>
           </select>
         </label>
-        <label className="grid gap-1 md:col-span-2">
-          <span className="text-xs font-extrabold uppercase tracking-wide text-slate-600">Branche (optional, steuert das Matching)</span>
+        <label className="grid gap-1">
+          <span className="text-xs font-extrabold uppercase tracking-wide text-slate-600">Branche (optional)</span>
           <input
             className="h-11 rounded-xl border border-slate-300 px-3"
             onChange={(event) => setIndustry(event.target.value)}
-            placeholder="Hotels & Reisen"
+            placeholder="Handwerk, Klinik, Hotel…"
             value={industry}
+          />
+        </label>
+        <label className="grid gap-1">
+          <span className="text-xs font-extrabold uppercase tracking-wide text-slate-600">Tags (z. B. jobs)</span>
+          <input
+            className="h-11 rounded-xl border border-slate-300 px-3"
+            onChange={(event) => setTags(event.target.value)}
+            placeholder="jobs"
+            value={tags}
+          />
+        </label>
+        <label className="grid gap-1 md:col-span-2">
+          <span className="text-xs font-extrabold uppercase tracking-wide text-slate-600">Briefing / Vorgaben (optional)</span>
+          <textarea
+            className="min-h-24 rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            onChange={(event) => setBrief(event.target.value)}
+            placeholder="Fiktive Firma, Jobtitel, Ton, was die Anzeige können muss…"
+            value={brief}
           />
         </label>
         <div className="md:col-span-2">
@@ -168,6 +188,7 @@ export function AdbotTrainingGround({ initialInbox }: Props) {
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
             {current.landingHostname} · {current.platform}/{current.objective}
+            {current.tags?.length ? ` · ${current.tags.join(", ")}` : ""}
           </p>
           <div className="mt-4 grid gap-5 lg:grid-cols-[240px_1fr]">
             {current.imagePreviewUrl ? (

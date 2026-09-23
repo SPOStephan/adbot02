@@ -67,7 +67,7 @@ assert.match(page, /asset_role/);
 assert.match(page, /training_status/);
 
 assert.match(configRoute, /getPublicCreativeGenerationConfig/);
-assert.match(configRoute, /authenticateMetaCustomer/);
+assert.match(configRoute, /authenticateLibraryCustomer/);
 assert.doesNotMatch(configRoute, /OPENROUTER_API_KEY|apiKey/);
 
 assert.match(trainingRoute, /mark_brand_asset_training_status/);

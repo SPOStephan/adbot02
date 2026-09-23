@@ -26,6 +26,7 @@ import {
   labelForOption,
   type AdExampleView,
 } from "@/lib/ad-examples/types";
+import { STRUCTURE_TEMPLATE_KINDS } from "@/lib/ad-examples/structure";
 
 type ApiResponse = {
   ok?: boolean;
@@ -180,7 +181,25 @@ function ExampleFields({ example, includeFile }: { example?: AdExampleView; incl
       </label>
       <label className="grid gap-1">
         <FieldLabel>Tags</FieldLabel>
-        <input className="h-11 rounded-xl border border-slate-300 px-3" defaultValue={example?.tags.join(", ")} name="tags" placeholder="preisanker, social-proof, urgency" />
+        <input className="h-11 rounded-xl border border-slate-300 px-3" defaultValue={example?.tags.join(", ")} name="tags" placeholder="jobs, preisanker, social-proof" />
+      </label>
+      <label className="grid gap-1">
+        <FieldLabel>Strukturvorlage</FieldLabel>
+        <select className="h-11 rounded-xl border border-slate-300 px-3" defaultValue={example?.structureKind ?? "none"} name="structureKind">
+          {STRUCTURE_TEMPLATE_KINDS.map((item) => (
+            <option key={item.value} value={item.value}>{item.label}</option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1 md:col-span-2">
+        <FieldLabel>Struktur-Slots (key | role | Platz | max Zeichen | Hinweis)</FieldLabel>
+        <textarea
+          className="min-h-28 rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"
+          defaultValue={example?.structureSlotsText}
+          name="structureSlotsText"
+          placeholder={"logo | logo | oben links | 0 | Firmenlogo\njob_title | headline | oben | 48 | Jobtitel\njob_description | body | darunter | 180 | Nutzen, nicht Fließtext"}
+        />
+        <span className="text-xs text-slate-500">Tag „jobs“ ohne eigene Slots lädt die Standard-Job-Struktur (Logo, Illustration, Titel, Beschreibung, CTA).</span>
       </label>
       <label className="grid gap-1">
         <FieldLabel>Qualität (1–5)</FieldLabel>
@@ -227,6 +246,7 @@ export function AdExampleLibraryAdmin({
   const [platform, setPlatform] = useState("all");
   const [objective, setObjective] = useState("all");
   const [industry, setIndustry] = useState("all");
+  const [tag, setTag] = useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -244,6 +264,7 @@ export function AdExampleLibraryAdmin({
         platform,
         objective,
         industry,
+        tag,
       });
       const response = await fetch(`/api/admin/ad-examples?${params}`, {
         credentials: "same-origin",
@@ -278,7 +299,7 @@ export function AdExampleLibraryAdmin({
     }
     void loadPage(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load when filters change
-  }, [debouncedQuery, platform, objective, industry]);
+  }, [debouncedQuery, platform, objective, industry, tag]);
 
   const industries = useMemo(
     () => [...new Set(examples.map((item) => item.industry).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de")),
@@ -397,6 +418,14 @@ export function AdExampleLibraryAdmin({
           <label className="relative"><Filter className="absolute left-3 top-3 size-4 text-slate-400" /><select className="h-10 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm" onChange={(event) => setPlatform(event.target.value)} value={platform}><option value="all">Alle Plattformen</option>{AD_EXAMPLE_PLATFORMS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <select className="h-10 rounded-lg border border-slate-200 px-3 text-sm" onChange={(event) => setObjective(event.target.value)} value={objective}><option value="all">Alle Ziele</option>{AD_EXAMPLE_OBJECTIVES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
           <select className="h-10 rounded-lg border border-slate-200 px-3 text-sm" onChange={(event) => setIndustry(event.target.value)} value={industry}><option value="all">Alle Branchen</option>{industries.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+          <label className="md:col-span-4">
+            <input
+              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+              onChange={(event) => setTag(event.target.value)}
+              placeholder="Tag filtern, z. B. jobs"
+              value={tag}
+            />
+          </label>
         </div>
 
         <InspirationPager

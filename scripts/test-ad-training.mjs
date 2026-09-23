@@ -32,6 +32,8 @@ assert.match(service, /suggestAdCopyForDestination/);
 assert.match(service, /skipCredits: true/);
 assert.match(service, /generateTrainingAdImage/);
 assert.match(service, /rateTrainingAd/);
+assert.match(service, /normalizeCreativeTags/);
+assert.match(service, /resolveAdStructureTemplate/);
 
 const api = read("src/app/api/admin/training/route.ts");
 assert.match(api, /isSiteAdmin/);
@@ -45,6 +47,8 @@ assert.match(page, /AdbotTrainingGround/);
 const client = read("src/components/AdbotTrainingGround.tsx");
 assert.match(client, /Ad gestalten/);
 assert.match(client, /landingUrl/);
+assert.match(client, /jobs/);
+assert.match(client, /Briefing/);
 assert.match(client, /Gut — so mehr/);
 assert.match(client, /Schlecht — so nicht/);
 

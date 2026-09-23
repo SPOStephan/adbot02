@@ -102,7 +102,7 @@ assert.match(migration, /create or replace function public\.enqueue_creative_ass
 assert.doesNotMatch(migration, /materialize_meta_organic_boost_plan/);
 assert.doesNotMatch(migration, /materialize_meta_launch_chain_plan/);
 
-assert.match(enqueueRoute, /authenticateMetaCustomer/);
+assert.match(enqueueRoute, /authenticateLibraryCustomer/);
 assert.match(enqueueRoute, /parseCreativeAssetEnqueueBody/);
 assert.match(enqueueRoute, /enqueueCreativeAssetGenerationJob/);
 assert.match(phase2Doc, /mode=`free`|mode=free|mode=\`free\`/);

@@ -205,5 +205,42 @@ assert.match(enqueue, /attachCustomerWinnerStyleRefs/);
 assert.match(docs, /Phase 1/);
 assert.match(docs, /Hunderttausenden/);
 assert.match(docs, /nicht.*fine-getuned|nicht.*Fine-Tune/i);
+assert.match(docs, /Tags/);
+assert.match(read("src/lib/ad-learning/context.ts"), /structureSlots/);
+assert.match(read("src/lib/ad-learning/retrieve.ts"), /tags: input.tags/);
+
+const jobPattern = inspirationPatternFromMetadata({
+  brandAssetId: "job-1",
+  libraryScope: "INSPIRATION",
+  metadata: {
+    library: "ad_example_library",
+    ad_example: {
+      platform: "meta",
+      objective: "leads",
+      industry: "Recruiting",
+      hook_text: "Jetzt bewerben",
+      tags: ["jobs"],
+      structure: {
+        kind: "job",
+        slots: [{ key: "job_title", role: "headline", placement: "oben", maxChars: 48 }],
+      },
+    },
+    external_source: { customer_visible: false },
+  },
+});
+assert.ok(jobPattern);
+assert.ok(jobPattern.tags.includes("jobs"));
+assert.ok(
+  scoreInspirationMatch(jobPattern, { tags: ["jobs"] }) >
+    scoreInspirationMatch(pattern, { tags: ["jobs"] }),
+);
+assert.match(
+  formatAdLearningPromptBlock({
+    inspirationPatterns: [jobPattern],
+    customerSignals: [],
+    trainingSignals: [],
+  }),
+  /job_title@oben/,
+);
 
 console.log("test-ad-learning: ok");

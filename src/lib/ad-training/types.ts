@@ -9,6 +9,8 @@ export type TrainingRunView = {
   platform: string;
   objective: string;
   industry: string;
+  tags: string[];
+  brief: string;
   headline: string;
   primaryText: string;
   description: string;

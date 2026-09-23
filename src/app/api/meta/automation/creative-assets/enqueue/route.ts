@@ -10,10 +10,8 @@ import {
   controlJson,
   readControlJson,
 } from "@/lib/meta/customer-control-route";
-import {
-  authenticateMetaCustomer,
-  CustomerControlServiceError,
-} from "@/lib/meta/customer-control-service";
+import { authenticateLibraryCustomer } from "@/lib/creative-assets/library-customer";
+import { CustomerControlServiceError } from "@/lib/meta/customer-control-service";
 import { CustomerControlInputError } from "@/lib/meta/customer-control-input";
 
 export const runtime = "nodejs";
@@ -28,7 +26,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await readControlJson(request);
     const parsed = parseCreativeAssetEnqueueBody(body);
-    const customer = await authenticateMetaCustomer();
+    const customer = await authenticateLibraryCustomer();
     const result = await enqueueCreativeAssetGenerationJob({
       customer,
       brandProfileId: parsed.brandProfileId,

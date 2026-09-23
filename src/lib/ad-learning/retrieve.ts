@@ -21,6 +21,7 @@ export type LoadAdLearningContextInput = {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[];
   landingHostname?: string;
   inspirationLimit?: number;
   customerLimit?: number;
@@ -38,6 +39,7 @@ async function loadInspirationPatterns(input: {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[];
   limit: number;
 }): Promise<InspirationPattern[]> {
   const admin = createAdminClient();
@@ -65,6 +67,7 @@ async function loadInspirationPatterns(input: {
           platform: input.platform,
           objective: input.objective,
           industry: input.industry,
+          tags: input.tags,
         }),
       };
     })
@@ -120,19 +123,33 @@ async function loadTrainingGroundSignals(input: {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[];
   landingHostname?: string;
   limit: number;
 }): Promise<TrainingGroundSignal[]> {
   if (input.limit < 1) return [];
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let query = admin
     .from("adbot_training_runs")
     .select(
-      "id,platform,objective,industry,landing_hostname,headline,primary_text,verdict,verdict_note,rated_at",
+      "id,platform,objective,industry,landing_hostname,headline,primary_text,verdict,verdict_note,rated_at,tags",
     )
     .in("verdict", ["keep", "reject"])
     .order("rated_at", { ascending: false })
     .limit(80);
+  let { data, error } = await query;
+  if (error) {
+    const fallback = await admin
+      .from("adbot_training_runs")
+      .select(
+        "id,platform,objective,industry,landing_hostname,headline,primary_text,verdict,verdict_note,rated_at",
+      )
+      .in("verdict", ["keep", "reject"])
+      .order("rated_at", { ascending: false })
+      .limit(80);
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error || !Array.isArray(data)) return [];
 
   return data
@@ -149,6 +166,9 @@ async function loadTrainingGroundSignals(input: {
         headline: String(row.headline ?? ""),
         primaryText: String(row.primary_text ?? ""),
         note: String(row.verdict_note ?? ""),
+        tags: Array.isArray(row.tags)
+          ? row.tags.filter((item): item is string => typeof item === "string")
+          : [],
       };
       return {
         signal,
@@ -157,6 +177,7 @@ async function loadTrainingGroundSignals(input: {
           objective: input.objective,
           industry: input.industry,
           landingHostname: input.landingHostname,
+          tags: input.tags,
         }),
       };
     })
@@ -170,12 +191,14 @@ export async function loadInspirationLearningPreview(input: {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[];
   limit?: number;
 }): Promise<InspirationPattern[]> {
   return loadInspirationPatterns({
     platform: input.platform,
     objective: mapObjective(input.objective),
     industry: input.industry,
+    tags: input.tags,
     limit: Math.min(Math.max(input.limit ?? 8, 0), 8),
   });
 }
@@ -192,6 +215,7 @@ export async function loadAdLearningContext(
         platform: input.platform,
         objective: mapObjective(input.objective),
         industry: input.industry,
+        tags: input.tags,
         limit: inspirationLimit,
       }),
       loadCustomerSignals({
@@ -203,6 +227,7 @@ export async function loadAdLearningContext(
         platform: input.platform,
         objective: mapObjective(input.objective),
         industry: input.industry,
+        tags: input.tags,
         landingHostname: input.landingHostname,
         limit: trainingLimit,
       }),

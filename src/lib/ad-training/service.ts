@@ -8,6 +8,11 @@ import type { AdCopyObjective } from "@/lib/ad-copy/providers/types";
 import type { AdIntelligencePlatform } from "@/lib/ad-intelligence/contract";
 import { formatAdLearningPromptBlock } from "@/lib/ad-learning/context";
 import { loadAdLearningContext } from "@/lib/ad-learning/retrieve";
+import {
+  formatStructureForPrompt,
+  normalizeCreativeTags,
+  resolveAdStructureTemplate,
+} from "@/lib/ad-examples/structure";
 import { generateTrainingAdImage, isTrainingImageGenerationConfigured } from "./image";
 import type { TrainingInbox, TrainingRunView, TrainingVerdict } from "./types";
 
@@ -32,6 +37,8 @@ type RunRow = {
   platform: string;
   objective: string;
   industry: string;
+  tags: string[] | null;
+  brief: string;
   headline: string;
   primary_text: string;
   description: string;
@@ -44,7 +51,7 @@ type RunRow = {
 };
 
 const SELECT =
-  "id,landing_url,landing_hostname,landing_title,landing_excerpt,platform,objective,industry,headline,primary_text,description,image_asset_id,image_error,verdict,verdict_note,rated_at,created_at";
+  "id,landing_url,landing_hostname,landing_title,landing_excerpt,platform,objective,industry,headline,primary_text,description,image_asset_id,image_error,verdict,verdict_note,rated_at,created_at,tags,brief";
 
 function isMissingTable(error: { message?: string; code?: string } | null): boolean {
   if (!error) return false;
@@ -61,6 +68,8 @@ function view(row: RunRow): TrainingRunView {
     platform: row.platform,
     objective: row.objective,
     industry: row.industry,
+    tags: Array.isArray(row.tags) ? row.tags.filter((item): item is string => typeof item === "string") : [],
+    brief: row.brief ?? "",
     headline: row.headline,
     primaryText: row.primary_text,
     description: row.description,
@@ -88,14 +97,17 @@ function learningObjective(value: string): string {
   return "traffic";
 }
 
-export async function loadTrainingInbox(): Promise<TrainingInbox> {
+export async function loadTrainingInbox(input?: { tag?: string }): Promise<TrainingInbox> {
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const tag = (input?.tag ?? "").trim().toLowerCase();
+  let query = admin
     .from("adbot_training_runs")
     .select(SELECT)
     .order("created_at", { ascending: false })
     .limit(40);
+  if (tag) query = query.contains("tags", [tag]);
+  const { data, error } = await query;
   if (error) {
     if (isMissingTable(error)) {
       return {
@@ -106,6 +118,26 @@ export async function loadTrainingInbox(): Promise<TrainingInbox> {
         migrationNeeded: true,
         imageGenerationConfigured: isTrainingImageGenerationConfigured(),
       };
+    }
+    if (/tags|brief/i.test(error.message ?? "")) {
+      const fallback = await admin
+        .from("adbot_training_runs")
+        .select(
+          "id,landing_url,landing_hostname,landing_title,landing_excerpt,platform,objective,industry,headline,primary_text,description,image_asset_id,image_error,verdict,verdict_note,rated_at,created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(40);
+      if (!fallback.error) {
+        const runs = ((fallback.data ?? []) as RunRow[]).map(view);
+        return {
+          runs,
+          ratedCount: runs.filter((item) => item.verdict).length,
+          keepCount: runs.filter((item) => item.verdict === "keep").length,
+          rejectCount: runs.filter((item) => item.verdict === "reject").length,
+          migrationNeeded: false,
+          imageGenerationConfigured: isTrainingImageGenerationConfigured(),
+        };
+      }
     }
     throw new TrainingServiceError("load_failed", 500, "Trainingsläufe nicht ladbar.");
   }
@@ -126,12 +158,17 @@ export async function generateTrainingAd(input: {
   platform?: string;
   objective?: string;
   industry?: string;
+  tags?: string[] | string;
+  brief?: string;
 }): Promise<TrainingRunView> {
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const page = await fetchLandingPageContext(input.landingUrl);
   const platform = (input.platform ?? "meta").trim() || "meta";
   const objective = learningObjective(input.objective ?? "traffic");
   const industry = (input.industry ?? "").trim();
+  const tags = normalizeCreativeTags(input.tags);
+  const brief = (input.brief ?? "").trim().slice(0, 1500);
+  const structure = resolveAdStructureTemplate({ kind: tags.includes("jobs") ? "job" : "none", tags });
   let hostname = "";
   try {
     hostname = new URL(page.url).hostname.toLowerCase();
@@ -144,6 +181,7 @@ export async function generateTrainingAd(input: {
     platform,
     objective,
     industry,
+    tags,
     landingHostname: hostname,
     customerLimit: 0,
   }).catch(() => ({
@@ -161,6 +199,7 @@ export async function generateTrainingAd(input: {
       : "meta") as AdIntelligencePlatform,
     industry,
     skipCredits: true,
+    industry,
   });
 
   const runId = randomUUID();
@@ -168,6 +207,9 @@ export async function generateTrainingAd(input: {
     "Photorealistic advertising image, no text, no logos, no watermark.",
     page.title ? `Subject: ${page.title}` : "",
     copy.suggestion.headline ? `Campaign idea: ${copy.suggestion.headline}` : "",
+    brief ? `Brief: ${brief.slice(0, 400)}` : "",
+    tags.length ? `Campaign tags: ${tags.join(", ")}` : "",
+    formatStructureForPrompt(structure),
     page.description || page.excerpt
       ? `Context: ${(page.description || page.excerpt).slice(0, 280)}`
       : "",
@@ -202,6 +244,8 @@ export async function generateTrainingAd(input: {
       platform,
       objective,
       industry,
+      tags,
+      brief,
       headline: copy.suggestion.headline,
       primary_text: copy.suggestion.primaryText,
       description: copy.suggestion.description,
@@ -220,6 +264,34 @@ export async function generateTrainingAd(input: {
         503,
         "Bitte zuerst die Migration adbot_training_runs ausführen.",
       );
+    }
+    if (/tags|brief/i.test(error.message ?? "")) {
+      const retry = await admin
+        .from("adbot_training_runs")
+        .insert({
+          id: runId,
+          created_by: input.createdBy,
+          landing_url: page.url,
+          landing_hostname: hostname,
+          landing_title: page.title,
+          landing_excerpt: (page.description || page.excerpt).slice(0, 1500),
+          platform,
+          objective,
+          industry,
+          headline: copy.suggestion.headline,
+          primary_text: copy.suggestion.primaryText,
+          description: copy.suggestion.description,
+          image_asset_id: imageAssetId,
+          image_error: imageError,
+          learning_prompt: formatAdLearningPromptBlock(learning),
+          copy_provider: copy.billing.providerKey,
+          copy_model: copy.billing.model,
+        })
+        .select(
+          "id,landing_url,landing_hostname,landing_title,landing_excerpt,platform,objective,industry,headline,primary_text,description,image_asset_id,image_error,verdict,verdict_note,rated_at,created_at",
+        )
+        .maybeSingle();
+      if (!retry.error && retry.data) return view(retry.data as RunRow);
     }
     throw new TrainingServiceError(
       "insert_failed",
