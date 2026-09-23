@@ -18,6 +18,7 @@ import type {
   StartBenefit,
   StartPage,
 } from "@shared/funnel";
+import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { clampHeroBackgroundOpacity, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
@@ -33,14 +34,20 @@ type StoredMemoryFunnel = {
   updatedAt: string;
 };
 
-type WithOptionalEyebrow<T> = T extends FunnelPage ? Omit<T, "eyebrow"> & { eyebrow?: string } : never;
+type WithOptionalEyebrow<T> = T extends FunnelPage ? Omit<T, "eyebrow" | "progressTitle" | "progressHint" | "progressIcon"> & {
+  eyebrow?: string;
+  progressTitle?: string;
+  progressHint?: string;
+  progressIcon?: string;
+} : never;
 type LegacyFunnelPage = WithOptionalEyebrow<FunnelPage>;
-type LegacyFunnelConfig = Omit<FunnelConfig, "status" | "brand" | "legal" | "postSubmit" | "metaTracking" | "pages"> & {
+type LegacyFunnelConfig = Omit<FunnelConfig, "status" | "brand" | "legal" | "postSubmit" | "metaTracking" | "progress" | "pages"> & {
   status?: FunnelStatus;
   brand?: Partial<FunnelBrand>;
   legal?: Partial<FunnelConfig["legal"]>;
   postSubmit?: Partial<FunnelConfig["postSubmit"]>;
   metaTracking?: Partial<FunnelConfig["metaTracking"]>;
+  progress?: Partial<FunnelConfig["progress"]> & { colors?: Partial<FunnelConfig["progress"]["colors"]> };
   pages: LegacyFunnelPage[];
 };
 
@@ -116,6 +123,9 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
   const { __serverPrivate: _serverPrivate, ...publicConfig } = config as LegacyFunnelConfig & { __serverPrivate?: unknown };
   const status = normalizeStatus(config, published);
   const pages = config.pages.map(page => {
+    const progressIcon = typeof page.progressIcon === "string" && funnelOptionIconSet.has(page.progressIcon)
+      ? page.progressIcon as FunnelOptionIcon
+      : defaultProgressIcon(page.type);
     const normalizedPage = {
       ...page,
       eyebrow: typeof page.eyebrow === "string"
@@ -125,6 +135,9 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         : page.type === "contact"
           ? "Fast geschafft"
           : "",
+      progressTitle: typeof page.progressTitle === "string" ? page.progressTitle.slice(0, 80) : "",
+      progressHint: typeof page.progressHint === "string" ? page.progressHint.slice(0, 160) : "",
+      progressIcon,
     };
     if (page.type === "choice-grid" || page.type === "choice-list") {
       return {
@@ -163,6 +176,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
   return {
     ...publicConfig,
     brand: { ...defaultFunnel.brand, ...(config.brand ?? {}) },
+    progress: normalizeProgress(config.progress),
     legal: { ...defaultFunnel.legal, ...(config.legal ?? {}) },
     postSubmit: { ...defaultFunnel.postSubmit, ...(config.postSubmit ?? {}) },
     metaTracking: {

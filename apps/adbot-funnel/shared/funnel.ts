@@ -1,6 +1,19 @@
 export const PAGE_TYPES = ["start", "choice-grid", "choice-list", "contact"] as const;
 export const FUNNEL_STATUSES = ["draft", "published", "paused", "archived"] as const;
 export const START_PAGE_LAYOUTS = ["classic", "benefits"] as const;
+export const PROGRESS_LAYOUTS = [
+  "percent",
+  "minimal",
+  "icons",
+  "bar",
+  "chevrons",
+  "bold",
+  "reduced",
+  "illustrated",
+  "checks",
+  "chips",
+  "brand",
+] as const;
 export const LUCIDE_FUNNEL_ICONS = [
   "badge-check",
   "banknote",
@@ -20,6 +33,8 @@ export const LUCIDE_FUNNEL_ICONS = [
   "crown",
   "dumbbell",
   "factory",
+  "file-text",
+  "flag",
   "gem",
   "globe",
   "graduation-cap",
@@ -31,6 +46,7 @@ export const LUCIDE_FUNNEL_ICONS = [
   "lightbulb",
   "mail",
   "map-pin",
+  "message-circle",
   "megaphone",
   "phone",
   "plane",
@@ -73,6 +89,7 @@ export const FUNNEL_OPTION_ICONS = [...LUCIDE_FUNNEL_ICONS, ...ADBOT_FUNNEL_ICON
 export type FunnelPageType = (typeof PAGE_TYPES)[number];
 export type FunnelStatus = (typeof FUNNEL_STATUSES)[number];
 export type StartPageLayout = (typeof START_PAGE_LAYOUTS)[number];
+export type ProgressLayout = (typeof PROGRESS_LAYOUTS)[number];
 
 export type FunnelOptionIcon = (typeof FUNNEL_OPTION_ICONS)[number];
 export type LucideFunnelIcon = (typeof LUCIDE_FUNNEL_ICONS)[number];
@@ -97,6 +114,8 @@ export const FUNNEL_OPTION_ICON_LABELS: Record<FunnelOptionIcon, string> = {
   crown: "Krone",
   dumbbell: "Fitness",
   factory: "Produktion",
+  "file-text": "Dokument",
+  flag: "Zielflagge",
   gem: "Diamant",
   globe: "International",
   "graduation-cap": "Abschluss",
@@ -108,6 +127,7 @@ export const FUNNEL_OPTION_ICON_LABELS: Record<FunnelOptionIcon, string> = {
   lightbulb: "Idee",
   mail: "E-Mail",
   "map-pin": "Standort",
+  "message-circle": "Nachricht",
   megaphone: "Marketing",
   phone: "Telefon",
   plane: "Reise",
@@ -174,6 +194,11 @@ type FunnelPageBase = {
   title: string;
   description: string;
   buttonLabel: string;
+  /** Short public label in the progress indicator. Empty falls back to the page name. */
+  progressTitle: string;
+  /** Optional second line under the progress title. */
+  progressHint: string;
+  progressIcon: FunnelOptionIcon;
 };
 
 export type StartBenefit = {
@@ -247,6 +272,21 @@ export type FunnelBrand = {
   choiceSelectedBorderColor: string;
 };
 
+export type FunnelProgressColors = {
+  /** Empty string uses the branding accent. */
+  active: string;
+  completed: string;
+  upcoming: string;
+  text: string;
+  muted: string;
+  track: string;
+};
+
+export type FunnelProgress = {
+  layout: ProgressLayout;
+  colors: FunnelProgressColors;
+};
+
 export type FunnelSocialProof = {
   enabled: boolean;
   eyebrow: string;
@@ -288,6 +328,7 @@ export type FunnelConfig = {
   notificationEmail: string;
   allowedEmbedOrigins: string[];
   brand: FunnelBrand;
+  progress: FunnelProgress;
   socialProof: FunnelSocialProof;
   privacyUrl: string;
   privacyLabel: string;

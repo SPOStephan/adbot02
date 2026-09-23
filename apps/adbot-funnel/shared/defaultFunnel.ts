@@ -25,6 +25,17 @@ export const defaultFunnel: FunnelConfig = {
     choiceSelectedTextColor: "#10253f",
     choiceSelectedBorderColor: "#0165c3",
   },
+  progress: {
+    layout: "percent",
+    colors: {
+      active: "",
+      completed: "",
+      upcoming: "",
+      text: "",
+      muted: "",
+      track: "",
+    },
+  },
   socialProof: {
     enabled: true,
     eyebrow: "Einfach & vertraulich",
@@ -56,6 +67,9 @@ export const defaultFunnel: FunnelConfig = {
       description:
         "Beantworte wenige kurze Fragen und lerne uns unverbindlich kennen. Deine Angaben behandeln wir selbstverständlich vertraulich.",
       buttonLabel: "Jetzt starten",
+      progressTitle: "Job-Check",
+      progressHint: "Passt der Job zu dir?",
+      progressIcon: "search",
       layout: "classic",
       heroImageUrl: "",
       bullets: ["Kein Anschreiben nötig", "Mobil in wenigen Minuten", "Schnelle persönliche Rückmeldung"],
@@ -76,6 +90,9 @@ export const defaultFunnel: FunnelConfig = {
       title: "Welcher Bereich passt am besten zu dir?",
       description: "Wähle die Antwort aus, die deiner Wunschposition am nächsten kommt.",
       buttonLabel: "Weiter",
+      progressTitle: "Kurzprofil",
+      progressHint: "Ein paar Angaben",
+      progressIcon: "user-check",
       questionKey: "arbeitsbereich",
       allowMultiple: false,
       options: [
@@ -93,6 +110,9 @@ export const defaultFunnel: FunnelConfig = {
       title: "Wie viel Berufserfahrung bringst du mit?",
       description: "Eine ehrliche Einschätzung genügt – es gibt keine falsche Antwort.",
       buttonLabel: "Weiter",
+      progressTitle: "Erfahrung",
+      progressHint: "Wo stehst du gerade?",
+      progressIcon: "file-text",
       questionKey: "berufserfahrung",
       allowMultiple: false,
       options: [
@@ -110,6 +130,9 @@ export const defaultFunnel: FunnelConfig = {
       title: "Fast geschafft – wie erreichen wir dich?",
       description: "Hinterlasse deine Kontaktdaten. Wir melden uns persönlich und vertraulich bei dir.",
       buttonLabel: "Bewerbung absenden",
+      progressTitle: "Kennenlernen",
+      progressHint: "Wir melden uns bei dir",
+      progressIcon: "handshake",
       fields: [
         { key: "name", label: "Vor- und Nachname", placeholder: "Max Mustermann", enabled: true, required: true, inputType: "text" },
         { key: "company", label: "Aktuelles Unternehmen", placeholder: "Optional", enabled: true, required: false, inputType: "text" },

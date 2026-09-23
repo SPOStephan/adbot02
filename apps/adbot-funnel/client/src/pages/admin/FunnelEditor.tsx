@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
 import type { ContactPage, FunnelConfig, FunnelPage, StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage } from "@shared/funnelEditor";
+import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { EditorPreview } from "@/components/admin/EditorPreview";
 import { HeroBackgroundField } from "@/components/admin/HeroBackgroundField";
 import { IconColorField } from "@/components/admin/IconColorField";
 import { IconPicker } from "@/components/admin/IconPicker";
+import { ProgressLayoutPicker } from "@/components/admin/ProgressLayoutPicker";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
 import { useFunnelEditorHistory } from "@/hooks/useFunnelEditorHistory";
 
@@ -221,6 +223,21 @@ export default function FunnelEditor() {
               <FormRow label="Überschrift"><Textarea value={selectedPage.title} rows={2} onChange={event => patchPage({ title: event.target.value }, false)} /></FormRow>
               <FormRow label="Beschreibung"><Textarea value={selectedPage.description} rows={3} onChange={event => patchPage({ description: event.target.value }, false)} /></FormRow>
               <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
+              <div className="grid gap-3 rounded-2xl border p-4">
+                <div>
+                  <p className="text-sm font-bold">Stufe in der Fortschrittsanzeige</p>
+                  <p className="text-xs text-muted-foreground">Öffentlicher Name dieser Seite in der Statusleiste. Leer = interner Seitenname.</p>
+                </div>
+                <FormRow label="Stufenname"><Input value={selectedPage.progressTitle ?? ""} placeholder={selectedPage.name} onChange={event => patchPage({ progressTitle: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
+                <FormRow label="Kurztext (optional)"><Input value={selectedPage.progressHint ?? ""} placeholder="z. B. Passt der Job zu dir?" onChange={event => patchPage({ progressHint: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
+                <FormRow label="Icon dieser Stufe">
+                  <IconPicker
+                    value={selectedPage.progressIcon ?? "sparkles"}
+                    color={config.brand.accentColor}
+                    onChange={icon => patchPage({ progressIcon: icon } as Partial<FunnelPage>)}
+                  />
+                </FormRow>
+              </div>
 
               {selectedPage.type === "start" && (
                 <StartPageFields
@@ -245,6 +262,7 @@ export default function FunnelEditor() {
               <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Funnel veröffentlicht</strong><small className="text-muted-foreground">Öffentliche URL aktivieren; Ausschalten pausiert einen laufenden Funnel</small></span><Switch checked={config.status === "published"} disabled={config.status === "archived"} onCheckedChange={checked => changeConfig(current => ({ ...current, status: checked ? "published" : current.status === "published" ? "paused" : current.status, isPublished: checked }))} /></label>
               <FormRow label="Funnel-Titel"><Input value={config.title} onChange={event => changeConfig(current => ({ ...current, title: event.target.value }))} /></FormRow>
               <FormRow label="URL-Slug"><Input value={config.slug} onChange={event => changeConfig(current => ({ ...current, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))} /></FormRow>
+              <ProgressSettings config={config} changeConfig={changeConfig} />
               <div className="grid gap-4 rounded-2xl border bg-slate-50/70 p-4">
                 <div><p className="text-sm font-bold">Logo & Browser-Icon</p><p className="text-xs text-muted-foreground">Diese Angaben gelten nur für diesen Funnel.</p></div>
                 <FormRow label="Logo-URL"><Input value={config.brand.logoUrl} onChange={event => changeConfig(current => ({ ...current, brand: { ...current.brand, logoUrl: event.target.value } }))} /></FormRow>
@@ -357,6 +375,76 @@ function StartPageFields({
         </>
       )}
     </>
+  );
+}
+
+function ProgressSettings({
+  config,
+  changeConfig,
+}: {
+  config: FunnelConfig;
+  changeConfig: (updater: (current: FunnelConfig) => FunnelConfig, immediate?: boolean) => void;
+}) {
+  const progress = config.progress ?? DEFAULT_PROGRESS;
+  const resolved = resolveProgressColors(config.brand, progress.colors);
+  const patchProgress = (patch: Partial<FunnelConfig["progress"]>, immediate = true) => {
+    changeConfig(current => ({
+      ...current,
+      progress: {
+        layout: resolveProgressLayout(patch.layout ?? current.progress?.layout),
+        colors: { ...DEFAULT_PROGRESS.colors, ...(current.progress?.colors ?? {}), ...(patch.colors ?? {}) },
+      },
+    }), immediate);
+  };
+  const patchColor = (key: keyof typeof progress.colors, value: string) => {
+    patchProgress({ colors: { ...progress.colors, [key]: value } });
+  };
+
+  return (
+    <div className="grid gap-4 rounded-2xl border p-4">
+      <div>
+        <p className="text-sm font-bold">Fortschrittsanzeige</p>
+        <p className="text-xs text-muted-foreground">Gilt für alle Seiten. Stufentexte änderst du auf der jeweiligen Seite oder hier in der Liste.</p>
+      </div>
+      <ProgressLayoutPicker value={resolveProgressLayout(progress.layout)} onChange={layout => patchProgress({ layout })} />
+      <div className="grid gap-3">
+        {config.pages.map((page, index) => (
+          <div key={page.id} className="grid gap-2 rounded-xl border bg-slate-50 p-3 sm:grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_170px]">
+            <span className="pt-2 text-xs font-bold text-muted-foreground">{index + 1}</span>
+            <Input value={page.progressTitle ?? ""} placeholder={page.name} onChange={event => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressTitle: event.target.value } as FunnelPage : item) }), false)} />
+            <Input value={page.progressHint ?? ""} placeholder="Kurztext" onChange={event => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressHint: event.target.value } as FunnelPage : item) }), false)} />
+            <IconPicker value={page.progressIcon ?? "sparkles"} color={config.brand.accentColor} onChange={icon => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressIcon: icon } as FunnelPage : item) }))} />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <OptionalProgressColor label="Aktive Stufe" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
+        <OptionalProgressColor label="Erledigte Stufe" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
+        <OptionalProgressColor label="Kommende Stufe" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
+        <OptionalProgressColor label="Balken / Linie" value={progress.colors.track} fallback={resolved.track} onChange={value => patchColor("track", value)} />
+        <OptionalProgressColor label="Stufentext" value={progress.colors.text} fallback={resolved.text} onChange={value => patchColor("text", value)} />
+        <OptionalProgressColor label="Nebentext" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
+      </div>
+    </div>
+  );
+}
+
+function OptionalProgressColor({
+  label,
+  value,
+  fallback,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  fallback: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-1">
+      <BrandColorField label={label} value={value || fallback} onChange={onChange} hint={value ? "Eigene Farbe für dieses Element." : "Leer = Brandingfarbe."} />
+      {value ? <Button type="button" size="sm" variant="ghost" className="justify-start px-0" onClick={() => onChange("")}>Branding verwenden</Button> : null}
+    </div>
   );
 }
 

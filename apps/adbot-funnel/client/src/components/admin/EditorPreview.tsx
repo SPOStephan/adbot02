@@ -15,7 +15,7 @@ export function EditorPreview({ config, page }: { config: FunnelConfig; page: Fu
   });
   return (
     <div className="admin-live-preview">
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={`/f/${config.slug}/impressum`} step={step} totalSteps={config.pages.length} showProgress fullBleed={page.type === "start" && resolveStartLayout(page) === "benefits"}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={`/f/${config.slug}/impressum`} step={step} totalSteps={config.pages.length} showProgress pages={config.pages} progress={config.progress} fullBleed={page.type === "start" && resolveStartLayout(page) === "benefits"}>
         {page.type === "start" ? (
           <StartStep page={page} brand={config.brand} onContinue={() => undefined} />
         ) : page.type === "choice-grid" || page.type === "choice-list" ? (
