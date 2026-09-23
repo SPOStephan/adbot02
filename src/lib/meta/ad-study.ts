@@ -10,6 +10,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const META_NUMERIC_ID = /^[1-9][0-9]{0,39}$/;
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function optionalText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
 export async function createFunnelSplitAdStudy(input: {
   userId: string;
   platformAccountId: string;
@@ -30,12 +40,7 @@ export async function createFunnelSplitAdStudy(input: {
       "Der Launch-Plan wurde nicht gefunden.",
     );
   }
-  const payload =
-    plan.planned_payload &&
-    typeof plan.planned_payload === "object" &&
-    !Array.isArray(plan.planned_payload)
-      ? (plan.planned_payload as Record<string, unknown>)
-      : {};
+  const payload = asRecord(plan.planned_payload);
   if (Number(payload.structural_ad_set_count) !== 2) {
     throw new CustomerControlInputError(
       "funnel_split_requires_two_adsets",
@@ -121,8 +126,12 @@ export async function createFunnelSplitAdStudy(input: {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
+  const campaign = asRecord(payload.campaign);
   const study = buildSplitTestAdStudyPayload({
-    name: String(payload.campaign?.name ?? payload.campaign_name ?? "Adbot Funnel Split"),
+    name:
+      optionalText(campaign.name) ??
+      optionalText(payload.campaign_name) ??
+      "Adbot Funnel Split",
     description: payload.variant_destination_url
       ? `Funnel A ${payload.destination_url} vs Funnel B ${payload.variant_destination_url}`
       : "Adbot 2-Ad-Set Splittest",
@@ -165,12 +174,6 @@ export async function createFunnelSplitAdStudy(input: {
     const graphError = new MetaGraphError(
       response.status || 400,
       json && typeof json === "object" ? json : {},
-      {
-        appPercent: null,
-        pagePercent: null,
-        businessPercent: null,
-        retryAfterSeconds: null,
-      },
     );
     throw new CustomerControlServiceError(
       "meta_ad_study_failed",

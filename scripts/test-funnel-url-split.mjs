@@ -96,6 +96,8 @@ assert.match(adStudyService, /append_meta_mutation_audit_event/);
 assert.match(adStudyService, /META_AD_STUDY_CREATED/);
 assert.match(adStudyService, /\/ad_studies/);
 assert.match(adStudyService, /create-ad-set-paused-2/);
+assert.match(adStudyService, /function asRecord/);
+assert.doesNotMatch(adStudyService, /payload\.campaign\?\.name/);
 assert.doesNotMatch(adStudyService, /event_type: "meta_ad_study_created"/);
 
 function transpile(source) {
