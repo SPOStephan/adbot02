@@ -56,9 +56,13 @@ export const defaultFunnel: FunnelConfig = {
       description:
         "Beantworte wenige kurze Fragen und lerne uns unverbindlich kennen. Deine Angaben behandeln wir selbstverständlich vertraulich.",
       buttonLabel: "Jetzt starten",
+      layout: "classic",
       heroImageUrl: "",
       bullets: ["Kein Anschreiben nötig", "Mobil in wenigen Minuten", "Schnelle persönliche Rückmeldung"],
       trustNote: "Kostenlos · Unverbindlich · Datenschutzkonform",
+      benefitsBandTitle: "Deine Vorteile",
+      secondaryButtonLabel: "",
+      benefits: [],
     },
     {
       id: "page-role",

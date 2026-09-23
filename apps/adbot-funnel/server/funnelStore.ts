@@ -15,7 +15,10 @@ import type {
   FunnelStatus,
   FunnelSummary,
   LeadQuality,
+  StartBenefit,
+  StartPage,
 } from "@shared/funnel";
+import { resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 
@@ -130,6 +133,24 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
           icon: typeof option.icon === "string" && funnelOptionIconSet.has(option.icon) ? option.icon as FunnelOptionIcon : "sparkles",
           leadValue: parseLeadValue(option.leadValue),
         })),
+      };
+    }
+    if (page.type === "start") {
+      const startPage = page as StartPage & { layout?: string; benefits?: StartBenefit[]; benefitsBandTitle?: string; secondaryButtonLabel?: string };
+      return {
+        ...normalizedPage,
+        layout: resolveStartLayout(startPage),
+        benefitsBandTitle: typeof startPage.benefitsBandTitle === "string" ? startPage.benefitsBandTitle : "",
+        secondaryButtonLabel: typeof startPage.secondaryButtonLabel === "string" ? startPage.secondaryButtonLabel : "",
+        benefits: Array.isArray(startPage.benefits)
+          ? startPage.benefits.slice(0, 12).map(benefit => ({
+            id: benefit.id || randomUUID(),
+            icon: typeof benefit.icon === "string" && funnelOptionIconSet.has(benefit.icon) ? benefit.icon as FunnelOptionIcon : "sparkles",
+            title: String(benefit.title ?? "").slice(0, 120) || "Vorteil",
+            text: String(benefit.text ?? "").slice(0, 400),
+            color: typeof benefit.color === "string" && /^#[0-9a-fA-F]{6}$/.test(benefit.color) ? benefit.color.toUpperCase() : undefined,
+          }))
+          : [],
       };
     }
     return normalizedPage;
@@ -511,6 +532,12 @@ export async function setFunnelOwner(funnelId: string, owner: Partial<FunnelOwne
 function regeneratePages(config: FunnelConfig): FunnelConfig["pages"] {
   return config.pages.map(page => {
     const base = { ...structuredClone(page), id: randomUUID() };
+    if (base.type === "start") {
+      return {
+        ...base,
+        benefits: (base.benefits ?? []).map(benefit => ({ ...benefit, id: randomUUID() })),
+      };
+    }
     if (base.type !== "choice-grid" && base.type !== "choice-list") return base;
     return {
       ...base,

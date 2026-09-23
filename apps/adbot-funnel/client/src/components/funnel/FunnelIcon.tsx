@@ -46,9 +46,11 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import type { FunnelOptionIcon } from "@shared/funnel";
+import type { LucideFunnelIcon } from "@shared/funnel";
+import { isAdbotFunnelIcon } from "@shared/funnel";
+import { adbotIconMap } from "./adbotIcons";
 
-const icons = {
+const lucideIcons = {
   "badge-check": BadgeCheck,
   banknote: Banknote,
   bell: Bell,
@@ -95,9 +97,22 @@ const icons = {
   users: Users,
   wrench: Wrench,
   zap: Zap,
-} satisfies Record<FunnelOptionIcon, typeof Check>;
+} satisfies Record<LucideFunnelIcon, typeof Check>;
 
-export function FunnelIcon({ name, className }: { name: FunnelOptionIcon | string; className?: string }) {
-  const Icon = icons[name as FunnelOptionIcon] ?? Sparkles;
-  return <Icon className={className} aria-hidden="true" strokeWidth={1.8} />;
+export function FunnelIcon({
+  name,
+  className,
+  color,
+}: {
+  name: string;
+  className?: string;
+  color?: string;
+}) {
+  const style = color ? { color } : undefined;
+  if (isAdbotFunnelIcon(name)) {
+    const Icon = adbotIconMap[name];
+    return <span className={className} style={style}><Icon className="size-full" /></span>;
+  }
+  const Icon = lucideIcons[name as LucideFunnelIcon] ?? Sparkles;
+  return <Icon className={className} style={style} aria-hidden="true" strokeWidth={1.8} />;
 }

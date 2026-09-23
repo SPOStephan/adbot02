@@ -1,0 +1,66 @@
+import { describe, expect, it } from "vitest";
+import { defaultFunnel } from "@shared/defaultFunnel";
+import { funnelConfigSchema } from "@shared/funnelSchemas";
+import { benefitsFromBullets, contrastOnAccent, defaultStartBenefits, resolveStartLayout } from "@shared/startLayout";
+import { normalizeFunnelConfig } from "./funnelStore";
+
+describe("Startseiten-Layouts", () => {
+  it("fällt ohne Angabe auf das klassische Layout zurück", () => {
+    expect(resolveStartLayout({ layout: "classic" })).toBe("classic");
+    expect(resolveStartLayout({ layout: "benefits" })).toBe("benefits");
+    expect(resolveStartLayout({})).toBe("classic");
+  });
+
+  it("erzeugt Icon-Kacheln aus bestehenden Bullet-Zeilen", () => {
+    const tiles = benefitsFromBullets(["30 Tage Urlaub", "Homeoffice"], () => "fixed-id");
+    expect(tiles).toEqual([
+      expect.objectContaining({ id: "fixed-id", title: "30 Tage Urlaub" }),
+      expect.objectContaining({ id: "fixed-id", title: "Homeoffice" }),
+    ]);
+    expect(defaultStartBenefits(() => "seed").length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("wählt kontrastreiche Schrift auf der Branding-Fläche", () => {
+    expect(contrastOnAccent("#0165c3")).toBe("#ffffff");
+    expect(contrastOnAccent("#f4f8fc")).toBe("#10253f");
+  });
+
+  it("akzeptiert das Vorteile-Layout mit Adbot-Icon und Farb-Override", () => {
+    const pages = defaultFunnel.pages.map(page => page.type === "start"
+      ? {
+        ...page,
+        layout: "benefits" as const,
+        benefitsBandTitle: "Deine Vorteile bei uns",
+        secondaryButtonLabel: "Jetzt bewerben",
+        benefits: [{
+          id: "benefit-1",
+          icon: "adbot-vacation-days" as const,
+          title: "30 Tage Urlaub",
+          text: "Zeit für Erholung.",
+          color: "#C8102E",
+        }],
+      }
+      : page);
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages }).success).toBe(true);
+  });
+
+  it("normalisiert Bestands-Startseiten ohne Layout-Felder", () => {
+    const legacy = structuredClone(defaultFunnel);
+    const start = legacy.pages[0];
+    if (start?.type === "start") {
+      Reflect.deleteProperty(start, "layout");
+      Reflect.deleteProperty(start, "benefits");
+      Reflect.deleteProperty(start, "benefitsBandTitle");
+      Reflect.deleteProperty(start, "secondaryButtonLabel");
+    }
+    const normalized = normalizeFunnelConfig(legacy, true);
+    const page = normalized.pages[0];
+    expect(page?.type).toBe("start");
+    if (page?.type === "start") {
+      expect(page.layout).toBe("classic");
+      expect(page.benefits).toEqual([]);
+      expect(page.benefitsBandTitle).toBe("");
+      expect(page.secondaryButtonLabel).toBe("");
+    }
+  });
+});

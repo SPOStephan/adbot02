@@ -1,7 +1,21 @@
-import type { StartPage } from "@shared/funnel";
+import type { FunnelBrand, StartPage } from "@shared/funnel";
+import { contrastOnAccent, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
+import { FunnelIcon } from "./FunnelIcon";
 
-export function StartStep({ page, onContinue }: { page: StartPage; onContinue: () => void }) {
+export function StartStep({
+  page,
+  brand,
+  onContinue,
+}: {
+  page: StartPage;
+  brand?: FunnelBrand;
+  onContinue: () => void;
+}) {
+  if (resolveStartLayout(page) === "benefits") {
+    return <BenefitsStartStep page={page} brand={brand} onContinue={onContinue} />;
+  }
+
   return (
     <section className="funnel-step funnel-start-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-copy">
@@ -27,6 +41,69 @@ export function StartStep({ page, onContinue }: { page: StartPage; onContinue: (
             <div className="funnel-art-badge"><Check size={18} /><span>In 2 Minuten<br /><strong>beworben</strong></span></div>
           </div>
         )}
+      </div>
+    </section>
+  );
+}
+
+function BenefitsStartStep({
+  page,
+  brand,
+  onContinue,
+}: {
+  page: StartPage;
+  brand?: FunnelBrand;
+  onContinue: () => void;
+}) {
+  const accent = brand?.accentColor ?? "#0165c3";
+  const bandColor = brand?.accentColor ?? accent;
+  const bandText = contrastOnAccent(bandColor);
+  const bottomLabel = page.secondaryButtonLabel.trim() || page.buttonLabel;
+
+  return (
+    <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`}>
+      <div className={`funnel-start-benefits-hero${page.heroImageUrl ? " has-image" : ""}`}>
+        {page.heroImageUrl ? <img src={page.heroImageUrl} alt="" /> : <div className="funnel-start-benefits-hero-fallback" aria-hidden="true" />}
+        <div className="funnel-start-benefits-hero-copy">
+          {page.eyebrow && <p className="funnel-start-benefits-kicker">{page.eyebrow}</p>}
+          <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
+          {page.description.trim() && <p className="funnel-start-benefits-lead">{page.description}</p>}
+          <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
+            {page.buttonLabel}
+          </button>
+          {page.trustNote && <p className="funnel-trust-note">{page.trustNote}</p>}
+        </div>
+      </div>
+
+      {page.benefitsBandTitle.trim() && (
+        <div className="funnel-start-benefits-band" style={{ background: bandColor, color: bandText }}>
+          <h2>{page.benefitsBandTitle}</h2>
+        </div>
+      )}
+
+      {page.benefits.length > 0 && (
+        <div className="funnel-start-benefits-tiles-wrap">
+          <ul className="funnel-start-benefits-tiles">
+            {page.benefits.map(benefit => {
+              const iconColor = benefit.color || accent;
+              return (
+                <li key={benefit.id}>
+                  <span className="funnel-start-benefits-icon" style={{ color: iconColor }}>
+                    <FunnelIcon name={benefit.icon} className="size-11" color={iconColor} />
+                  </span>
+                  <strong>{benefit.title}</strong>
+                  {benefit.text.trim() && <p>{benefit.text}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      <div className="funnel-start-benefits-cta-wrap">
+        <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
+          {bottomLabel}
+        </button>
       </div>
     </section>
   );
