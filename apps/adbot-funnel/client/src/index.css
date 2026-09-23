@@ -382,6 +382,8 @@
   .funnel-proof strong { color: var(--funnel-ink); font-size: 11px; }
   .funnel-proof-icon { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: color-mix(in srgb, var(--funnel-accent) 9%, white); color: var(--funnel-accent); }
 
+  .funnel-exit-step { width: min(100%, 640px); margin: 0 auto; padding: 28px 8px 40px; display: grid; gap: 12px; }
+  .funnel-exit-step .funnel-step-actions { margin-top: 8px; }
   .funnel-success { width: min(100%, 600px); margin: 0 auto; padding: 54px 20px; display: grid; justify-items: center; text-align: center; }
   .funnel-success-icon { width: 72px; height: 72px; margin-bottom: 20px; border-radius: 23px; display: grid; place-items: center; color: white; background: var(--funnel-accent); box-shadow: 0 16px 36px color-mix(in srgb, var(--funnel-accent) 28%, transparent); }
   .funnel-success-icon svg { width: 35px; height: 35px; }

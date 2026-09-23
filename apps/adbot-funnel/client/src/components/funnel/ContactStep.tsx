@@ -1,5 +1,7 @@
 import { useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
-import type { ApplicationContact, ContactPage } from "@shared/funnel";
+import type { AddressForm, ApplicationContact, ContactPage } from "@shared/funnel";
+import { funnelUiCopy } from "@shared/addressForm";
+import { pageShowsDescription, pageShowsEyebrow, pageShowsTitle } from "@shared/pageCopy";
 import { ArrowLeft, Check, FileText, Loader2, UploadCloud, X } from "lucide-react";
 
 export type ResumeDraft = { file: File; dataBase64: string };
@@ -17,9 +19,11 @@ type ContactStepProps = {
   onFileError: (message: string) => void;
   onBack: () => void;
   onSubmit: () => void;
+  addressForm?: AddressForm;
 };
 
-export function ContactStep({ page, contact, consent, resume, error, pending, onContactChange, onConsentChange, onResumeChange, onFileError, onBack, onSubmit }: ContactStepProps) {
+export function ContactStep({ page, contact, consent, resume, error, pending, onContactChange, onConsentChange, onResumeChange, onFileError, onBack, onSubmit, addressForm = "du" }: ContactStepProps) {
+  const ui = funnelUiCopy(addressForm);
   const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
   const selectResume = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -31,12 +35,12 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ]);
     if (!allowedTypes.has(file.type)) {
-      onFileError("Bitte lade deinen Lebenslauf als PDF-, DOC- oder DOCX-Datei hoch.");
+      onFileError(ui.resumeType);
       event.target.value = "";
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      onFileError("Die Datei ist größer als 8 MB. Bitte wähle eine kleinere Datei.");
+      onFileError(ui.fileTooLarge);
       event.target.value = "";
       return;
     }
@@ -51,7 +55,7 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
       onResumeChange({ file, dataBase64 });
     } catch {
       event.target.value = "";
-      onFileError("Die Datei konnte nicht gelesen werden. Bitte wähle sie erneut aus.");
+      onFileError(ui.fileUnreadable);
     }
   };
   const submit = (event: FormEvent) => { event.preventDefault(); onSubmit(); };
@@ -59,9 +63,9 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
   return (
     <section className="funnel-step funnel-contact-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-question-copy">
-        {page.eyebrow && <p className="funnel-eyebrow">{page.eyebrow}</p>}
-        <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
-        <p className="funnel-description">{page.description}</p>
+        {pageShowsEyebrow(page) && <p className="funnel-eyebrow">{page.eyebrow}</p>}
+        <h1 id={`${page.id}-title`} tabIndex={-1} className={pageShowsTitle(page) ? undefined : "sr-only"}>{page.title}</h1>
+        {pageShowsDescription(page) && <p className="funnel-description">{page.description}</p>}
       </div>
       <form className="funnel-contact-form" onSubmit={submit} aria-busy={pending} aria-describedby={error ? `${page.id}-error` : undefined}>
         <div className="funnel-field-grid">
@@ -84,7 +88,7 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
             {resume ? (
               <div className="funnel-uploaded-file" aria-live="polite"><FileText size={22} aria-hidden="true" /><span><strong>{resume.file.name}</strong><small>{(resume.file.size / 1024 / 1024).toFixed(2)} MB</small></span><button type="button" aria-label="Lebenslauf entfernen" onClick={() => onResumeChange(undefined)}><X size={18} /></button></div>
             ) : (
-              <label className="funnel-upload-zone" htmlFor={`${page.id}-resume`}><UploadCloud size={26} aria-hidden="true" /><strong>Datei auswählen</strong><span id={`${page.id}-resume-hint`}>PDF, DOC oder DOCX · maximal 8 MB</span><input id={`${page.id}-resume`} type="file" required={page.resumeRequired} aria-describedby={`${page.id}-resume-hint`} accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={selectResume} /></label>
+              <label className="funnel-upload-zone" htmlFor={`${page.id}-resume`}><UploadCloud size={26} aria-hidden="true" /><strong>{ui.chooseFile}</strong><span id={`${page.id}-resume-hint`}>PDF, DOC oder DOCX · maximal 8 MB</span><input id={`${page.id}-resume`} type="file" required={page.resumeRequired} aria-describedby={`${page.id}-resume-hint`} accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={selectResume} /></label>
             )}
           </div>
         )}
@@ -92,7 +96,7 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
         {error && <div id={`${page.id}-error`} ref={errorRef} className="funnel-form-error" role="alert" tabIndex={-1}>{error}</div>}
         <div className="funnel-step-actions">
           <button className="funnel-secondary-button" type="button" onClick={onBack} disabled={pending}><ArrowLeft size={18} />Zurück</button>
-          <button className="funnel-primary-button" type="submit" disabled={pending} aria-busy={pending}>{pending ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}{pending ? "Wird gesendet …" : page.buttonLabel}</button>
+          <button className="funnel-primary-button" type="submit" disabled={pending} aria-busy={pending}>{pending ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}{pending ? ui.sending : page.buttonLabel}</button>
         </div>
       </form>
     </section>

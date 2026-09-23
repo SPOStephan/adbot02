@@ -18,6 +18,8 @@ import type {
   StartBenefit,
   StartPage,
 } from "@shared/funnel";
+import { resolveAddressForm } from "@shared/addressForm";
+import { normalizeFunnelGate, normalizeKnockoutOption } from "@shared/funnelGate";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { clampHeroBackgroundOpacity, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
@@ -34,20 +36,25 @@ type StoredMemoryFunnel = {
   updatedAt: string;
 };
 
-type WithOptionalEyebrow<T> = T extends FunnelPage ? Omit<T, "eyebrow" | "progressTitle" | "progressHint" | "progressIcon"> & {
+type WithOptionalEyebrow<T> = T extends FunnelPage ? Omit<T, "eyebrow" | "progressTitle" | "progressHint" | "progressIcon" | "showEyebrow" | "showTitle" | "showDescription"> & {
   eyebrow?: string;
   progressTitle?: string;
   progressHint?: string;
   progressIcon?: string;
+  showEyebrow?: boolean;
+  showTitle?: boolean;
+  showDescription?: boolean;
 } : never;
 type LegacyFunnelPage = WithOptionalEyebrow<FunnelPage>;
-type LegacyFunnelConfig = Omit<FunnelConfig, "status" | "brand" | "legal" | "postSubmit" | "metaTracking" | "progress" | "pages"> & {
+type LegacyFunnelConfig = Omit<FunnelConfig, "status" | "brand" | "legal" | "postSubmit" | "metaTracking" | "progress" | "addressForm" | "gate" | "pages"> & {
   status?: FunnelStatus;
   brand?: Partial<FunnelBrand>;
   legal?: Partial<FunnelConfig["legal"]>;
   postSubmit?: Partial<FunnelConfig["postSubmit"]>;
   metaTracking?: Partial<FunnelConfig["metaTracking"]>;
   progress?: Partial<FunnelConfig["progress"]> & { colors?: Partial<FunnelConfig["progress"]["colors"]> };
+  addressForm?: FunnelConfig["addressForm"];
+  gate?: Partial<FunnelConfig["gate"]>;
   pages: LegacyFunnelPage[];
 };
 
@@ -138,6 +145,9 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
       progressTitle: typeof page.progressTitle === "string" ? page.progressTitle.slice(0, 80) : "",
       progressHint: typeof page.progressHint === "string" ? page.progressHint.slice(0, 160) : "",
       progressIcon,
+      showEyebrow: page.showEyebrow !== false,
+      showTitle: page.showTitle !== false,
+      showDescription: page.showDescription !== false,
     };
     if (page.type === "choice-grid" || page.type === "choice-list") {
       return {
@@ -146,6 +156,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
           ...option,
           icon: typeof option.icon === "string" && funnelOptionIconSet.has(option.icon) ? option.icon as FunnelOptionIcon : "sparkles",
           leadValue: parseLeadValue(option.leadValue),
+          ...normalizeKnockoutOption(option),
         })),
       };
     }
@@ -177,6 +188,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
     ...publicConfig,
     brand: { ...defaultFunnel.brand, ...(config.brand ?? {}) },
     progress: normalizeProgress(config.progress),
+    addressForm: resolveAddressForm(config.addressForm),
+    gate: normalizeFunnelGate(config.gate),
     legal: { ...defaultFunnel.legal, ...(config.legal ?? {}) },
     postSubmit: { ...defaultFunnel.postSubmit, ...(config.postSubmit ?? {}) },
     metaTracking: {

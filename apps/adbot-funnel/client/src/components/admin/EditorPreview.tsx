@@ -21,7 +21,7 @@ export function EditorPreview({ config, page }: { config: FunnelConfig; page: Fu
         ) : page.type === "choice-grid" || page.type === "choice-list" ? (
           <ChoiceStep page={page} selected={answers[page.questionKey] ?? []} onSelect={value => choose(page.questionKey, value, page.allowMultiple)} onBack={() => undefined} onContinue={() => undefined} />
         ) : (
-          <ContactStep page={page as ContactPage} contact={{}} consent={false} pending={false} onContactChange={() => undefined} onConsentChange={() => undefined} onResumeChange={() => undefined} onFileError={() => undefined} onBack={() => undefined} onSubmit={() => undefined} />
+          <ContactStep page={page as ContactPage} contact={{}} consent={false} pending={false} onContactChange={() => undefined} onConsentChange={() => undefined} onResumeChange={() => undefined} onFileError={() => undefined} onBack={() => undefined} onSubmit={() => undefined} addressForm={config.addressForm ?? "du"} />
         )}
       </FunnelChrome>
     </div>
