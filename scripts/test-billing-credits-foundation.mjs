@@ -9,6 +9,10 @@ const migration = readFileSync(
   "utf8",
 );
 const creditsTs = readFileSync(join(root, "src/lib/billing/credits.ts"), "utf8");
+const waizrCreditsTs = readFileSync(
+  join(root, "src/lib/billing/waizr-credits.ts"),
+  "utf8",
+);
 
 assert.match(migration, /create table if not exists public\.billing_plans/);
 assert.match(migration, /create table if not exists public\.credit_wallets/);
@@ -36,6 +40,14 @@ assert.match(creditsTs, /reserveCreditsAmount/);
 assert.match(creditsTs, /topUpCredits/);
 assert.match(creditsTs, /assignBillingPlan/);
 assert.match(creditsTs, /getCreditBalanceForUser/);
+assert.match(creditsTs, /ADBOT_CREDIT_PROVIDER/);
+assert.match(creditsTs, /assertAdbotPaidActionAllowed/);
+assert.match(creditsTs, /provider: reservation\.provider/);
+assert.match(waizrCreditsTs, /getOrCreateWaizrCreditAccountForUser/);
+assert.match(waizrCreditsTs, /createWaizrQuote/);
+assert.match(waizrCreditsTs, /createWaizrReservation/);
+assert.match(waizrCreditsTs, /captureWaizrReservation/);
+assert.match(waizrCreditsTs, /releaseWaizrReservation/);
 
 const creditsUi = readFileSync(
   join(root, "src/components/CreditsSidebarBalance.tsx"),

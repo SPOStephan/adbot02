@@ -77,7 +77,11 @@ export async function suggestAdCopyForDestination(input: {
     .digest("hex")
     .slice(0, 64);
 
-  let reservation: { reservationId: string; amount: number } | null = null;
+  let reservation: {
+    provider: "legacy" | "waizr";
+    reservationId: string;
+    amount: number;
+  } | null = null;
   if (!input.skipCredits) {
     try {
       reservation = await reserveCreditsAmount({
@@ -134,6 +138,7 @@ export async function suggestAdCopyForDestination(input: {
       await commitCreditReservation({
         userId: input.userId,
         reservationId: reservation.reservationId,
+        provider: reservation.provider,
       });
     }
 
@@ -154,6 +159,7 @@ export async function suggestAdCopyForDestination(input: {
         await releaseCreditReservation({
           userId: input.userId,
           reservationId: reservation.reservationId,
+          provider: reservation.provider,
         });
       }
     } catch (releaseError) {

@@ -1,3 +1,5 @@
+import type { CreditProvider } from "@/lib/billing/credit-contract";
+
 export const CREATIVE_ASSET_PROVIDER_CONTRACT_VERSION = "2026-07-29";
 
 export const SUPPORTED_CREATIVE_IMAGE_MIME_TYPES = [
@@ -23,6 +25,8 @@ export type CreativeAssetJob = {
   leaseToken: string;
   /** Phase 6: pending credit reservation to commit/release. */
   creditReservationId: string | null;
+  /** Provider that owns the reservation; retained across async processing. */
+  creditProvider: CreditProvider | null;
 };
 
 export type CreativeAssetModerationStatus =

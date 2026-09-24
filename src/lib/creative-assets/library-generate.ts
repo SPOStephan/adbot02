@@ -118,8 +118,12 @@ export async function generateLibraryCreativeNow(input: {
   skipCredits?: boolean;
 }): Promise<LibraryGenerateResult> {
   const jobId = randomUUID();
-  let reservation: { reservationId: string; amount: number; alreadyExisted: boolean } | null =
-    null;
+  let reservation: {
+    provider: "legacy" | "waizr";
+    reservationId: string;
+    amount: number;
+    alreadyExisted: boolean;
+  } | null = null;
   if (!input.skipCredits) {
     reservation = await reserveCredits({
       userId: input.userId,
@@ -163,6 +167,7 @@ export async function generateLibraryCreativeNow(input: {
       await commitCreditReservation({
         userId: input.userId,
         reservationId: reservation.reservationId,
+        provider: reservation.provider,
       });
     }
 
@@ -179,6 +184,7 @@ export async function generateLibraryCreativeNow(input: {
       await releaseCreditReservation({
         userId: input.userId,
         reservationId: reservation.reservationId,
+        provider: reservation.provider,
       }).catch(() => undefined);
     }
     throw error;

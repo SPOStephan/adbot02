@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
+import { processNextCreativeCreditSettlement } from "@/lib/billing/creative-credit-settlement";
 import { hasCreativeAssetProviderConfig } from "@/lib/creative-assets/env";
 import { processNextCreativeAssetJob } from "@/lib/creative-assets/worker";
 import { constantTimeEqual } from "@/lib/meta/crypto";
@@ -38,24 +39,38 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!hasCreativeAssetProviderConfig()) {
-    return NextResponse.json(
-      { ok: false, error: "creative_provider_not_configured" },
-      { status: 503, headers: NO_STORE_HEADERS },
-    );
-  }
-
   try {
+    const settlementBefore = await processNextCreativeCreditSettlement();
+    if (!hasCreativeAssetProviderConfig()) {
+      return NextResponse.json(
+        {
+          ok: settlementBefore.status !== "DEAD",
+          processed: settlementBefore.processed ? 1 : 0,
+          result: "creative_provider_not_configured",
+          creditSettlement: settlementBefore.status,
+        },
+        {
+          status: settlementBefore.processed ? 200 : 503,
+          headers: NO_STORE_HEADERS,
+        },
+      );
+    }
+
     const result = await processNextCreativeAssetJob({
       ownerId: `creative-cron:${randomUUID()}`,
       signal: AbortSignal.timeout(150_000),
     });
+    const settlementAfter = await processNextCreativeCreditSettlement();
 
     return NextResponse.json(
       {
         ok: true,
-        processed: result.outcome === "idle" ? 0 : 1,
+        processed:
+          (result.outcome === "idle" ? 0 : 1) +
+          (settlementBefore.processed ? 1 : 0) +
+          (settlementAfter.processed ? 1 : 0),
         result: result.status,
+        creditSettlements: [settlementBefore.status, settlementAfter.status],
       },
       { headers: NO_STORE_HEADERS },
     );
