@@ -52,7 +52,13 @@ assert.match(read("src/components/DashboardHeaderChrome.tsx"), /KIready öffnen/
 assert.match(read("src/components/SignOutButton.tsx"), /window\.location\.assign\(`\$\{APP_SITE_URL\}\/login`\)/);
 assert.match(read("src/lib/site-urls.ts"), /\/auth\/kiready\/start/);
 assert.doesNotMatch(read("src/lib/supabase/proxy.ts"), /isAuthRoute[\s\S]*kiready/);
-assert.match(read("src/lib/billing/credits.ts"), /assertKireadyPaidActionAllowed/);
+assert.match(read("src/lib/billing/credits.ts"), /assertAdbotPaidActionAllowed/);
+assert.match(read("src/lib/kiready/entitlement.ts"), /hasActiveDirectAdbotSubscription/);
+assert.match(
+  read("src/lib/kiready/entitlement.ts"),
+  /if \(await hasActiveDirectAdbotSubscription\(userId\)\) return;/,
+);
+assert.match(read("src/lib/kiready/entitlement.ts"), /getKireadyAccessForUser/);
 assert.match(read("supabase/migrations/20260920140000_kiready_sso_phase1.sql"), /kiready_external_identities/);
 assert.match(read("supabase/migrations/20260920140000_kiready_sso_phase1.sql"), /adbot_organizations/);
 assert.match(read("supabase/migrations/20260920140000_kiready_sso_phase1.sql"), /unique \(issuer, subject\)/);

@@ -22,6 +22,14 @@ const routePath = join(
 );
 const typesPath = join(root, "src/lib/creative-assets/types.ts");
 const clientPath = join(root, "src/components/MediaLibraryClient.tsx");
+const settlementPath = join(
+  root,
+  "src/lib/billing/creative-credit-settlement.ts",
+);
+const settlementMigrationPath = join(
+  root,
+  "supabase/migrations/20260924163000_creative_credit_settlement_outbox.sql",
+);
 
 const migration = await readFile(migrationPath, "utf8");
 const phase6Doc = await readFile(phase6DocPath, "utf8");
@@ -31,6 +39,8 @@ const worker = await readFile(workerPath, "utf8");
 const route = await readFile(routePath, "utf8");
 const types = await readFile(typesPath, "utf8");
 const client = await readFile(clientPath, "utf8");
+const settlement = await readFile(settlementPath, "utf8");
+const settlementMigration = await readFile(settlementMigrationPath, "utf8");
 const migrationSha256 = createHash("sha256").update(migration).digest("hex");
 
 assert.match(migration, /credit_reservation_id/);
@@ -48,17 +58,28 @@ assert.match(enqueue, /reserveCredits/);
 assert.match(enqueue, /CREATIVE_IMAGE_CREDIT_ACTION/);
 assert.match(enqueue, /p_credit_reservation_id/);
 assert.match(enqueue, /releaseCreditReservation/);
+assert.match(enqueue, /withBillingReference/);
+assert.match(enqueue, /reservation\.provider === "legacy"/);
 
 assert.match(worker, /settleCreativeJobCredits/);
 assert.match(worker, /commitCreditReservation/);
 assert.match(worker, /creditReservationId/);
+assert.match(worker, /billingReferenceFromPayload/);
+assert.match(worker, /creditProvider/);
 assert.match(worker, /billing/);
+assert.match(settlement, /claim_next_creative_credit_settlement/);
+assert.match(settlement, /complete_creative_credit_settlement/);
+assert.match(settlementMigration, /PENDING_CAPTURE/);
+assert.match(settlementMigration, /PENDING_RELEASE/);
+assert.match(settlementMigration, /PROCESSING/);
+assert.match(settlementMigration, /SETTLED/);
 
 assert.match(route, /InsufficientCreditsError/);
 assert.match(route, /402/);
 assert.match(route, /creditsReserved/);
 
 assert.match(types, /creditReservationId/);
+assert.match(types, /creditProvider/);
 assert.match(client, /Credits reserviert|INSUFFICIENT_CREDITS/);
 
 assert.equal(

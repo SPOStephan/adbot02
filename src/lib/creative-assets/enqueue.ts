@@ -18,6 +18,7 @@ import {
   releaseCreditReservation,
   reserveCredits,
 } from "@/lib/billing/credits";
+import { withBillingReference } from "@/lib/billing/credit-contract";
 import { CustomerControlInputError } from "@/lib/meta/customer-control-input";
 import { attachCustomerWinnerStyleRefs } from "@/lib/ad-learning/style-refs";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -206,7 +207,11 @@ export async function enqueueCreativeAssetGenerationJob(input: {
   });
 
   const admin = createAdminClient();
-  const payload = generation as unknown as Record<string, unknown>;
+  const generationPayload = generation as unknown as Record<string, unknown>;
+  const payload =
+    reservation.provider === "waizr"
+      ? withBillingReference(generationPayload, reservation)
+      : generationPayload;
 
   try {
     const { data, error } = await admin.rpc("enqueue_creative_asset_job", {
@@ -218,7 +223,8 @@ export async function enqueueCreativeAssetGenerationJob(input: {
       p_provider_version: null,
       p_input_payload: payload,
       p_max_attempts: 3,
-      p_credit_reservation_id: reservation.reservationId,
+      p_credit_reservation_id:
+        reservation.provider === "legacy" ? reservation.reservationId : null,
     });
 
     if (error) {
@@ -274,6 +280,7 @@ export async function enqueueCreativeAssetGenerationJob(input: {
         await releaseCreditReservation({
           userId: input.customer.userId,
           reservationId: reservation.reservationId,
+          provider: reservation.provider,
         });
       } catch (releaseError) {
         console.error("creative_image_credit_release_failed", {

@@ -25,6 +25,7 @@ import {
   commitCreditReservation,
   releaseCreditReservation,
 } from "../billing/credits";
+import { billingReferenceFromPayload } from "../billing/credit-contract";
 import { createAdminClient } from "../supabase/admin";
 import {
   formatSlotsMetadataSummary,
@@ -108,6 +109,11 @@ type CreativeAssetJobRow = {
 };
 
 function asJob(row: CreativeAssetJobRow): CreativeAssetJob {
+  const externalBilling = billingReferenceFromPayload(row.input_payload);
+  const localReservationId =
+    typeof row.credit_reservation_id === "string"
+      ? row.credit_reservation_id
+      : null;
   return {
     jobId: row.job_id,
     userId: row.user_id,
@@ -122,9 +128,9 @@ function asJob(row: CreativeAssetJobRow): CreativeAssetJob {
     attemptCount: row.attempt_count,
     leaseToken: row.lease_token,
     creditReservationId:
-      typeof row.credit_reservation_id === "string"
-        ? row.credit_reservation_id
-        : null,
+      externalBilling?.reservationId ?? localReservationId,
+    creditProvider:
+      externalBilling?.provider ?? (localReservationId ? "legacy" : null),
   };
 }
 
@@ -133,7 +139,8 @@ async function settleCreativeJobCredits(input: {
   outcome: "commit" | "release";
 }): Promise<void> {
   const reservationId = input.job.creditReservationId;
-  if (!reservationId) {
+  const provider = input.job.creditProvider;
+  if (!reservationId || !provider) {
     return;
   }
   try {
@@ -141,11 +148,13 @@ async function settleCreativeJobCredits(input: {
       await commitCreditReservation({
         userId: input.job.userId,
         reservationId,
+        provider,
       });
     } else {
       await releaseCreditReservation({
         userId: input.job.userId,
         reservationId,
+        provider,
       });
     }
   } catch (error) {
@@ -275,6 +284,7 @@ export async function runCreativeAssetWorkerOnce(input: {
         billing: {
           action_key: "creative.generate_image_master",
           credit_reservation_id: job.creditReservationId,
+          credit_provider: job.creditProvider,
           mode: generation.mode,
           model_id: generation.model_id,
           provider_key: generation.provider_key,
