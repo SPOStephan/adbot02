@@ -95,6 +95,10 @@ type Props = {
   instagramAccounts?: LaunchAdActorOption[];
   initialFacebookPageId?: string | null;
   initialInstagramActorId?: string | null;
+  initialDestinationUrl?: string | null;
+  initialPrimaryText?: string | null;
+  initialHeadline?: string | null;
+  initialDescription?: string | null;
 };
 
 const DEFAULT_TRAFFIC_BLUEPRINT = {
@@ -267,6 +271,10 @@ export function TrafficLaunchCanary({
   instagramAccounts = [],
   initialFacebookPageId = null,
   initialInstagramActorId = null,
+  initialDestinationUrl = null,
+  initialPrimaryText = null,
+  initialHeadline = null,
+  initialDescription = null,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -274,7 +282,9 @@ export function TrafficLaunchCanary({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [prepareElapsedSec, setPrepareElapsedSec] = useState(0);
-  const [destinationUrl, setDestinationUrl] = useState("");
+  const [destinationUrl, setDestinationUrl] = useState(
+    initialDestinationUrl?.trim() ?? "",
+  );
   const [dailyBudget, setDailyBudget] = useState("20.00");
   const [facebookPageId, setFacebookPageId] = useState(
     initialFacebookPageId &&
@@ -288,9 +298,15 @@ export function TrafficLaunchCanary({
       ? initialInstagramActorId
       : (instagramAccounts[0]?.id ?? ""),
   );
-  const [primaryTexts, setPrimaryTexts] = useState<string[]>(["Mehr erfahren."]);
-  const [headlines, setHeadlines] = useState<string[]>(["Jetzt mehr erfahren"]);
-  const [descriptions, setDescriptions] = useState<string[]>([""]);
+  const [primaryTexts, setPrimaryTexts] = useState<string[]>([
+    initialPrimaryText?.trim() || "Mehr erfahren.",
+  ]);
+  const [headlines, setHeadlines] = useState<string[]>([
+    initialHeadline?.trim() || "Jetzt mehr erfahren",
+  ]);
+  const [descriptions, setDescriptions] = useState<string[]>([
+    initialDescription?.trim() || "",
+  ]);
   const [structuralMode, setStructuralMode] = useState<
     "off" | "two_ads" | "two_ad_sets" | "funnel_split"
   >("off");
