@@ -23,6 +23,19 @@ describe("Lead-Wert aus Funnel-Antworten", () => {
     ).toBe(110);
   });
 
+  it("ignoriert Antworten auf ausgeblendeten Seiten", () => {
+    const hiddenRole = {
+      ...defaultFunnel,
+      pages: defaultFunnel.pages.map(page => page.id === "page-role" ? { ...page, hidden: true } : page),
+    };
+    expect(
+      computeApplicationLeadValue(hiddenRole, {
+        arbeitsbereich: ["vertrieb"],
+        berufserfahrung: ["3-plus"],
+      }),
+    ).toBe(80);
+  });
+
   it("liefert keinen Wert, wenn keine Option einen Wert hat", () => {
     const withoutValues = structuredClone(defaultFunnel);
     for (const page of withoutValues.pages) {

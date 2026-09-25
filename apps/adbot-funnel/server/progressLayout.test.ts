@@ -61,6 +61,13 @@ describe("Fortschrittsanzeige", () => {
     expect(steps.map(item => item.state)).toEqual(["completed", "current", "upcoming", "upcoming"]);
   });
 
+  it("lässt ausgeblendete Seiten in der Fortschrittsanzeige weg", () => {
+    const pages = defaultFunnel.pages.map(page => page.id === "page-role" ? { ...page, hidden: true } : page);
+    const steps = resolveProgressSteps(pages, 2);
+    expect(steps.map(item => item.id)).toEqual(["page-start", "page-experience", "page-contact"]);
+    expect(steps.map(item => item.state)).toEqual(["completed", "current", "upcoming"]);
+  });
+
   it("akzeptiert Varianten und leere Farb-Overrides im Schema", () => {
     expect(funnelConfigSchema.safeParse({
       ...defaultFunnel,

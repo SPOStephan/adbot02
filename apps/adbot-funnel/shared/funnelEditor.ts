@@ -1,4 +1,4 @@
-import type { FunnelConfig, FunnelPage } from "./funnel";
+import { canHideFunnelPage, isFunnelPageHidden, type FunnelConfig, type FunnelPage } from "./funnel";
 
 const clone = <T>(value: T): T => structuredClone(value);
 
@@ -32,4 +32,19 @@ export function deleteFunnelPage(config: FunnelConfig, pageId: string): FunnelCo
   const page = config.pages.find(item => item.id === pageId);
   if (!page || page.type === "start" || page.type === "contact" || config.pages.length <= 2) return config;
   return { ...config, pages: config.pages.filter(item => item.id !== pageId) };
+}
+
+export function setFunnelPageHidden(config: FunnelConfig, pageId: string, hidden: boolean): FunnelConfig {
+  const page = config.pages.find(item => item.id === pageId);
+  if (!page || !canHideFunnelPage(page) || isFunnelPageHidden(page) === hidden) return config;
+  return {
+    ...config,
+    pages: config.pages.map(item => item.id === pageId ? { ...item, hidden } : item),
+  };
+}
+
+export function toggleFunnelPageHidden(config: FunnelConfig, pageId: string): FunnelConfig {
+  const page = config.pages.find(item => item.id === pageId);
+  if (!page) return config;
+  return setFunnelPageHidden(config, pageId, !isFunnelPageHidden(page));
 }

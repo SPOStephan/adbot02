@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, Eye, EyeOff, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
-import type { ContactPage, FunnelConfig, FunnelPage, StartPage } from "@shared/funnel";
-import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage } from "@shared/funnelEditor";
+import { canHideFunnelPage, isFunnelPageHidden, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
+import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
 import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
@@ -171,6 +171,17 @@ export default function FunnelEditor() {
     });
   };
   const move = (direction: -1 | 1) => { changeConfig(current => moveFunnelPage(current, selectedPage.id, direction)); };
+  const toggleHidden = (pageId: string) => {
+    changeConfig(current => {
+      const next = toggleFunnelPageHidden(current, pageId);
+      if (next === current) {
+        toast.error("Start- und Kontaktseite können nicht ausgeblendet werden.");
+        return current;
+      }
+      return next;
+    });
+  };
+  const hiddenCount = config.pages.filter(isFunnelPageHidden).length;
 
   return (
     <div className="min-h-[calc(100vh-2rem)] -m-4 bg-slate-50">
@@ -188,14 +199,34 @@ export default function FunnelEditor() {
 
       <div className="grid min-h-[calc(100vh-76px)] xl:grid-cols-[240px_minmax(330px,480px)_minmax(420px,1fr)]">
         <aside className="border-r bg-white p-3">
-          <div className="mb-3 flex items-center justify-between px-2"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Seiten</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{config.pages.length}</span></div>
+          <div className="mb-3 flex items-center justify-between px-2"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Seiten</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{hiddenCount > 0 ? `${config.pages.length - hiddenCount}/${config.pages.length}` : config.pages.length}</span></div>
           <div className="grid gap-1.5">
-            {config.pages.map((page, index) => (
-              <button key={page.id} type="button" aria-pressed={selectedPage.id === page.id} onClick={() => setSelectedId(page.id)} className={`group flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3] ${selectedPage.id === page.id ? "border-[#0165c3]/30 bg-[#0165c3]/8 shadow-sm" : "border-transparent hover:bg-slate-50"}`}>
-                <GripVertical className="size-4 shrink-0 text-slate-300" /><span className={`grid size-7 shrink-0 place-items-center rounded-lg text-xs font-bold ${selectedPage.id === page.id ? "bg-[#0165c3] text-white" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span>
-                <span className="min-w-0"><strong className="block truncate text-sm">{page.name}</strong><small className="block truncate text-[10px] text-muted-foreground">{pageLabels[page.type]}</small></span>
-              </button>
-            ))}
+            {config.pages.map((page, index) => {
+              const hidden = isFunnelPageHidden(page);
+              const selected = selectedPage.id === page.id;
+              return (
+                <div key={page.id} className={`group flex min-w-0 items-center gap-1 rounded-xl border px-1.5 py-1.5 transition ${selected ? "border-[#0165c3]/30 bg-[#0165c3]/8 shadow-sm" : "border-transparent hover:bg-slate-50"} ${hidden ? "opacity-55" : ""}`}>
+                  <button type="button" aria-pressed={selected} onClick={() => setSelectedId(page.id)} className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3] ${hidden ? "grayscale" : ""}`}>
+                    <GripVertical className="size-4 shrink-0 text-slate-300" />
+                    <span className={`grid size-7 shrink-0 place-items-center rounded-lg text-xs font-bold ${selected && !hidden ? "bg-[#0165c3] text-white" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span>
+                    <span className="min-w-0">
+                      <strong className={`block truncate text-sm ${hidden ? "text-slate-400 line-through decoration-slate-300" : ""}`}>{page.name}</strong>
+                      <small className="block truncate text-[10px] text-muted-foreground">{hidden ? "Ausgeblendet" : pageLabels[page.type]}</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`grid size-8 shrink-0 place-items-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3] ${canHideFunnelPage(page) ? "text-slate-500 hover:bg-white hover:text-[#0165c3]" : "cursor-not-allowed text-slate-300"}`}
+                    aria-label={hidden ? `Seite „${page.name}“ wieder einblenden` : `Seite „${page.name}“ ausblenden`}
+                    title={canHideFunnelPage(page) ? (hidden ? "Wieder einblenden" : "Ausblenden") : "Start- und Kontaktseite bleiben sichtbar"}
+                    disabled={!canHideFunnelPage(page)}
+                    onClick={() => toggleHidden(page.id)}
+                  >
+                    {hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </aside>
 
@@ -203,7 +234,12 @@ export default function FunnelEditor() {
           <Tabs defaultValue="page">
             <TabsList className="mb-5 grid w-full grid-cols-2"><TabsTrigger value="page">Seite</TabsTrigger><TabsTrigger value="global"><Settings2 className="size-3.5" />Global</TabsTrigger></TabsList>
             <TabsContent value="page" className="mt-0 grid gap-5">
-              <div className="flex items-center justify-between gap-2"><div><p className="text-xs text-muted-foreground">{pageLabels[selectedPage.type]}</p><h2 className="font-bold">{selectedPage.name}</h2></div><div className="flex gap-1"><Button size="icon" variant="ghost" title="Nach oben" disabled={selectedIndex <= 1 || selectedPage.type === "contact"} onClick={() => move(-1)}><ArrowUp className="size-4" /></Button><Button size="icon" variant="ghost" title="Nach unten" disabled={selectedIndex >= config.pages.length - 2 || selectedPage.type === "start"} onClick={() => move(1)}><ArrowDown className="size-4" /></Button><Button size="icon" variant="ghost" title="Duplizieren" onClick={duplicate}><Copy className="size-4" /></Button><Button size="icon" variant="ghost" className="text-destructive" title="Löschen" disabled={selectedPage.type === "start" || selectedPage.type === "contact"} onClick={remove}><Trash2 className="size-4" /></Button></div></div>
+              <div className="flex items-center justify-between gap-2"><div><p className="text-xs text-muted-foreground">{pageLabels[selectedPage.type]}{isFunnelPageHidden(selectedPage) ? " · ausgeblendet" : ""}</p><h2 className={`font-bold ${isFunnelPageHidden(selectedPage) ? "text-slate-400" : ""}`}>{selectedPage.name}</h2></div><div className="flex gap-1"><Button size="icon" variant="ghost" title="Nach oben" disabled={selectedIndex <= 1 || selectedPage.type === "contact"} onClick={() => move(-1)}><ArrowUp className="size-4" /></Button><Button size="icon" variant="ghost" title="Nach unten" disabled={selectedIndex >= config.pages.length - 2 || selectedPage.type === "start"} onClick={() => move(1)}><ArrowDown className="size-4" /></Button><Button size="icon" variant="ghost" title={isFunnelPageHidden(selectedPage) ? "Wieder einblenden" : "Ausblenden"} disabled={!canHideFunnelPage(selectedPage)} onClick={() => toggleHidden(selectedPage.id)}>{isFunnelPageHidden(selectedPage) ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</Button><Button size="icon" variant="ghost" title="Duplizieren" onClick={duplicate}><Copy className="size-4" /></Button><Button size="icon" variant="ghost" className="text-destructive" title="Löschen" disabled={selectedPage.type === "start" || selectedPage.type === "contact"} onClick={remove}><Trash2 className="size-4" /></Button></div></div>
+              {isFunnelPageHidden(selectedPage) ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  Diese Seite bleibt als Idee gespeichert, ist im öffentlichen Funnel aber ausgeblendet. Über das Augen-Symbol kannst du sie jederzeit wieder aktivieren.
+                </div>
+              ) : null}
               {selectedPage.type === "start" && (
                 <StartLayoutPicker
                   value={resolveStartLayout(selectedPage)}
@@ -409,8 +445,8 @@ function ProgressSettings({
       <ProgressLayoutPicker value={resolveProgressLayout(progress.layout)} onChange={layout => patchProgress({ layout })} />
       <div className="grid gap-3">
         {config.pages.map((page, index) => (
-          <div key={page.id} className="grid gap-2 rounded-xl border bg-slate-50 p-3 sm:grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_170px]">
-            <span className="pt-2 text-xs font-bold text-muted-foreground">{index + 1}</span>
+          <div key={page.id} className={`grid gap-2 rounded-xl border bg-slate-50 p-3 sm:grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_170px] ${isFunnelPageHidden(page) ? "opacity-50 grayscale" : ""}`}>
+            <span className="pt-2 text-xs font-bold text-muted-foreground">{isFunnelPageHidden(page) ? "–" : index + 1}</span>
             <Input value={page.progressTitle ?? ""} placeholder={page.name} onChange={event => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressTitle: event.target.value } as FunnelPage : item) }), false)} />
             <Input value={page.progressHint ?? ""} placeholder="Kurztext" onChange={event => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressHint: event.target.value } as FunnelPage : item) }), false)} />
             <IconPicker value={page.progressIcon ?? "sparkles"} color={config.brand.accentColor} onChange={icon => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressIcon: icon } as FunnelPage : item) }))} />

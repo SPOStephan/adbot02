@@ -233,6 +233,35 @@ describe("Funnel-Router", () => {
     expect((await admin.funnel.funnels()).map(funnel => funnel.slug)).toEqual(expect.arrayContaining(["karriere", "vertrieb-nord", "vertrieb-nord-2", "vertrieb-nord-kopie"]));
   });
 
+  it("blendet gespeicherte Ideenseiten öffentlich aus und verlangt dort keine Antwort", async () => {
+    const admin = appRouter.createCaller(adminContext);
+    const publicCaller = appRouter.createCaller(publicContext);
+    const created = await admin.funnel.create({ title: "Ideen-Funnel", slug: "ideen-seiten" });
+    const hiddenRole = created.pages.find(page => page.type === "choice-grid");
+    if (!hiddenRole || hiddenRole.type !== "choice-grid") throw new Error("Auswahlseite fehlt");
+    const pages = created.pages.map(page => page.id === hiddenRole.id ? { ...page, hidden: true } : page);
+    await admin.funnel.saveConfig({ ...created, pages, status: "published", isPublished: true });
+
+    const stored = await admin.funnel.adminConfig({ id: created.id });
+    expect(stored.config.pages.find(page => page.id === hiddenRole.id)?.hidden).toBe(true);
+    expect(stored.config.pages.map(page => page.id)).toEqual(created.pages.map(page => page.id));
+
+    const publicConfig = await publicCaller.funnel.publicConfig({ slug: created.slug });
+    expect(publicConfig.pages.some(page => page.id === hiddenRole.id)).toBe(false);
+    expect(publicConfig.pages.map(page => page.type)).toEqual(["start", "choice-list", "contact"]);
+
+    const visibleChoice = publicConfig.pages.find(page => page.type === "choice-list");
+    if (!visibleChoice || visibleChoice.type !== "choice-list") throw new Error("Sichtbare Auswahlseite fehlt");
+    const result = await publicCaller.funnel.submit({
+      funnelSlug: created.slug,
+      answers: { [visibleChoice.questionKey]: [visibleChoice.options[2]!.value] },
+      contact: { name: "Erika Muster", email: "erika@example.org", phone: "+49 123" },
+      consent: true,
+    });
+    expect(result.id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(result.leadValue).toBe(80);
+  });
+
   it("liefert nur veröffentlichte Funnel öffentlich aus", async () => {
     const admin = appRouter.createCaller(adminContext);
     const publicCaller = appRouter.createCaller(publicContext);

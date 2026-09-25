@@ -199,7 +199,21 @@ type FunnelPageBase = {
   /** Optional second line under the progress title. */
   progressHint: string;
   progressIcon: FunnelOptionIcon;
+  /** Hidden idea pages stay in the editor but are skipped in the public funnel. */
+  hidden?: boolean;
 };
+
+export function isFunnelPageHidden(page: Pick<FunnelPageBase, "hidden">): boolean {
+  return page.hidden === true;
+}
+
+export function canHideFunnelPage(page: Pick<FunnelPageBase, "type">): boolean {
+  return page.type !== "start" && page.type !== "contact";
+}
+
+export function visibleFunnelPages<T extends Pick<FunnelPageBase, "hidden">>(pages: T[]): T[] {
+  return pages.filter(page => !isFunnelPageHidden(page));
+}
 
 export type StartBenefit = {
   id: string;
@@ -337,6 +351,15 @@ export type FunnelConfig = {
   metaTracking: FunnelMetaTracking;
   pages: FunnelPage[];
 };
+
+export function toPublicFunnelConfig(config: FunnelConfig): FunnelConfig {
+  return {
+    ...config,
+    notificationEmail: "",
+    allowedEmbedOrigins: [],
+    pages: visibleFunnelPages(config.pages),
+  };
+}
 
 export type FunnelSummary = {
   id: string;

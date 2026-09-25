@@ -30,7 +30,10 @@ export function FunnelProgress({
   const colors = resolveProgressColors(brand, progress.colors);
   const steps = resolveProgressSteps(pages, step);
   const total = Math.max(steps.length, 1);
-  const currentIndex = Math.min(Math.max(step, 0), total - 1);
+  const currentVisibleIndex = steps.findIndex(item => item.state === "current");
+  const currentIndex = currentVisibleIndex >= 0
+    ? currentVisibleIndex
+    : Math.min(Math.max(step, 0), total - 1);
   const percent = progressPercent(currentIndex, total);
   const current = steps[currentIndex];
 
