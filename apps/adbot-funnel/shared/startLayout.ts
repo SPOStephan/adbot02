@@ -1,8 +1,22 @@
-import type { FunnelOptionIcon, StartBenefit, StartPage, StartPageLayout } from "./funnel";
+import type { BenefitsTileLayout, FunnelOptionIcon, StartBadge, StartBenefit, StartPage, StartPageLayout } from "./funnel";
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
+export const DEFAULT_BENEFITS_TILE_LAYOUT: BenefitsTileLayout = "two-column";
 export const MAX_START_BENEFITS = 12;
+export const MAX_START_BADGES = 16;
 export const DEFAULT_HERO_BACKGROUND_OPACITY = 15;
+export const MAX_START_BENEFIT_TEXT = 800;
+
+export const START_BADGE_TEMPLATES = [
+  "Homeoffice",
+  "Fixum + Provision",
+  "10.000 €",
+  "30 Tage Urlaub",
+  "Firmenwagen",
+  "Gleitzeit",
+  "Weiterbildung",
+  "Unbefristet",
+] as const;
 
 const DEFAULT_BENEFIT_SEEDS: Array<Pick<StartBenefit, "icon" | "title" | "text">> = [
   { icon: "adbot-vacation-days", title: "30 Tage Urlaub", text: "Ausreichend Zeit für Erholung, Familie und alles, was dir wichtig ist." },
@@ -24,6 +38,27 @@ const FALLBACK_ICONS: FunnelOptionIcon[] = [
 
 export function resolveStartLayout(page: Pick<StartPage, "layout"> | { layout?: string }): StartPageLayout {
   return page.layout === "benefits" ? "benefits" : DEFAULT_START_LAYOUT;
+}
+
+export function resolveBenefitsTileLayout(value?: string | null): BenefitsTileLayout {
+  return value === "one-column" ? "one-column" : DEFAULT_BENEFITS_TILE_LAYOUT;
+}
+
+export function emptyStartBadge(createId = () => crypto.randomUUID()): StartBadge {
+  return { id: createId(), label: "Neues Badge" };
+}
+
+export function badgeFromTemplate(label: string, createId = () => crypto.randomUUID()): StartBadge {
+  return { id: createId(), label: label.slice(0, 80) };
+}
+
+export function resolveBadgeColors(
+  badge: Pick<StartBadge, "backgroundColor" | "textColor">,
+  fallbackText: string,
+): { background: string; text: string } {
+  const background = badge.backgroundColor || "#ffffff";
+  const text = badge.textColor || (badge.backgroundColor ? contrastOnAccent(background) : fallbackText);
+  return { background, text };
 }
 
 export function defaultStartBenefits(createId = () => crypto.randomUUID()): StartBenefit[] {

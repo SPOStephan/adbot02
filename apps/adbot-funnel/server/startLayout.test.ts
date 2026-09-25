@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { benefitsFromBullets, contrastOnAccent, defaultStartBenefits, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, contrastOnAccent, defaultStartBenefits, resolveBadgeColors, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -9,6 +9,9 @@ describe("Startseiten-Layouts", () => {
     expect(resolveStartLayout({ layout: "classic" })).toBe("classic");
     expect(resolveStartLayout({ layout: "benefits" })).toBe("benefits");
     expect(resolveStartLayout({})).toBe("classic");
+    expect(resolveBenefitsTileLayout("one-column")).toBe("one-column");
+    expect(resolveBenefitsTileLayout("two-column")).toBe("two-column");
+    expect(resolveBenefitsTileLayout(undefined)).toBe("two-column");
   });
 
   it("erzeugt Icon-Kacheln aus bestehenden Bullet-Zeilen", () => {
@@ -44,12 +47,35 @@ describe("Startseiten-Layouts", () => {
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages }).success).toBe(true);
   });
 
+  it("nimmt einspaltige Kacheln, Badges und Vorlagen an", () => {
+    const pages = defaultFunnel.pages.map(page => page.type === "start"
+      ? {
+        ...page,
+        layout: "benefits" as const,
+        benefitsTileLayout: "one-column" as const,
+        badges: [
+          { id: "badge-1", label: "Homeoffice", backgroundColor: "#0165C3", textColor: "#FFFFFF" },
+          badgeFromTemplate("10.000 €", () => "badge-2"),
+        ],
+      }
+      : page);
+    const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages });
+    const start = parsed.pages[0];
+    expect(start?.type).toBe("start");
+    if (start?.type !== "start") throw new Error("Startseite fehlt");
+    expect(start.benefitsTileLayout).toBe("one-column");
+    expect(start.badges.map(badge => badge.label)).toEqual(["Homeoffice", "10.000 €"]);
+    expect(resolveBadgeColors({ backgroundColor: "#0165C3" }, "#10253f")).toEqual({ background: "#0165C3", text: "#ffffff" });
+  });
+
   it("normalisiert Bestands-Startseiten ohne Layout-Felder", () => {
     const legacy = structuredClone(defaultFunnel);
     const start = legacy.pages[0];
     if (start?.type === "start") {
       Reflect.deleteProperty(start, "layout");
       Reflect.deleteProperty(start, "benefits");
+      Reflect.deleteProperty(start, "benefitsTileLayout");
+      Reflect.deleteProperty(start, "badges");
       Reflect.deleteProperty(start, "benefitsBandTitle");
       Reflect.deleteProperty(start, "secondaryButtonLabel");
     }
@@ -61,6 +87,8 @@ describe("Startseiten-Layouts", () => {
       expect(page.benefits).toEqual([]);
       expect(page.benefitsBandTitle).toBe("");
       expect(page.secondaryButtonLabel).toBe("");
+      expect(page.benefitsTileLayout).toBe("two-column");
+      expect(page.badges).toEqual([]);
       expect(page.heroBackgroundOpacity).toBe(15);
       expect(page.heroBackgroundDesktopUrl).toBe("");
     }

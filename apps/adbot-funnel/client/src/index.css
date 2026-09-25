@@ -440,18 +440,39 @@
   .funnel-start-benefits-hero-bg { z-index: 0; overflow: hidden; pointer-events: none; }
   .funnel-start-benefits-hero-bg img { object-fit: cover; }
   .funnel-start-benefits-hero-copy { position: relative; z-index: 1; }
-  .funnel-start-benefits-hero-photo,
-  .funnel-start-benefits-hero > img {
-    width: 100%;
-    max-height: 240px;
+  .funnel-start-benefits-portrait {
+    width: 132px;
+    height: 132px;
     object-fit: cover;
-    border-radius: 0;
-    margin-bottom: 22px;
+    border-radius: 50%;
+    margin: 0 auto 18px;
+    display: block;
+    box-shadow: 0 10px 28px rgba(16, 37, 63, 0.16);
   }
   .funnel-start-benefits-hero-fallback {
     display: none;
   }
   .funnel-start-benefits-hero-copy { width: min(100%, 720px); display: grid; justify-items: center; }
+  .funnel-start-benefits-badges {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 16px 0 0;
+    padding: 0;
+  }
+  .funnel-start-benefits-badge {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    line-height: 1.2;
+    font-weight: 650;
+  }
   .funnel-start-benefits-kicker {
     margin: 0 0 10px;
     color: var(--funnel-ink);
@@ -515,6 +536,29 @@
     gap: 8px;
     color: var(--funnel-ink);
   }
+  .funnel-start-benefits-copy {
+    display: grid;
+    justify-items: inherit;
+    gap: 6px;
+    min-width: 0;
+  }
+  .funnel-start-benefits-tiles.is-one-column {
+    grid-template-columns: 1fr;
+    width: min(100%, 640px);
+    gap: 26px;
+  }
+  .funnel-start-benefits-tiles.is-one-column li {
+    grid-template-columns: 56px minmax(0, 1fr);
+    justify-items: start;
+    align-items: start;
+    text-align: left;
+    gap: 16px;
+  }
+  .funnel-start-benefits-tiles.is-one-column p {
+    max-width: none;
+    font-size: 14px;
+    line-height: 1.55;
+  }
   .funnel-start-benefits-icon {
     width: 52px;
     height: 52px;
@@ -543,27 +587,14 @@
   }
 
   @media (min-width: 640px) {
-    .funnel-start-benefits-hero.has-image,
     .funnel-start-benefits-hero.has-background {
       min-height: 420px;
       padding: 56px 32px 64px;
       place-items: center;
     }
-    .funnel-start-benefits-hero.has-image .funnel-start-benefits-hero-photo {
-      position: absolute;
-      inset: 0;
-      max-height: none;
-      margin: 0;
-      opacity: 0.28;
-    }
-    .funnel-start-benefits-hero.has-image:not(.has-background)::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--funnel-bg) 28%, transparent), color-mix(in srgb, var(--funnel-bg) 72%, transparent));
-      pointer-events: none;
-    }
+    .funnel-start-benefits-portrait { width: 148px; height: 148px; }
     .funnel-start-benefits-hero-copy { position: relative; z-index: 1; }
+    .funnel-start-benefits-tiles.is-one-column { gap: 32px; padding-inline: 32px; }
     .funnel-start-benefits-hero h1 { font-size: clamp(2.2rem, 4vw, 3.4rem); max-width: 16ch; }
     .funnel-start-benefits-band { padding: 28px 32px; }
     .funnel-start-benefits-tiles { gap: 42px 48px; padding: 56px 32px 12px; }
@@ -601,7 +632,7 @@
 .admin-live-preview .funnel-footer { flex-direction: column; }
 .admin-live-preview .funnel-canvas-benefits .funnel-main { padding: 0 0 16px; }
 .admin-live-preview .funnel-start-benefits-hero { padding: 0 12px 18px; }
-.admin-live-preview .funnel-start-benefits-hero > img { max-height: 150px; margin-bottom: 14px; }
+.admin-live-preview .funnel-start-benefits-portrait { width: 88px; height: 88px; margin-bottom: 12px; }
 .admin-live-preview .funnel-start-benefits-hero h1 { font-size: 1.55rem; }
 .admin-live-preview .funnel-start-benefits-tiles { gap: 18px 10px; padding: 18px 10px 4px; }
 .admin-live-preview .funnel-start-benefits-icon svg,

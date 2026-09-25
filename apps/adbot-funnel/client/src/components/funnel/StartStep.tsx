@@ -1,5 +1,5 @@
 import type { FunnelBrand, StartPage } from "@shared/funnel";
-import { contrastOnAccent, resolveStartLayout } from "@shared/startLayout";
+import { contrastOnAccent, resolveBadgeColors, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 
@@ -61,10 +61,12 @@ function BenefitsStartStep({
   const bottomLabel = page.secondaryButtonLabel.trim() || page.buttonLabel;
   const backgroundUrl = page.heroBackgroundMobileUrl || page.heroBackgroundDesktopUrl;
   const opacity = Math.max(0, Math.min(100, page.heroBackgroundOpacity ?? 15)) / 100;
+  const tileLayout = resolveBenefitsTileLayout(page.benefitsTileLayout);
+  const ink = brand?.textColor ?? "#10253f";
 
   return (
     <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`}>
-      <div className={`funnel-start-benefits-hero${page.heroImageUrl ? " has-image" : ""}${backgroundUrl ? " has-background" : ""}`}>
+      <div className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? " has-portrait" : ""}${backgroundUrl ? " has-background" : ""}`}>
         {backgroundUrl && (
           <div className="funnel-start-benefits-hero-bg" aria-hidden="true">
             <picture>
@@ -73,10 +75,26 @@ function BenefitsStartStep({
             </picture>
           </div>
         )}
-        {page.heroImageUrl ? <img className="funnel-start-benefits-hero-photo" src={page.heroImageUrl} alt="" /> : <div className="funnel-start-benefits-hero-fallback" aria-hidden="true" />}
         <div className="funnel-start-benefits-hero-copy">
+          {page.heroImageUrl.trim() ? <img className="funnel-start-benefits-portrait" src={page.heroImageUrl} alt="" /> : null}
           {page.eyebrow && <p className="funnel-start-benefits-kicker">{page.eyebrow}</p>}
           <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
+          {(page.badges ?? []).length > 0 && (
+            <ul className="funnel-start-benefits-badges">
+              {(page.badges ?? []).map(badge => {
+                const colors = resolveBadgeColors(badge, ink);
+                return (
+                  <li
+                    key={badge.id}
+                    className="funnel-start-benefits-badge"
+                    style={{ background: colors.background, color: colors.text, borderColor: badge.backgroundColor || "color-mix(in srgb, var(--funnel-ink) 14%, transparent)" }}
+                  >
+                    {badge.label}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           {page.description.trim() && <p className="funnel-start-benefits-lead">{page.description}</p>}
           <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
             {page.buttonLabel}
@@ -93,7 +111,7 @@ function BenefitsStartStep({
 
       {page.benefits.length > 0 && (
         <div className="funnel-start-benefits-tiles-wrap">
-          <ul className="funnel-start-benefits-tiles">
+          <ul className={`funnel-start-benefits-tiles is-${tileLayout}`}>
             {page.benefits.map(benefit => {
               const iconColor = benefit.color || accent;
               return (
@@ -101,8 +119,10 @@ function BenefitsStartStep({
                   <span className="funnel-start-benefits-icon" style={{ color: iconColor }}>
                     <FunnelIcon name={benefit.icon} className="size-11" color={iconColor} />
                   </span>
-                  <strong>{benefit.title}</strong>
-                  {benefit.text.trim() && <p>{benefit.text}</p>}
+                  <span className="funnel-start-benefits-copy">
+                    <strong>{benefit.title}</strong>
+                    {benefit.text.trim() && <p>{benefit.text}</p>}
+                  </span>
                 </li>
               );
             })}

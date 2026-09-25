@@ -37,7 +37,33 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("Jetzt bewerben");
     expect(html).toContain("30 Tage Urlaub");
     expect(html).not.toContain("funnel-start-benefits-hero-bg");
-    expect(html).toContain('class="funnel-start-benefits-tiles"');
+    expect(html).toContain("funnel-start-benefits-tiles");
+    expect(html).toContain("is-two-column");
+    expect(html).not.toContain("funnel-start-benefits-portrait");
+    expect(html).not.toContain("funnel-start-benefits-badges");
+  });
+
+  it("setzt einspaltige Kacheln, Portrait und Badges als eigene Elemente", () => {
+    const page: StartPage = {
+      ...getStartPage(),
+      layout: "benefits",
+      heroImageUrl: "https://cdn.example.org/portrait.jpg",
+      benefitsTileLayout: "one-column",
+      badges: [
+        { id: "badge-home", label: "Homeoffice", backgroundColor: "#E8F2FB", textColor: "#0165C3" },
+        { id: "badge-fixum", label: "Fixum + Provision" },
+      ],
+      benefits: defaultStartBenefits(() => "tile"),
+    };
+    const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(html).toContain("funnel-start-benefits-portrait");
+    expect(html).toContain("https://cdn.example.org/portrait.jpg");
+    expect(html).toContain("funnel-start-benefits-badges");
+    expect(html).toContain("Homeoffice");
+    expect(html).toContain("Fixum + Provision");
+    expect(html).toContain("is-one-column");
+    expect(html).not.toContain("has-image");
+    expect(html).not.toContain("funnel-start-benefits-hero-photo");
   });
 
   it("legt das Hintergrundbild nur im Hero mit einstellbarer Deckkraft", () => {

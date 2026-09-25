@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { BENEFITS_TILE_LAYOUTS, FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS } from "./progressLayout";
-import { DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BENEFITS } from "./startLayout";
+import { DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.enum(FUNNEL_OPTION_ICONS);
 const optionalHttpsUrlSchema = z.string().max(2048).refine(value => value === "" || /^https:\/\//i.test(value), "Es ist nur eine absolute HTTPS-Adresse zulässig.");
@@ -38,8 +38,15 @@ const startBenefitSchema = z.object({
   id: z.string().min(1),
   icon: iconSchema,
   title: z.string().min(1).max(120),
-  text: z.string().max(400),
+  text: z.string().max(MAX_START_BENEFIT_TEXT),
   color: optionalHexColorSchema.optional(),
+});
+
+const startBadgeSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1).max(80),
+  backgroundColor: optionalHexColorSchema.optional(),
+  textColor: optionalHexColorSchema.optional(),
 });
 
 const optionalAssetUrlSchema = z.string().max(2048).refine(
@@ -56,6 +63,8 @@ const startPageSchema = pageBaseSchema.extend({
   benefitsBandTitle: z.string().max(200).default(""),
   secondaryButtonLabel: z.string().max(100).default(""),
   benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
+  benefitsTileLayout: z.enum(BENEFITS_TILE_LAYOUTS).default(DEFAULT_BENEFITS_TILE_LAYOUT),
+  badges: z.array(startBadgeSchema).max(MAX_START_BADGES).default([]),
   heroBackgroundAssetId: z.string().max(80).default(""),
   heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),
   heroBackgroundMobileUrl: optionalAssetUrlSchema.default(""),
