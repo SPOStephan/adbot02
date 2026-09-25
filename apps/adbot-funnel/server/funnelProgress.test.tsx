@@ -6,6 +6,15 @@ import type { ProgressLayout } from "../shared/funnel";
 import { PROGRESS_LAYOUTS } from "../shared/funnel";
 
 describe("FunnelProgress Markup", () => {
+  it("zählt ausgeblendete Ideenseiten nicht in der Fortschrittsanzeige", () => {
+    const pages = defaultFunnel.pages.map(page => page.id === "page-role" ? { ...page, hidden: true } : page);
+    const html = renderToStaticMarkup(
+      <FunnelProgress brand={defaultFunnel.brand} progress={defaultFunnel.progress} pages={pages} step={2} />,
+    );
+    expect(html).toContain("Schritt 2 von 3");
+    expect(html).not.toContain("Kurzprofil");
+  });
+
   it("behält die bisherige Prozentanzeige als Default", () => {
     const html = renderToStaticMarkup(
       <FunnelProgress brand={defaultFunnel.brand} progress={defaultFunnel.progress} pages={defaultFunnel.pages} step={0} />,

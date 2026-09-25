@@ -6,7 +6,7 @@ import { applyFunnelDocumentBranding } from "@/lib/favicon";
 import { applyPostSubmitAction } from "@/lib/postSubmit";
 import { createMetaEventId, loadMetaPixel, readMetaBrowserIdentifiers, trackMetaConversion } from "@/lib/metaPixel";
 import { getBrowserHostname } from "@/lib/funnelHost";
-import type { ApplicationContact, FunnelAnswers, FunnelConfig } from "@shared/funnel";
+import { visibleFunnelPages, type ApplicationContact, type FunnelAnswers, type FunnelConfig } from "@shared/funnel";
 import { resolveStartLayout } from "@shared/startLayout";
 import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
@@ -76,9 +76,10 @@ function FunnelView({
   if (isLoading) return <div className="funnel-loading" role="status" aria-live="polite"><Loader2 className="animate-spin" aria-hidden="true" /><span>Funnel wird geladen …</span></div>;
   if (!config || loadError) return <div className="funnel-loading funnel-error" role="alert"><strong>Dieser Funnel ist gerade nicht erreichbar.</strong><span>Bitte versuche es später erneut.</span></div>;
 
-  const currentPage = config.pages[step];
-  const contactPage = config.pages.find(page => page.type === "contact");
-  const next = () => setStep(current => Math.min(current + 1, config.pages.length - 1));
+  const pages = visibleFunnelPages(config.pages);
+  const currentPage = pages[step];
+  const contactPage = pages.find(page => page.type === "contact");
+  const next = () => setStep(current => Math.min(current + 1, pages.length - 1));
   const back = () => setStep(current => Math.max(current - 1, 0));
   const choose = (key: string, value: string, multiple: boolean) => setAnswers(current => {
     const selected = current[key] ?? [];
@@ -127,7 +128,7 @@ function FunnelView({
   return (
     <div ref={topRef}>
       <EmbedHeightReporter />
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={paths.imprintUrl} step={step} totalSteps={config.pages.length} showProgress={!submitted} pages={config.pages} progress={config.progress} onBack={back} onForward={next} fullBleed={!submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits"}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={paths.imprintUrl} step={step} totalSteps={pages.length} showProgress={!submitted} pages={pages} progress={config.progress} onBack={back} onForward={next} fullBleed={!submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits"}>
         {submitted && contactPage?.type === "contact" ? (
           <section className="funnel-success" aria-live="polite" aria-labelledby="funnel-success-title"><span className="funnel-success-icon" aria-hidden="true"><CircleCheckBig /></span><p className="funnel-eyebrow">Erfolgreich übermittelt</p><h1 id="funnel-success-title" tabIndex={-1}>{contactPage.successTitle}</h1><p>{contactPage.successText}</p></section>
         ) : currentPage?.type === "start" ? (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
-import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage } from "@shared/funnelEditor";
+import { isFunnelPageHidden, visibleFunnelPages } from "@shared/funnel";
+import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
 
 describe("Funnel-Seiteneditor", () => {
   it("dupliziert eine Auswahlseite mit eigenen IDs direkt hinter dem Original", () => {
@@ -29,5 +30,15 @@ describe("Funnel-Seiteneditor", () => {
     expect(deleteFunnelPage(defaultFunnel, "page-role").pages.map(page => page.id)).toEqual(["page-start", "page-experience", "page-contact"]);
     expect(deleteFunnelPage(defaultFunnel, "page-start")).toBe(defaultFunnel);
     expect(deleteFunnelPage(defaultFunnel, "page-contact")).toBe(defaultFunnel);
+  });
+
+  it("blendet Auswahlseiten aus und holt sie per erneutem Klick zurück", () => {
+    const hidden = toggleFunnelPageHidden(defaultFunnel, "page-role");
+    expect(hidden.pages.map(page => page.id)).toEqual(defaultFunnel.pages.map(page => page.id));
+    expect(isFunnelPageHidden(hidden.pages[1]!)).toBe(true);
+    expect(visibleFunnelPages(hidden.pages).map(page => page.id)).toEqual(["page-start", "page-experience", "page-contact"]);
+    expect(toggleFunnelPageHidden(hidden, "page-role").pages[1]?.hidden).toBe(false);
+    expect(toggleFunnelPageHidden(defaultFunnel, "page-start")).toBe(defaultFunnel);
+    expect(toggleFunnelPageHidden(defaultFunnel, "page-contact")).toBe(defaultFunnel);
   });
 });

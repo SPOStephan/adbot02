@@ -12,7 +12,7 @@ import {
   leadQualitySchema,
   setFunnelOwnerSchema,
 } from "@shared/funnelSchemas";
-import type { ApplicationSubmission, FunnelConfig, ResumeMetadata } from "@shared/funnel";
+import { isFunnelPageHidden, toPublicFunnelConfig, type ApplicationSubmission, type FunnelConfig, type ResumeMetadata } from "@shared/funnel";
 import type { User } from "../../drizzle/schema";
 import { isBunnyConfigured, uploadFunnelBytesToBunny } from "../bunny";
 import { createFunnelMediaAsset, listFunnelMediaAssets } from "../funnelMediaStore";
@@ -71,6 +71,7 @@ function validateSubmission(config: FunnelConfig, submission: z.infer<typeof app
   const contactPage = config.pages.find(page => page.type === "contact");
   if (!contactPage || contactPage.type !== "contact") throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Kontaktseite fehlt." });
   for (const page of config.pages) {
+    if (isFunnelPageHidden(page)) continue;
     if (page.type !== "choice-grid" && page.type !== "choice-list") continue;
     const values = submission.answers[page.questionKey] ?? [];
     if (values.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Bitte beantworte: ${page.title}` });
@@ -217,7 +218,7 @@ export const funnelRouter = router({
     const fallback = input.slug === "karriere" ? await getOrCreateDefaultFunnel() : null;
     const result = config ?? fallback;
     if (!result || result.status !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
-    return { ...result, notificationEmail: "", allowedEmbedOrigins: [] };
+    return toPublicFunnelConfig(result);
   }),
 
   /** Resolve published funnel by READY custom hostname (not shared hosts). */
@@ -246,9 +247,7 @@ export const funnelRouter = router({
         });
       }
       return {
-        ...config,
-        notificationEmail: "",
-        allowedEmbedOrigins: [],
+        ...toPublicFunnelConfig(config),
         boundHostname: hostname,
       };
     }),

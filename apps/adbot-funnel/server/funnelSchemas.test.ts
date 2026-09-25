@@ -23,6 +23,21 @@ describe("Funnel-Validierung", () => {
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages }).success).toBe(true);
   });
 
+  it("akzeptiert ausgeblendete Auswahlseiten und hält Start/Kontakt sichtbar", () => {
+    const hiddenChoice = defaultFunnel.pages.map(page => page.id === "page-role" ? { ...page, hidden: true } : page);
+    const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages: hiddenChoice });
+    expect(parsed.pages.find(page => page.id === "page-role")?.hidden).toBe(true);
+    expect(parsed.pages.find(page => page.id === "page-start")?.hidden).toBe(false);
+    expect(funnelConfigSchema.safeParse({
+      ...defaultFunnel,
+      pages: defaultFunnel.pages.map(page => page.type === "start" ? { ...page, hidden: true } : page),
+    }).success).toBe(false);
+    expect(funnelConfigSchema.safeParse({
+      ...defaultFunnel,
+      pages: defaultFunnel.pages.map(page => page.type === "contact" ? { ...page, hidden: true } : page),
+    }).success).toBe(false);
+  });
+
   it("akzeptiert neue Katalog-Icons und weist unbekannte Werte zurück", () => {
     const pagesWithWrench = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "wrench" as const } : option) } : page);
     const pagesWithAdbotIcon = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "adbot-company-car" as const } : option) } : page);

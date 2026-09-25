@@ -1,4 +1,4 @@
-import type { FunnelAnswers, FunnelConfig, LeadQuality } from "./funnel";
+import { isFunnelPageHidden, type FunnelAnswers, type FunnelConfig, type LeadQuality } from "./funnel";
 
 export const LEAD_QUALITY_VALUES = ["good", "bad"] as const;
 
@@ -34,6 +34,7 @@ export function computeApplicationLeadValue(
   let found = false;
 
   for (const page of config.pages) {
+    if (isFunnelPageHidden(page)) continue;
     if (page.type !== "choice-grid" && page.type !== "choice-list") continue;
     const selected = new Set(answers[page.questionKey] ?? []);
     for (const option of page.options) {

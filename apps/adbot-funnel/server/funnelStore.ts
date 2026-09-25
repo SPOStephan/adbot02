@@ -128,6 +128,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
       : defaultProgressIcon(page.type);
     const normalizedPage = {
       ...page,
+      hidden: page.type !== "start" && page.type !== "contact" && page.hidden === true,
       eyebrow: typeof page.eyebrow === "string"
       ? page.eyebrow
       : page.type === "choice-grid" || page.type === "choice-list"

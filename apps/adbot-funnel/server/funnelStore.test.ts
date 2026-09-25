@@ -129,6 +129,7 @@ describe("Mehr-Funnel-Speicher", () => {
     expect(normalized.pages.find(page => page.type === "choice-list")?.eyebrow).toBe("Kurze Frage");
     expect(normalized.pages.find(page => page.type === "contact")?.eyebrow).toBe("Fast geschafft");
     expect(normalized.pages.find(page => page.type === "choice-grid")?.options[0]?.icon).toBe("sparkles");
+    expect(normalized.pages.every(page => page.hidden === false)).toBe(true);
     expect(normalized.pages[0]?.title).toBe(defaultFunnel.pages[0]?.title);
 
     await saveFunnel(normalized);

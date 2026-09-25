@@ -26,6 +26,7 @@ const pageBaseSchema = z.object({
   progressTitle: z.string().max(80).default(""),
   progressHint: z.string().max(160).default(""),
   progressIcon: iconSchema.default("sparkles"),
+  hidden: z.boolean().default(false),
 });
 
 const optionalHexColorSchema = z.string().max(16).refine(
@@ -168,6 +169,16 @@ export const funnelConfigSchema = z
     }
     if (config.pages.at(-1)?.type !== "contact") {
       ctx.addIssue({ code: "custom", path: ["pages"], message: "Die letzte Seite muss eine Kontaktseite sein." });
+    }
+    for (let index = 0; index < config.pages.length; index += 1) {
+      const page = config.pages[index];
+      if (page?.hidden && (page.type === "start" || page.type === "contact")) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["pages", index, "hidden"],
+          message: "Start- und Kontaktseite können nicht ausgeblendet werden.",
+        });
+      }
     }
     const pageIds = config.pages.map(page => page.id);
     if (new Set(pageIds).size !== pageIds.length) {

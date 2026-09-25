@@ -7,7 +7,7 @@ import type {
   FunnelProgressColors,
   ProgressLayout,
 } from "./funnel";
-import { PROGRESS_LAYOUTS } from "./funnel";
+import { PROGRESS_LAYOUTS, visibleFunnelPages } from "./funnel";
 
 export const DEFAULT_PROGRESS_LAYOUT: ProgressLayout = "percent";
 
@@ -104,14 +104,19 @@ export function resolveProgressColors(
 }
 
 export function resolveProgressSteps(pages: FunnelPage[], step: number): ResolvedProgressStep[] {
-  return pages.map((page, index) => {
+  const visible = visibleFunnelPages(pages);
+  const currentId = pages[step]?.id;
+  const currentVisibleIndex = visible.findIndex(page => page.id === currentId);
+  return visible.map((page, index) => {
     const copy = resolveProgressStepCopy(page);
     return {
       id: page.id,
       title: copy.title,
       hint: copy.hint,
       icon: copy.icon,
-      state: index < step ? "completed" : index === step ? "current" : "upcoming",
+      state: currentVisibleIndex < 0
+        ? "upcoming"
+        : index < currentVisibleIndex ? "completed" : index === currentVisibleIndex ? "current" : "upcoming",
     };
   });
 }
