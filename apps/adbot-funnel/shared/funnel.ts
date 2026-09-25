@@ -1,6 +1,7 @@
 export const PAGE_TYPES = ["start", "choice-grid", "choice-list", "contact"] as const;
 export const FUNNEL_STATUSES = ["draft", "published", "paused", "archived"] as const;
 export const START_PAGE_LAYOUTS = ["classic", "benefits"] as const;
+export const BENEFITS_TILE_LAYOUTS = ["two-column", "one-column"] as const;
 export const PROGRESS_LAYOUTS = [
   "percent",
   "minimal",
@@ -89,6 +90,7 @@ export const FUNNEL_OPTION_ICONS = [...LUCIDE_FUNNEL_ICONS, ...ADBOT_FUNNEL_ICON
 export type FunnelPageType = (typeof PAGE_TYPES)[number];
 export type FunnelStatus = (typeof FUNNEL_STATUSES)[number];
 export type StartPageLayout = (typeof START_PAGE_LAYOUTS)[number];
+export type BenefitsTileLayout = (typeof BENEFITS_TILE_LAYOUTS)[number];
 export type ProgressLayout = (typeof PROGRESS_LAYOUTS)[number];
 
 export type FunnelOptionIcon = (typeof FUNNEL_OPTION_ICONS)[number];
@@ -224,6 +226,15 @@ export type StartBenefit = {
   color?: string;
 };
 
+export type StartBadge = {
+  id: string;
+  label: string;
+  /** Optional badge fill. Empty/undefined uses a light chip. */
+  backgroundColor?: string;
+  /** Optional badge text. Empty/undefined uses contrast on the fill or body text. */
+  textColor?: string;
+};
+
 export type StartPage = FunnelPageBase & {
   type: "start";
   layout: StartPageLayout;
@@ -233,6 +244,8 @@ export type StartPage = FunnelPageBase & {
   benefitsBandTitle: string;
   secondaryButtonLabel: string;
   benefits: StartBenefit[];
+  benefitsTileLayout: BenefitsTileLayout;
+  badges: StartBadge[];
   heroBackgroundAssetId: string;
   heroBackgroundDesktopUrl: string;
   heroBackgroundMobileUrl: string;

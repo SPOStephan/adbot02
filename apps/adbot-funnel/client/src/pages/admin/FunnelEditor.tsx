@@ -5,7 +5,7 @@ import { useLocation, useParams } from "wouter";
 import { canHideFunnelPage, isFunnelPageHidden, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
 import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
-import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveStartLayout } from "@shared/startLayout";
+import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,8 @@ import { HeroBackgroundField } from "@/components/admin/HeroBackgroundField";
 import { IconColorField } from "@/components/admin/IconColorField";
 import { IconPicker } from "@/components/admin/IconPicker";
 import { ProgressLayoutPicker } from "@/components/admin/ProgressLayoutPicker";
+import { BenefitsTileLayoutPicker } from "@/components/admin/BenefitsTileLayoutPicker";
+import { StartBadgesField } from "@/components/admin/StartBadgesField";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
 import { useFunnelEditorHistory } from "@/hooks/useFunnelEditorHistory";
 
@@ -350,12 +352,11 @@ function StartPageFields({
   const layout = resolveStartLayout(page);
   return (
     <>
-      <FormRow label="Bild-URL" hint="Leer lassen, um die neutrale Illustration bzw. den reinen Text-Hero zu verwenden.">
-        <Input value={page.heroImageUrl} onChange={event => patch({ heroImageUrl: event.target.value } as Partial<FunnelPage>, false)} />
-      </FormRow>
-
       {layout === "classic" && (
         <>
+          <FormRow label="Bild-URL" hint="Leer lassen, um die neutrale Illustration bzw. den reinen Text-Hero zu verwenden.">
+            <Input value={page.heroImageUrl} onChange={event => patch({ heroImageUrl: event.target.value } as Partial<FunnelPage>, false)} />
+          </FormRow>
           <FormRow label="Vorteile – eine Zeile pro Punkt">
             <Textarea value={page.bullets.join("\n")} rows={4} onChange={event => patch({ bullets: event.target.value.split("\n").filter(Boolean) } as Partial<FunnelPage>, false)} />
           </FormRow>
@@ -368,6 +369,14 @@ function StartPageFields({
       {layout === "benefits" && (
         <>
           <HeroBackgroundField funnelId={funnelId} page={page} onChange={next => patch(next as Partial<FunnelPage>)} />
+          <FormRow label="Bildelement (optional)" hint="Eigenes Foto als Element über der Überschrift, zum Beispiel ein Portrait. Unabhängig vom Hintergrundbild. Leer = kein Bildelement.">
+            <Input value={page.heroImageUrl} placeholder="https://…/portrait.jpg" onChange={event => patch({ heroImageUrl: event.target.value } as Partial<FunnelPage>, false)} />
+          </FormRow>
+          <StartBadgesField
+            badges={page.badges ?? []}
+            brandColor={brandColor}
+            onChange={badges => patch({ badges } as Partial<FunnelPage>)}
+          />
           <FormRow label="Trenner-Überschrift" hint="Volle Fläche in der Brandingfarbe, z. B. „Deine Vorteile bei uns“.">
             <Input value={page.benefitsBandTitle} onChange={event => patch({ benefitsBandTitle: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
@@ -377,6 +386,10 @@ function StartPageFields({
           <FormRow label="Unterer Button" hint="Leer = gleiche Beschriftung wie der Button oben.">
             <Input value={page.secondaryButtonLabel} placeholder={page.buttonLabel} onChange={event => patch({ secondaryButtonLabel: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
+          <BenefitsTileLayoutPicker
+            value={resolveBenefitsTileLayout(page.benefitsTileLayout)}
+            onChange={benefitsTileLayout => patch({ benefitsTileLayout } as Partial<FunnelPage>)}
+          />
           <div className="grid gap-3">
             <div className="flex items-center justify-between">
               <Label>Icon-Kacheln</Label>
@@ -398,7 +411,7 @@ function StartPageFields({
                     <Trash2 className="size-4" />
                   </Button>
                 </div>
-                <Textarea rows={2} placeholder="Kurzer Erklärtext" value={benefit.text} onChange={event => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, text: event.target.value } : item) } as Partial<FunnelPage>)} />
+                <Textarea rows={resolveBenefitsTileLayout(page.benefitsTileLayout) === "one-column" ? 4 : 2} placeholder={resolveBenefitsTileLayout(page.benefitsTileLayout) === "one-column" ? "Längerer Erklärtext" : "Kurzer Erklärtext"} value={benefit.text} onChange={event => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, text: event.target.value } : item) } as Partial<FunnelPage>)} />
                 <IconColorField
                   label="Iconfarbe"
                   value={benefit.color}

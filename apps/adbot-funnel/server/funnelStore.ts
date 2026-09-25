@@ -15,11 +15,12 @@ import type {
   FunnelStatus,
   FunnelSummary,
   LeadQuality,
+  StartBadge,
   StartBenefit,
   StartPage,
 } from "@shared/funnel";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
-import { clampHeroBackgroundOpacity, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundOpacity, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
@@ -151,7 +152,15 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
       };
     }
     if (page.type === "start") {
-      const startPage = page as StartPage & { layout?: string; benefits?: StartBenefit[]; benefitsBandTitle?: string; secondaryButtonLabel?: string };
+      const startPage = page as StartPage & {
+        layout?: string;
+        benefits?: StartBenefit[];
+        benefitsTileLayout?: string;
+        badges?: StartBadge[];
+        benefitsBandTitle?: string;
+        secondaryButtonLabel?: string;
+      };
+      const optionalHex = (value: unknown) => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toUpperCase() : undefined;
       return {
         ...normalizedPage,
         layout: resolveStartLayout(startPage),
@@ -161,13 +170,22 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroBackgroundDesktopUrl: typeof startPage.heroBackgroundDesktopUrl === "string" ? startPage.heroBackgroundDesktopUrl : "",
         heroBackgroundMobileUrl: typeof startPage.heroBackgroundMobileUrl === "string" ? startPage.heroBackgroundMobileUrl : "",
         heroBackgroundOpacity: clampHeroBackgroundOpacity(startPage.heroBackgroundOpacity),
+        benefitsTileLayout: resolveBenefitsTileLayout(startPage.benefitsTileLayout),
+        badges: Array.isArray(startPage.badges)
+          ? startPage.badges.slice(0, MAX_START_BADGES).map(badge => ({
+            id: badge.id || randomUUID(),
+            label: String(badge.label ?? "").trim().slice(0, 80) || "Badge",
+            backgroundColor: optionalHex(badge.backgroundColor),
+            textColor: optionalHex(badge.textColor),
+          }))
+          : [],
         benefits: Array.isArray(startPage.benefits)
           ? startPage.benefits.slice(0, 12).map(benefit => ({
             id: benefit.id || randomUUID(),
             icon: typeof benefit.icon === "string" && funnelOptionIconSet.has(benefit.icon) ? benefit.icon as FunnelOptionIcon : "sparkles",
             title: String(benefit.title ?? "").slice(0, 120) || "Vorteil",
-            text: String(benefit.text ?? "").slice(0, 400),
-            color: typeof benefit.color === "string" && /^#[0-9a-fA-F]{6}$/.test(benefit.color) ? benefit.color.toUpperCase() : undefined,
+            text: String(benefit.text ?? "").slice(0, MAX_START_BENEFIT_TEXT),
+            color: optionalHex(benefit.color),
           }))
           : [],
       };
@@ -556,6 +574,7 @@ function regeneratePages(config: FunnelConfig): FunnelConfig["pages"] {
       return {
         ...base,
         benefits: (base.benefits ?? []).map(benefit => ({ ...benefit, id: randomUUID() })),
+        badges: (base.badges ?? []).map(badge => ({ ...badge, id: randomUUID() })),
       };
     }
     if (base.type !== "choice-grid" && base.type !== "choice-list") return base;
