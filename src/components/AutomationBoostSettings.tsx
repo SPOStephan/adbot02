@@ -4,6 +4,9 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Megaphone, Save } from "lucide-react";
 
+import { fallbackCountryCode } from "@/lib/campaign-geo/adapters";
+import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
+
 export type BoostMode = "OFF" | "REVIEW" | "AUTO";
 export type BoostAssetScope = "ALL" | "SELECTED";
 
@@ -211,6 +214,7 @@ export function AutomationBoostSettings({
     setNotice(null);
     try {
       const days = Number(durationDays);
+      const geo = await fetchCampaignGeoTarget();
       const response = await fetch("/api/meta/automation/boost-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -223,7 +227,7 @@ export function AutomationBoostSettings({
           budgetOwnerType: effectiveBudgetMode === "LIFETIME" ? "CAMPAIGN" : "AD_SET",
           objective: "OUTCOME_ENGAGEMENT",
           sourceFilter,
-          defaultCountries: ["DE"],
+          defaultCountries: [fallbackCountryCode(geo)],
           defaultCtaType: ctaType.trim() ? ctaType.trim().toUpperCase() : null,
           defaultDestinationUrl: destinationUrl.trim() || null,
           assetScope,

@@ -25,6 +25,8 @@ import {
 import type { LaunchAdActorOption } from "@/components/TrafficLaunchCanary";
 import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
 import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
+import { toMetaAdSetTargeting } from "@/lib/campaign-geo/adapters";
+import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 import {
   resolveDynamicCreativeAssetIds,
@@ -491,6 +493,7 @@ export function LeadLaunchCanary({
         parts.assetFeedSpec;
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
     }
+    template.ad_set.targeting = toMetaAdSetTargeting(await fetchCampaignGeoTarget());
 
     const saved = await apiJson<{ blueprintId?: string }>(
       "POST",

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { CampaignGeoTargetCard } from "@/components/CampaignGeoTargetCard";
 import { DashboardPageHeader } from "@/components/DashboardPageHeader";
 import { OpenAIAdsConnectionForm } from "@/components/OpenAIAdsConnectionForm";
 import { OpenAIAdsWorkspace } from "@/components/OpenAIAdsWorkspace";
@@ -54,6 +55,10 @@ export default async function ChatGPTAdsPage() {
         eyebrow="OpenAI Advertiser API"
         title="ChatGPT Ads"
       />
+
+      <div className="mt-8">
+        <CampaignGeoTargetCard compact />
+      </div>
 
       {dashboardAvailable ? (
         <>

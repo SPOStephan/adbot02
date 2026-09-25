@@ -30,6 +30,7 @@
     "test:meta-customer-controls": "node scripts/test-meta-customer-controls.mjs",
     "test:campaign-assistant-brief": "node scripts/test-campaign-assistant-brief.mjs",
     "test:campaign-idea-pipeline": "node scripts/test-campaign-idea-pipeline.mjs",
+    "test:campaign-geo": "node scripts/test-campaign-geo.mjs",
     "test:ad-copy-pricing": "node scripts/test-ad-copy-pricing.mjs",
     "test:funnel-workspace": "node scripts/test-funnel-workspace.mjs && node scripts/test-lead-funnel-setup-guide.mjs && node scripts/test-funnel-admin-custom-domain.mjs",
     "test:custom-domains": "node scripts/test-custom-domains.mjs",
