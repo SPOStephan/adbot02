@@ -29,6 +29,12 @@ export const DASHBOARD_PAGE_COPY = {
     description:
       "Regelbasierte Hinweise aus gespeicherten Live-Kennzahlen — ohne automatische Änderungen.",
   },
+  kampagnenPipeline: {
+    eyebrow: "Ideen",
+    title: "Kampagnen-Pipeline",
+    description:
+      "Link, Screenshot oder Stichworte ablegen. Adbot versteht den Kern — umsetzen erst auf deinen Klick. Fremde Anzeigen niemals 1:1.",
+  },
   autonomie: {
     eyebrow: "Steuerung",
     title: "Autonomie",

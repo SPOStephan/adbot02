@@ -2044,3 +2044,120 @@ export function parseAdStudyCommand(value: unknown): AdStudyCommand {
     planId: requiredUuid(body.planId, "Die Plan-ID"),
   };
 }
+
+const CAMPAIGN_IDEA_SOURCE_TYPES = ["LINK", "SCREENSHOT", "KEYWORDS"] as const;
+
+export type CampaignIdeaCommand = {
+  sourceType: (typeof CAMPAIGN_IDEA_SOURCE_TYPES)[number];
+  sourceUrl: string | null;
+  keywords: string;
+  notes: string;
+  screenshotAssetId: string | null;
+  destinationUrl: string | null;
+  objective: CampaignAssistantObjective | null;
+};
+
+export function parseCampaignIdeaCommand(value: unknown): CampaignIdeaCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    [
+      "sourceType",
+      "sourceUrl",
+      "keywords",
+      "notes",
+      "screenshotAssetId",
+      "destinationUrl",
+      "objective",
+    ],
+    "Die Kampagnen-Idee",
+  );
+  const sourceType = requiredEnum(
+    body.sourceType,
+    "Die Ideen-Quelle",
+    CAMPAIGN_IDEA_SOURCE_TYPES,
+  );
+  const sourceUrl = optionalHttpsUrl(body.sourceUrl);
+  const keywords = optionalText(body.keywords, "Die Stichworte", 500);
+  const notes = optionalText(body.notes, "Die Notiz", 500);
+  const screenshotAssetId = optionalUuid(
+    body.screenshotAssetId,
+    "Die Screenshot-Asset-ID",
+  );
+  const destinationUrl = optionalHttpsUrl(body.destinationUrl);
+  const objectiveRaw = body.objective;
+  const objective =
+    objectiveRaw === undefined || objectiveRaw === null || objectiveRaw === ""
+      ? null
+      : requiredEnum(objectiveRaw, "Das Werbeziel", CAMPAIGN_ASSISTANT_OBJECTIVES);
+
+  if (sourceType === "LINK" && !sourceUrl) {
+    inputError("campaign_idea_link_required", "Bitte einen HTTPS-Link zur Idee einfügen.");
+  }
+  if (sourceType === "KEYWORDS" && !keywords) {
+    inputError(
+      "campaign_idea_keywords_required",
+      "Bitte Stichworte zur Idee eingeben.",
+    );
+  }
+  if (sourceType === "SCREENSHOT" && !screenshotAssetId) {
+    inputError(
+      "campaign_idea_screenshot_required",
+      "Bitte zuerst einen Screenshot hochladen.",
+    );
+  }
+  if (!sourceUrl && !keywords && !screenshotAssetId) {
+    inputError(
+      "campaign_idea_empty",
+      "Link, Screenshot oder Stichworte — mindestens eines davon.",
+    );
+  }
+
+  return {
+    sourceType,
+    sourceUrl,
+    keywords,
+    notes,
+    screenshotAssetId,
+    destinationUrl,
+    objective,
+  };
+}
+
+export type CampaignIdeaIdCommand = {
+  ideaId: string;
+};
+
+export function parseCampaignIdeaIdCommand(value: unknown): CampaignIdeaIdCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(body, ["ideaId"], "Die Kampagnen-Idee");
+  return { ideaId: requiredUuid(body.ideaId, "Die Ideen-ID") };
+}
+
+export type CampaignIdeaRealizeCommand = {
+  ideaId: string;
+  destinationUrl: string;
+  objective: CampaignAssistantObjective;
+  generateCreative: boolean;
+};
+
+export function parseCampaignIdeaRealizeCommand(
+  value: unknown,
+): CampaignIdeaRealizeCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(
+    body,
+    ["ideaId", "destinationUrl", "objective", "generateCreative"],
+    "Die Ideen-Umsetzung",
+  );
+  return {
+    ideaId: requiredUuid(body.ideaId, "Die Ideen-ID"),
+    destinationUrl: requiredHttpsUrl(body.destinationUrl),
+    objective: requiredEnum(
+      body.objective,
+      "Das Werbeziel",
+      CAMPAIGN_ASSISTANT_OBJECTIVES,
+    ),
+    generateCreative: requiredBoolean(body.generateCreative, "Neues Motiv erzeugen"),
+  };
+}

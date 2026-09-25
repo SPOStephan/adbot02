@@ -19,6 +19,7 @@ import {
   Target,
   GraduationCap,
   Library,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react";
 
@@ -73,6 +74,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       icon: Sparkles,
       href: "/dashboard/assistent",
       match: "/dashboard/assistent",
+    },
+    {
+      label: "Kampagnen-Pipeline",
+      icon: Lightbulb,
+      href: "/dashboard/kampagnen-pipeline",
+      match: "/dashboard/kampagnen-pipeline",
     },
     {
       label: "Funnel",

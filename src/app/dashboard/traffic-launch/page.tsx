@@ -23,13 +23,14 @@ export const maxDuration = 300;
 type PageProps = {
   searchParams: Promise<{
     assetId?: string | string[];
+    ideaId?: string | string[];
   }>;
 };
 
 async function TrafficLaunchBody({
   query,
 }: {
-  query: { assetId?: string | string[] };
+  query: { assetId?: string | string[]; ideaId?: string | string[] };
 }) {
   const supabase = await createClient();
   const {
@@ -39,6 +40,32 @@ async function TrafficLaunchBody({
   if (!user) {
     redirect("/login?next=/dashboard/traffic-launch");
   }
+
+  const ideaId =
+    typeof query.ideaId === "string" && /^[0-9a-f-]{36}$/i.test(query.ideaId)
+      ? query.ideaId
+      : null;
+  const { data: ideaRow } = ideaId
+    ? await supabase
+        .from("campaign_ideas")
+        .select(
+          "destination_url,realized_copy,realized_asset_id,screenshot_asset_id",
+        )
+        .eq("id", ideaId)
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : { data: null };
+  const realizedCopy =
+    ideaRow?.realized_copy &&
+    typeof ideaRow.realized_copy === "object" &&
+    !Array.isArray(ideaRow.realized_copy)
+      ? (ideaRow.realized_copy as Record<string, unknown>)
+      : null;
+  const ideaAssetId =
+    typeof ideaRow?.realized_asset_id === "string" &&
+    ideaRow.realized_asset_id !== ideaRow.screenshot_asset_id
+      ? ideaRow.realized_asset_id
+      : null;
 
   const {
     metaAccount,
@@ -93,8 +120,31 @@ async function TrafficLaunchBody({
         instagramAccounts={launchInstagramAccounts}
         initialAssetId={
           typeof query.assetId === "string" &&
-          /^[0-9a-f-]{36}$/i.test(query.assetId)
+          /^[0-9a-f-]{36}$/i.test(query.assetId) &&
+          query.assetId !== ideaRow?.screenshot_asset_id
             ? query.assetId
+            : ideaAssetId
+        }
+        initialDestinationUrl={
+          typeof ideaRow?.destination_url === "string"
+            ? ideaRow.destination_url
+            : null
+        }
+        initialPrimaryText={
+          typeof realizedCopy?.primaryText === "string"
+            ? realizedCopy.primaryText
+            : typeof realizedCopy?.primary_text === "string"
+              ? realizedCopy.primary_text
+              : null
+        }
+        initialHeadline={
+          typeof realizedCopy?.headline === "string"
+            ? realizedCopy.headline
+            : null
+        }
+        initialDescription={
+          typeof realizedCopy?.description === "string"
+            ? realizedCopy.description
             : null
         }
         initialFacebookPageId={brandProfileView?.facebookPageId}
