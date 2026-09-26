@@ -1,5 +1,6 @@
 import type { CSSProperties, PropsWithChildren } from "react";
 import type { FunnelBrand, FunnelConfig, FunnelSocialProof } from "@shared/funnel";
+import { DEFAULT_PROGRESS } from "@shared/progressLayout";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { FunnelProgress } from "./FunnelProgress";
 import { FormattedText } from "./FormattedText";
@@ -70,7 +71,7 @@ export function FunnelChrome({
       {showProgress && pages ? (
         <FunnelProgress
           brand={brand}
-          progress={progress ?? { layout: "percent", colors: { active: "", completed: "", upcoming: "", text: "", muted: "", track: "" }, stages: [] }}
+          progress={progress ?? DEFAULT_PROGRESS}
           pages={pages}
           step={step}
           onBack={onBack}

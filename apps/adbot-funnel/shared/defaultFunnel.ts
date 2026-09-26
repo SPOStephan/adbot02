@@ -1,4 +1,5 @@
 import type { FunnelConfig } from "./funnel";
+import { DEFAULT_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
 
 export const DEFAULT_FUNNEL_ID = "10000000-0000-4000-8000-000000000001";
 
@@ -36,6 +37,7 @@ export const defaultFunnel: FunnelConfig = {
       track: "",
     },
     stages: [],
+    contentGapPx: DEFAULT_PROGRESS_CONTENT_GAP_PX,
   },
   socialProof: {
     enabled: true,

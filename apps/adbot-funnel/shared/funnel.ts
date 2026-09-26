@@ -367,6 +367,8 @@ export type FunnelProgress = {
   layout: ProgressLayout;
   colors: FunnelProgressColors;
   stages: FunnelProgressStage[];
+  /** Space in px between the progress block and the page content below. */
+  contentGapPx: number;
 };
 
 export type FunnelSocialProof = {

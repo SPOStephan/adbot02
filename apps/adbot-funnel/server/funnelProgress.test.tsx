@@ -25,7 +25,15 @@ describe("FunnelProgress Markup", () => {
     expect(html).toContain("Schritt 1 von 4");
     expect(html).toContain("0%");
     expect(html).toContain("funnel-progress-track");
+    expect(html).toContain("--fp-content-gap:14px");
     expect(html).not.toContain("Job-Check");
+  });
+
+  it("übernimmt einen eigenen Abstand unter der Fortschrittsleiste", () => {
+    const html = renderToStaticMarkup(
+      <FunnelProgress brand={defaultFunnel.brand} progress={{ ...defaultFunnel.progress, contentGapPx: 8 }} pages={defaultFunnel.pages} step={0} />,
+    );
+    expect(html).toContain("--fp-content-gap:8px");
   });
 
   it.each(PROGRESS_LAYOUTS.filter(layout => layout !== "percent" && layout !== "reduced" && layout !== "bar"))("rendert Variante %s mit Stufentexten", (layout: ProgressLayout) => {

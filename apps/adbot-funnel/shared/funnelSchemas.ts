@@ -2,7 +2,7 @@ import { z } from "zod";
 import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
-import { DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS } from "./progressLayout";
+import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
 import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
@@ -154,7 +154,8 @@ export const funnelConfigSchema = z
         label: z.string().max(40),
         startPageId: z.string().min(1).max(80),
       })).max(6).default([]),
-    }).default({ layout: DEFAULT_PROGRESS_LAYOUT, colors: EMPTY_PROGRESS_COLORS, stages: [] }),
+      contentGapPx: z.number().int().min(MIN_PROGRESS_CONTENT_GAP_PX).max(MAX_PROGRESS_CONTENT_GAP_PX).default(DEFAULT_PROGRESS_CONTENT_GAP_PX),
+    }).default({ layout: DEFAULT_PROGRESS_LAYOUT, colors: EMPTY_PROGRESS_COLORS, stages: [], contentGapPx: DEFAULT_PROGRESS_CONTENT_GAP_PX }),
     brand: z.object({
       logoUrl: z.string().max(2048).refine(value => value === "" || value.startsWith("/") || /^https?:\/\//i.test(value), "Logo muss eine HTTPS-/HTTP- oder interne URL sein."),
       logoAlt: z.string().min(1).max(160),

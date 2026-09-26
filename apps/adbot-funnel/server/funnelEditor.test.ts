@@ -64,5 +64,15 @@ describe("Funnel-Seiteneditor", () => {
     expect(fieldSource).toContain("wrapSelectionInColor");
     expect(fieldSource).toContain("Kleiner");
     expect(fieldSource).not.toContain('runCommand("foreColor"');
+    expect(fieldSource).toContain("onPaste");
+    expect(fieldSource).toContain("plainTextFromClipboard");
+    expect(fieldSource).toContain("insertPlainTextAtSelection");
+    expect(fieldSource).toContain('getData("text/plain")');
+  });
+
+  it("lässt den Abstand unter der Fortschrittsleiste in Pixeln einstellen", () => {
+    expect(editorSource).toContain("Abstand zum Inhalt");
+    expect(editorSource).toContain("contentGapPx");
+    expect(editorSource).toContain("clampProgressContentGapPx");
   });
 });

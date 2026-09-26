@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
 import {
+  clampProgressContentGapPx,
+  DEFAULT_PROGRESS_CONTENT_GAP_PX,
   DEFAULT_PROGRESS_LAYOUT,
   defaultProgressStages,
   normalizeProgress,
@@ -15,6 +17,17 @@ import {
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Fortschrittsanzeige", () => {
+  it("setzt 14px als Standardabstand unter der Fortschrittsleiste", () => {
+    expect(DEFAULT_PROGRESS_CONTENT_GAP_PX).toBe(14);
+    expect(clampProgressContentGapPx(undefined)).toBe(14);
+    expect(clampProgressContentGapPx(28)).toBe(28);
+    expect(clampProgressContentGapPx(-4)).toBe(0);
+    expect(clampProgressContentGapPx(200)).toBe(80);
+    expect(normalizeProgress(undefined).contentGapPx).toBe(14);
+    expect(normalizeProgress({ contentGapPx: 22 } as Parameters<typeof normalizeProgress>[0]).contentGapPx).toBe(22);
+    expect(funnelConfigSchema.parse({ ...defaultFunnel, progress: { ...defaultFunnel.progress, contentGapPx: undefined } }).progress.contentGapPx).toBe(14);
+  });
+
   it("fällt ohne Angabe auf Schritt & Prozent zurück", () => {
     expect(resolveProgressLayout("minimal")).toBe("minimal");
     expect(resolveProgressLayout("unknown")).toBe(DEFAULT_PROGRESS_LAYOUT);
