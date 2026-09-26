@@ -22,4 +22,15 @@ describe("formatierter Funnel-Text", () => {
     expect(isBlankFormattedText("<b>  </b>")).toBe(true);
     expect(isBlankFormattedText("<b>Hallo</b>")).toBe(false);
   });
+
+  it("hält & einmal escaped und heilt &amp;amp;", () => {
+    expect(sanitizeFormattedText("Bau & Montage")).toBe("Bau &amp; Montage");
+    expect(sanitizeFormattedText("Bau &amp; Montage")).toBe("Bau &amp; Montage");
+    expect(sanitizeFormattedText("Bau &amp;amp; Montage")).toBe("Bau &amp; Montage");
+    expect(sanitizeFormattedText("<b>Bau &amp; Montage</b>")).toBe("<b>Bau &amp; Montage</b>");
+    expect(sanitizeFormattedText("<b>Bau &amp;amp; Montage</b>")).toBe("<b>Bau &amp; Montage</b>");
+    expect(sanitizeFormattedText(sanitizeFormattedText("Bau & Montage"))).toBe("Bau &amp; Montage");
+    expect(stripFormattedText("Bau &amp; Montage")).toBe("Bau & Montage");
+    expect(stripFormattedText("<b>Bau &amp;amp; Montage</b>")).toBe("Bau & Montage");
+  });
 });

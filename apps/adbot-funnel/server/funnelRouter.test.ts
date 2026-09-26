@@ -188,6 +188,41 @@ describe("Funnel-Router", () => {
     expect((await publicCaller.funnel.publicConfig({ slug: config.slug })).brand.faviconUrl).toBe(stored.url);
   });
 
+  it("speichert ein gültiges Logo und lehnt beschädigte Dateien ab", async () => {
+    const publicCaller = appRouter.createCaller(publicContext);
+    const admin = appRouter.createCaller(adminContext);
+    const { config } = await admin.funnel.adminConfig();
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const invalidPayload = {
+      funnelId: config.id,
+      fileName: "logo.png",
+      mimeType: "image/png" as const,
+      size: 4,
+      dataBase64: Buffer.from("kein-png").toString("base64"),
+    };
+
+    await expect(publicCaller.funnel.uploadLogo(invalidPayload)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(admin.funnel.uploadLogo(invalidPayload)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Die Logo-Datei ist beschädigt oder hat ein nicht unterstütztes Format.",
+    });
+
+    const stored = await admin.funnel.uploadLogo({
+      funnelId: config.id,
+      fileName: "logo.png",
+      mimeType: "image/png",
+      size: png.byteLength,
+      dataBase64: png.toString("base64"),
+    });
+    expect(storagePutMock).toHaveBeenCalledWith(
+      expect.stringMatching(new RegExp(`^funnels/${config.id}/branding/logo-[0-9a-f-]+\\.png$`, "i")),
+      png,
+      "image/png",
+    );
+    await admin.funnel.saveConfig({ ...config, brand: { ...config.brand, logoUrl: stored.url } });
+    expect((await publicCaller.funnel.publicConfig({ slug: config.slug })).brand.logoUrl).toBe(stored.url);
+  });
+
   it("nimmt zugeschnittene Hintergrundbilder in die Kundenbibliothek auf", async () => {
     const admin = appRouter.createCaller(adminContext);
     const config = await admin.funnel.adminConfig({ id: "10000000-0000-4000-8000-000000000001" }).then(result => result.config);

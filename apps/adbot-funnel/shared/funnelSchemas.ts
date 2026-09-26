@@ -142,7 +142,7 @@ export const funnelConfigSchema = z
       }).default(EMPTY_PROGRESS_COLORS),
     }).default({ layout: DEFAULT_PROGRESS_LAYOUT, colors: EMPTY_PROGRESS_COLORS }),
     brand: z.object({
-      logoUrl: z.string().max(2048),
+      logoUrl: z.string().max(2048).refine(value => value === "" || value.startsWith("/") || /^https?:\/\//i.test(value), "Logo muss eine HTTPS-/HTTP- oder interne URL sein."),
       logoAlt: z.string().min(1).max(160),
       faviconUrl: z.string().max(2048).refine(value => value === "" || value.startsWith("/") || /^https?:\/\//i.test(value), "Favicon muss eine HTTPS-/HTTP- oder interne URL sein."),
       accentColor: z.literal("#0165c3"),

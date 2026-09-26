@@ -157,6 +157,14 @@ const faviconUploadSchema = z.object({
   dataBase64: z.string().min(1).max(1_000_000),
 });
 
+const logoUploadSchema = z.object({
+  funnelId: funnelIdSchema,
+  fileName: z.string().min(1).max(160),
+  mimeType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+  size: z.number().int().positive().max(2 * 1024 * 1024),
+  dataBase64: z.string().min(1).max(3_000_000),
+});
+
 const metaServerSettingsSchema = z.object({
   funnelId: funnelIdSchema,
   accessToken: z.string().trim().min(20).max(4096).optional(),
@@ -195,12 +203,30 @@ async function storeHeroVariant(
   }
 }
 
+function hasValidPngSignature(buffer: Buffer) {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  return buffer.length >= signature.length && signature.every((value, index) => buffer[index] === value);
+}
+
 function hasValidFaviconSignature(buffer: Buffer, mimeType: z.infer<typeof faviconUploadSchema>["mimeType"]) {
-  if (mimeType === "image/png") {
-    const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-    return buffer.length >= signature.length && signature.every((value, index) => buffer[index] === value);
-  }
+  if (mimeType === "image/png") return hasValidPngSignature(buffer);
   return buffer.length >= 4 && buffer[0] === 0 && buffer[1] === 0 && buffer[2] === 1 && buffer[3] === 0;
+}
+
+function hasValidLogoSignature(buffer: Buffer, mimeType: z.infer<typeof logoUploadSchema>["mimeType"]) {
+  if (mimeType === "image/png") return hasValidPngSignature(buffer);
+  if (mimeType === "image/jpeg") {
+    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  return buffer.length >= 12
+    && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46
+    && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+}
+
+function logoExtension(mimeType: z.infer<typeof logoUploadSchema>["mimeType"]) {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  return "jpg";
 }
 
 function asOwnerUserId(value?: string | null) {
@@ -374,6 +400,15 @@ export const funnelRouter = router({
     const extension = input.mimeType === "image/png" ? "png" : "ico";
     const contentType = input.mimeType === "image/png" ? "image/png" : "image/x-icon";
     return storagePut(`funnels/${input.funnelId}/branding/favicon-${crypto.randomUUID()}.${extension}`, buffer, contentType);
+  }),
+
+  uploadLogo: adminProcedure.input(logoUploadSchema).mutation(async ({ input, ctx }) => {
+    await requireOwnedFunnel(input.funnelId, ctx.user);
+    const buffer = Buffer.from(input.dataBase64, "base64");
+    if (buffer.byteLength !== input.size || !hasValidLogoSignature(buffer, input.mimeType)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Die Logo-Datei ist beschädigt oder hat ein nicht unterstütztes Format." });
+    }
+    return storagePut(`funnels/${input.funnelId}/branding/logo-${crypto.randomUUID()}.${logoExtension(input.mimeType)}`, buffer, input.mimeType);
   }),
 
   mediaLibrary: adminProcedure.input(z.object({ funnelId: funnelIdSchema })).query(async ({ input, ctx }) => {

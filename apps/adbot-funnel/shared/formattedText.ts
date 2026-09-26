@@ -1,4 +1,11 @@
 const ALLOWED_TAGS = new Set(["b", "strong", "i", "em", "u", "span", "br"]);
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  nbsp: " ",
+};
 
 export function escapeHtml(value: string): string {
   return value
@@ -8,13 +15,32 @@ export function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+export function decodeHtmlEntities(value: string): string {
+  let current = value;
+  for (let i = 0; i < 6; i++) {
+    const next = current.replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z]+));/g, (_, hex, dec, name) => {
+      if (hex) {
+        const code = parseInt(hex, 16);
+        return Number.isFinite(code) && code < 0x110000 ? String.fromCodePoint(code) : "";
+      }
+      if (dec) {
+        const code = Number(dec);
+        return Number.isFinite(code) && code < 0x110000 ? String.fromCodePoint(code) : "";
+      }
+      return NAMED_ENTITIES[String(name).toLowerCase()] ?? "";
+    });
+    if (next === current) break;
+    current = next;
+  }
+  return current;
+}
+
+function collapseEncodedAmpersands(value: string): string {
+  return value.replace(/&amp;(?:amp;)+/gi, "&amp;");
+}
+
 function decodeEntity(entity: string): string {
-  if (entity === "amp") return "&";
-  if (entity === "lt") return "<";
-  if (entity === "gt") return ">";
-  if (entity === "quot") return '"';
-  if (entity === "nbsp") return " ";
-  return "";
+  return decodeHtmlEntities(`&${entity};`);
 }
 
 function rgbToHex(r: number, g: number, b: number): string | null {
@@ -56,13 +82,13 @@ export function isBlankFormattedText(value: string): boolean {
 
 export function sanitizeFormattedText(input: string): string {
   if (!input) return "";
-  const source = input.replace(/\r\n/g, "\n");
-  if (!/<[a-z/]/i.test(source)) return escapeHtml(source);
+  const source = collapseEncodedAmpersands(input.replace(/\r\n/g, "\n"));
+  if (!/<[a-z/]/i.test(source)) return escapeHtml(decodeHtmlEntities(source));
 
   let output = "";
   const open: string[] = [];
   let skipping: string | null = null;
-  const token = /<!--[\s\S]*?-->|<\/?[a-zA-Z][^>]*>|&[a-z]+;|[^<&]+/g;
+  const token = /<!--[\s\S]*?-->|<\/?[a-zA-Z][^>]*>|&(?:#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);|[^<&]+|&/g;
   let match: RegExpExecArray | null;
   while ((match = token.exec(source))) {
     const chunk = match[0];
@@ -73,8 +99,7 @@ export function sanitizeFormattedText(input: string): string {
       continue;
     }
     if (chunk.startsWith("&")) {
-      const decoded = decodeEntity(chunk.slice(1, -1));
-      output += decoded ? escapeHtml(decoded) : "";
+      output += escapeHtml(chunk === "&" ? "&" : decodeEntity(chunk.slice(1, -1)));
       continue;
     }
     if (!chunk.startsWith("<")) {
