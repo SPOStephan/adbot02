@@ -346,21 +346,30 @@ export default function FunnelEditor() {
                 <FormattedTextField value={selectedPage.description} rows={3} onChange={value => patchPage({ description: value }, false)} />
               </FormRow>
               <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
-              <div className="grid gap-3 rounded-2xl border p-4">
-                <div>
+              {resolveProgressLayout(config.progress?.layout) === "segments" ? (
+                <div className="grid gap-2 rounded-2xl border p-4">
                   <p className="text-sm font-bold">Stufe in der Fortschrittsanzeige</p>
-                  <p className="text-xs text-muted-foreground">Öffentlicher Name dieser Seite in der Statusleiste. Leer = interner Seitenname.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Bei beschrifteten Balken gehören Anzahl, Labels, Startseiten und Farben zur Variante unter Global → Fortschrittsanzeige.
+                  </p>
                 </div>
-                <FormRow label="Stufenname"><Input value={selectedPage.progressTitle ?? ""} placeholder={selectedPage.name} onChange={event => patchPage({ progressTitle: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
-                <FormRow label="Kurztext (optional)"><Input value={selectedPage.progressHint ?? ""} placeholder="z. B. Passt der Job zu dir?" onChange={event => patchPage({ progressHint: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
-                <FormRow label="Icon dieser Stufe">
-                  <IconPicker
-                    value={selectedPage.progressIcon ?? "sparkles"}
-                    color={config.brand.accentColor}
-                    onChange={icon => patchPage({ progressIcon: icon } as Partial<FunnelPage>)}
-                  />
-                </FormRow>
-              </div>
+              ) : (
+                <div className="grid gap-3 rounded-2xl border p-4">
+                  <div>
+                    <p className="text-sm font-bold">Stufe in der Fortschrittsanzeige</p>
+                    <p className="text-xs text-muted-foreground">Öffentlicher Name dieser Seite in der Statusleiste. Leer = interner Seitenname. Andere Optiken unter Global → Fortschrittsanzeige → Variante wählen.</p>
+                  </div>
+                  <FormRow label="Stufenname"><Input value={selectedPage.progressTitle ?? ""} placeholder={selectedPage.name} onChange={event => patchPage({ progressTitle: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
+                  <FormRow label="Kurztext (optional)"><Input value={selectedPage.progressHint ?? ""} placeholder="z. B. Passt der Job zu dir?" onChange={event => patchPage({ progressHint: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
+                  <FormRow label="Icon dieser Stufe">
+                    <IconPicker
+                      value={selectedPage.progressIcon ?? "sparkles"}
+                      color={config.brand.accentColor}
+                      onChange={icon => patchPage({ progressIcon: icon } as Partial<FunnelPage>)}
+                    />
+                  </FormRow>
+                </div>
+              )}
 
               {selectedPage.type === "start" && (
                 <StartPageFields
@@ -662,7 +671,7 @@ function ProgressSettings({
     <div className="grid gap-4 rounded-2xl border p-4">
       <div>
         <p className="text-sm font-bold">Fortschrittsanzeige</p>
-        <p className="text-xs text-muted-foreground">Unter „Variante wählen“. Beschriftete Balken haben eigene Anzahl, Labels und Startseiten. Farbe der Balken stellst du darunter ein.</p>
+        <p className="text-xs text-muted-foreground">Über „Variante wählen“. Beschriftete Balken: Anzahl, Labels und Startseite jedes Balkens frei. Farben darunter.</p>
       </div>
       <ProgressLayoutPicker
         value={resolveProgressLayout(progress.layout)}
@@ -686,12 +695,23 @@ function ProgressSettings({
         </div>
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <OptionalProgressColor label="Aktive Stufe" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
-        <OptionalProgressColor label="Erledigte Stufe" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
-        <OptionalProgressColor label="Kommende Stufe" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
-        <OptionalProgressColor label="Balken / Linie" value={progress.colors.track} fallback={resolved.track} onChange={value => patchColor("track", value)} />
-        <OptionalProgressColor label="Stufentext" value={progress.colors.text} fallback={resolved.text} onChange={value => patchColor("text", value)} />
-        <OptionalProgressColor label="Nebentext" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
+        {resolveProgressLayout(progress.layout) === "segments" ? (
+          <>
+            <OptionalProgressColor label="Aktiver Balken" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
+            <OptionalProgressColor label="Erledigter Balken" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
+            <OptionalProgressColor label="Leerer Balken" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
+            <OptionalProgressColor label="Beschriftung" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
+          </>
+        ) : (
+          <>
+            <OptionalProgressColor label="Aktive Stufe" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
+            <OptionalProgressColor label="Erledigte Stufe" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
+            <OptionalProgressColor label="Kommende Stufe" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
+            <OptionalProgressColor label="Balken / Linie" value={progress.colors.track} fallback={resolved.track} onChange={value => patchColor("track", value)} />
+            <OptionalProgressColor label="Stufentext" value={progress.colors.text} fallback={resolved.text} onChange={value => patchColor("text", value)} />
+            <OptionalProgressColor label="Nebentext" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
+          </>
+        )}
       </div>
     </div>
   );
