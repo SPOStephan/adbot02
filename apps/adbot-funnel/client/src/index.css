@@ -226,7 +226,7 @@
   .funnel-wordmark-mark { width: 34px; height: 34px; border-radius: 11px; display: inline-grid; place-items: center; background: var(--funnel-accent); color: white; font-size: 11px; box-shadow: 0 8px 20px color-mix(in srgb, var(--funnel-accent) 22%, transparent); }
   .funnel-security { display: inline-flex; align-items: center; gap: 6px; color: var(--funnel-muted); font-size: 11px; font-weight: 650; white-space: nowrap; }
 
-  .funnel-progress { width: min(calc(100% - 40px), 720px); margin: 4px auto 0; min-width: 0; overflow: hidden; color: var(--fp-text, var(--funnel-ink)); }
+  .funnel-progress { width: min(calc(100% - 40px), 720px); margin: 12px auto 22px; min-width: 0; overflow: hidden; color: var(--fp-text, var(--funnel-ink)); }
   .funnel-progress-meta { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 7px; color: var(--fp-muted, var(--funnel-muted)); font-size: 11px; font-weight: 700; }
   .funnel-progress-track { height: 5px; background: var(--fp-track, #dbe6f0); border-radius: 999px; overflow: hidden; }
   .funnel-progress-bar .funnel-progress-track,
@@ -528,7 +528,7 @@
     display: grid;
     justify-items: center;
     text-align: center;
-    padding: 8px 20px 36px;
+    padding: 20px 20px 36px;
     isolation: isolate;
   }
   .funnel-start-benefits-hero.has-background { min-height: 280px; place-content: center; }
@@ -597,11 +597,12 @@
     font-weight: 650;
   }
   .funnel-start-benefits-kicker {
-    margin: 0 0 10px;
+    margin: 0 0 12px;
     color: var(--funnel-ink);
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     letter-spacing: 0;
+    line-height: 1.35;
     text-transform: none;
   }
   .funnel-start-benefits-hero h1 {
@@ -849,7 +850,7 @@
 .admin-live-preview .funnel-contact-form { padding: 15px; }
 .admin-live-preview .funnel-footer { flex-direction: column; }
 .admin-live-preview .funnel-canvas-benefits .funnel-main { padding: 0 0 16px; }
-.admin-live-preview .funnel-start-benefits-hero { padding: 0 12px 18px; }
+.admin-live-preview .funnel-start-benefits-hero { padding: 16px 12px 18px; }
 .admin-live-preview .funnel-start-benefits-portrait.is-circle { width: 88px; height: 88px; margin-bottom: 12px; }
 .admin-live-preview .funnel-start-benefits-portrait.is-wide { width: 100%; height: auto; margin-bottom: 12px; }
 .admin-live-preview .funnel-start-benefits-hero h1 { font-size: 1.55rem; }
@@ -904,10 +905,25 @@
 .funnel-formatted i,
 .funnel-formatted em { font-style: italic; }
 .funnel-formatted u { text-decoration: underline; }
+.funnel-formatted small {
+  font-size: 0.62em;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+h1.funnel-formatted small,
+h2.funnel-formatted small {
+  font-size: 0.52em;
+  font-weight: 700;
+}
 h1.funnel-formatted,
 h2.funnel-formatted,
 p.funnel-formatted,
 strong.funnel-formatted { display: block; }
+.formatted-text-field small {
+  font-size: 0.72em;
+  font-weight: 650;
+}
 .formatted-text-field {
   min-height: 2.75rem;
   width: 100%;
