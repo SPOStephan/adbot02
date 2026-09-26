@@ -8,6 +8,7 @@ import type {
   ProgressLayout,
 } from "./funnel";
 import { PROGRESS_LAYOUTS, visibleFunnelPages } from "./funnel";
+import { stripFormattedText } from "./formattedText";
 
 export const DEFAULT_PROGRESS_LAYOUT: ProgressLayout = "percent";
 
@@ -47,7 +48,7 @@ export type ResolvedProgressStep = {
   id: string;
   title: string;
   hint: string;
-  icon: FunnelOptionIcon;
+  icon: string;
   state: "completed" | "current" | "upcoming";
 };
 
@@ -75,10 +76,10 @@ export function defaultProgressIcon(type: FunnelPageType): FunnelOptionIcon {
 export function resolveProgressStepCopy(page: Pick<FunnelPage, "name" | "eyebrow" | "title" | "type" | "progressTitle" | "progressHint" | "progressIcon">): {
   title: string;
   hint: string;
-  icon: FunnelOptionIcon;
+  icon: string;
 } {
-  const title = page.progressTitle.trim() || page.name.trim() || page.title.trim() || "Schritt";
-  const hint = page.progressHint.trim() || page.eyebrow.trim();
+  const title = page.progressTitle.trim() || page.name.trim() || stripFormattedText(page.title) || "Schritt";
+  const hint = page.progressHint.trim() || stripFormattedText(page.eyebrow);
   const icon = page.progressIcon || defaultProgressIcon(page.type);
   return { title, hint, icon };
 }

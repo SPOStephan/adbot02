@@ -12,6 +12,8 @@ import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
 import { ChoiceStep } from "@/components/funnel/ChoiceStep";
 import { ContactStep, type ResumeDraft } from "@/components/funnel/ContactStep";
+import { FormattedText } from "@/components/funnel/FormattedText";
+import { FunnelLibraryIconSync } from "@/components/funnel/FunnelLibraryIconSync";
 
 function EmbedHeightReporter() {
   useEffect(() => {
@@ -127,10 +129,11 @@ function FunnelView({
 
   return (
     <div ref={topRef}>
+      <FunnelLibraryIconSync />
       <EmbedHeightReporter />
       <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={paths.imprintUrl} step={step} totalSteps={pages.length} showProgress={!submitted} pages={pages} progress={config.progress} onBack={back} onForward={next} fullBleed={!submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits"}>
         {submitted && contactPage?.type === "contact" ? (
-          <section className="funnel-success" aria-live="polite" aria-labelledby="funnel-success-title"><span className="funnel-success-icon" aria-hidden="true"><CircleCheckBig /></span><p className="funnel-eyebrow">Erfolgreich übermittelt</p><h1 id="funnel-success-title" tabIndex={-1}>{contactPage.successTitle}</h1><p>{contactPage.successText}</p></section>
+          <section className="funnel-success" aria-live="polite" aria-labelledby="funnel-success-title"><span className="funnel-success-icon" aria-hidden="true"><CircleCheckBig /></span><p className="funnel-eyebrow">Erfolgreich übermittelt</p><FormattedText as="h1" id="funnel-success-title" tabIndex={-1} value={contactPage.successTitle} /><FormattedText as="p" value={contactPage.successText} /></section>
         ) : currentPage?.type === "start" ? (
           <StartStep page={currentPage} brand={config.brand} onContinue={next} />
         ) : currentPage?.type === "choice-grid" || currentPage?.type === "choice-list" ? (

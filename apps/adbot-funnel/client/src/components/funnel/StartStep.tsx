@@ -2,6 +2,8 @@ import type { FunnelBrand, StartPage } from "@shared/funnel";
 import { contrastOnAccent, resolveBadgeColors, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
+import { FormattedText } from "./FormattedText";
+import { stripFormattedText } from "@shared/formattedText";
 
 export function StartStep({
   page,
@@ -19,9 +21,9 @@ export function StartStep({
   return (
     <section className="funnel-step funnel-start-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-copy">
-        {page.eyebrow && <p className="funnel-eyebrow">{page.eyebrow}</p>}
-        <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
-        <p className="funnel-description">{page.description}</p>
+        {page.eyebrow && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
+        <FormattedText as="h1" id={`${page.id}-title`} tabIndex={-1} value={page.title} />
+        <FormattedText as="p" className="funnel-description" value={page.description} />
         <ul className="funnel-benefits">
           {page.bullets.map(bullet => <li key={bullet}><Check size={17} />{bullet}</li>)}
         </ul>
@@ -77,8 +79,8 @@ function BenefitsStartStep({
         )}
         <div className="funnel-start-benefits-hero-copy">
           {page.heroImageUrl.trim() ? <img className="funnel-start-benefits-portrait" src={page.heroImageUrl} alt="" /> : null}
-          {page.eyebrow && <p className="funnel-start-benefits-kicker">{page.eyebrow}</p>}
-          <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
+          {page.eyebrow && <FormattedText as="p" className="funnel-start-benefits-kicker" value={page.eyebrow} />}
+          <FormattedText as="h1" id={`${page.id}-title`} tabIndex={-1} value={page.title} />
           {(page.badges ?? []).length > 0 && (
             <ul className="funnel-start-benefits-badges">
               {(page.badges ?? []).map(badge => {
@@ -95,7 +97,7 @@ function BenefitsStartStep({
               })}
             </ul>
           )}
-          {page.description.trim() && <p className="funnel-start-benefits-lead">{page.description}</p>}
+          {stripFormattedText(page.description) && <FormattedText as="p" className="funnel-start-benefits-lead" value={page.description} />}
           <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
             {page.buttonLabel}
           </button>
@@ -103,9 +105,9 @@ function BenefitsStartStep({
         </div>
       </div>
 
-      {page.benefitsBandTitle.trim() && (
+      {stripFormattedText(page.benefitsBandTitle) && (
         <div className="funnel-start-benefits-band" style={{ background: bandColor, color: bandText }}>
-          <h2>{page.benefitsBandTitle}</h2>
+          <FormattedText as="h2" value={page.benefitsBandTitle} />
         </div>
       )}
 
@@ -120,8 +122,8 @@ function BenefitsStartStep({
                     <FunnelIcon name={benefit.icon} className="size-11" color={iconColor} />
                   </span>
                   <span className="funnel-start-benefits-copy">
-                    <strong>{benefit.title}</strong>
-                    {benefit.text.trim() && <p>{benefit.text}</p>}
+                    <FormattedText as="strong" value={benefit.title} />
+                    {stripFormattedText(benefit.text) ? <FormattedText as="p" value={benefit.text} /> : null}
                   </span>
                 </li>
               );

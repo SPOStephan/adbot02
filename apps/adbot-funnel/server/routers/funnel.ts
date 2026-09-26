@@ -13,6 +13,7 @@ import {
   setFunnelOwnerSchema,
 } from "@shared/funnelSchemas";
 import { isFunnelPageHidden, toPublicFunnelConfig, type ApplicationSubmission, type FunnelConfig, type ResumeMetadata } from "@shared/funnel";
+import { stripFormattedText } from "@shared/formattedText";
 import type { User } from "../../drizzle/schema";
 import { isBunnyConfigured, uploadFunnelBytesToBunny } from "../bunny";
 import { createFunnelMediaAsset, listFunnelMediaAssets } from "../funnelMediaStore";
@@ -60,6 +61,7 @@ import {
   pushFunnelDomainUpsertToPortal,
 } from "../portalDomainSync";
 import { pushFunnelCreativeHandoffToPortal } from "../portalCreativeHandoff";
+import { listFunnelLibraryIcons, requestFunnelLibraryIcon } from "../funnelIconStore";
 import {
   attachDomainToVercelProject,
   removeDomainFromVercelProject,
@@ -74,8 +76,8 @@ function validateSubmission(config: FunnelConfig, submission: z.infer<typeof app
     if (isFunnelPageHidden(page)) continue;
     if (page.type !== "choice-grid" && page.type !== "choice-list") continue;
     const values = submission.answers[page.questionKey] ?? [];
-    if (values.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Bitte beantworte: ${page.title}` });
-    if (!page.allowMultiple && values.length > 1) throw new TRPCError({ code: "BAD_REQUEST", message: `Für „${page.title}“ ist nur eine Antwort zulässig.` });
+    if (values.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Bitte beantworte: ${stripFormattedText(page.title)}` });
+    if (!page.allowMultiple && values.length > 1) throw new TRPCError({ code: "BAD_REQUEST", message: `Für „${stripFormattedText(page.title)}“ ist nur eine Antwort zulässig.` });
     const allowedValues = new Set(page.options.map(option => option.value));
     if (values.some(value => !allowedValues.has(value))) throw new TRPCError({ code: "BAD_REQUEST", message: `Ungültige Antwort für „${page.title}“.` });
   }
@@ -220,6 +222,16 @@ export const funnelRouter = router({
     if (!result || result.status !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
     return toPublicFunnelConfig(result);
   }),
+
+  libraryIcons: publicProcedure.query(() => listFunnelLibraryIcons()),
+
+  requestLibraryIcon: adminProcedure
+    .input(z.object({
+      label: z.string().trim().min(2).max(80),
+      requestNote: z.string().trim().max(400).default(""),
+      svg: z.string().max(20_000).optional(),
+    }))
+    .mutation(({ input }) => requestFunnelLibraryIcon(input)),
 
   /** Resolve published funnel by READY custom hostname (not shared hosts). */
   publicConfigByHost: publicProcedure

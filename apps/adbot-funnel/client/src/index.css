@@ -532,6 +532,8 @@
     min-width: 0;
     display: grid;
     justify-items: center;
+    align-content: start;
+    align-items: start;
     text-align: center;
     gap: 8px;
     color: var(--funnel-ink);
@@ -539,6 +541,8 @@
   .funnel-start-benefits-copy {
     display: grid;
     justify-items: inherit;
+    align-content: start;
+    align-self: start;
     gap: 6px;
     min-width: 0;
   }
@@ -638,3 +642,33 @@
 .admin-live-preview .funnel-start-benefits-icon svg,
 .admin-live-preview .funnel-start-benefits-icon span { width: 34px; height: 34px; }
 .admin-live-preview .funnel-start-benefits-button { min-width: 0; }
+
+.funnel-formatted { display: inline; }
+.funnel-formatted b,
+.funnel-formatted strong { font-weight: 800; }
+.funnel-formatted i,
+.funnel-formatted em { font-style: italic; }
+.funnel-formatted u { text-decoration: underline; }
+h1.funnel-formatted,
+h2.funnel-formatted,
+p.funnel-formatted,
+strong.funnel-formatted { display: block; }
+.formatted-text-field {
+  min-height: 2.75rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: white;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  outline: none;
+}
+.formatted-text-field:focus {
+  border-color: #0165c3;
+  box-shadow: 0 0 0 3px rgb(1 101 195 / 15%);
+}
+.formatted-text-field:empty::before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+}

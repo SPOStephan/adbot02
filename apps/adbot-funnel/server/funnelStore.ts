@@ -1,7 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { defaultFunnel } from "@shared/defaultFunnel";
-import { FUNNEL_OPTION_ICONS, FUNNEL_STATUSES } from "@shared/funnel";
+import { FUNNEL_STATUSES } from "@shared/funnel";
+import { isSelectableFunnelIcon } from "@shared/funnelIconCatalog";
+import { sanitizeFormattedText } from "@shared/formattedText";
 import type {
   ApplicationRecord,
   ApplicationStatus,
@@ -9,7 +11,6 @@ import type {
   ChoicePage,
   FunnelBrand,
   FunnelConfig,
-  FunnelOptionIcon,
   FunnelOwner,
   FunnelPage,
   FunnelStatus,
@@ -72,7 +73,13 @@ let memoryFunnels: StoredMemoryFunnel[] = [
 const memoryApplications: ApplicationRecord[] = [];
 const memoryMetaServerSettings = new Map<string, MetaServerSettings>();
 let client: SupabaseClient | null | undefined;
-const funnelOptionIconSet = new Set<string>(FUNNEL_OPTION_ICONS);
+function resolveStoredIcon(value: unknown): string {
+  return typeof value === "string" && isSelectableFunnelIcon(value) ? value : "sparkles";
+}
+
+function resolveFormatted(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? sanitizeFormattedText(value) : fallback;
+}
 
 export type MetaServerSettings = {
   accessToken?: string;
@@ -124,14 +131,14 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
   const { __serverPrivate: _serverPrivate, ...publicConfig } = config as LegacyFunnelConfig & { __serverPrivate?: unknown };
   const status = normalizeStatus(config, published);
   const pages = config.pages.map(page => {
-    const progressIcon = typeof page.progressIcon === "string" && funnelOptionIconSet.has(page.progressIcon)
-      ? page.progressIcon as FunnelOptionIcon
-      : defaultProgressIcon(page.type);
+    const progressIcon = resolveStoredIcon(page.progressIcon || defaultProgressIcon(page.type));
     const normalizedPage = {
       ...page,
       hidden: page.type !== "start" && page.type !== "contact" && page.hidden === true,
+      title: resolveFormatted(page.title, page.name || "Seite"),
+      description: resolveFormatted(page.description),
       eyebrow: typeof page.eyebrow === "string"
-      ? page.eyebrow
+      ? resolveFormatted(page.eyebrow)
       : page.type === "choice-grid" || page.type === "choice-list"
         ? "Kurze Frage"
         : page.type === "contact"
@@ -146,7 +153,9 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         ...normalizedPage,
         options: page.options.map(option => ({
           ...option,
-          icon: typeof option.icon === "string" && funnelOptionIconSet.has(option.icon) ? option.icon as FunnelOptionIcon : "sparkles",
+          icon: resolveStoredIcon(option.icon),
+          label: resolveFormatted(option.label, "Option"),
+          description: option.description ? resolveFormatted(option.description) : option.description,
           leadValue: parseLeadValue(option.leadValue),
         })),
       };
@@ -182,9 +191,9 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         benefits: Array.isArray(startPage.benefits)
           ? startPage.benefits.slice(0, 12).map(benefit => ({
             id: benefit.id || randomUUID(),
-            icon: typeof benefit.icon === "string" && funnelOptionIconSet.has(benefit.icon) ? benefit.icon as FunnelOptionIcon : "sparkles",
-            title: String(benefit.title ?? "").slice(0, 120) || "Vorteil",
-            text: String(benefit.text ?? "").slice(0, MAX_START_BENEFIT_TEXT),
+            icon: resolveStoredIcon(benefit.icon),
+            title: resolveFormatted(benefit.title, "Vorteil").slice(0, 480) || "Vorteil",
+            text: resolveFormatted(benefit.text).slice(0, MAX_START_BENEFIT_TEXT * 4),
             color: optionalHex(benefit.color),
           }))
           : [],

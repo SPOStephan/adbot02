@@ -51,6 +51,8 @@ import {
 } from "lucide-react";
 import type { LucideFunnelIcon } from "@shared/funnel";
 import { isAdbotFunnelIcon } from "@shared/funnel";
+import { getFunnelLibraryIcon } from "@shared/funnelIconRuntime";
+import { sanitizeFunnelIconSvg } from "@shared/funnelIconSvg";
 import { adbotIconMap } from "./adbotIcons";
 
 const lucideIcons = {
@@ -115,6 +117,13 @@ export function FunnelIcon({
   color?: string;
 }) {
   const style = color ? { color } : undefined;
+  const custom = getFunnelLibraryIcon(name);
+  if (custom) {
+    const svg = sanitizeFunnelIconSvg(custom.svg);
+    if (svg) {
+      return <span className={className} style={style} dangerouslySetInnerHTML={{ __html: svg }} />;
+    }
+  }
   if (isAdbotFunnelIcon(name)) {
     const Icon = adbotIconMap[name];
     return <span className={className} style={style}><Icon className="size-full" /></span>;

@@ -2,6 +2,7 @@ import type { CSSProperties, PropsWithChildren } from "react";
 import type { FunnelBrand, FunnelConfig, FunnelSocialProof } from "@shared/funnel";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { FunnelProgress } from "./FunnelProgress";
+import { FormattedText } from "./FormattedText";
 
 type FunnelChromeProps = PropsWithChildren<{
   brand: FunnelBrand;
@@ -83,7 +84,7 @@ export function FunnelChrome({
         {socialProof.enabled && (
           <div className="funnel-proof">
             <span className="funnel-proof-icon"><ShieldCheck size={18} /></span>
-            <span><strong>{socialProof.eyebrow}</strong>{socialProof.text}</span>
+            <span><FormattedText as="strong" value={socialProof.eyebrow} /><FormattedText value={socialProof.text} /></span>
           </div>
         )}
         <nav className="funnel-legal-links" aria-label="Rechtliche Hinweise">

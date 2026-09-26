@@ -42,8 +42,10 @@ describe("Funnel-Validierung", () => {
     const pagesWithWrench = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "wrench" as const } : option) } : page);
     const pagesWithAdbotIcon = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "adbot-company-car" as const } : option) } : page);
     const pagesWithUnknownIcon = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "sondericon" } : option) } : page);
+    const pagesWithCustomIcon = defaultFunnel.pages.map(page => page.type === "choice-grid" ? { ...page, options: page.options.map((option, index) => index === 0 ? { ...option, icon: "adbot-custom-fahrrad-ab12cd34" } : option) } : page);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithWrench }).success).toBe(true);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithAdbotIcon }).success).toBe(true);
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithCustomIcon }).success).toBe(true);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages: pagesWithUnknownIcon }).success).toBe(false);
   });
 

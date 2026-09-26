@@ -171,7 +171,7 @@ export type FunnelOption = {
   id: string;
   label: string;
   value: string;
-  icon: FunnelOptionIcon;
+  icon: string;
   description?: string;
   /** Optional EUR value sent to Meta with the Lead event when this answer is selected. */
   leadValue?: number;
@@ -200,7 +200,7 @@ type FunnelPageBase = {
   progressTitle: string;
   /** Optional second line under the progress title. */
   progressHint: string;
-  progressIcon: FunnelOptionIcon;
+  progressIcon: string;
   /** Hidden idea pages stay in the editor but are skipped in the public funnel. */
   hidden?: boolean;
 };
@@ -219,7 +219,7 @@ export function visibleFunnelPages<T extends Pick<FunnelPageBase, "hidden">>(pag
 
 export type StartBenefit = {
   id: string;
-  icon: FunnelOptionIcon;
+  icon: string;
   title: string;
   text: string;
   /** Optional hex override. Empty/undefined uses the branding accent. */

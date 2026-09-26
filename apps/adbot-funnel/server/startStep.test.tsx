@@ -39,6 +39,7 @@ describe("StartStep Layouts", () => {
     expect(html).not.toContain("funnel-start-benefits-hero-bg");
     expect(html).toContain("funnel-start-benefits-tiles");
     expect(html).toContain("is-two-column");
+    expect(html).toContain("funnel-start-benefits-copy");
     expect(html).not.toContain("funnel-start-benefits-portrait");
     expect(html).not.toContain("funnel-start-benefits-badges");
   });
