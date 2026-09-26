@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import type { FunnelBrand, FunnelPage, FunnelProgress as FunnelProgressConfig } from "@shared/funnel";
 import {
+  clampProgressContentGapPx,
   progressPercent,
   resolveProgressColors,
   resolveProgressLayout,
@@ -56,6 +57,7 @@ export function FunnelProgress({
         "--fp-muted": colors.muted,
         "--fp-track": colors.track,
         "--fp-count": steps.length,
+        "--fp-content-gap": `${clampProgressContentGapPx(progress.contentGapPx)}px`,
       } as CSSProperties}
     >
       {layout === "percent" ? (

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
 import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
-import { DEFAULT_PROGRESS, defaultProgressStages, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
+import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -664,11 +664,7 @@ function ProgressSettings({
   const patchProgress = (patch: Partial<FunnelConfig["progress"]>, immediate = true) => {
     changeConfig(current => ({
       ...current,
-      progress: {
-        layout: resolveProgressLayout(patch.layout ?? current.progress?.layout),
-        colors: { ...DEFAULT_PROGRESS.colors, ...(current.progress?.colors ?? {}), ...(patch.colors ?? {}) },
-        stages: patch.stages ?? current.progress?.stages ?? [],
-      },
+      progress: normalizeProgress({ ...current.progress, ...patch }),
     }), immediate);
   };
   const patchColor = (key: keyof typeof progress.colors, value: string) => {
@@ -688,6 +684,21 @@ function ProgressSettings({
           stages: layout === "segments" && (progress.stages?.length ?? 0) === 0 ? defaultProgressStages(config.pages) : progress.stages,
         })}
       />
+      <FormRow
+        label="Abstand zum Inhalt"
+        hint="Pixel zwischen Fortschrittsleiste und der Überschrift darunter. Standard 14 (halb so viel wie die zuletzt vergrößerte 28 px)."
+      >
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={80}
+            value={progress.contentGapPx ?? DEFAULT_PROGRESS_CONTENT_GAP_PX}
+            onChange={event => patchProgress({ contentGapPx: clampProgressContentGapPx(event.target.valueAsNumber) }, false)}
+          />
+          <span className="text-xs font-semibold text-muted-foreground">px</span>
+        </div>
+      </FormRow>
       {resolveProgressLayout(progress.layout) === "segments" ? (
         <ProgressStagesField pages={config.pages} stages={progress.stages ?? []} onChange={stages => patchProgress({ stages }, false)} />
       ) : (

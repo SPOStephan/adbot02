@@ -226,7 +226,7 @@
   .funnel-wordmark-mark { width: 34px; height: 34px; border-radius: 11px; display: inline-grid; place-items: center; background: var(--funnel-accent); color: white; font-size: 11px; box-shadow: 0 8px 20px color-mix(in srgb, var(--funnel-accent) 22%, transparent); }
   .funnel-security { display: inline-flex; align-items: center; gap: 6px; color: var(--funnel-muted); font-size: 11px; font-weight: 650; white-space: nowrap; }
 
-  .funnel-progress { width: min(calc(100% - 40px), 720px); margin: 12px auto 28px; min-width: 0; overflow: hidden; color: var(--fp-text, var(--funnel-ink)); }
+  .funnel-progress { width: min(calc(100% - 40px), 720px); margin: 12px auto var(--fp-content-gap, 14px); min-width: 0; overflow: hidden; color: var(--fp-text, var(--funnel-ink)); }
   .funnel-progress-meta { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 7px; color: var(--fp-muted, var(--funnel-muted)); font-size: 11px; font-weight: 700; }
   .funnel-progress-track { height: 5px; background: var(--fp-track, #dbe6f0); border-radius: 999px; overflow: hidden; }
   .funnel-progress-bar .funnel-progress-track,
@@ -377,6 +377,7 @@
   }
 
   .funnel-main { width: min(100%, 1120px); margin: 0 auto; padding: 28px 20px 42px; display: grid; align-items: center; }
+  .funnel-canvas:has(.funnel-progress) > .funnel-main { padding-top: 0; }
   .funnel-step { width: min(100%, 720px); margin: 0 auto; }
   .funnel-start-step { display: grid; gap: 30px; align-items: center; }
   .funnel-copy, .funnel-question-copy { min-width: 0; }
@@ -507,6 +508,7 @@
   @media (min-width: 640px) {
     .funnel-header { padding: 24px 32px 14px; }
     .funnel-main { padding: 38px 32px 56px; }
+    .funnel-canvas:has(.funnel-progress) > .funnel-main { padding-top: 0; }
     .funnel-security { font-size: 12px; }
     .funnel-wordmark { font-size: 14px; }
     .funnel-start-step { grid-template-columns: minmax(0, 1.05fr) minmax(280px, .95fr); gap: 46px; width: 100%; }
@@ -861,6 +863,7 @@
 .admin-live-preview .funnel-canvas { min-height: 700px; }
 .admin-live-preview .funnel-header { padding: 16px 14px 10px; }
 .admin-live-preview .funnel-main { padding: 24px 15px 30px; }
+.admin-live-preview .funnel-canvas:has(.funnel-progress) > .funnel-main { padding-top: 0; }
 .admin-live-preview .funnel-start-step { grid-template-columns: 1fr; gap: 24px; }
 .admin-live-preview .funnel-step h1 { font-size: 2rem; }
 .admin-live-preview .funnel-subtitle { font-size: 1.05rem; }

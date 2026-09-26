@@ -22,10 +22,22 @@ export const EMPTY_PROGRESS_COLORS: FunnelProgressColors = {
   track: "",
 };
 
+/** Current progress margin-bottom was 28px; half of that is the new default. */
+export const DEFAULT_PROGRESS_CONTENT_GAP_PX = 14;
+export const MIN_PROGRESS_CONTENT_GAP_PX = 0;
+export const MAX_PROGRESS_CONTENT_GAP_PX = 80;
+
+export function clampProgressContentGapPx(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_PROGRESS_CONTENT_GAP_PX;
+  return Math.min(MAX_PROGRESS_CONTENT_GAP_PX, Math.max(MIN_PROGRESS_CONTENT_GAP_PX, Math.round(numeric)));
+}
+
 export const DEFAULT_PROGRESS: FunnelProgress = {
   layout: DEFAULT_PROGRESS_LAYOUT,
   colors: { ...EMPTY_PROGRESS_COLORS },
   stages: [],
+  contentGapPx: DEFAULT_PROGRESS_CONTENT_GAP_PX,
 };
 
 export const MAX_PROGRESS_STAGES = 6;
@@ -204,6 +216,7 @@ export function normalizeProgress(input?: Partial<FunnelProgress> | null): Funne
       track: hexOrEmpty(colors.track),
     },
     stages: normalizeProgressStages(input?.stages),
+    contentGapPx: clampProgressContentGapPx(input?.contentGapPx),
   };
 }
 

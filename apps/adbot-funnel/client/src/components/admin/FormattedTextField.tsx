@@ -88,6 +88,52 @@ function wrapSelectionInSmall() {
   selection.addRange(next);
 }
 
+export function plainTextFromClipboard(data: DataTransfer | null | undefined): string {
+  if (!data) return "";
+  return data.getData("text/plain").replace(/\r\n/g, "\n").replace(/\u00A0/g, " ");
+}
+
+export function insertPlainTextAtSelection(editor: HTMLElement, text: string) {
+  editor.focus();
+  if (text && document.queryCommandSupported("insertText") && document.execCommand("insertText", false, text)) {
+    return;
+  }
+  const selection = window.getSelection();
+  const range = selection && selection.rangeCount > 0 && editor.contains(selection.getRangeAt(0).commonAncestorContainer)
+    ? selection.getRangeAt(0)
+    : (() => {
+      const next = document.createRange();
+      next.selectNodeContents(editor);
+      next.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(next);
+      return next;
+    })();
+  range.deleteContents();
+  const fragment = document.createDocumentFragment();
+  const lines = text.split("\n");
+  lines.forEach((line, index) => {
+    if (index > 0) fragment.appendChild(document.createElement("br"));
+    if (line) fragment.appendChild(document.createTextNode(line));
+  });
+  if (!fragment.childNodes.length) return;
+  const last = fragment.lastChild;
+  range.insertNode(fragment);
+  if (last && selection) {
+    const after = document.createRange();
+    after.setStartAfter(last);
+    after.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(after);
+  }
+}
+
+function isEditingNode(node: HTMLElement) {
+  if (document.activeElement === node) return true;
+  const selection = window.getSelection();
+  return Boolean(selection?.anchorNode && node.contains(selection.anchorNode));
+}
+
 export function FormattedTextField({
   value,
   onChange,
@@ -106,7 +152,7 @@ export function FormattedTextField({
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
-    if (document.activeElement === node) return;
+    if (isEditingNode(node)) return;
     const next = value || "";
     if (node.innerHTML !== next) node.innerHTML = next;
   }, [value]);
@@ -172,6 +218,13 @@ export function FormattedTextField({
         data-placeholder={placeholder ?? ""}
         style={{ minHeight: `${Math.max(2, rows) * 1.5 + 1.2}rem` }}
         suppressContentEditableWarning
+        onPaste={event => {
+          event.preventDefault();
+          const editor = ref.current;
+          if (!editor) return;
+          insertPlainTextAtSelection(editor, plainTextFromClipboard(event.clipboardData));
+          onChange(sanitizeFormattedText(editor.innerHTML));
+        }}
         onInput={() => {
           if (!ref.current) return;
           onChange(ref.current.innerHTML);
