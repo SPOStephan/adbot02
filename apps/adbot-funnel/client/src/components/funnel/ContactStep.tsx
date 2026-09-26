@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
-import type { ApplicationContact, ContactPage } from "@shared/funnel";
+import { isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown, type ApplicationContact, type ContactPage } from "@shared/funnel";
 import { ArrowLeft, Check, FileText, Loader2, UploadCloud, X } from "lucide-react";
 import { FormattedText } from "./FormattedText";
 
@@ -60,9 +60,9 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
   return (
     <section className="funnel-step funnel-contact-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-question-copy">
-        {page.eyebrow && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
-        <FormattedText as="h1" id={`${page.id}-title`} tabIndex={-1} value={page.title} />
-        <FormattedText as="p" className="funnel-description" value={page.description} />
+        {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
+        <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
+        {isPageDescriptionShown(page) && <FormattedText as="p" className="funnel-description" value={page.description} />}
       </div>
       <form className="funnel-contact-form" onSubmit={submit} aria-busy={pending} aria-describedby={error ? `${page.id}-error` : undefined}>
         <div className="funnel-field-grid">

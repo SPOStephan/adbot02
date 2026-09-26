@@ -36,6 +36,9 @@ const pageBaseSchema = z.object({
   progressHint: z.string().max(160).default(""),
   progressIcon: iconSchema.default("sparkles"),
   hidden: z.boolean().default(false),
+  eyebrowVisible: z.boolean().default(true),
+  titleVisible: z.boolean().default(true),
+  descriptionVisible: z.boolean().default(true),
 });
 
 const optionalHexColorSchema = z.string().max(16).refine(

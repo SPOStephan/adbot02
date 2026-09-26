@@ -1,3 +1,5 @@
+import { isBlankFormattedText } from "./formattedText";
+
 export const PAGE_TYPES = ["start", "choice-grid", "choice-list", "contact"] as const;
 export const FUNNEL_STATUSES = ["draft", "published", "paused", "archived"] as const;
 export const START_PAGE_LAYOUTS = ["classic", "benefits"] as const;
@@ -205,10 +207,34 @@ type FunnelPageBase = {
   progressIcon: string;
   /** Hidden idea pages stay in the editor but are skipped in the public funnel. */
   hidden?: boolean;
+  /** When false the stored text stays in the editor but is not shown to applicants. */
+  eyebrowVisible?: boolean;
+  titleVisible?: boolean;
+  descriptionVisible?: boolean;
 };
 
 export function isFunnelPageHidden(page: Pick<FunnelPageBase, "hidden">): boolean {
   return page.hidden === true;
+}
+
+export function isCopyFieldVisible(value?: boolean): boolean {
+  return value !== false;
+}
+
+export function isPageEyebrowShown(page: Pick<FunnelPageBase, "eyebrow" | "eyebrowVisible">): boolean {
+  return isCopyFieldVisible(page.eyebrowVisible) && !isBlankFormattedText(page.eyebrow);
+}
+
+export function isPageTitleShown(page: Pick<FunnelPageBase, "titleVisible">): boolean {
+  return isCopyFieldVisible(page.titleVisible);
+}
+
+export function isPageDescriptionShown(page: Pick<FunnelPageBase, "description" | "descriptionVisible">): boolean {
+  return isCopyFieldVisible(page.descriptionVisible) && !isBlankFormattedText(page.description);
+}
+
+export function choiceAdvancesOnSelect(allowMultiple: boolean): boolean {
+  return !allowMultiple;
 }
 
 export function canHideFunnelPage(page: Pick<FunnelPageBase, "type">): boolean {

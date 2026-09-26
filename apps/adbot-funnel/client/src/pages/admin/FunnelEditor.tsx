@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, Eye, EyeOff, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
-import { canHideFunnelPage, isFunnelPageHidden, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
+import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
 import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
@@ -30,8 +30,42 @@ import { useFunnelEditorHistory } from "@/hooks/useFunnelEditorHistory";
 
 const pageLabels: Record<FunnelPage["type"], string> = { start: "Startseite", "choice-grid": "Symbolkacheln", "choice-list": "Buttonliste", contact: "Kontaktformular" };
 
-function FormRow({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return <div className="grid gap-2"><Label>{label}</Label>{children}{hint && <p className="text-xs text-muted-foreground">{hint}</p>}</div>;
+function FormRow({
+  label,
+  children,
+  hint,
+  visible,
+  onToggleVisible,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+  visible?: boolean;
+  onToggleVisible?: () => void;
+}) {
+  const shown = visible !== false;
+  return (
+    <div className={`grid gap-2 ${onToggleVisible && !shown ? "opacity-60" : ""}`}>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        {onToggleVisible && (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-8 shrink-0"
+            title={shown ? "Ausblenden" : "Wieder einblenden"}
+            aria-label={shown ? `${label} ausblenden` : `${label} wieder einblenden`}
+            onClick={onToggleVisible}
+          >
+            {shown ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+          </Button>
+        )}
+      </div>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
 }
 
 export default function FunnelEditor() {
@@ -285,9 +319,30 @@ export default function FunnelEditor() {
                 />
               )}
               <FormRow label="Interner Seitenname"><Input value={selectedPage.name} onChange={event => patchPage({ name: event.target.value }, false)} /></FormRow>
-              <FormRow label="Überzeile (optional)" hint="Leer lassen, um diesen Bereich vollständig auszublenden. Markieren für Fett, Kursiv, Unterstrich oder Farbe."><FormattedTextField value={selectedPage.eyebrow} placeholder="Zum Beispiel: Kurze Frage" rows={1} onChange={value => patchPage({ eyebrow: value } as Partial<FunnelPage>, false)} /></FormRow>
-              <FormRow label="Überschrift" hint="Einzelne Wörter markieren und fett, kursiv, unterstrichen oder farbig setzen."><FormattedTextField value={selectedPage.title} rows={2} onChange={value => patchPage({ title: value }, false)} /></FormRow>
-              <FormRow label="Beschreibung"><FormattedTextField value={selectedPage.description} rows={3} onChange={value => patchPage({ description: value }, false)} /></FormRow>
+              <FormRow
+                label="Überzeile"
+                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Markieren für Fett, Kursiv, Unterstrich oder Farbe. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                visible={isCopyFieldVisible(selectedPage.eyebrowVisible)}
+                onToggleVisible={() => patchPage({ eyebrowVisible: !isCopyFieldVisible(selectedPage.eyebrowVisible) } as Partial<FunnelPage>)}
+              >
+                <FormattedTextField value={selectedPage.eyebrow} placeholder="Zum Beispiel: Kurze Frage" rows={1} onChange={value => patchPage({ eyebrow: value } as Partial<FunnelPage>, false)} />
+              </FormRow>
+              <FormRow
+                label="Überschrift"
+                hint={isCopyFieldVisible(selectedPage.titleVisible) ? "Einzelne Wörter markieren und fett, kursiv, unterstrichen oder farbig setzen." : "Ausgeblendet – Bewerber sehen diese Überschrift nicht."}
+                visible={isCopyFieldVisible(selectedPage.titleVisible)}
+                onToggleVisible={() => patchPage({ titleVisible: !isCopyFieldVisible(selectedPage.titleVisible) } as Partial<FunnelPage>)}
+              >
+                <FormattedTextField value={selectedPage.title} rows={2} onChange={value => patchPage({ title: value }, false)} />
+              </FormRow>
+              <FormRow
+                label="Beschreibung"
+                hint={isCopyFieldVisible(selectedPage.descriptionVisible) ? undefined : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                visible={isCopyFieldVisible(selectedPage.descriptionVisible)}
+                onToggleVisible={() => patchPage({ descriptionVisible: !isCopyFieldVisible(selectedPage.descriptionVisible) } as Partial<FunnelPage>)}
+              >
+                <FormattedTextField value={selectedPage.description} rows={3} onChange={value => patchPage({ description: value }, false)} />
+              </FormRow>
               <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
               <div className="grid gap-3 rounded-2xl border p-4">
                 <div>
@@ -315,7 +370,7 @@ export default function FunnelEditor() {
               )}
 
               {(selectedPage.type === "choice-grid" || selectedPage.type === "choice-list") && <>
-                <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Mehrfachauswahl</strong><small className="text-muted-foreground">Mehrere Antworten erlauben</small></span><Switch checked={selectedPage.allowMultiple} onCheckedChange={checked => patchPage({ allowMultiple: checked } as Partial<FunnelPage>)} /></label>
+                <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Mehrfachauswahl</strong><small className="text-muted-foreground">Aus: Klick auf eine Kachel geht direkt weiter. An: mehrere Antworten, danach unten „Weiter“.</small></span><Switch checked={selectedPage.allowMultiple} onCheckedChange={checked => patchPage({ allowMultiple: checked } as Partial<FunnelPage>)} /></label>
                 <div className="grid gap-3"><div className="flex items-center justify-between"><Label>Antwortoptionen</Label><Button size="sm" variant="outline" onClick={() => patchPage({ options: [...selectedPage.options, { id: crypto.randomUUID(), label: "Neue Option", value: `option-${selectedPage.options.length + 1}`, icon: "sparkles" }] } as Partial<FunnelPage>)}>Option hinzufügen</Button></div>
                   {selectedPage.options.map((option, optionIndex) => <div className="grid gap-2 rounded-xl border bg-slate-50 p-3" key={option.id}><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto]"><FormattedTextField value={option.label} rows={1} onChange={value => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, label: value, value: stripFormattedText(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || item.value } : item) } as Partial<FunnelPage>)} /><IconPicker value={option.icon} onChange={icon => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, icon } : item) } as Partial<FunnelPage>)} /><Button size="icon" variant="ghost" className="shrink-0 text-destructive" aria-label={`Option ${stripFormattedText(option.label)} löschen`} disabled={selectedPage.options.length <= 2} onClick={() => patchPage({ options: selectedPage.options.filter((_, index) => index !== optionIndex) } as Partial<FunnelPage>)}><Trash2 className="size-4" /></Button></div><FormattedTextField placeholder="Optionale Kurzbeschreibung" rows={2} value={option.description ?? ""} onChange={value => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, description: value } : item) } as Partial<FunnelPage>)} /><FormRow label="Wert für Meta (€)" hint="Leer = kein Extra-Wert. Gute Antworten höher, schwache niedriger. Summe geht mit dem Lead an Meta."><Input inputMode="decimal" placeholder="z. B. 80" value={option.leadValue ?? ""} onChange={event => { const raw = event.target.value.trim().replace(",", "."); const nextValue = raw === "" ? undefined : Number(raw); patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, leadValue: nextValue !== undefined && Number.isFinite(nextValue) && nextValue >= 0 && nextValue <= 10000 ? Math.round(nextValue * 100) / 100 : undefined } : item) } as Partial<FunnelPage>); }} /></FormRow></div>)}
                 </div>
