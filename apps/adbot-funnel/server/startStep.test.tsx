@@ -18,6 +18,8 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("funnel-start-step");
     expect(html).not.toContain("funnel-start-benefits");
     expect(html).toContain(getStartPage().buttonLabel);
+    expect(html).toContain("--fs-title:1");
+    expect(html).toContain("--fs-eyebrow:1");
   });
 
   it("rendert die Vorteile-Variante mit zwei-Spalten-Kacheln und Branding-Trenner", () => {
@@ -56,6 +58,20 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("<small>");
     expect(html).toContain("(m/w/d)");
     expect(html).toContain("#607287");
+  });
+
+  it("setzt größere Überschrift und kleinere Überzeile als CSS-Variablen", () => {
+    const page: StartPage = {
+      ...getStartPage(),
+      titleSizeStep: 2,
+      eyebrowSizeStep: -1,
+    };
+    const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(html).toContain("--fs-title:1.12");
+    expect(html).toContain("--fs-eyebrow:0.94");
+    expect(html).toContain("--fs-subtitle:1");
+    const benefits = renderToStaticMarkup(<StartStep page={{ ...page, layout: "benefits" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(benefits).toContain("--fs-title:1.12");
   });
 
   it("blendet Überzeile und Beschreibung der Startseite aus", () => {

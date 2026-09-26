@@ -38,6 +38,18 @@ describe("ChoiceStep Fortschritt", () => {
     expect(html.slice(eyebrowAt, subtitleAt)).toMatch(/<h1\b/);
     expect(stripSoftHyphens(html)).toContain("Du verkaufst Versicherungen");
     expect(html).toContain("#0165C3");
+    expect(html).toContain("--fs-title:1");
+  });
+
+  it("wendet die Schriftgröße der Überschrift als CSS-Variable an", () => {
+    const page: ChoicePage = {
+      ...getChoicePage(),
+      titleSizeStep: 3,
+      subtitleSizeStep: -2,
+    };
+    const html = renderToStaticMarkup(<ChoiceStep page={page} selected={[]} onSelect={vi.fn()} onBack={vi.fn()} onContinue={vi.fn()} />);
+    expect(html).toContain("--fs-title:1.18");
+    expect(html).toContain("--fs-subtitle:0.88");
   });
 
   it("blendet Überzeile und Beschreibung aus, behält die Überschrift für Screenreader", () => {

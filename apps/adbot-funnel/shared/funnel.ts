@@ -217,6 +217,11 @@ type FunnelPageBase = {
   titleVisible?: boolean;
   subtitleVisible?: boolean;
   descriptionVisible?: boolean;
+  /** Integer offset from the CSS default size. 0 keeps the current size. */
+  eyebrowSizeStep?: number;
+  titleSizeStep?: number;
+  subtitleSizeStep?: number;
+  descriptionSizeStep?: number;
 };
 
 export function isFunnelPageHidden(page: Pick<FunnelPageBase, "hidden">): boolean {

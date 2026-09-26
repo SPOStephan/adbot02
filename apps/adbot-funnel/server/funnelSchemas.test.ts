@@ -31,6 +31,19 @@ describe("Funnel-Validierung", () => {
     expect(parsed.pages.every(page => page.eyebrowVisible === false && page.titleVisible === false && page.subtitleVisible === false && page.descriptionVisible === false)).toBe(true);
   });
 
+  it("füllt fehlende Schriftgrößen-Schritte mit Standard 0", () => {
+    const pages = defaultFunnel.pages.map(page => {
+      const next = { ...page };
+      Reflect.deleteProperty(next, "eyebrowSizeStep");
+      Reflect.deleteProperty(next, "titleSizeStep");
+      Reflect.deleteProperty(next, "subtitleSizeStep");
+      Reflect.deleteProperty(next, "descriptionSizeStep");
+      return next;
+    });
+    const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages });
+    expect(parsed.pages.every(page => page.eyebrowSizeStep === 0 && page.titleSizeStep === 0 && page.subtitleSizeStep === 0 && page.descriptionSizeStep === 0)).toBe(true);
+  });
+
   it("füllt eine fehlende Sub-Headline leer auf", () => {
     const pages = defaultFunnel.pages.map(page => {
       const next = { ...page };

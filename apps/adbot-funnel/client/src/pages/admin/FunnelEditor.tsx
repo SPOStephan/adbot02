@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, Eye, EyeOff, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
+import { clampCopySizeStep } from "@shared/copySize";
 import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
@@ -18,6 +19,7 @@ import { EditorPreview } from "@/components/admin/EditorPreview";
 import { HeroBackgroundField } from "@/components/admin/HeroBackgroundField";
 import { HeroImageField } from "@/components/admin/HeroImageField";
 import { IconColorField } from "@/components/admin/IconColorField";
+import { CopySizeStepper } from "@/components/admin/CopySizeStepper";
 import { FormattedTextField } from "@/components/admin/FormattedTextField";
 import { IconPicker } from "@/components/admin/IconPicker";
 import { FunnelLibraryIconSync } from "@/components/funnel/FunnelLibraryIconSync";
@@ -38,31 +40,38 @@ function FormRow({
   hint,
   visible,
   onToggleVisible,
+  sizeStep,
+  onSizeStepChange,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
   visible?: boolean;
   onToggleVisible?: () => void;
+  sizeStep?: number;
+  onSizeStepChange?: (step: number) => void;
 }) {
   const shown = visible !== false;
   return (
     <div className={`grid gap-2 ${onToggleVisible && !shown ? "opacity-60" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <Label>{label}</Label>
-        {onToggleVisible && (
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-8 shrink-0"
-            title={shown ? "Ausblenden" : "Wieder einblenden"}
-            aria-label={shown ? `${label} ausblenden` : `${label} wieder einblenden`}
-            onClick={onToggleVisible}
-          >
-            {shown ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {onSizeStepChange && <CopySizeStepper value={sizeStep} onChange={onSizeStepChange} areaLabel={label} />}
+          {onToggleVisible && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-8 shrink-0"
+              title={shown ? "Ausblenden" : "Wieder einblenden"}
+              aria-label={shown ? `${label} ausblenden` : `${label} wieder einblenden`}
+              onClick={onToggleVisible}
+            >
+              {shown ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+            </Button>
+          )}
+        </div>
       </div>
       {children}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -323,33 +332,41 @@ export default function FunnelEditor() {
               <FormRow label="Interner Seitenname"><Input value={selectedPage.name} onChange={event => patchPage({ name: event.target.value }, false)} /></FormRow>
               <FormRow
                 label="Überzeile"
-                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Kleine Zeile über der Überschrift. Markieren für Fett, Kursiv, Unterstrich, Farbe oder Kleiner. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Kleine Zeile über der Überschrift. Größe über die Pfeile, Standard bleibt die bisherige Größe. Markieren für Fett, Kursiv, Unterstrich, Farbe oder Kleiner. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
                 visible={isCopyFieldVisible(selectedPage.eyebrowVisible)}
                 onToggleVisible={() => patchPage({ eyebrowVisible: !isCopyFieldVisible(selectedPage.eyebrowVisible) } as Partial<FunnelPage>)}
+                sizeStep={selectedPage.eyebrowSizeStep}
+                onSizeStepChange={step => patchPage({ eyebrowSizeStep: clampCopySizeStep(step) } as Partial<FunnelPage>)}
               >
                 <FormattedTextField value={selectedPage.eyebrow} placeholder="Zum Beispiel: Kurze Frage" rows={1} onChange={value => patchPage({ eyebrow: value } as Partial<FunnelPage>, false)} />
               </FormRow>
               <FormRow
                 label="Überschrift"
-                hint={isCopyFieldVisible(selectedPage.titleVisible) ? "Wörter markieren: Fett, Kursiv, Unterstrich, Farbe oder Kleiner – zum Beispiel (§34i) (m/w/d) in kleinerer Schrift." : "Ausgeblendet – Bewerber sehen diese Überschrift nicht."}
+                hint={isCopyFieldVisible(selectedPage.titleVisible) ? "Wörter markieren: Fett, Kursiv, Unterstrich, Farbe oder Kleiner – zum Beispiel (§34i) (m/w/d) in kleinerer Schrift. Größe über die Pfeile, Standard bleibt die bisherige Größe." : "Ausgeblendet – Bewerber sehen diese Überschrift nicht."}
                 visible={isCopyFieldVisible(selectedPage.titleVisible)}
                 onToggleVisible={() => patchPage({ titleVisible: !isCopyFieldVisible(selectedPage.titleVisible) } as Partial<FunnelPage>)}
+                sizeStep={selectedPage.titleSizeStep}
+                onSizeStepChange={step => patchPage({ titleSizeStep: clampCopySizeStep(step) } as Partial<FunnelPage>)}
               >
                 <FormattedTextField value={selectedPage.title} rows={2} onChange={value => patchPage({ title: value }, false)} />
               </FormRow>
               <FormRow
                 label="Sub-Headline"
-                hint={isCopyFieldVisible(selectedPage.subtitleVisible) ? "Kleinere Zeile unter der Überschrift, mit eigener Farbe. Leer lassen blendet sie aus." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                hint={isCopyFieldVisible(selectedPage.subtitleVisible) ? "Kleinere Zeile unter der Überschrift, mit eigener Farbe. Größe über die Pfeile, Standard bleibt die bisherige Größe. Leer lassen blendet sie aus." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
                 visible={isCopyFieldVisible(selectedPage.subtitleVisible)}
                 onToggleVisible={() => patchPage({ subtitleVisible: !isCopyFieldVisible(selectedPage.subtitleVisible) } as Partial<FunnelPage>)}
+                sizeStep={selectedPage.subtitleSizeStep}
+                onSizeStepChange={step => patchPage({ subtitleSizeStep: clampCopySizeStep(step) } as Partial<FunnelPage>)}
               >
                 <FormattedTextField value={selectedPage.subtitle ?? ""} placeholder="Zum Beispiel: Du verkaufst Versicherungen" rows={1} onChange={value => patchPage({ subtitle: value } as Partial<FunnelPage>, false)} />
               </FormRow>
               <FormRow
                 label="Beschreibung"
-                hint={isCopyFieldVisible(selectedPage.descriptionVisible) ? undefined : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                hint={isCopyFieldVisible(selectedPage.descriptionVisible) ? "Größe über die Pfeile, Standard bleibt die bisherige Größe." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
                 visible={isCopyFieldVisible(selectedPage.descriptionVisible)}
                 onToggleVisible={() => patchPage({ descriptionVisible: !isCopyFieldVisible(selectedPage.descriptionVisible) } as Partial<FunnelPage>)}
+                sizeStep={selectedPage.descriptionSizeStep}
+                onSizeStepChange={step => patchPage({ descriptionSizeStep: clampCopySizeStep(step) } as Partial<FunnelPage>)}
               >
                 <FormattedTextField value={selectedPage.description} rows={3} onChange={value => patchPage({ description: value }, false)} />
               </FormRow>

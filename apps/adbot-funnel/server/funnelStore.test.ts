@@ -131,6 +131,7 @@ describe("Mehr-Funnel-Speicher", () => {
     expect(normalized.pages.find(page => page.type === "choice-grid")?.options[0]?.icon).toBe("sparkles");
     expect(normalized.pages.every(page => page.hidden === false)).toBe(true);
     expect(normalized.pages.every(page => page.eyebrowVisible !== false && page.titleVisible !== false && page.subtitleVisible !== false && page.descriptionVisible !== false)).toBe(true);
+    expect(normalized.pages.every(page => page.eyebrowSizeStep === 0 && page.titleSizeStep === 0 && page.subtitleSizeStep === 0 && page.descriptionSizeStep === 0)).toBe(true);
     expect(normalized.pages.every(page => page.subtitle === "")).toBe(true);
     expect(normalized.pages[0]?.title).toBe(defaultFunnel.pages[0]?.title);
 

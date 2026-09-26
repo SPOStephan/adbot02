@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { copySizeCssVars } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
 import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
@@ -20,7 +21,7 @@ export function StartStep({
   }
 
   return (
-    <section className="funnel-step funnel-start-step" aria-labelledby={`${page.id}-title`}>
+    <section className="funnel-step funnel-start-step" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
       <div className="funnel-copy">
         {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
         <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
@@ -76,7 +77,7 @@ function BenefitsStartStep({
   const imageRadius = clampHeroImageRadius(page.heroImageRadius);
 
   return (
-    <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`}>
+    <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
       <div className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? ` has-portrait is-image-${imageLayout}` : ""}${backgroundUrl ? " has-background" : ""}`}>
         {backgroundUrl && (
           <div className="funnel-start-benefits-hero-bg" aria-hidden="true" style={{ "--hero-bg-focus-x": `${focusX}%` } as CSSProperties}>

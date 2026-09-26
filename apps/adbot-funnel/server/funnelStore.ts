@@ -20,6 +20,7 @@ import type {
   StartBenefit,
   StartPage,
 } from "@shared/funnel";
+import { clampCopySizeStep } from "@shared/copySize";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
@@ -139,6 +140,10 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
       titleVisible: page.titleVisible !== false,
       subtitleVisible: page.subtitleVisible !== false,
       descriptionVisible: page.descriptionVisible !== false,
+      eyebrowSizeStep: clampCopySizeStep(page.eyebrowSizeStep),
+      titleSizeStep: clampCopySizeStep(page.titleSizeStep),
+      subtitleSizeStep: clampCopySizeStep(page.subtitleSizeStep),
+      descriptionSizeStep: clampCopySizeStep(page.descriptionSizeStep),
       title: resolveFormatted(page.title, page.name || "Seite"),
       subtitle: resolveFormatted(page.subtitle),
       description: resolveFormatted(page.description),
