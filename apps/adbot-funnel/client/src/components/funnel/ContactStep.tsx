@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
+import { copySizeCssVars } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type ApplicationContact, type ContactPage } from "@shared/funnel";
 import { ArrowLeft, Check, FileText, Loader2, UploadCloud, X } from "lucide-react";
 import { FormattedText } from "./FormattedText";
@@ -58,7 +59,7 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
   const submit = (event: FormEvent) => { event.preventDefault(); onSubmit(); };
 
   return (
-    <section className="funnel-step funnel-contact-step" aria-labelledby={`${page.id}-title`}>
+    <section className="funnel-step funnel-contact-step" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
       <div className="funnel-question-copy">
         {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
         <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />

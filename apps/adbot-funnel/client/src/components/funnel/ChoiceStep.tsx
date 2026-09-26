@@ -1,4 +1,5 @@
-import type { KeyboardEvent } from "react";
+import type { CSSProperties, KeyboardEvent } from "react";
+import { copySizeCssVars } from "@shared/copySize";
 import { choiceAdvancesOnSelect, isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type ChoicePage } from "@shared/funnel";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
@@ -27,7 +28,7 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
     onSelect(next.dataset.value);
   };
   return (
-    <section className="funnel-step funnel-question-step" aria-labelledby={`${page.id}-title`}>
+    <section className="funnel-step funnel-question-step" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
       <div className="funnel-question-copy">
         {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
         <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />

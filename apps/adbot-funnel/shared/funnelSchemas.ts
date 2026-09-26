@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
+import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
 import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
@@ -41,6 +42,10 @@ const pageBaseSchema = z.object({
   titleVisible: z.boolean().default(true),
   subtitleVisible: z.boolean().default(true),
   descriptionVisible: z.boolean().default(true),
+  eyebrowSizeStep: z.number().int().min(MIN_COPY_SIZE_STEP).max(MAX_COPY_SIZE_STEP).default(DEFAULT_COPY_SIZE_STEP),
+  titleSizeStep: z.number().int().min(MIN_COPY_SIZE_STEP).max(MAX_COPY_SIZE_STEP).default(DEFAULT_COPY_SIZE_STEP),
+  subtitleSizeStep: z.number().int().min(MIN_COPY_SIZE_STEP).max(MAX_COPY_SIZE_STEP).default(DEFAULT_COPY_SIZE_STEP),
+  descriptionSizeStep: z.number().int().min(MIN_COPY_SIZE_STEP).max(MAX_COPY_SIZE_STEP).default(DEFAULT_COPY_SIZE_STEP),
 });
 
 const optionalHexColorSchema = z.string().max(16).refine(

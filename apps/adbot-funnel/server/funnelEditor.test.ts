@@ -70,6 +70,16 @@ describe("Funnel-Seiteneditor", () => {
     expect(fieldSource).toContain('getData("text/plain")');
     expect(fieldSource).toContain("HexColorTextInput");
     expect(fieldSource).toContain("Schriftfarbe als Hexwert");
+    expect(editorSource).toContain("CopySizeStepper");
+    expect(editorSource).toContain("eyebrowSizeStep");
+    expect(editorSource).toContain("titleSizeStep");
+    expect(editorSource).toContain("subtitleSizeStep");
+    expect(editorSource).toContain("descriptionSizeStep");
+    expect(editorSource).toContain("Größe über die Pfeile");
+    const stepperSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/CopySizeStepper.tsx"), "utf8");
+    expect(stepperSource).toContain("kleiner");
+    expect(stepperSource).toContain("größer");
+    expect(stepperSource).toContain("Standard");
   });
 
   it("lässt den Abstand unter der Fortschrittsleiste in Pixeln einstellen", () => {
