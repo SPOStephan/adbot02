@@ -671,7 +671,7 @@ function ProgressSettings({
     <div className="grid gap-4 rounded-2xl border p-4">
       <div>
         <p className="text-sm font-bold">Fortschrittsanzeige</p>
-        <p className="text-xs text-muted-foreground">Über „Variante wählen“. Beschriftete Balken: Anzahl, Labels und Startseite jedes Balkens frei. Farben darunter.</p>
+        <p className="text-xs text-muted-foreground">Über „Variante wählen“. Simple Variante ist „Nur Balken“. Beschriftete Balken: Anzahl, Labels und Startseite frei. Farben darunter.</p>
       </div>
       <ProgressLayoutPicker
         value={resolveProgressLayout(progress.layout)}

@@ -111,6 +111,12 @@ describe("Fortschrittsanzeige", () => {
     expect(normalized.pages.at(-1)?.progressIcon).toBe("handshake");
   });
 
+  it("fällt ohne konfigurierte Stufen auf die drei Standard-Balken zurück", () => {
+    const steps = resolveProgressSegments(defaultFunnel.pages, 0, []);
+    expect(steps.map(item => item.title)).toEqual(["Job-Check", "Kurzprofil", "Kennenlernen"]);
+    expect(steps.map(item => item.state)).toEqual(["current", "upcoming", "upcoming"]);
+  });
+
   it("legt drei Balken an: Aufruf, zweite Seite, Adresseingabe", () => {
     const stages = defaultProgressStages(defaultFunnel.pages);
     expect(stages.map(stage => stage.startPageId)).toEqual(["page-start", "page-role", "page-contact"]);

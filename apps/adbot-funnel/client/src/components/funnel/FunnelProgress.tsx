@@ -55,6 +55,7 @@ export function FunnelProgress({
         "--fp-text": colors.text,
         "--fp-muted": colors.muted,
         "--fp-track": colors.track,
+        "--fp-count": steps.length,
       } as CSSProperties}
     >
       {layout === "percent" ? (
@@ -62,7 +63,7 @@ export function FunnelProgress({
       ) : layout === "segments" ? (
         <SegmentProgress steps={steps} />
       ) : layout === "bar" ? (
-        <BarProgress steps={steps} percent={percent} />
+        <BarProgress currentIndex={currentIndex} total={total} percent={percent} />
       ) : layout === "reduced" ? (
         <ReducedProgress
           currentIndex={currentIndex}
@@ -120,18 +121,13 @@ function PercentProgress({ percent, currentIndex, total }: { percent: number; cu
   );
 }
 
-function BarProgress({ steps, percent }: { steps: ResolvedProgressStep[]; percent: number }) {
+function BarProgress({ currentIndex, total, percent }: { currentIndex: number; total: number; percent: number }) {
   return (
     <>
+      <div className="funnel-progress-meta">
+        <span>Schritt {currentIndex + 1} von {total}</span>
+      </div>
       <ProgressTrack percent={percent} />
-      <ol className="funnel-progress-list">
-        {steps.map((item, index) => (
-          <li key={item.id} data-state={item.state}>
-            <strong>{index + 1}. {item.title}</strong>
-            {item.hint ? <span>{item.hint}</span> : null}
-          </li>
-        ))}
-      </ol>
     </>
   );
 }

@@ -36,17 +36,17 @@ export const PROGRESS_LAYOUT_META: Array<{
   description: string;
 }> = [
   { id: "percent", title: "Schritt & Prozent", description: "Die bisherige Anzeige: Schritt X von Y plus Fortschrittsbalken." },
+  { id: "bar", title: "Nur Balken", description: "Die simple Variante: Schritt X von Y und ein Balken direkt darunter, über der Seitenüberschrift." },
   { id: "segments", title: "Beschriftete Balken", description: "Getrennte Balken mit Label. Anzahl, Farbe und Startseite jeder Stufe sind frei wählbar." },
-  { id: "minimal", title: "Modern & minimal", description: "Nummerierte Kreise auf einer Linie mit Titel und Kurztext." },
-  { id: "icons", title: "Mit Icons", description: "Icon-Kreise statt Zahlen. Auf dem Handy nur die Kreise, aktueller Name darunter." },
-  { id: "bar", title: "Fortschrittsleiste", description: "Balken oben, darunter alle Stufen als nummerierte Liste." },
-  { id: "chevrons", title: "Mit Labeln", description: "Pfeilsegmente mit Icon, Nummer und Text." },
-  { id: "bold", title: "Nummern in Kreisen", description: "Große 01/02-Kreise, Titel in Versalien." },
-  { id: "reduced", title: "Kompakt (Mobil)", description: "Schritt X von Y und Balken oben, ohne Extra-Überschrift." },
-  { id: "illustrated", title: "Mit Illustrationen", description: "Farbige Icon-Kreise und verbindende Linie." },
-  { id: "checks", title: "Elegant mit Häkchen", description: "Erledigte Stufen als Häkchen, aktuelle hervorgehoben." },
-  { id: "chips", title: "Karten / Chips", description: "Jede Stufe als Karte, aktuelle eingefärbt." },
-  { id: "brand", title: "Mit Branding-Linie", description: "Dekorative Linie, Icons und freie Stufentexte." },
+  { id: "minimal", title: "Modern & minimal", description: "Nummerierte Kreise auf einer Linie. Am Handy nur die Kreise, aktueller Name darunter." },
+  { id: "icons", title: "Mit Icons", description: "Icon-Kreise statt Zahlen. Am Handy nur die Kreise, aktueller Name darunter." },
+  { id: "chevrons", title: "Mit Labeln", description: "Pfeilsegmente mit Icon, Nummer und Text. Am Handy nur die Kreise." },
+  { id: "bold", title: "Nummern in Kreisen", description: "Große 01/02-Kreise, Titel in Versalien. Am Handy nur die Kreise." },
+  { id: "reduced", title: "Kompakt mit Navigation", description: "Schritt X von Y, Vor/Zurück und Balken oben, ohne Extra-Überschrift." },
+  { id: "illustrated", title: "Mit Illustrationen", description: "Farbige Icon-Kreise und verbindende Linie. Am Handy nur die Kreise." },
+  { id: "checks", title: "Elegant mit Häkchen", description: "Erledigte Stufen als Häkchen, aktuelle hervorgehoben. Am Handy nur die Kreise." },
+  { id: "chips", title: "Karten / Chips", description: "Jede Stufe als Karte. Am Handy nur die Nummern." },
+  { id: "brand", title: "Mit Branding-Linie", description: "Dekorative Linie und Icons. Am Handy nur die Icons, aktueller Name darunter." },
 ];
 
 export type ResolvedProgressStep = {
@@ -163,11 +163,7 @@ export function resolveProgressSegments(
   const visible = visibleFunnelPages(pages);
   if (visible.length === 0) return [];
   const configured = (stages ?? []).filter(stage => stage.startPageId && visible.some(page => page.id === stage.startPageId));
-  const source = configured.length > 0 ? configured : visible.map(page => ({
-    id: page.id,
-    label: resolveProgressStepCopy(page).title,
-    startPageId: page.id,
-  }));
+  const source = configured.length > 0 ? configured : defaultProgressStages(pages);
   const unique: Array<FunnelProgressStage & { startIndex: number }> = [];
   for (const stage of source) {
     const startIndex = visible.findIndex(page => page.id === stage.startPageId);

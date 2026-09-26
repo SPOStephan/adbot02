@@ -85,13 +85,6 @@ function ProgressThumbnail({ layout }: { layout: ProgressLayout }) {
         <span className="h-1.5 overflow-hidden rounded-full bg-slate-200">
           <span className="block h-full w-1/3 rounded-full bg-[#0165c3]" />
         </span>
-        {layout === "bar" ? (
-          <span className="grid gap-1 text-[9px] text-slate-500">
-            <span>1. Job-Check</span>
-            <span>2. Kurzprofil</span>
-          </span>
-        ) : null}
-        {layout === "reduced" ? <span className="text-[11px] font-bold">Job-Check</span> : null}
       </div>
     );
   }
