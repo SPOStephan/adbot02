@@ -27,12 +27,12 @@ describe("visueller Funnel-Icon-Katalog", () => {
   it("zeichnet Adbot-Icons kleiner und mit dünnerem Strich als Lucide", () => {
     const adbot = renderToStaticMarkup(<FunnelIcon name="adbot-company-car" />);
     const lucide = renderToStaticMarkup(<FunnelIcon name="sparkles" />);
-    expect(ADBOT_ICON_VIEWBOX).toBe("-2.5 -2.5 29 29");
-    expect(ADBOT_ICON_STROKE).toBe(1.55);
+    expect(ADBOT_ICON_VIEWBOX).toBe("-5 -5 34 34");
+    expect(ADBOT_ICON_STROKE).toBe(1.3);
     expect(adbot).toContain("funnel-icon-own");
     expect(adbot).toContain(ADBOT_ICON_VIEWBOX);
     expect(adbot).toContain(`stroke-width="${ADBOT_ICON_STROKE}"`);
     expect(lucide).not.toContain("funnel-icon-own");
-    expect(placeholderFunnelIconSvg("Test")).toContain('stroke-width="1.55"');
+    expect(placeholderFunnelIconSvg("Test")).toContain('stroke-width="1.3"');
   });
 });

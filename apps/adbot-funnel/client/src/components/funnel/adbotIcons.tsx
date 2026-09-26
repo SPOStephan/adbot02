@@ -2,8 +2,8 @@ import type { ReactElement, ReactNode } from "react";
 import type { AdbotFunnelIcon } from "@shared/funnel";
 
 /** Extra viewBox padding so Adbot glyphs match Lucide’s optical size in the blue tile. */
-export const ADBOT_ICON_VIEWBOX = "-2.5 -2.5 29 29";
-export const ADBOT_ICON_STROKE = 1.55;
+export const ADBOT_ICON_VIEWBOX = "-5 -5 34 34";
+export const ADBOT_ICON_STROKE = 1.3;
 
 function StrokeIcon({ children, className }: { children: ReactNode; className?: string }) {
   return (
