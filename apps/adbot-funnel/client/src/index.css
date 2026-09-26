@@ -233,14 +233,15 @@
   .funnel-progress-percent .funnel-progress-track,
   .funnel-progress-reduced .funnel-progress-track { margin: 0; }
   .funnel-progress-segments {
-    display: grid;
-    grid-template-columns: repeat(var(--fp-count, 3), minmax(0, 1fr));
-    gap: 8px 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
     margin: 0;
     padding: 6px 0 2px;
     list-style: none;
   }
-  .funnel-progress-segments li { display: grid; justify-items: center; gap: 8px; min-width: 0; text-align: center; }
+  .funnel-progress-segments li { flex: 1 1 0; min-width: 0; display: grid; justify-items: stretch; gap: 8px; text-align: center; }
   .funnel-progress-segment-bar {
     display: block;
     width: 100%;
@@ -256,12 +257,14 @@
   }
   .funnel-progress-segments strong {
     min-width: 0;
-    max-width: 100%;
+    width: 100%;
     color: var(--fp-muted, var(--funnel-muted));
     font-size: 12px;
     font-weight: 650;
     line-height: 1.25;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    hyphens: manual;
+    -webkit-hyphens: manual;
   }
   .funnel-progress-segments li[data-state="completed"] strong {
     color: var(--fp-completed, var(--funnel-accent));
