@@ -5,6 +5,10 @@ describe("direkte Hex-Farbeingabe", () => {
   it("akzeptiert eingefügte Werte mit und ohne Raute und normalisiert Großschreibung", () => {
     expect(normalizeHexColor("#a1b2c3")).toBe("#A1B2C3");
     expect(normalizeHexColor("0165c3")).toBe("#0165C3");
+    expect(normalizeHexColor("  #0165c3  ")).toBe("#0165C3");
+    expect(normalizeHexColor("0af", { expandShort: true })).toBe("#00AAFF");
+    expect(normalizeHexColor("#0AF", { expandShort: true })).toBe("#00AAFF");
+    expect(normalizeHexColor("0af")).toBeNull();
   });
 
   it("behält unvollständige Eingaben als Entwurf, übernimmt sie aber noch nicht", () => {

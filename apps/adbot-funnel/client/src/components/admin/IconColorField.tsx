@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { formatHexColorDraft, hexToRgb, normalizeHexColor, parseRgbComponent, rgbToHex } from "@/lib/hexColor";
+import { HexColorTextInput } from "@/components/admin/HexColorTextInput";
+import { hexToRgb, parseRgbComponent, rgbToHex } from "@/lib/hexColor";
 
 export function IconColorField({
   label,
@@ -17,23 +18,14 @@ export function IconColorField({
 }) {
   const resolved = value || brandColor;
   const usingBrand = !value;
-  const [hexDraft, setHexDraft] = useState(resolved.toUpperCase());
   const rgb = hexToRgb(resolved) ?? { r: 1, g: 101, b: 195 };
   const [rgbDraft, setRgbDraft] = useState({ r: String(rgb.r), g: String(rgb.g), b: String(rgb.b) });
 
   useEffect(() => {
     const next = (value || brandColor).toUpperCase();
-    setHexDraft(next);
     const parsed = hexToRgb(next) ?? { r: 1, g: 101, b: 195 };
     setRgbDraft({ r: String(parsed.r), g: String(parsed.g), b: String(parsed.b) });
   }, [value, brandColor]);
-
-  const commitHex = (input: string) => {
-    const next = formatHexColorDraft(input);
-    setHexDraft(next);
-    const normalized = normalizeHexColor(next);
-    if (normalized) onChange(normalized);
-  };
 
   const commitRgb = (part: "r" | "g" | "b", raw: string) => {
     const nextDraft = { ...rgbDraft, [part]: raw };
@@ -58,7 +50,7 @@ export function IconColorField({
       <div className="grid gap-2 rounded-xl border bg-white p-2">
         <div className="flex items-center gap-2">
           <Input className="h-10 w-12 shrink-0 cursor-pointer border-0 bg-transparent p-0" type="color" value={resolved} aria-label={`${label} visuell auswählen`} onChange={event => onChange(event.target.value.toUpperCase())} />
-          <Input className="h-10 min-w-0 bg-slate-50 font-mono text-sm font-semibold uppercase" value={hexDraft} placeholder="#0165C3" maxLength={7} spellCheck={false} aria-label={`${label} als Hexwert`} onChange={event => commitHex(event.target.value)} onBlur={() => setHexDraft(resolved.toUpperCase())} />
+          <HexColorTextInput value={resolved} ariaLabel={`${label} als Hexwert`} onCommit={onChange} />
         </div>
         <div className="grid grid-cols-3 gap-2">
           {(["r", "g", "b"] as const).map(part => (
