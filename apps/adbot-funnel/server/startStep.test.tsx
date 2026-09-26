@@ -25,7 +25,7 @@ describe("StartStep Layouts", () => {
       ...getStartPage(),
       layout: "benefits",
       eyebrow: "Wir suchen dich!",
-      title: "Bauleiter:in (m/w/d)",
+      title: 'Bauleiter:in <small><span style="color: #607287">(m/w/d)</span></small>',
       benefitsBandTitle: "Deine Vorteile bei uns",
       secondaryButtonLabel: "Jetzt bewerben",
       benefits: defaultStartBenefits(() => "tile"),
@@ -45,6 +45,9 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("funnel-start-benefits-copy");
     expect(html).not.toContain("funnel-start-benefits-portrait");
     expect(html).not.toContain("funnel-start-benefits-badges");
+    expect(html).toContain("<small>");
+    expect(html).toContain("(m/w/d)");
+    expect(html).toContain("#607287");
   });
 
   it("blendet Überzeile und Beschreibung der Startseite aus", () => {

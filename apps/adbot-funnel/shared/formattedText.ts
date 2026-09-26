@@ -1,4 +1,4 @@
-const ALLOWED_TAGS = new Set(["b", "strong", "i", "em", "u", "span", "br"]);
+const ALLOWED_TAGS = new Set(["b", "strong", "i", "em", "u", "small", "span", "br"]);
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
   lt: "<",
@@ -144,6 +144,6 @@ export function sanitizeFormattedText(input: string): string {
     if (last) output += `</${last}>`;
   }
   return output
-    .replace(/<(b|strong|i|em|u|span)(?:\s[^>]*)?><\/\1>/g, "")
+    .replace(/<(b|strong|i|em|u|small|span)(?:\s[^>]*)?><\/\1>/g, "")
     .replace(/^(<br>)+|(<br>)+$/g, "");
 }

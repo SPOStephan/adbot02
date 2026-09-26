@@ -51,4 +51,12 @@ describe("Funnel-Seiteneditor", () => {
     expect(editorSource.match(/Weitere Option hinzufügen/g)?.length).toBe(2);
     expect(editorSource).toContain("page.options.length > 0");
   });
+
+  it("erklärt kleinere Zusätze und die Sub-Headline in der Überschrift", () => {
+    expect(editorSource).toContain("Überzeile / Sub-Headline");
+    expect(editorSource).toContain("(m/w/d)");
+    const fieldSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/FormattedTextField.tsx"), "utf8");
+    expect(fieldSource).toContain("wrapSelectionInSmall");
+    expect(fieldSource).toContain("Kleiner");
+  });
 });

@@ -322,8 +322,8 @@ export default function FunnelEditor() {
               )}
               <FormRow label="Interner Seitenname"><Input value={selectedPage.name} onChange={event => patchPage({ name: event.target.value }, false)} /></FormRow>
               <FormRow
-                label="Überzeile"
-                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Markieren für Fett, Kursiv, Unterstrich oder Farbe. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                label="Überzeile / Sub-Headline"
+                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Kleinere Zeile über der Überschrift, mit eigener Farbe. Markieren für Fett, Kursiv, Unterstrich, Farbe oder Kleiner. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
                 visible={isCopyFieldVisible(selectedPage.eyebrowVisible)}
                 onToggleVisible={() => patchPage({ eyebrowVisible: !isCopyFieldVisible(selectedPage.eyebrowVisible) } as Partial<FunnelPage>)}
               >
@@ -331,7 +331,7 @@ export default function FunnelEditor() {
               </FormRow>
               <FormRow
                 label="Überschrift"
-                hint={isCopyFieldVisible(selectedPage.titleVisible) ? "Einzelne Wörter markieren und fett, kursiv, unterstrichen oder farbig setzen." : "Ausgeblendet – Bewerber sehen diese Überschrift nicht."}
+                hint={isCopyFieldVisible(selectedPage.titleVisible) ? "Wörter markieren: Fett, Kursiv, Unterstrich, Farbe oder Kleiner – zum Beispiel (§34i) (m/w/d) in kleinerer Schrift." : "Ausgeblendet – Bewerber sehen diese Überschrift nicht."}
                 visible={isCopyFieldVisible(selectedPage.titleVisible)}
                 onToggleVisible={() => patchPage({ titleVisible: !isCopyFieldVisible(selectedPage.titleVisible) } as Partial<FunnelPage>)}
               >
