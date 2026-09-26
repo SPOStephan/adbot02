@@ -440,12 +440,11 @@
   .funnel-start-benefits-hero-bg { z-index: 0; pointer-events: none; }
   .funnel-start-benefits-hero-bg img {
     position: absolute;
-    top: 0;
+    inset: 0;
+    width: 100%;
     height: 100%;
-    width: auto;
-    max-width: none;
-    left: var(--hero-bg-focus-x, 50%);
-    transform: translateX(calc(-1 * var(--hero-bg-focus-x, 50%)));
+    object-fit: cover;
+    object-position: var(--hero-bg-focus-x, 50%) 50%;
   }
   .funnel-start-benefits-hero-copy { position: relative; z-index: 1; }
   .funnel-start-benefits-portrait {
@@ -681,12 +680,11 @@
 .hero-bg-focus-preview:active { cursor: grabbing; }
 .hero-bg-focus-preview img {
   position: absolute;
-  top: 0;
+  inset: 0;
+  width: 100%;
   height: 100%;
-  width: auto;
-  max-width: none;
-  left: var(--hero-bg-focus-x, 50%);
-  transform: translateX(calc(-1 * var(--hero-bg-focus-x, 50%)));
+  object-fit: cover;
+  object-position: var(--hero-bg-focus-x, 50%) 50%;
   pointer-events: none;
 }
 

@@ -52,7 +52,7 @@ export function HeroBackgroundField({
       });
       await library.refetch();
       applyAsset(asset);
-      toast.success("Hintergrundbild hochgeladen. Die volle Höhe bleibt sichtbar.");
+      toast.success("Hintergrundbild hochgeladen. Es füllt den Hero in voller Höhe, bei Bedarf auch in voller Breite.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Das Bild konnte nicht hochgeladen werden.");
     } finally {
@@ -64,7 +64,7 @@ export function HeroBackgroundField({
     <div className="grid gap-3 rounded-xl border bg-slate-50 p-3">
       <div>
         <p className="text-sm font-bold">Hintergrundbild</p>
-        <p className="text-xs text-muted-foreground">Liegt nur im Bereich über dem Trenner. Das Motiv wird in voller Höhe eingepasst, nicht als schmaler Ausschnitt. Standard 15&nbsp;% Deckkraft, damit der Text lesbar bleibt.</p>
+        <p className="text-xs text-muted-foreground">Liegt nur im Bereich über dem Trenner. Das Motiv bleibt in voller Höhe sichtbar; wird es dadurch zu schmal, wird es proportional auf volle Breite vergrößert. Standard 15&nbsp;% Deckkraft, damit der Text lesbar bleibt.</p>
       </div>
       {hasImage && previewUrl && (
         <HeroBackgroundFocusPreview
@@ -111,7 +111,7 @@ export function HeroBackgroundField({
         <DialogContent className="max-w-[640px] sm:max-w-[640px]">
           <DialogHeader>
             <DialogTitle>Hintergrundbild</DialogTitle>
-            <DialogDescription>Wähle ein Bild aus deiner Bibliothek oder lade ein neues hoch. Es wird in voller Höhe eingepasst, als WebP gespeichert und lässt sich danach nach links und rechts schieben.</DialogDescription>
+            <DialogDescription>Wähle ein Bild aus deiner Bibliothek oder lade ein neues hoch. Es wird als WebP gespeichert, füllt den Hero mindestens in der vollen Höhe und – falls sonst freie Seitenflächen entstünden – auch in der vollen Breite. Danach lässt es sich nach links und rechts schieben.</DialogDescription>
           </DialogHeader>
           <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border bg-white px-3 text-sm font-medium shadow-xs hover:bg-slate-50">
             {pending || upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
@@ -191,7 +191,7 @@ function HeroBackgroundFocusPreview({
         aria-label="Hintergrundmotiv nach links oder rechts verschieben"
         onValueChange={values => onChange(clampHeroBackgroundFocusX(values[0] ?? DEFAULT_HERO_BACKGROUND_FOCUS_X))}
       />
-      <p className="text-xs text-muted-foreground">Ziehe das Bild oder den Regler. Die volle Höhe bleibt sichtbar; verschoben wird nur nach links und rechts.</p>
+      <p className="text-xs text-muted-foreground">Ziehe das Bild oder den Regler nach links und rechts. Wird das Motiv zu schmal, füllt es automatisch die volle Breite.</p>
     </div>
   );
 }
