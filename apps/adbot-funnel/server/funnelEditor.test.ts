@@ -75,4 +75,14 @@ describe("Funnel-Seiteneditor", () => {
     expect(editorSource).toContain("contentGapPx");
     expect(editorSource).toContain("clampProgressContentGapPx");
   });
+
+  it("lässt eingefügte Badges per Drag sortieren und per Doppelklick bearbeiten", () => {
+    const badgesSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/StartBadgesField.tsx"), "utf8");
+    expect(badgesSource).toContain("moveStartBadge");
+    expect(badgesSource).toContain("onDragStart");
+    expect(badgesSource).toContain("onDoubleClick");
+    expect(badgesSource).toContain("Badge-Text");
+    expect(badgesSource).toContain("Hintergrund");
+    expect(badgesSource).toContain("Textfarbe");
+  });
 });

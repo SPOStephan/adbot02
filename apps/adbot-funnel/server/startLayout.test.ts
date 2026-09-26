@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -112,6 +112,9 @@ describe("Startseiten-Layouts", () => {
     expect(start.benefitsTileGap).toBe("medium");
     expect(start.badges.map(badge => badge.label)).toEqual(["Homeoffice", "10.000 €"]);
     expect(resolveBadgeColors({ backgroundColor: "#0165C3" }, "#10253f")).toEqual({ background: "#0165C3", text: "#ffffff" });
+    expect(moveStartBadge(start.badges, "badge-2", "badge-1").map(badge => badge.id)).toEqual(["badge-2", "badge-1"]);
+    expect(moveStartBadge(start.badges, "badge-1", "badge-1")).toBe(start.badges);
+    expect(moveStartBadge(start.badges, "fehlt", "badge-1")).toBe(start.badges);
   });
 
   it("normalisiert Bestands-Startseiten ohne Layout-Felder", () => {
