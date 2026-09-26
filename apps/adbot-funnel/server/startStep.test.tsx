@@ -116,8 +116,8 @@ describe("StartStep Layouts", () => {
       heroImageUrl: "https://cdn.example.org/portrait.jpg",
       benefitsTileLayout: "one-column",
       badges: [
-        { id: "badge-home", label: "Homeoffice", backgroundColor: "#E8F2FB", textColor: "#0165C3" },
-        { id: "badge-fixum", label: "Fixum + Provision" },
+        { id: "badge-home", label: "Homeoffice", backgroundColor: "#E8F2FB", textColor: "#0165C3", icon: "home" },
+        { id: "badge-fixum", label: "Fixum + Provision", icon: "sparkles", iconPosition: "right" },
       ],
       benefits: defaultStartBenefits(() => "tile"),
     };
@@ -131,6 +131,15 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("funnel-start-benefits-badges");
     expect(html).toContain("Homeoffice");
     expect(html).toContain("Fixum + Provision");
+    expect(html).toContain("funnel-start-benefits-badge-icon");
+    const firstIconAt = html.indexOf("funnel-start-benefits-badge-icon");
+    const homeAt = html.indexOf("Homeoffice");
+    const fixumAt = html.indexOf("Fixum + Provision");
+    const secondIconAt = html.indexOf("funnel-start-benefits-badge-icon", firstIconAt + 1);
+    expect(firstIconAt).toBeGreaterThan(-1);
+    expect(firstIconAt).toBeLessThan(homeAt);
+    expect(secondIconAt).toBeGreaterThan(fixumAt);
+    expect(html).toContain("#0165C3");
     expect(html).toContain("is-one-column");
     const wide = renderToStaticMarkup(<StartStep page={{ ...page, benefitsTileLayout: "two-column", benefitsTileGap: "large" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
     expect(wide).toContain("is-gap-large");

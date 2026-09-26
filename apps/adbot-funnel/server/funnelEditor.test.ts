@@ -116,5 +116,11 @@ describe("Funnel-Seiteneditor", () => {
     expect(badgesSource).toContain("Badge-Text");
     expect(badgesSource).toContain("Hintergrund");
     expect(badgesSource).toContain("Textfarbe");
+    expect(badgesSource).toContain("IconPicker");
+    expect(badgesSource).toContain("allowEmpty");
+    expect(badgesSource).toContain("Icon nach rechts");
+    expect(badgesSource).toContain("StartBadgeContent");
+    const pickerSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/IconPicker.tsx"), "utf8");
+    expect(pickerSource).toContain("Kein Icon");
   });
 });

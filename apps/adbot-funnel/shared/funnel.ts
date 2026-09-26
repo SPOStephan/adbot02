@@ -269,6 +269,8 @@ export type StartBenefit = {
   color?: string;
 };
 
+export type StartBadgeIconPosition = "left" | "right";
+
 export type StartBadge = {
   id: string;
   label: string;
@@ -276,6 +278,10 @@ export type StartBadge = {
   backgroundColor?: string;
   /** Optional badge text. Empty/undefined uses contrast on the fill or body text. */
   textColor?: string;
+  /** Optional catalog icon. Empty means text only. */
+  icon?: string;
+  /** Default is left of the label. */
+  iconPosition?: StartBadgeIconPosition;
 };
 
 export type StartPage = FunnelPageBase & {

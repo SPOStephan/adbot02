@@ -5,6 +5,7 @@ import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, reso
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
+import { StartBadgeContent } from "./StartBadgeContent";
 import { stripFormattedText } from "@shared/formattedText";
 
 export function StartStep({
@@ -109,7 +110,7 @@ function BenefitsStartStep({
                     className="funnel-start-benefits-badge"
                     style={{ background: colors.background, color: colors.text, borderColor: badge.backgroundColor || "color-mix(in srgb, var(--funnel-ink) 14%, transparent)" }}
                   >
-                    {badge.label}
+                    <StartBadgeContent badge={badge} color={colors.text} />
                   </li>
                 );
               })}

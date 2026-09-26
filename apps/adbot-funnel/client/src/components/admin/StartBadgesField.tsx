@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { GripVertical, Trash2 } from "lucide-react";
+import { ArrowLeftRight, GripVertical, Trash2 } from "lucide-react";
 import type { StartBadge } from "@shared/funnel";
-import { badgeFromTemplate, emptyStartBadge, MAX_START_BADGES, moveStartBadge, resolveBadgeColors, START_BADGE_TEMPLATES } from "@shared/startLayout";
+import { badgeFromTemplate, emptyStartBadge, MAX_START_BADGES, moveStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, START_BADGE_TEMPLATES } from "@shared/startLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { IconColorField } from "@/components/admin/IconColorField";
+import { IconPicker } from "@/components/admin/IconPicker";
+import { StartBadgeContent } from "@/components/funnel/StartBadgeContent";
 
 const BADGE_DRAG_TYPE = "application/x-adbot-start-badge";
 
@@ -39,7 +41,7 @@ export function StartBadgesField({
       <div>
         <p className="text-sm font-bold">Badges (optional)</p>
         <p className="text-xs text-muted-foreground">
-          Kleine Chips unter der Überschrift. Vorlagen einsetzen oder eigene anlegen. Ziehen ändert die Reihenfolge, Doppelklick öffnet Text und Farben.
+          Kleine Chips unter der Überschrift. Vorlagen einsetzen oder eigene anlegen. Ziehen ändert die Reihenfolge, Doppelklick öffnet Text, Icon und Farben.
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -113,12 +115,12 @@ export function StartBadgesField({
                 </button>
                 <button
                   type="button"
-                  className="max-w-[12rem] truncate px-1 text-left text-xs font-semibold"
+                  className="inline-flex max-w-[12rem] items-center gap-[0.4em] truncate px-1 text-left text-xs font-semibold"
                   aria-label={`${badge.label} bearbeiten`}
                   title="Doppelklick zum Bearbeiten"
                   onDoubleClick={() => setEditingId(badge.id)}
                 >
-                  {badge.label || "Badge"}
+                  <StartBadgeContent badge={badge} color={colors.text} />
                 </button>
                 <Button
                   size="icon"
@@ -155,6 +157,29 @@ export function StartBadgesField({
               if (event.key === "Escape") setEditingId(null);
             }}
           />
+          <div className="grid gap-2">
+            <Label>Icon</Label>
+            <p className="text-xs text-muted-foreground">Übernimmt die Textfarbe des Badges. Standard links vom Text.</p>
+            <IconPicker
+              value={resolveBadgeIcon(editing.icon)}
+              color={resolveBadgeColors(editing, brandColor).text}
+              allowEmpty
+              emptyLabel="Kein Icon"
+              onChange={icon => patch(editing.id, { icon })}
+            />
+            {resolveBadgeIcon(editing.icon) ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 justify-start gap-2 bg-white"
+                onClick={() => patch(editing.id, { iconPosition: resolveBadgeIconPosition(editing.iconPosition) === "right" ? "left" : "right" })}
+              >
+                <ArrowLeftRight className="size-3.5" />
+                {resolveBadgeIconPosition(editing.iconPosition) === "right" ? "Icon nach links" : "Icon nach rechts"}
+              </Button>
+            ) : null}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <IconColorField
               label="Hintergrund"

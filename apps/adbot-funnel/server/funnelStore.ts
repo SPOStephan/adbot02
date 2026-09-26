@@ -207,6 +207,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
             label: String(badge.label ?? "").trim().slice(0, 80) || "Badge",
             backgroundColor: optionalHex(badge.backgroundColor),
             textColor: optionalHex(badge.textColor),
+            icon: typeof badge.icon === "string" && isSelectableFunnelIcon(badge.icon) ? badge.icon : "",
+            iconPosition: badge.iconPosition === "right" ? "right" : "left",
           }))
           : [],
         benefits: Array.isArray(startPage.benefits)
