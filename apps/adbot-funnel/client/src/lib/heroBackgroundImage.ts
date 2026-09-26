@@ -1,4 +1,4 @@
-import { coverCropRect, HERO_BACKGROUND_DESKTOP, HERO_BACKGROUND_MOBILE } from "@shared/heroBackground";
+import { HERO_BACKGROUND_DESKTOP, HERO_BACKGROUND_MOBILE, scaleToMaxBox } from "@shared/heroBackground";
 
 const MAX_SOURCE_BYTES = 12 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -25,14 +25,14 @@ async function canvasToBase64(canvas: HTMLCanvasElement, quality = 0.74) {
   };
 }
 
-async function cropVariant(bitmap: ImageBitmap, width: number, height: number) {
-  const crop = coverCropRect(bitmap.width, bitmap.height, width, height);
+async function encodeVariant(bitmap: ImageBitmap, maxWidth: number, maxHeight: number) {
+  const size = scaleToMaxBox(bitmap.width, bitmap.height, maxWidth, maxHeight);
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = size.width;
+  canvas.height = size.height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Das Bild konnte nicht verarbeitet werden.");
-  context.drawImage(bitmap, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, width, height);
+  context.drawImage(bitmap, 0, 0, size.width, size.height);
   return canvasToBase64(canvas);
 }
 
@@ -42,8 +42,8 @@ export async function prepareHeroBackgroundVariants(file: File) {
   const bitmap = await createImageBitmap(file);
   try {
     const [desktop, mobile] = await Promise.all([
-      cropVariant(bitmap, HERO_BACKGROUND_DESKTOP.width, HERO_BACKGROUND_DESKTOP.height),
-      cropVariant(bitmap, HERO_BACKGROUND_MOBILE.width, HERO_BACKGROUND_MOBILE.height),
+      encodeVariant(bitmap, HERO_BACKGROUND_DESKTOP.maxWidth, HERO_BACKGROUND_DESKTOP.maxHeight),
+      encodeVariant(bitmap, HERO_BACKGROUND_MOBILE.maxWidth, HERO_BACKGROUND_MOBILE.maxHeight),
     ]);
     return { desktop, mobile, filename: file.name };
   } finally {

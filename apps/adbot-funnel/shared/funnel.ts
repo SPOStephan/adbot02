@@ -253,6 +253,8 @@ export type StartPage = FunnelPageBase & {
   heroBackgroundDesktopUrl: string;
   heroBackgroundMobileUrl: string;
   heroBackgroundOpacity: number;
+  /** 0 = left edge, 50 = center, 100 = right edge. */
+  heroBackgroundFocusX: number;
 };
 
 export type FunnelMediaAsset = {

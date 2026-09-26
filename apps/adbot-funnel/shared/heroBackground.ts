@@ -1,18 +1,18 @@
-export const HERO_BACKGROUND_DESKTOP = { width: 1600, height: 720 };
-export const HERO_BACKGROUND_MOBILE = { width: 800, height: 1100 };
+export const HERO_BACKGROUND_DESKTOP = { maxWidth: 1920, maxHeight: 1200 };
+export const HERO_BACKGROUND_MOBILE = { maxWidth: 1100, maxHeight: 1400 };
 
-export function coverCropRect(
+/** Scale down to the max box. Never crop. Never upscale. Keeps the full motif. */
+export function scaleToMaxBox(
   sourceWidth: number,
   sourceHeight: number,
-  targetWidth: number,
-  targetHeight: number,
+  maxWidth: number,
+  maxHeight: number,
 ) {
-  const sourceRatio = sourceWidth / Math.max(sourceHeight, 1);
-  const targetRatio = targetWidth / Math.max(targetHeight, 1);
-  if (sourceRatio > targetRatio) {
-    const width = sourceHeight * targetRatio;
-    return { sx: (sourceWidth - width) / 2, sy: 0, sw: width, sh: sourceHeight };
-  }
-  const height = sourceWidth / targetRatio;
-  return { sx: 0, sy: (sourceHeight - height) / 2, sw: sourceWidth, sh: height };
+  const width = Math.max(1, sourceWidth);
+  const height = Math.max(1, sourceHeight);
+  const scale = Math.min(1, maxWidth / width, maxHeight / height);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
 }

@@ -77,11 +77,13 @@ describe("StartStep Layouts", () => {
       heroBackgroundDesktopUrl: "https://cdn.example.org/desktop.webp",
       heroBackgroundMobileUrl: "https://cdn.example.org/mobile.webp",
       heroBackgroundOpacity: 20,
+      heroBackgroundFocusX: 20,
       benefits: [],
     };
     const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
     expect(html).toContain("funnel-start-benefits-hero-bg");
     expect(html).toContain("https://cdn.example.org/mobile.webp");
     expect(html).toContain("opacity:0.2");
+    expect(html).toContain("--hero-bg-focus-x:20%");
   });
 });

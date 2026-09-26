@@ -3,7 +3,7 @@ import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, META_CONVER
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
 import { DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS } from "./progressLayout";
-import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
+import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
 
@@ -79,6 +79,7 @@ const startPageSchema = pageBaseSchema.extend({
   heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),
   heroBackgroundMobileUrl: optionalAssetUrlSchema.default(""),
   heroBackgroundOpacity: z.number().min(0).max(100).default(DEFAULT_HERO_BACKGROUND_OPACITY),
+  heroBackgroundFocusX: z.number().min(0).max(100).default(DEFAULT_HERO_BACKGROUND_FOCUS_X),
 });
 
 const choicePageSchema = pageBaseSchema.extend({
