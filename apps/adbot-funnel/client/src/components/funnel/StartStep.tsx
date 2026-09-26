@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
-import { clampHeroBackgroundFocusX, contrastOnAccent, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -71,10 +71,12 @@ function BenefitsStartStep({
   const cards = tileLayout === "cards";
   const sectionBackground = cards ? resolveBenefitsSectionBackground(page.benefitsSectionBackground) : undefined;
   const cardBackground = cards ? resolveBenefitsCardBackground(page.benefitsCardBackground) : undefined;
+  const imageLayout = resolveHeroImageLayout(page.heroImageLayout);
+  const imageRadius = clampHeroImageRadius(page.heroImageRadius);
 
   return (
     <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`}>
-      <div className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? " has-portrait" : ""}${backgroundUrl ? " has-background" : ""}`}>
+      <div className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? ` has-portrait is-image-${imageLayout}` : ""}${backgroundUrl ? " has-background" : ""}`}>
         {backgroundUrl && (
           <div className="funnel-start-benefits-hero-bg" aria-hidden="true" style={{ "--hero-bg-focus-x": `${focusX}%` } as CSSProperties}>
             <picture>
@@ -84,7 +86,14 @@ function BenefitsStartStep({
           </div>
         )}
         <div className="funnel-start-benefits-hero-copy">
-          {page.heroImageUrl.trim() ? <img className="funnel-start-benefits-portrait" src={page.heroImageUrl} alt="" /> : null}
+          {page.heroImageUrl.trim() ? (
+            <img
+              className={`funnel-start-benefits-portrait is-${imageLayout}`}
+              src={page.heroImageUrl}
+              alt=""
+              style={imageLayout === "wide" ? { "--hero-image-radius": `${imageRadius}px` } as CSSProperties : undefined}
+            />
+          ) : null}
           {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-start-benefits-kicker" value={page.eyebrow} />}
           <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
           {(page.badges ?? []).length > 0 && (

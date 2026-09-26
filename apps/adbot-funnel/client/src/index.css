@@ -461,13 +461,26 @@
   }
   .funnel-start-benefits-hero-copy { position: relative; z-index: 1; }
   .funnel-start-benefits-portrait {
+    object-fit: cover;
+    display: block;
+  }
+  .funnel-start-benefits-portrait.is-circle {
     width: 132px;
     height: 132px;
-    object-fit: cover;
     border-radius: 50%;
     margin: 0 auto 18px;
-    display: block;
     box-shadow: 0 10px 28px rgba(16, 37, 63, 0.16);
+  }
+  .funnel-start-benefits-portrait.is-wide {
+    width: 100%;
+    max-width: 100%;
+    aspect-ratio: 16 / 10;
+    height: auto;
+    border-radius: var(--hero-image-radius, 28px);
+    margin: 0 0 20px;
+  }
+  .funnel-start-benefits-hero.is-image-wide .funnel-start-benefits-hero-copy {
+    width: min(100%, 720px);
   }
   .funnel-start-benefits-hero-fallback {
     display: none;
@@ -668,7 +681,8 @@
       padding: 56px 32px 64px;
       place-items: center;
     }
-    .funnel-start-benefits-portrait { width: 148px; height: 148px; }
+    .funnel-start-benefits-portrait.is-circle { width: 148px; height: 148px; }
+    .funnel-start-benefits-portrait.is-wide { aspect-ratio: 16 / 10; }
     .funnel-start-benefits-hero-copy { position: relative; z-index: 1; }
     .funnel-start-benefits-tiles.is-one-column { gap: 32px; padding-inline: 32px; }
     .funnel-start-benefits-tiles.is-cards { gap: 14px; padding-inline: 32px; }
@@ -712,7 +726,8 @@
 .admin-live-preview .funnel-footer { flex-direction: column; }
 .admin-live-preview .funnel-canvas-benefits .funnel-main { padding: 0 0 16px; }
 .admin-live-preview .funnel-start-benefits-hero { padding: 0 12px 18px; }
-.admin-live-preview .funnel-start-benefits-portrait { width: 88px; height: 88px; margin-bottom: 12px; }
+.admin-live-preview .funnel-start-benefits-portrait.is-circle { width: 88px; height: 88px; margin-bottom: 12px; }
+.admin-live-preview .funnel-start-benefits-portrait.is-wide { width: 100%; height: auto; margin-bottom: 12px; }
 .admin-live-preview .funnel-start-benefits-hero h1 { font-size: 1.55rem; }
 .admin-live-preview .funnel-start-benefits-tiles { padding: 18px 10px 4px; }
 .admin-live-preview .funnel-start-benefits-tiles.is-one-column { gap: 18px; }

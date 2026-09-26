@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
 import { DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS } from "./progressLayout";
-import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
+import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
 
@@ -70,6 +70,8 @@ const startPageSchema = pageBaseSchema.extend({
   type: z.literal("start"),
   layout: z.enum(START_PAGE_LAYOUTS).default("classic"),
   heroImageUrl: z.string().max(2048),
+  heroImageLayout: z.enum(HERO_IMAGE_LAYOUTS).default(DEFAULT_HERO_IMAGE_LAYOUT),
+  heroImageRadius: z.number().min(0).max(MAX_HERO_IMAGE_RADIUS).default(DEFAULT_HERO_IMAGE_RADIUS),
   bullets: z.array(z.string().min(1).max(240)).max(8),
   trustNote: formattedTextSchema(300),
   benefitsBandTitle: formattedTextSchema(200).default(""),

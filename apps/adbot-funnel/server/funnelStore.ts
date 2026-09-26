@@ -21,7 +21,7 @@ import type {
   StartPage,
 } from "@shared/funnel";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
-import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
@@ -171,6 +171,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         benefitsTileGap?: string;
         benefitsSectionBackground?: string;
         benefitsCardBackground?: string;
+        heroImageLayout?: string;
+        heroImageRadius?: number;
         badges?: StartBadge[];
         benefitsBandTitle?: string;
         secondaryButtonLabel?: string;
@@ -186,6 +188,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroBackgroundMobileUrl: typeof startPage.heroBackgroundMobileUrl === "string" ? startPage.heroBackgroundMobileUrl : "",
         heroBackgroundOpacity: clampHeroBackgroundOpacity(startPage.heroBackgroundOpacity),
         heroBackgroundFocusX: clampHeroBackgroundFocusX(startPage.heroBackgroundFocusX),
+        heroImageLayout: resolveHeroImageLayout(startPage.heroImageLayout),
+        heroImageRadius: clampHeroImageRadius(startPage.heroImageRadius),
         benefitsTileLayout: resolveBenefitsTileLayout(startPage.benefitsTileLayout),
         benefitsTileGap: resolveBenefitsTileGap(startPage.benefitsTileGap),
         benefitsSectionBackground: optionalHex(startPage.benefitsSectionBackground) || "",
