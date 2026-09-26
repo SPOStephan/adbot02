@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ChoiceStep } from "../client/src/components/funnel/ChoiceStep";
 import { defaultFunnel } from "../shared/defaultFunnel";
 import type { ChoicePage } from "../shared/funnel";
+import { stripSoftHyphens } from "../shared/hyphenateGerman";
 
 function getChoicePage(): ChoicePage {
   const page = defaultFunnel.pages.find((candidate): candidate is ChoicePage => candidate.type === "choice-grid");
@@ -31,7 +32,21 @@ describe("ChoiceStep Fortschritt", () => {
     expect(html).not.toContain(page.eyebrow);
     expect(html).not.toContain(page.description);
     expect(html).toContain("funnel-sr-only");
-    expect(html).toContain(page.title);
+    expect(stripSoftHyphens(html)).toContain(page.title);
     expect(html).not.toContain(`aria-describedby="${page.id}-description"`);
+  });
+
+  it("setzt in langen Optionstexten weiche Trennstriche", () => {
+    const page: ChoicePage = {
+      ...getChoicePage(),
+      options: getChoicePage().options.map((option, index) => index === 0
+        ? { ...option, label: "Immobilienfinanzierung / Baufinanzierung" }
+        : option),
+    };
+    const html = renderToStaticMarkup(<ChoiceStep page={page} selected={[]} onSelect={vi.fn()} onBack={vi.fn()} onContinue={vi.fn()} />);
+    expect(html).toContain("funnel-choice-text");
+    expect(html).toContain("\u00AD");
+    expect(html.replaceAll("\u00AD", "")).toContain("Immobilienfinanzierung / Baufinanzierung");
+    expect(html).toContain("Im\u00ADmo\u00ADbi\u00ADli\u00ADen\u00ADfi\u00ADnan\u00ADzie\u00ADrung");
   });
 });

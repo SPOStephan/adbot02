@@ -23,6 +23,12 @@ describe("formatierter Funnel-Text", () => {
     expect(isBlankFormattedText("<b>Hallo</b>")).toBe(false);
   });
 
+  it("entfernt weiche Trennstriche aus gespeichertem Text", () => {
+    expect(sanitizeFormattedText("Im\u00ADmobilienfinanzierung")).toBe("Immobilienfinanzierung");
+    expect(sanitizeFormattedText("<b>Im\u00ADmobilien</b>")).toBe("<b>Immobilien</b>");
+    expect(stripFormattedText("Im\u00ADmo &amp; Bau")).toBe("Immo & Bau");
+  });
+
   it("hält & einmal escaped und heilt &amp;amp;", () => {
     expect(sanitizeFormattedText("Bau & Montage")).toBe("Bau &amp; Montage");
     expect(sanitizeFormattedText("Bau &amp; Montage")).toBe("Bau &amp; Montage");

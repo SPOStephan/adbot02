@@ -340,14 +340,16 @@
   .funnel-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
   .funnel-choice-list { display: grid; gap: 9px; }
   .funnel-choice { position: relative; width: 100%; min-width: 0; border: 1px solid var(--funnel-line); border-radius: 17px; background: var(--funnel-choice-bg); color: var(--funnel-choice-text); text-align: left; box-shadow: 0 8px 22px rgba(27,76,119,.05); transition: border-color 160ms, box-shadow 180ms, transform 150ms, background-color 180ms, color 180ms; }
-  .funnel-choice-grid .funnel-choice { min-height: 138px; padding: 18px 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
-  .funnel-choice-list .funnel-choice { min-height: 66px; padding: 11px 13px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+  .funnel-choice-grid .funnel-choice { --funnel-choice-inline-pad: 14px; min-height: 138px; padding: 18px var(--funnel-choice-inline-pad); display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+  .funnel-choice-list .funnel-choice { --funnel-choice-inline-pad: 13px; min-height: 66px; padding: 11px var(--funnel-choice-inline-pad); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; }
   .funnel-choice:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--funnel-accent) 45%, var(--funnel-line)); box-shadow: 0 12px 28px color-mix(in srgb, var(--funnel-accent) 11%, transparent); }
   .funnel-choice:active { transform: scale(.98); }
   .funnel-choice.is-selected { border-color: var(--funnel-choice-selected-border); background: var(--funnel-choice-selected-bg); color: var(--funnel-choice-selected-text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--funnel-choice-selected-border) 16%, transparent); }
   .funnel-choice-icon { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: color-mix(in srgb, var(--funnel-accent) 9%, white); color: var(--funnel-accent); flex: 0 0 auto; }
   .funnel-choice-icon svg { width: 22px; height: 22px; }
-  .funnel-choice-text { display: grid; gap: 3px; min-width: 0; }
+  .funnel-choice-text { display: grid; gap: 3px; min-width: 0; width: 100%; max-width: 100%; overflow-wrap: break-word; word-break: normal; hyphens: manual; -webkit-hyphens: manual; }
+  .funnel-choice-text strong,
+  .funnel-choice-text small { min-width: 0; max-width: 100%; overflow-wrap: break-word; hyphens: manual; -webkit-hyphens: manual; }
   .funnel-choice-text strong { font-size: 14px; line-height: 1.3; }
   .funnel-choice-text small { color: color-mix(in srgb, var(--funnel-choice-text) 68%, transparent); font-size: 11px; line-height: 1.4; }
   .funnel-choice.is-selected .funnel-choice-text small { color: color-mix(in srgb, var(--funnel-choice-selected-text) 72%, transparent); }
@@ -409,7 +411,7 @@
     .funnel-start-step { grid-template-columns: minmax(0, 1.05fr) minmax(280px, .95fr); gap: 46px; width: 100%; }
     .funnel-start-step .funnel-primary-button { min-width: 220px; }
     .funnel-choice-grid { gap: 14px; }
-    .funnel-choice-grid .funnel-choice { min-height: 164px; padding: 22px 18px; }
+    .funnel-choice-grid .funnel-choice { --funnel-choice-inline-pad: 18px; min-height: 164px; padding: 22px var(--funnel-choice-inline-pad); }
     .funnel-field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .funnel-field-wide { grid-column: 1 / -1; }
     .funnel-contact-form { padding: 28px; }
@@ -572,6 +574,11 @@
     align-self: start;
     gap: 6px;
     min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    hyphens: manual;
+    -webkit-hyphens: manual;
   }
   .funnel-start-benefits-tiles.is-one-column {
     grid-template-columns: 1fr;
@@ -602,6 +609,9 @@
     font-size: 14px;
     line-height: 1.25;
     font-weight: 780;
+    overflow-wrap: break-word;
+    hyphens: manual;
+    -webkit-hyphens: manual;
   }
   .funnel-start-benefits-tiles p {
     margin: 0;
@@ -609,6 +619,9 @@
     color: var(--funnel-muted);
     font-size: 12px;
     line-height: 1.45;
+    overflow-wrap: break-word;
+    hyphens: manual;
+    -webkit-hyphens: manual;
   }
   .funnel-start-benefits-cta-wrap {
     display: grid;
@@ -659,7 +672,7 @@
 .admin-live-preview .funnel-step h1 { font-size: 2rem; }
 .admin-live-preview .funnel-hero-art { min-height: 220px; }
 .admin-live-preview .funnel-choice-grid { gap: 8px; }
-.admin-live-preview .funnel-choice-grid .funnel-choice { min-height: 130px; padding: 14px 12px; }
+.admin-live-preview .funnel-choice-grid .funnel-choice { --funnel-choice-inline-pad: 12px; min-height: 130px; padding: 14px var(--funnel-choice-inline-pad); }
 .admin-live-preview .funnel-field-grid { grid-template-columns: 1fr; }
 .admin-live-preview .funnel-field-wide { grid-column: auto; }
 .admin-live-preview .funnel-contact-form { padding: 15px; }
