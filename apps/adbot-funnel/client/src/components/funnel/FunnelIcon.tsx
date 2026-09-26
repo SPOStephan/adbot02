@@ -117,16 +117,17 @@ export function FunnelIcon({
   color?: string;
 }) {
   const style = color ? { color } : undefined;
+  const ownClass = ["funnel-icon-own", className].filter(Boolean).join(" ");
   const custom = getFunnelLibraryIcon(name);
   if (custom) {
     const svg = sanitizeFunnelIconSvg(custom.svg);
     if (svg) {
-      return <span className={className} style={style} dangerouslySetInnerHTML={{ __html: svg }} />;
+      return <span className={ownClass} data-icon-kind="custom" style={style} dangerouslySetInnerHTML={{ __html: svg }} />;
     }
   }
   if (isAdbotFunnelIcon(name)) {
     const Icon = adbotIconMap[name];
-    return <span className={className} style={style}><Icon className="size-full" /></span>;
+    return <span className={ownClass} data-icon-kind="adbot" style={style}><Icon className="size-full" /></span>;
   }
   const Icon = lucideIcons[name as LucideFunnelIcon] ?? Sparkles;
   return <Icon className={className} style={style} aria-hidden="true" strokeWidth={1.8} />;

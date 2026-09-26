@@ -699,6 +699,16 @@
   pointer-events: none;
 }
 
+.funnel-icon-own {
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
+}
+.funnel-icon-own[data-icon-kind="custom"] svg {
+  transform: scale(0.84);
+  transform-origin: center;
+}
+
 .funnel-formatted { display: inline; }
 .funnel-formatted b,
 .funnel-formatted strong { font-weight: 800; }
