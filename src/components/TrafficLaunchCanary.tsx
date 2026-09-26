@@ -22,6 +22,11 @@ import {
 } from "@/components/CreativePickerModal";
 import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
 import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
+import {
+  toMetaAdSetTargeting,
+  type MetaAdSetTargeting,
+} from "@/lib/campaign-geo/adapters";
+import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 import {
   resolveDynamicCreativeAssetIds,
@@ -108,7 +113,7 @@ const DEFAULT_TRAFFIC_BLUEPRINT = {
     optimization_goal: "LINK_CLICKS",
     bid_strategy: "LOWEST_COST_WITHOUT_CAP",
     destination_type: "WEBSITE",
-    targeting: { geo_locations: { countries: ["DE"] } },
+    targeting: { geo_locations: { countries: ["DE"] } } as MetaAdSetTargeting,
   },
   creative: {
     object_story_spec: {
@@ -496,6 +501,7 @@ export function TrafficLaunchCanary({
         parts.assetFeedSpec;
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
     }
+    template.ad_set.targeting = toMetaAdSetTargeting(await fetchCampaignGeoTarget());
 
     const saved = await apiJson<{ blueprintId?: string }>(
       "POST",

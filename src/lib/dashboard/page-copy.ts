@@ -70,4 +70,10 @@ export const DASHBOARD_PAGE_COPY = {
     title: "Creatives",
     description: "Creative-Bibliothek und Generierung.",
   },
+  zielgruppen: {
+    eyebrow: "Global",
+    title: "Zielgruppen",
+    description:
+      "Ein Ort plus optionaler Radius für alle Kampagnen. Plattformen mit vergleichbarem Geotargeting nutzen dieselbe Vorgabe.",
+  },
 } as const;

@@ -25,6 +25,11 @@ import {
 import type { LaunchAdActorOption } from "@/components/TrafficLaunchCanary";
 import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
 import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
+import {
+  toMetaAdSetTargeting,
+  type MetaAdSetTargeting,
+} from "@/lib/campaign-geo/adapters";
+import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 import {
   resolveDynamicCreativeAssetIds,
@@ -105,7 +110,7 @@ const DEFAULT_LEAD_BLUEPRINT = {
     billing_event: "IMPRESSIONS",
     optimization_goal: "OFFSITE_CONVERSIONS",
     bid_strategy: "LOWEST_COST_WITHOUT_CAP",
-    targeting: { geo_locations: { countries: ["DE"] } },
+    targeting: { geo_locations: { countries: ["DE"] } } as MetaAdSetTargeting,
   },
   creative: {
     object_story_spec: {
@@ -491,6 +496,7 @@ export function LeadLaunchCanary({
         parts.assetFeedSpec;
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
     }
+    template.ad_set.targeting = toMetaAdSetTargeting(await fetchCampaignGeoTarget());
 
     const saved = await apiJson<{ blueprintId?: string }>(
       "POST",

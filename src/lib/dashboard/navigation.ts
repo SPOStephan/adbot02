@@ -111,7 +111,12 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       href: "/dashboard/creatives",
       match: "/dashboard/creatives",
     },
-    { label: "Zielgruppen", icon: Target, href: null },
+    {
+      label: "Zielgruppen",
+      icon: Target,
+      href: "/dashboard/zielgruppen",
+      match: "/dashboard/zielgruppen",
+    },
     {
       label: "Autonomie",
       icon: ShieldCheck,

@@ -1,7 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
+
+import { pickOpenAILocationId, toOpenAIAdsLocationQuery } from "@/lib/campaign-geo/adapters";
+import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
+import type { CampaignGeoTarget } from "@/lib/campaign-geo/types";
 
 type GeoLocation = {
   id: string;
@@ -45,6 +50,76 @@ export function OpenAIAdsLaunchForm({
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [globalGeo, setGlobalGeo] = useState<CampaignGeoTarget | null>(null);
+
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+    void (async () => {
+      const geo = await fetchCampaignGeoTarget();
+      if (cancelled || !geo) return;
+      setGlobalGeo(geo);
+      setGeoQuery((current) => current || toOpenAIAdsLocationQuery(geo));
+      setLocations((current) => {
+        if (current.length > 0) return current;
+        if (geo.openaiLocationId) {
+          return [
+            {
+              id: geo.openaiLocationId,
+              type: geo.placeKind,
+              canonical_name: geo.placeLabel,
+              country_code: geo.countryCode ?? "",
+              name: geo.placeLabel,
+              region_code: null,
+            },
+          ];
+        }
+        return current;
+      });
+      if (geo.openaiLocationId) return;
+      try {
+        const query = new URLSearchParams({
+          platformAccountId,
+          q: toOpenAIAdsLocationQuery(geo),
+        });
+        const response = await fetch(
+          `/api/connectors/openai-ads/geo-search?${query.toString()}`,
+          { credentials: "same-origin", cache: "no-store" },
+        );
+        const payload: unknown = await response.json().catch(() => null);
+        if (cancelled || !response.ok) return;
+        const results =
+          typeof payload === "object" &&
+          payload !== null &&
+          "locations" in payload &&
+          Array.isArray(payload.locations)
+            ? (payload.locations as GeoLocation[])
+            : [];
+        const pickedId = pickOpenAILocationId(geo, results);
+        const picked = results.find((item) => item.id === pickedId);
+        if (!picked) return;
+        setGeoResults(results);
+        setLocations((current) =>
+          current.some((item) => item.id === picked.id)
+            ? current
+            : [...current, picked],
+        );
+        void fetch("/api/campaign-geo", {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            geo: { ...geo, openaiLocationId: picked.id },
+          }),
+        }).catch(() => undefined);
+      } catch {
+        // OpenAI-Suche ist optional; der globale Ort bleibt vorausgefüllt.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, platformAccountId]);
 
   async function searchLocations() {
     if (geoQuery.trim().length < 2 || searching) return;
@@ -280,6 +355,27 @@ export function OpenAIAdsLaunchForm({
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            {globalGeo ? (
+              <p className="mb-3 text-xs leading-5 text-slate-600">
+                Global: {globalGeo.placeLabel}
+                {globalGeo.radiusKm ? ` · ${globalGeo.radiusKm} km` : ""}.
+                ChatGPT Ads kennt keinen Radius — nur den nächsten Standort.
+                Ändern unter{" "}
+                <Link className="font-bold underline" href="/dashboard/zielgruppen">
+                  Zielgruppen
+                </Link>
+                .
+              </p>
+            ) : (
+              <p className="mb-3 text-xs leading-5 text-slate-600">
+                Optional zuerst unter{" "}
+                <Link className="font-bold underline" href="/dashboard/zielgruppen">
+                  Zielgruppen
+                </Link>{" "}
+                einen globalen Ort setzen. ChatGPT Ads braucht danach eine
+                OpenAI-Standort-ID.
+              </p>
+            )}
             <label className="text-sm font-bold text-slate-800">
               Standorttargeting
               <div className="mt-2 flex gap-2">
