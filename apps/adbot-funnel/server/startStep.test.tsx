@@ -26,6 +26,7 @@ describe("StartStep Layouts", () => {
       layout: "benefits",
       eyebrow: "Wir suchen dich!",
       title: 'Bauleiter:in <small><span style="color: #607287">(m/w/d)</span></small>',
+      subtitle: '<span style="color: #0165C3">Du verkaufst Versicherungen</span>',
       benefitsBandTitle: "Deine Vorteile bei uns",
       secondaryButtonLabel: "Jetzt bewerben",
       benefits: defaultStartBenefits(() => "tile"),
@@ -36,6 +37,13 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("funnel-start-benefits-tiles");
     expect(visible).toContain("Deine Vorteile bei uns");
     expect(visible).toContain("Wir suchen dich!");
+    const kickerAt = html.indexOf("funnel-start-benefits-kicker");
+    const subtitleAt = html.indexOf("funnel-start-benefits-subtitle");
+    expect(kickerAt).toBeGreaterThan(-1);
+    expect(subtitleAt).toBeGreaterThan(kickerAt);
+    expect(html.slice(kickerAt, subtitleAt)).toMatch(/<h1\b/);
+    expect(visible).toContain("Du verkaufst Versicherungen");
+    expect(html).toContain("#0165C3");
     expect(html).toContain("Jetzt bewerben");
     expect(visible).toContain("30 Tage Urlaub");
     expect(html).not.toContain("funnel-start-benefits-hero-bg");

@@ -30,6 +30,7 @@ const pageBaseSchema = z.object({
   name: z.string().min(1).max(120),
   eyebrow: formattedTextSchema(160),
   title: formattedTextSchema(300, 1),
+  subtitle: formattedTextSchema(240).default(""),
   description: formattedTextSchema(1200),
   buttonLabel: z.string().min(1).max(100),
   progressTitle: z.string().max(80).default(""),
@@ -38,6 +39,7 @@ const pageBaseSchema = z.object({
   hidden: z.boolean().default(false),
   eyebrowVisible: z.boolean().default(true),
   titleVisible: z.boolean().default(true),
+  subtitleVisible: z.boolean().default(true),
   descriptionVisible: z.boolean().default(true),
 });
 

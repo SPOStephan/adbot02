@@ -137,8 +137,10 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
       hidden: page.type !== "start" && page.type !== "contact" && page.hidden === true,
       eyebrowVisible: page.eyebrowVisible !== false,
       titleVisible: page.titleVisible !== false,
+      subtitleVisible: page.subtitleVisible !== false,
       descriptionVisible: page.descriptionVisible !== false,
       title: resolveFormatted(page.title, page.name || "Seite"),
+      subtitle: resolveFormatted(page.subtitle),
       description: resolveFormatted(page.description),
       eyebrow: typeof page.eyebrow === "string"
       ? resolveFormatted(page.eyebrow)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
-import { choiceAdvancesOnSelect, isCopyFieldVisible, isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown } from "@shared/funnel";
+import { choiceAdvancesOnSelect, isCopyFieldVisible, isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown } from "@shared/funnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
 import { normalizeFunnelConfig } from "./funnelStore";
 
@@ -11,9 +11,12 @@ describe("Sichtbarkeit von Seitentexten", () => {
     expect(isCopyFieldVisible(undefined)).toBe(true);
     expect(isPageEyebrowShown(start)).toBe(true);
     expect(isPageTitleShown(start)).toBe(true);
+    expect(isPageSubtitleShown(start)).toBe(false);
     expect(isPageDescriptionShown(start)).toBe(true);
     expect(isPageEyebrowShown({ ...start, eyebrowVisible: false })).toBe(false);
     expect(isPageTitleShown({ ...start, titleVisible: false })).toBe(false);
+    expect(isPageSubtitleShown({ ...start, subtitle: "Unter der Headline", subtitleVisible: false })).toBe(false);
+    expect(isPageSubtitleShown({ ...start, subtitle: "Unter der Headline" })).toBe(true);
     expect(isPageDescriptionShown({ ...start, descriptionVisible: false })).toBe(false);
     expect(isPageEyebrowShown({ ...start, eyebrow: "" })).toBe(false);
   });
@@ -23,14 +26,17 @@ describe("Sichtbarkeit von Seitentexten", () => {
     for (const page of legacy.pages) {
       Reflect.deleteProperty(page, "eyebrowVisible");
       Reflect.deleteProperty(page, "titleVisible");
+      Reflect.deleteProperty(page, "subtitleVisible");
       Reflect.deleteProperty(page, "descriptionVisible");
+      Reflect.deleteProperty(page, "subtitle");
     }
     const normalized = normalizeFunnelConfig(legacy, true);
-    expect(normalized.pages.every(page => page.eyebrowVisible && page.titleVisible && page.descriptionVisible)).toBe(true);
+    expect(normalized.pages.every(page => page.eyebrowVisible && page.titleVisible && page.subtitleVisible && page.descriptionVisible)).toBe(true);
+    expect(normalized.pages.every(page => page.subtitle === "")).toBe(true);
     expect(funnelConfigSchema.parse({
       ...defaultFunnel,
-      pages: defaultFunnel.pages.map(page => ({ ...page, eyebrowVisible: false, titleVisible: false, descriptionVisible: false })),
-    }).pages[0]).toMatchObject({ eyebrowVisible: false, titleVisible: false, descriptionVisible: false });
+      pages: defaultFunnel.pages.map(page => ({ ...page, eyebrowVisible: false, titleVisible: false, subtitleVisible: false, descriptionVisible: false })),
+    }).pages[0]).toMatchObject({ eyebrowVisible: false, titleVisible: false, subtitleVisible: false, descriptionVisible: false });
   });
 
   it("geht bei Einfachauswahl direkt weiter, bei Mehrfachauswahl nicht", () => {

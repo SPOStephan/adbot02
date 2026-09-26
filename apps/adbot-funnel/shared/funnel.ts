@@ -201,6 +201,8 @@ type FunnelPageBase = {
   name: string;
   eyebrow: string;
   title: string;
+  /** Smaller line directly under the title. Empty hides it. */
+  subtitle: string;
   description: string;
   buttonLabel: string;
   /** Short public label in the progress indicator. Empty falls back to the page name. */
@@ -213,6 +215,7 @@ type FunnelPageBase = {
   /** When false the stored text stays in the editor but is not shown to applicants. */
   eyebrowVisible?: boolean;
   titleVisible?: boolean;
+  subtitleVisible?: boolean;
   descriptionVisible?: boolean;
 };
 
@@ -230,6 +233,10 @@ export function isPageEyebrowShown(page: Pick<FunnelPageBase, "eyebrow" | "eyebr
 
 export function isPageTitleShown(page: Pick<FunnelPageBase, "titleVisible">): boolean {
   return isCopyFieldVisible(page.titleVisible);
+}
+
+export function isPageSubtitleShown(page: Pick<FunnelPageBase, "subtitle" | "subtitleVisible">): boolean {
+  return isCopyFieldVisible(page.subtitleVisible) && !isBlankFormattedText(page.subtitle);
 }
 
 export function isPageDescriptionShown(page: Pick<FunnelPageBase, "description" | "descriptionVisible">): boolean {
