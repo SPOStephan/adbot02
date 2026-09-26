@@ -95,5 +95,5 @@ export function sanitizeFunnelIconSvg(input: string): string | null {
 }
 
 export function placeholderFunnelIconSvg(_label: string): string {
-  return '<svg viewBox="-2.5 -2.5 29 29" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.55" /><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" /></svg>';
+  return '<svg viewBox="-5 -5 34 34" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.3" /><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>';
 }

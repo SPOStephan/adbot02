@@ -705,7 +705,7 @@
   line-height: 0;
 }
 .funnel-icon-own[data-icon-kind="custom"] svg {
-  transform: scale(0.84);
+  transform: scale(0.76);
   transform-origin: center;
 }
 
