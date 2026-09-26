@@ -26,7 +26,7 @@ describe("FunnelProgress Markup", () => {
     expect(html).not.toContain("Job-Check");
   });
 
-  it.each(PROGRESS_LAYOUTS.filter(layout => layout !== "percent"))("rendert Variante %s mit Stufentexten", (layout: ProgressLayout) => {
+  it.each(PROGRESS_LAYOUTS.filter(layout => layout !== "percent" && layout !== "reduced"))("rendert Variante %s mit Stufentexten", (layout: ProgressLayout) => {
     const html = renderToStaticMarkup(
       <FunnelProgress
         brand={defaultFunnel.brand}
@@ -60,6 +60,36 @@ describe("FunnelProgress Markup", () => {
     expect(html).toContain("Kennenlernen");
     expect(html).toContain('data-state="current"');
     expect(html).toContain('aria-valuenow="50"');
+  });
+
+  it("hält den Kompakt-Balken oben und wiederholt die Seitenüberschrift nicht", () => {
+    const html = renderToStaticMarkup(
+      <FunnelProgress
+        brand={defaultFunnel.brand}
+        progress={{ ...defaultFunnel.progress, layout: "reduced" }}
+        pages={defaultFunnel.pages}
+        step={0}
+      />,
+    );
+    expect(html).toContain("funnel-progress-reduced");
+    expect(html).toContain("Schritt 1 von 4");
+    expect(html).toContain("funnel-progress-track");
+    expect(html).not.toContain("funnel-progress-reduced-copy");
+    expect(html).not.toContain("Job-Check");
+    expect(html.indexOf("funnel-progress-reduced-head")).toBeLessThan(html.indexOf("funnel-progress-track"));
+  });
+
+  it("zeigt bei Icon-Varianten den aktuellen Stufennamen als eine Zeile", () => {
+    const html = renderToStaticMarkup(
+      <FunnelProgress
+        brand={defaultFunnel.brand}
+        progress={{ ...defaultFunnel.progress, layout: "icons" }}
+        pages={defaultFunnel.pages}
+        step={0}
+      />,
+    );
+    expect(html).toContain("funnel-progress-current-label");
+    expect(html).toContain("Job-Check");
   });
 
   it("färbt aktive Elemente mit Override statt Branding", () => {

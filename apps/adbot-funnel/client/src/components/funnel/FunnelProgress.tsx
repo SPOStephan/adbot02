@@ -65,7 +65,6 @@ export function FunnelProgress({
         <BarProgress steps={steps} percent={percent} />
       ) : layout === "reduced" ? (
         <ReducedProgress
-          current={current}
           currentIndex={currentIndex}
           total={total}
           percent={percent}
@@ -89,6 +88,9 @@ export function FunnelProgress({
       ) : (
         <MinimalProgress steps={steps} />
       )}
+      {needsMobileCaption(layout) && current ? (
+        <p className="funnel-progress-current-label">{current.title}</p>
+      ) : null}
     </div>
   );
 }
@@ -134,15 +136,24 @@ function BarProgress({ steps, percent }: { steps: ResolvedProgressStep[]; percen
   );
 }
 
+function needsMobileCaption(layout: ReturnType<typeof resolveProgressLayout>) {
+  return layout === "minimal"
+    || layout === "icons"
+    || layout === "illustrated"
+    || layout === "bold"
+    || layout === "checks"
+    || layout === "brand"
+    || layout === "chips"
+    || layout === "chevrons";
+}
+
 function ReducedProgress({
-  current,
   currentIndex,
   total,
   percent,
   onBack,
   onForward,
 }: {
-  current?: ResolvedProgressStep;
   currentIndex: number;
   total: number;
   percent: number;
@@ -162,12 +173,6 @@ function ReducedProgress({
           </button>
         </div>
       </div>
-      {current ? (
-        <div className="funnel-progress-reduced-copy">
-          <strong>{current.title}</strong>
-          {current.hint ? <span>{current.hint}</span> : null}
-        </div>
-      ) : null}
       <ProgressTrack percent={percent} />
     </>
   );
