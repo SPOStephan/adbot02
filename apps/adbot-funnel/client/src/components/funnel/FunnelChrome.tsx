@@ -70,7 +70,7 @@ export function FunnelChrome({
       {showProgress && pages ? (
         <FunnelProgress
           brand={brand}
-          progress={progress ?? { layout: "percent", colors: { active: "", completed: "", upcoming: "", text: "", muted: "", track: "" } }}
+          progress={progress ?? { layout: "percent", colors: { active: "", completed: "", upcoming: "", text: "", muted: "", track: "" }, stages: [] }}
           pages={pages}
           step={step}
           onBack={onBack}
