@@ -1,9 +1,13 @@
 import type { ReactElement, ReactNode } from "react";
 import type { AdbotFunnelIcon } from "@shared/funnel";
 
+/** Extra viewBox padding so Adbot glyphs match Lucide’s optical size in the blue tile. */
+export const ADBOT_ICON_VIEWBOX = "-2.5 -2.5 29 29";
+export const ADBOT_ICON_STROKE = 1.55;
+
 function StrokeIcon({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg className={className} viewBox={ADBOT_ICON_VIEWBOX} fill="none" stroke="currentColor" strokeWidth={ADBOT_ICON_STROKE} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {children}
     </svg>
   );
