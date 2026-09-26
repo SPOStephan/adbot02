@@ -68,8 +68,9 @@ describe("Funnel-Seiteneditor", () => {
     expect(fieldSource).toContain("plainTextFromClipboard");
     expect(fieldSource).toContain("insertPlainTextAtSelection");
     expect(fieldSource).toContain('getData("text/plain")');
-    expect(fieldSource).toContain("HexColorTextInput");
-    expect(fieldSource).toContain("Schriftfarbe als Hexwert");
+    expect(fieldSource).toContain("ColorValueEditor");
+    expect(fieldSource).toContain("Schriftfarbe");
+    expect(fieldSource).toContain("Popover");
     expect(editorSource).toContain("CopySizeStepper");
     expect(editorSource).toContain("eyebrowSizeStep");
     expect(editorSource).toContain("titleSizeStep");
@@ -90,9 +91,16 @@ describe("Funnel-Seiteneditor", () => {
 
   it("nimmt Hexwerte in Farbfeldern mit und ohne Raute an", () => {
     const hexSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/HexColorTextInput.tsx"), "utf8");
+    const editorSourceColor = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/ColorValueEditor.tsx"), "utf8");
+    const brandSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/BrandColorField.tsx"), "utf8");
+    const iconColorSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/IconColorField.tsx"), "utf8");
     expect(hexSource).toContain("expandShort");
     expect(hexSource).toContain("onPaste");
     expect(hexSource).toContain("#0165C3 oder 0165C3");
+    expect(editorSourceColor).toContain("Hexwert");
+    expect(editorSourceColor).toContain("HexColorTextInput");
+    expect(brandSource).toContain("ColorValueEditor");
+    expect(iconColorSource).toContain("ColorValueEditor");
   });
 
   it("lässt eingefügte Badges per Drag sortieren und per Doppelklick bearbeiten", () => {

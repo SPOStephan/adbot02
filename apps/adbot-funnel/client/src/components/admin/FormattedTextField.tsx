@@ -1,10 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bold, Italic, Underline } from "lucide-react";
 import { normalizeCssColor, sanitizeFormattedText } from "@shared/formattedText";
 import { normalizeHexColor } from "@/lib/hexColor";
-import { HexColorTextInput } from "@/components/admin/HexColorTextInput";
+import { ColorValueEditor } from "@/components/admin/ColorValueEditor";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 function runCommand(command: string, value?: string) {
   document.execCommand(command, false, value);
@@ -150,6 +150,7 @@ export function FormattedTextField({
   "aria-label"?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [color, setColor] = useState("#10253F");
 
   useEffect(() => {
     const node = ref.current;
@@ -164,6 +165,15 @@ export function FormattedTextField({
     const next = sanitizeFormattedText(ref.current.innerHTML);
     if (ref.current.innerHTML !== next) ref.current.innerHTML = next;
     onChange(next);
+  };
+
+  const applyColor = (next: string) => {
+    const hex = normalizeHexColor(next) ?? normalizeCssColor(next);
+    if (!hex) return;
+    setColor(hex);
+    wrapSelectionInColor(hex, ref.current);
+    ref.current?.focus();
+    commit();
   };
 
   return (
@@ -194,33 +204,26 @@ export function FormattedTextField({
         >
           <span className="text-[11px] font-bold leading-none">Klein</span>
         </Button>
-        <label className="inline-flex h-8 items-center gap-1 rounded-md border bg-white px-2 text-xs font-semibold">
-          Farbe
-          <Input
-            className="h-6 w-8 cursor-pointer border-0 bg-transparent p-0"
-            type="color"
-            aria-label="Schriftfarbe für die Auswahl"
-            defaultValue="#10253f"
-            onMouseDown={event => event.preventDefault()}
-            onChange={event => {
-              wrapSelectionInColor(event.target.value, ref.current);
-              ref.current?.focus();
-              commit();
-            }}
-          />
-        </label>
-        <HexColorTextInput
-          value="#10253F"
-          className="h-8 w-[9.75rem] bg-white font-mono text-xs font-semibold uppercase"
-          ariaLabel="Schriftfarbe als Hexwert"
-          onCommit={hex => {
-            const color = normalizeHexColor(hex) ?? normalizeCssColor(hex);
-            if (!color) return;
-            wrapSelectionInColor(color, ref.current);
-            ref.current?.focus();
-            commit();
-          }}
-        />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 px-2"
+              aria-label="Schriftfarbe"
+              title="Farbe über Hexwert oder Farbwähler setzen"
+              onMouseDown={event => event.preventDefault()}
+            >
+              Farbe
+              <span className="size-4 rounded-sm border" style={{ background: color }} aria-hidden="true" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-80" onOpenAutoFocus={event => event.preventDefault()}>
+            <p className="mb-2 text-xs font-semibold">Schriftfarbe</p>
+            <ColorValueEditor value={color} onChange={applyColor} ariaLabel="Schriftfarbe" />
+          </PopoverContent>
+        </Popover>
       </div>
       <div
         ref={ref}
