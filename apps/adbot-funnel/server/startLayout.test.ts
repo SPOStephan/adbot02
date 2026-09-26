@@ -85,6 +85,7 @@ describe("Startseiten-Layouts", () => {
       Reflect.deleteProperty(start, "badges");
       Reflect.deleteProperty(start, "benefitsBandTitle");
       Reflect.deleteProperty(start, "secondaryButtonLabel");
+      Reflect.deleteProperty(start, "heroBackgroundFocusX");
     }
     const normalized = normalizeFunnelConfig(legacy, true);
     const page = normalized.pages[0];
@@ -98,6 +99,7 @@ describe("Startseiten-Layouts", () => {
       expect(page.benefitsTileGap).toBe("medium");
       expect(page.badges).toEqual([]);
       expect(page.heroBackgroundOpacity).toBe(15);
+      expect(page.heroBackgroundFocusX).toBe(50);
       expect(page.heroBackgroundDesktopUrl).toBe("");
     }
   });

@@ -6,6 +6,7 @@ export const DEFAULT_BENEFITS_TILE_GAP: BenefitsTileGap = "medium";
 export const MAX_START_BENEFITS = 12;
 export const MAX_START_BADGES = 16;
 export const DEFAULT_HERO_BACKGROUND_OPACITY = 15;
+export const DEFAULT_HERO_BACKGROUND_FOCUS_X = 50;
 export const MAX_START_BENEFIT_TEXT = 800;
 
 export const START_BADGE_TEMPLATES = [
@@ -89,6 +90,12 @@ export function emptyStartBenefit(createId: () => string = () => crypto.randomUU
 export function clampHeroBackgroundOpacity(value: unknown) {
   const numeric = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numeric)) return DEFAULT_HERO_BACKGROUND_OPACITY;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+export function clampHeroBackgroundFocusX(value: unknown) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_HERO_BACKGROUND_FOCUS_X;
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 

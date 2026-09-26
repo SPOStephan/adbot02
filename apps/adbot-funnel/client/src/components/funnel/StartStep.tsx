@@ -1,5 +1,6 @@
+import type { CSSProperties } from "react";
 import type { FunnelBrand, StartPage } from "@shared/funnel";
-import { contrastOnAccent, resolveBadgeColors, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, contrastOnAccent, resolveBadgeColors, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -63,6 +64,7 @@ function BenefitsStartStep({
   const bottomLabel = page.secondaryButtonLabel.trim() || page.buttonLabel;
   const backgroundUrl = page.heroBackgroundMobileUrl || page.heroBackgroundDesktopUrl;
   const opacity = Math.max(0, Math.min(100, page.heroBackgroundOpacity ?? 15)) / 100;
+  const focusX = clampHeroBackgroundFocusX(page.heroBackgroundFocusX);
   const tileLayout = resolveBenefitsTileLayout(page.benefitsTileLayout);
   const tileGap = resolveBenefitsTileGap(page.benefitsTileGap);
   const ink = brand?.textColor ?? "#10253f";
@@ -71,7 +73,7 @@ function BenefitsStartStep({
     <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`}>
       <div className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? " has-portrait" : ""}${backgroundUrl ? " has-background" : ""}`}>
         {backgroundUrl && (
-          <div className="funnel-start-benefits-hero-bg" aria-hidden="true">
+          <div className="funnel-start-benefits-hero-bg" aria-hidden="true" style={{ "--hero-bg-focus-x": `${focusX}%` } as CSSProperties}>
             <picture>
               {page.heroBackgroundDesktopUrl && <source media="(min-width: 640px)" srcSet={page.heroBackgroundDesktopUrl} />}
               <img src={backgroundUrl} alt="" style={{ opacity }} />

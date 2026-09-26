@@ -21,7 +21,7 @@ import type {
   StartPage,
 } from "@shared/funnel";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
-import { clampHeroBackgroundOpacity, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
@@ -180,6 +180,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroBackgroundDesktopUrl: typeof startPage.heroBackgroundDesktopUrl === "string" ? startPage.heroBackgroundDesktopUrl : "",
         heroBackgroundMobileUrl: typeof startPage.heroBackgroundMobileUrl === "string" ? startPage.heroBackgroundMobileUrl : "",
         heroBackgroundOpacity: clampHeroBackgroundOpacity(startPage.heroBackgroundOpacity),
+        heroBackgroundFocusX: clampHeroBackgroundFocusX(startPage.heroBackgroundFocusX),
         benefitsTileLayout: resolveBenefitsTileLayout(startPage.benefitsTileLayout),
         benefitsTileGap: resolveBenefitsTileGap(startPage.benefitsTileGap),
         badges: Array.isArray(startPage.badges)

@@ -430,15 +430,23 @@
   }
   .funnel-start-benefits-hero.has-background { min-height: 280px; place-content: center; }
   .funnel-start-benefits-hero-bg,
-  .funnel-start-benefits-hero-bg picture,
-  .funnel-start-benefits-hero-bg img {
+  .funnel-start-benefits-hero-bg picture {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+    overflow: hidden;
   }
-  .funnel-start-benefits-hero-bg { z-index: 0; overflow: hidden; pointer-events: none; }
-  .funnel-start-benefits-hero-bg img { object-fit: cover; }
+  .funnel-start-benefits-hero-bg { z-index: 0; pointer-events: none; }
+  .funnel-start-benefits-hero-bg img {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: auto;
+    max-width: none;
+    left: var(--hero-bg-focus-x, 50%);
+    transform: translateX(calc(-1 * var(--hero-bg-focus-x, 50%)));
+  }
   .funnel-start-benefits-hero-copy { position: relative; z-index: 1; }
   .funnel-start-benefits-portrait {
     width: 132px;
@@ -658,6 +666,29 @@
 .admin-live-preview .funnel-start-benefits-icon svg,
 .admin-live-preview .funnel-start-benefits-icon span { width: 34px; height: 34px; }
 .admin-live-preview .funnel-start-benefits-button { min-width: 0; }
+
+.hero-bg-focus-preview {
+  position: relative;
+  height: 168px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #d7e0ea;
+  background: #e8eef4;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.hero-bg-focus-preview:active { cursor: grabbing; }
+.hero-bg-focus-preview img {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  left: var(--hero-bg-focus-x, 50%);
+  transform: translateX(calc(-1 * var(--hero-bg-focus-x, 50%)));
+  pointer-events: none;
+}
 
 .funnel-formatted { display: inline; }
 .funnel-formatted b,

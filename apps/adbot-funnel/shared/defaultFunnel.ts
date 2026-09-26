@@ -84,6 +84,7 @@ export const defaultFunnel: FunnelConfig = {
       heroBackgroundDesktopUrl: "",
       heroBackgroundMobileUrl: "",
       heroBackgroundOpacity: 15,
+      heroBackgroundFocusX: 50,
     },
     {
       id: "page-role",
