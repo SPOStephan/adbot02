@@ -3,7 +3,7 @@ import { isBlankFormattedText } from "./formattedText";
 export const PAGE_TYPES = ["start", "choice-grid", "choice-list", "contact"] as const;
 export const FUNNEL_STATUSES = ["draft", "published", "paused", "archived"] as const;
 export const START_PAGE_LAYOUTS = ["classic", "benefits"] as const;
-export const BENEFITS_TILE_LAYOUTS = ["two-column", "one-column"] as const;
+export const BENEFITS_TILE_LAYOUTS = ["two-column", "one-column", "cards"] as const;
 export const BENEFITS_TILE_GAPS = ["small", "medium", "large"] as const;
 export const PROGRESS_LAYOUTS = [
   "percent",
@@ -274,6 +274,10 @@ export type StartPage = FunnelPageBase & {
   benefits: StartBenefit[];
   benefitsTileLayout: BenefitsTileLayout;
   benefitsTileGap: BenefitsTileGap;
+  /** Empty = default for the selected tile template. */
+  benefitsSectionBackground: string;
+  /** Empty = white cards. Only used by the cards template. */
+  benefitsCardBackground: string;
   badges: StartBadge[];
   heroBackgroundAssetId: string;
   heroBackgroundDesktopUrl: string;

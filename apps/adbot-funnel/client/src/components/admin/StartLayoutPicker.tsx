@@ -17,7 +17,7 @@ const VARIANTS: Array<{
   {
     id: "benefits",
     title: "Vorteile & Icons",
-    description: "Headline und Button, dann Branding-Trenner und Icon-Kacheln. Die Kacheln selbst sind ein- oder zweispaltig wählbar.",
+    description: "Headline und Button, dann Branding-Trenner und Icon-Kacheln. Die Kacheln selbst als Vorlage wählbar: zwei Spalten, eine Spalte oder Karten.",
   },
 ];
 

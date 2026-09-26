@@ -1,8 +1,10 @@
-import type { BenefitsTileGap, BenefitsTileLayout, FunnelOptionIcon, StartBadge, StartBenefit, StartPage, StartPageLayout } from "./funnel";
+import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type StartBadge, type StartBenefit, type StartPage, type StartPageLayout } from "./funnel";
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
 export const DEFAULT_BENEFITS_TILE_LAYOUT: BenefitsTileLayout = "two-column";
 export const DEFAULT_BENEFITS_TILE_GAP: BenefitsTileGap = "medium";
+export const DEFAULT_BENEFITS_SECTION_BACKGROUND = "#F4F8FC";
+export const DEFAULT_BENEFITS_CARD_BACKGROUND = "#FFFFFF";
 export const MAX_START_BENEFITS = 12;
 export const MAX_START_BADGES = 16;
 export const DEFAULT_HERO_BACKGROUND_OPACITY = 15;
@@ -42,8 +44,44 @@ export function resolveStartLayout(page: Pick<StartPage, "layout"> | { layout?: 
   return page.layout === "benefits" ? "benefits" : DEFAULT_START_LAYOUT;
 }
 
+export const BENEFITS_TILE_LAYOUT_META: Array<{
+  id: BenefitsTileLayout;
+  title: string;
+  description: string;
+}> = [
+  {
+    id: "two-column",
+    title: "Zwei Spalten",
+    description: "Icon oben, darunter Überschrift und kurzer Text. Zwei Kacheln pro Reihe.",
+  },
+  {
+    id: "one-column",
+    title: "Eine Spalte",
+    description: "Icon links, rechts mehr Platz für Überschrift und längeren Text. Eine Kachel pro Reihe.",
+  },
+  {
+    id: "cards",
+    title: "Karten",
+    description: "Wie eine Spalte, aber jeder Vorteil in einer abgerundeten Box. Bereichs- und Kartenfarbe frei wählbar.",
+  },
+];
+
 export function resolveBenefitsTileLayout(value?: string | null): BenefitsTileLayout {
-  return value === "one-column" ? "one-column" : DEFAULT_BENEFITS_TILE_LAYOUT;
+  return (BENEFITS_TILE_LAYOUTS as readonly string[]).includes(value ?? "")
+    ? (value as BenefitsTileLayout)
+    : DEFAULT_BENEFITS_TILE_LAYOUT;
+}
+
+export function resolveBenefitsSectionBackground(value?: string | null): string {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+    ? value.toUpperCase()
+    : DEFAULT_BENEFITS_SECTION_BACKGROUND;
+}
+
+export function resolveBenefitsCardBackground(value?: string | null): string {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+    ? value.toUpperCase()
+    : DEFAULT_BENEFITS_CARD_BACKGROUND;
 }
 
 export function resolveBenefitsTileGap(value?: string | null): BenefitsTileGap {

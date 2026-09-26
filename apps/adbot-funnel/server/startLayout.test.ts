@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, contrastOnAccent, defaultStartBenefits, resolveBadgeColors, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, contrastOnAccent, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -11,7 +11,9 @@ describe("Startseiten-Layouts", () => {
     expect(resolveStartLayout({})).toBe("classic");
     expect(resolveBenefitsTileLayout("one-column")).toBe("one-column");
     expect(resolveBenefitsTileLayout("two-column")).toBe("two-column");
+    expect(resolveBenefitsTileLayout("cards")).toBe("cards");
     expect(resolveBenefitsTileLayout(undefined)).toBe("two-column");
+    expect(resolveBenefitsTileLayout("unknown")).toBe("two-column");
     expect(resolveBenefitsTileGap(undefined)).toBe("medium");
     expect(resolveBenefitsTileGap("medium")).toBe("medium");
     expect(resolveBenefitsTileGap("small")).toBe("small");
@@ -52,6 +54,25 @@ describe("Startseiten-Layouts", () => {
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages }).success).toBe(true);
   });
 
+  it("akzeptiert die Karten-Vorlage mit Bereichs- und Kartenfarbe", () => {
+    const pages = defaultFunnel.pages.map(page => page.type === "start"
+      ? {
+        ...page,
+        layout: "benefits" as const,
+        benefitsTileLayout: "cards" as const,
+        benefitsSectionBackground: "#E8F2FB",
+        benefitsCardBackground: "#FFFFFF",
+      }
+      : page);
+    const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages });
+    const start = parsed.pages[0];
+    expect(start?.type).toBe("start");
+    if (start?.type !== "start") throw new Error("Startseite fehlt");
+    expect(start.benefitsTileLayout).toBe("cards");
+    expect(start.benefitsSectionBackground).toBe("#E8F2FB");
+    expect(start.benefitsCardBackground).toBe("#FFFFFF");
+  });
+
   it("nimmt einspaltige Kacheln, Badges und Vorlagen an", () => {
     const pages = defaultFunnel.pages.map(page => page.type === "start"
       ? {
@@ -69,6 +90,8 @@ describe("Startseiten-Layouts", () => {
     expect(start?.type).toBe("start");
     if (start?.type !== "start") throw new Error("Startseite fehlt");
     expect(start.benefitsTileLayout).toBe("one-column");
+    expect(resolveBenefitsSectionBackground("")).toBe(DEFAULT_BENEFITS_SECTION_BACKGROUND);
+    expect(resolveBenefitsCardBackground("#EEF7FF")).toBe("#EEF7FF");
     expect(start.benefitsTileGap).toBe("medium");
     expect(start.badges.map(badge => badge.label)).toEqual(["Homeoffice", "10.000 €"]);
     expect(resolveBadgeColors({ backgroundColor: "#0165C3" }, "#10253f")).toEqual({ background: "#0165C3", text: "#ffffff" });
@@ -97,6 +120,8 @@ describe("Startseiten-Layouts", () => {
       expect(page.secondaryButtonLabel).toBe("");
       expect(page.benefitsTileLayout).toBe("two-column");
       expect(page.benefitsTileGap).toBe("medium");
+      expect(page.benefitsSectionBackground).toBe("");
+      expect(page.benefitsCardBackground).toBe("");
       expect(page.badges).toEqual([]);
       expect(page.heroBackgroundOpacity).toBe(15);
       expect(page.heroBackgroundFocusX).toBe(50);

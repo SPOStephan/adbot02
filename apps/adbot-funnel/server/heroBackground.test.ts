@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scaleToMaxBox } from "@shared/heroBackground";
+import { HERO_IMAGE_MAX, scaleToMaxBox } from "@shared/heroBackground";
 import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity } from "@shared/startLayout";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
@@ -12,6 +12,7 @@ describe("Hintergrundbild Zuschnitt und Bibliothek", () => {
     expect(scaleToMaxBox(800, 600, 1920, 1200)).toEqual({ width: 800, height: 600 });
     expect(scaleToMaxBox(1000, 4000, 1920, 1200)).toEqual({ width: 300, height: 1200 });
     expect(scaleToMaxBox(2400, 1000, 1920, 1200)).toEqual({ width: 1920, height: 800 });
+    expect(scaleToMaxBox(2400, 1800, HERO_IMAGE_MAX.maxWidth, HERO_IMAGE_MAX.maxHeight)).toEqual({ width: 1200, height: 900 });
   });
 
   it("begrenzt den Horizontal-Fokus auf 0–100 und fällt auf 50 zurück", () => {
