@@ -147,7 +147,12 @@ export const funnelConfigSchema = z
         muted: optionalHexColorSchema.default(""),
         track: optionalHexColorSchema.default(""),
       }).default(EMPTY_PROGRESS_COLORS),
-    }).default({ layout: DEFAULT_PROGRESS_LAYOUT, colors: EMPTY_PROGRESS_COLORS }),
+      stages: z.array(z.object({
+        id: z.string().min(1).max(80),
+        label: z.string().max(40),
+        startPageId: z.string().min(1).max(80),
+      })).max(6).default([]),
+    }).default({ layout: DEFAULT_PROGRESS_LAYOUT, colors: EMPTY_PROGRESS_COLORS, stages: [] }),
     brand: z.object({
       logoUrl: z.string().max(2048).refine(value => value === "" || value.startsWith("/") || /^https?:\/\//i.test(value), "Logo muss eine HTTPS-/HTTP- oder interne URL sein."),
       logoAlt: z.string().min(1).max(160),

@@ -62,6 +62,19 @@ export function ProgressLayoutPicker({
 }
 
 function ProgressThumbnail({ layout }: { layout: ProgressLayout }) {
+  if (layout === "segments") {
+    return (
+      <div className="grid grid-cols-3 gap-2.5 overflow-hidden rounded-xl border bg-white px-3 py-4">
+        {["Bewerbung", "Matching", "Gespräch"].map((label, index) => (
+          <span key={label} className="grid justify-items-center gap-2">
+            <span className={`h-1.5 w-full rounded-full ${index === 0 ? "bg-[#0165c3]" : "bg-[#c5d3e0]"}`} />
+            <span className={`text-center text-[9px] font-semibold ${index === 0 ? "text-[#0165c3]" : "text-slate-400"}`}>{label}</span>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
   if (layout === "percent" || layout === "bar" || layout === "reduced") {
     return (
       <div className="grid gap-2 overflow-hidden rounded-xl border bg-white p-3">
@@ -72,13 +85,6 @@ function ProgressThumbnail({ layout }: { layout: ProgressLayout }) {
         <span className="h-1.5 overflow-hidden rounded-full bg-slate-200">
           <span className="block h-full w-1/3 rounded-full bg-[#0165c3]" />
         </span>
-        {layout === "bar" ? (
-          <span className="grid gap-1 text-[9px] text-slate-500">
-            <span>1. Job-Check</span>
-            <span>2. Kurzprofil</span>
-          </span>
-        ) : null}
-        {layout === "reduced" ? <span className="text-[11px] font-bold">Job-Check</span> : null}
       </div>
     );
   }

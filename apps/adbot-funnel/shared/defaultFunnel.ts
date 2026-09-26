@@ -35,6 +35,7 @@ export const defaultFunnel: FunnelConfig = {
       muted: "",
       track: "",
     },
+    stages: [],
   },
   socialProof: {
     enabled: true,

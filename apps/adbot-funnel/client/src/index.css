@@ -198,6 +198,8 @@
     min-height: 100svh;
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
+    container-type: inline-size;
+    container-name: funnel;
     background:
       radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--funnel-accent) 11%, transparent), transparent 32rem),
       radial-gradient(circle at -10% 58%, color-mix(in srgb, var(--funnel-accent) 7%, transparent), transparent 28rem),
@@ -224,36 +226,85 @@
   .funnel-wordmark-mark { width: 34px; height: 34px; border-radius: 11px; display: inline-grid; place-items: center; background: var(--funnel-accent); color: white; font-size: 11px; box-shadow: 0 8px 20px color-mix(in srgb, var(--funnel-accent) 22%, transparent); }
   .funnel-security { display: inline-flex; align-items: center; gap: 6px; color: var(--funnel-muted); font-size: 11px; font-weight: 650; white-space: nowrap; }
 
-  .funnel-progress { width: min(calc(100% - 40px), 720px); margin: 4px auto 0; color: var(--fp-text, var(--funnel-ink)); }
+  .funnel-progress { width: min(calc(100% - 40px), 720px); margin: 4px auto 0; min-width: 0; overflow: hidden; color: var(--fp-text, var(--funnel-ink)); }
   .funnel-progress-meta { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 7px; color: var(--fp-muted, var(--funnel-muted)); font-size: 11px; font-weight: 700; }
   .funnel-progress-track { height: 5px; background: var(--fp-track, #dbe6f0); border-radius: 999px; overflow: hidden; }
+  .funnel-progress-bar .funnel-progress-track,
+  .funnel-progress-percent .funnel-progress-track,
+  .funnel-progress-reduced .funnel-progress-track { margin: 0; }
+  .funnel-progress-segments {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    margin: 0;
+    padding: 6px 0 2px;
+    list-style: none;
+  }
+  .funnel-progress-segments li { flex: 1 1 0; min-width: 0; display: grid; justify-items: stretch; gap: 8px; text-align: center; }
+  .funnel-progress-segment-bar {
+    display: block;
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--fp-upcoming, #c5d3e0);
+  }
+  .funnel-progress-segments li[data-state="completed"] .funnel-progress-segment-bar {
+    background: var(--fp-completed, var(--funnel-accent));
+  }
+  .funnel-progress-segments li[data-state="current"] .funnel-progress-segment-bar {
+    background: var(--fp-active, var(--funnel-accent));
+  }
+  .funnel-progress-segments strong {
+    min-width: 0;
+    width: 100%;
+    color: var(--fp-muted, var(--funnel-muted));
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+    hyphens: manual;
+    -webkit-hyphens: manual;
+  }
+  .funnel-progress-segments li[data-state="completed"] strong {
+    color: var(--fp-completed, var(--funnel-accent));
+  }
+  .funnel-progress-segments li[data-state="current"] strong {
+    color: var(--fp-active, var(--funnel-accent));
+  }
+  .funnel-progress-segments li[data-state="upcoming"] strong { color: var(--fp-muted, var(--funnel-muted)); }
   .funnel-progress-value { height: 100%; min-width: 7px; background: var(--fp-active, var(--funnel-accent)); border-radius: inherit; transition: width 260ms cubic-bezier(0.23, 1, 0.32, 1); }
-  .funnel-progress-list { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
-  .funnel-progress-list li { display: grid; gap: 2px; }
-  .funnel-progress-list strong { font-size: 13px; }
-  .funnel-progress-list span { color: var(--fp-muted, var(--funnel-muted)); font-size: 12px; line-height: 1.35; }
-  .funnel-progress-list li[data-state="upcoming"] { opacity: 0.55; }
-  .funnel-progress-list li[data-state="current"] strong { color: var(--fp-active, var(--funnel-accent)); }
-  .funnel-progress-reduced-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .funnel-progress-reduced-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
   .funnel-progress-kicker { margin: 0; color: var(--fp-muted, var(--funnel-muted)); font-size: 11px; font-weight: 700; }
   .funnel-progress-reduced-nav { display: flex; gap: 8px; }
   .funnel-progress-reduced-nav button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 999px; background: var(--fp-active, var(--funnel-accent)); color: #fff; }
   .funnel-progress-reduced-nav button:disabled { opacity: 0.35; }
-  .funnel-progress-reduced-copy { margin: 8px 0 12px; display: grid; gap: 2px; }
-  .funnel-progress-reduced-copy strong { font-size: 22px; line-height: 1.15; }
-  .funnel-progress-reduced-copy span { color: var(--fp-muted, var(--funnel-muted)); font-size: 13px; }
-  .funnel-progress-stepper { display: flex; gap: 0; margin: 0; padding: 8px 0 4px; list-style: none; overflow-x: auto; }
-  .funnel-progress-stepper li { position: relative; flex: 1 1 0; min-width: 92px; display: grid; justify-items: center; gap: 6px; text-align: center; }
-  .funnel-progress-stepper li + li::before { content: ""; position: absolute; top: 15px; right: calc(50% + 20px); left: calc(-50% + 20px); height: 2px; background: var(--fp-upcoming, #dbe6f0); }
+  .funnel-progress-current-label { display: none; }
+  .funnel-progress-stepper { display: flex; gap: 0; margin: 0; padding: 8px 0 4px; list-style: none; overflow: hidden; }
+  .funnel-progress-stepper li { position: relative; flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 6px; text-align: center; overflow: hidden; }
+  .funnel-progress-stepper li + li::before { content: ""; position: absolute; top: 15px; right: calc(50% + 16px); left: calc(-50% + 16px); height: 2px; background: var(--fp-upcoming, #dbe6f0); }
   .funnel-progress-stepper li[data-state="completed"] + li::before { background: var(--fp-completed, var(--funnel-accent)); }
   .funnel-progress-dot { z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; background: #fff; border: 2px solid var(--fp-upcoming, #dbe6f0); color: var(--fp-muted, var(--funnel-muted)); font-size: 12px; font-weight: 800; }
   .funnel-progress-stepper li[data-state="current"] .funnel-progress-dot,
   .funnel-progress-stepper li[data-state="completed"] .funnel-progress-dot { background: var(--fp-active, var(--funnel-accent)); border-color: var(--fp-active, var(--funnel-accent)); color: #fff; }
-  .funnel-progress-stepper strong { font-size: 13px; line-height: 1.2; }
-  .funnel-progress-stepper span { color: var(--fp-muted, var(--funnel-muted)); font-size: 11px; line-height: 1.3; }
-  .funnel-progress-stepper-icons .funnel-progress-dot,
-  .funnel-progress-stepper-bold .funnel-progress-dot { width: 40px; height: 40px; font-size: 13px; }
-  .funnel-progress-stepper-bold strong { text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; }
+  .funnel-progress-stepper strong {
+    max-width: 100%;
+    font-size: 12px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .funnel-progress-stepper li > span:not(.funnel-progress-dot) {
+    max-width: 100%;
+    color: var(--fp-muted, var(--funnel-muted));
+    font-size: 11px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .funnel-progress-stepper-bold strong { text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
   .funnel-progress-stepper-illustrated .funnel-progress-dot { background: color-mix(in srgb, var(--fp-active, var(--funnel-accent)) 14%, #fff); border-color: transparent; }
   .funnel-progress-stepper-illustrated li[data-state="upcoming"] .funnel-progress-dot { background: var(--fp-upcoming, #eef3f7); }
   .funnel-progress-stepper-illustrated li[data-state="current"] .funnel-progress-dot,
@@ -271,20 +322,59 @@
     height: 28px;
   }
   .funnel-progress-stepper-brand li + li::before { top: 13px; }
-  .funnel-progress-chips { display: flex; gap: 8px; margin: 0; padding: 4px 0; list-style: none; overflow-x: auto; }
-  .funnel-progress-chips li { flex: 1 1 0; min-width: 110px; display: grid; gap: 2px; padding: 10px 12px; border-radius: 16px; background: #fff; border: 1px solid #e6eef5; }
+  .funnel-progress-chips { display: flex; gap: 8px; margin: 0; padding: 4px 0; list-style: none; overflow: hidden; }
+  .funnel-progress-chips li { flex: 1 1 0; min-width: 0; display: grid; gap: 2px; padding: 10px 12px; border-radius: 16px; background: #fff; border: 1px solid #e6eef5; overflow: hidden; }
   .funnel-progress-chips li[data-state="current"] { background: color-mix(in srgb, var(--fp-active, var(--funnel-accent)) 10%, #fff); border-color: transparent; }
   .funnel-progress-chips em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--fp-active, var(--funnel-accent)); }
-  .funnel-progress-chips strong { font-size: 13px; }
-  .funnel-progress-chips span { color: var(--fp-muted, var(--funnel-muted)); font-size: 11px; }
-  .funnel-progress-chevrons { display: flex; margin: 0; padding: 0; list-style: none; overflow-x: auto; }
-  .funnel-progress-chevrons li { position: relative; flex: 1 1 0; min-width: 140px; display: flex; align-items: center; gap: 10px; padding: 12px 22px 12px 16px; background: var(--fp-upcoming, #eef3f7); color: var(--fp-text, var(--funnel-ink)); clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%); }
+  .funnel-progress-chips strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .funnel-progress-chips span { color: var(--fp-muted, var(--funnel-muted)); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .funnel-progress-chevrons { display: flex; margin: 0; padding: 0; list-style: none; overflow: hidden; }
+  .funnel-progress-chevrons li { position: relative; flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 12px 22px 12px 16px; background: var(--fp-upcoming, #eef3f7); color: var(--fp-text, var(--funnel-ink)); clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%); overflow: hidden; }
   .funnel-progress-chevrons li:first-child { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%); padding-left: 14px; }
   .funnel-progress-chevrons li[data-state="current"],
   .funnel-progress-chevrons li[data-state="completed"] { background: var(--fp-active, var(--funnel-accent)); color: #fff; }
   .funnel-progress-chevrons .funnel-progress-dot { width: 28px; height: 28px; border: 0; background: color-mix(in srgb, #fff 18%, transparent); color: inherit; }
-  .funnel-progress-chevrons em { display: block; font-style: normal; font-size: 13px; font-weight: 800; }
-  .funnel-progress-chevrons span { display: block; font-size: 11px; opacity: 0.84; }
+  .funnel-progress-chevrons em { display: block; font-style: normal; font-size: 13px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .funnel-progress-chevrons li > div span { display: block; font-size: 11px; opacity: 0.84; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  @container funnel (max-width: 720px) {
+    .funnel-progress-current-label {
+      display: block;
+      margin: 8px 0 0;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .funnel-progress-stepper li strong,
+    .funnel-progress-stepper li > span:not(.funnel-progress-dot) { display: none; }
+    .funnel-progress-chips li span,
+    .funnel-progress-chips li strong { display: none; }
+    .funnel-progress-chips li { padding: 8px 4px; justify-items: center; }
+    .funnel-progress-chevrons li {
+      clip-path: none;
+      padding: 4px 0;
+      background: transparent;
+      color: inherit;
+      justify-content: center;
+    }
+    .funnel-progress-chevrons li:first-child { clip-path: none; padding-left: 0; }
+    .funnel-progress-chevrons em,
+    .funnel-progress-chevrons li > div { display: none; }
+    .funnel-progress-chevrons .funnel-progress-dot {
+      background: #fff;
+      border: 2px solid var(--fp-upcoming, #dbe6f0);
+      color: var(--fp-muted, var(--funnel-muted));
+    }
+    .funnel-progress-chevrons li[data-state="current"] .funnel-progress-dot,
+    .funnel-progress-chevrons li[data-state="completed"] .funnel-progress-dot {
+      background: var(--fp-active, var(--funnel-accent));
+      border-color: var(--fp-active, var(--funnel-accent));
+      color: #fff;
+    }
+    .funnel-progress-segments strong { font-size: 11px; }
+  }
 
   .funnel-main { width: min(100%, 1120px); margin: 0 auto; padding: 28px 20px 42px; display: grid; align-items: center; }
   .funnel-step { width: min(100%, 720px); margin: 0 auto; }
@@ -711,6 +801,40 @@
   border-radius: 34px;
   background: var(--funnel-bg);
   box-shadow: 0 24px 60px rgba(15, 35, 56, .2);
+}
+.admin-live-preview .funnel-progress-current-label {
+  display: block;
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.admin-live-preview .funnel-progress-stepper li strong,
+.admin-live-preview .funnel-progress-stepper li > span:not(.funnel-progress-dot) { display: none; }
+.admin-live-preview .funnel-progress-chips li span,
+.admin-live-preview .funnel-progress-chips li strong { display: none; }
+.admin-live-preview .funnel-progress-chips li { padding: 8px 4px; justify-items: center; }
+.admin-live-preview .funnel-progress-chevrons li {
+  clip-path: none;
+  padding: 4px 0;
+  background: transparent;
+  color: inherit;
+  justify-content: center;
+}
+.admin-live-preview .funnel-progress-chevrons li:first-child { clip-path: none; padding-left: 0; }
+.admin-live-preview .funnel-progress-chevrons em,
+.admin-live-preview .funnel-progress-chevrons li > div { display: none; }
+.admin-live-preview .funnel-progress-chevrons .funnel-progress-dot {
+  background: #fff;
+  border: 2px solid var(--fp-upcoming, #dbe6f0);
+  color: var(--fp-muted, var(--funnel-muted));
+}
+.admin-live-preview .funnel-progress-chevrons li[data-state="current"] .funnel-progress-dot,
+.admin-live-preview .funnel-progress-chevrons li[data-state="completed"] .funnel-progress-dot {
+  background: var(--fp-active, var(--funnel-accent));
+  border-color: var(--fp-active, var(--funnel-accent));
+  color: #fff;
 }
 .admin-live-preview .funnel-canvas { min-height: 700px; }
 .admin-live-preview .funnel-header { padding: 16px 14px 10px; }

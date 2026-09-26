@@ -5,6 +5,7 @@ import {
   progressPercent,
   resolveProgressColors,
   resolveProgressLayout,
+  resolveProgressSegments,
   resolveProgressSteps,
   type ResolvedProgressColors,
   type ResolvedProgressStep,
@@ -28,7 +29,9 @@ export function FunnelProgress({
 }) {
   const layout = resolveProgressLayout(progress.layout);
   const colors = resolveProgressColors(brand, progress.colors);
-  const steps = resolveProgressSteps(pages, step);
+  const steps = layout === "segments"
+    ? resolveProgressSegments(pages, step, progress.stages)
+    : resolveProgressSteps(pages, step);
   const total = Math.max(steps.length, 1);
   const currentVisibleIndex = steps.findIndex(item => item.state === "current");
   const currentIndex = currentVisibleIndex >= 0
@@ -52,15 +55,17 @@ export function FunnelProgress({
         "--fp-text": colors.text,
         "--fp-muted": colors.muted,
         "--fp-track": colors.track,
+        "--fp-count": steps.length,
       } as CSSProperties}
     >
       {layout === "percent" ? (
         <PercentProgress percent={percent} currentIndex={currentIndex} total={total} />
+      ) : layout === "segments" ? (
+        <SegmentProgress steps={steps} />
       ) : layout === "bar" ? (
-        <BarProgress steps={steps} percent={percent} />
+        <BarProgress currentIndex={currentIndex} total={total} percent={percent} />
       ) : layout === "reduced" ? (
         <ReducedProgress
-          current={current}
           currentIndex={currentIndex}
           total={total}
           percent={percent}
@@ -84,7 +89,23 @@ export function FunnelProgress({
       ) : (
         <MinimalProgress steps={steps} />
       )}
+      {needsMobileCaption(layout) && current ? (
+        <p className="funnel-progress-current-label">{current.title}</p>
+      ) : null}
     </div>
+  );
+}
+
+function SegmentProgress({ steps }: { steps: ResolvedProgressStep[] }) {
+  return (
+    <ol className="funnel-progress-segments">
+      {steps.map(item => (
+        <li key={item.id} data-state={item.state}>
+          <span className="funnel-progress-segment-bar" aria-hidden="true" />
+          <strong>{item.title}</strong>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -100,31 +121,35 @@ function PercentProgress({ percent, currentIndex, total }: { percent: number; cu
   );
 }
 
-function BarProgress({ steps, percent }: { steps: ResolvedProgressStep[]; percent: number }) {
+function BarProgress({ currentIndex, total, percent }: { currentIndex: number; total: number; percent: number }) {
   return (
     <>
+      <div className="funnel-progress-meta">
+        <span>Schritt {currentIndex + 1} von {total}</span>
+      </div>
       <ProgressTrack percent={percent} />
-      <ol className="funnel-progress-list">
-        {steps.map((item, index) => (
-          <li key={item.id} data-state={item.state}>
-            <strong>{index + 1}. {item.title}</strong>
-            {item.hint ? <span>{item.hint}</span> : null}
-          </li>
-        ))}
-      </ol>
     </>
   );
 }
 
+function needsMobileCaption(layout: ReturnType<typeof resolveProgressLayout>) {
+  return layout === "minimal"
+    || layout === "icons"
+    || layout === "illustrated"
+    || layout === "bold"
+    || layout === "checks"
+    || layout === "brand"
+    || layout === "chips"
+    || layout === "chevrons";
+}
+
 function ReducedProgress({
-  current,
   currentIndex,
   total,
   percent,
   onBack,
   onForward,
 }: {
-  current?: ResolvedProgressStep;
   currentIndex: number;
   total: number;
   percent: number;
@@ -144,12 +169,6 @@ function ReducedProgress({
           </button>
         </div>
       </div>
-      {current ? (
-        <div className="funnel-progress-reduced-copy">
-          <strong>{current.title}</strong>
-          {current.hint ? <span>{current.hint}</span> : null}
-        </div>
-      ) : null}
       <ProgressTrack percent={percent} />
     </>
   );

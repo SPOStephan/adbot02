@@ -8,6 +8,7 @@ export const BENEFITS_TILE_GAPS = ["small", "medium", "large"] as const;
 export const HERO_IMAGE_LAYOUTS = ["circle", "wide"] as const;
 export const PROGRESS_LAYOUTS = [
   "percent",
+  "segments",
   "minimal",
   "icons",
   "bar",
@@ -349,9 +350,16 @@ export type FunnelProgressColors = {
   track: string;
 };
 
+export type FunnelProgressStage = {
+  id: string;
+  label: string;
+  startPageId: string;
+};
+
 export type FunnelProgress = {
   layout: ProgressLayout;
   colors: FunnelProgressColors;
+  stages: FunnelProgressStage[];
 };
 
 export type FunnelSocialProof = {

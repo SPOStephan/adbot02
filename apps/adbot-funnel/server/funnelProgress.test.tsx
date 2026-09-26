@@ -1,8 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { FunnelChrome } from "../client/src/components/funnel/FunnelChrome";
 import { FunnelProgress } from "../client/src/components/funnel/FunnelProgress";
+import { StartStep } from "../client/src/components/funnel/StartStep";
 import { defaultFunnel } from "../shared/defaultFunnel";
-import type { ProgressLayout } from "../shared/funnel";
+import type { ProgressLayout, StartPage } from "../shared/funnel";
 import { PROGRESS_LAYOUTS } from "../shared/funnel";
 
 describe("FunnelProgress Markup", () => {
@@ -26,7 +28,7 @@ describe("FunnelProgress Markup", () => {
     expect(html).not.toContain("Job-Check");
   });
 
-  it.each(PROGRESS_LAYOUTS.filter(layout => layout !== "percent"))("rendert Variante %s mit Stufentexten", (layout: ProgressLayout) => {
+  it.each(PROGRESS_LAYOUTS.filter(layout => layout !== "percent" && layout !== "reduced" && layout !== "bar"))("rendert Variante %s mit Stufentexten", (layout: ProgressLayout) => {
     const html = renderToStaticMarkup(
       <FunnelProgress
         brand={defaultFunnel.brand}
@@ -37,18 +39,111 @@ describe("FunnelProgress Markup", () => {
     );
     expect(html).toContain(`funnel-progress-${layout}`);
     expect(html).toContain("Kurzprofil");
-    expect(html).toContain('aria-valuenow="33"');
+    expect(html).toContain(layout === "segments" ? 'aria-valuenow="50"' : 'aria-valuenow="33"');
+  });
+
+  it("zeigt beschriftete Balken und hält die zweite Stufe über die Frageseiten", () => {
+    const stages = [
+      { id: "s1", label: "Bewerbung", startPageId: "page-start" },
+      { id: "s2", label: "Matching", startPageId: "page-role" },
+      { id: "s3", label: "Kennenlernen", startPageId: "page-contact" },
+    ];
+    const html = renderToStaticMarkup(
+      <FunnelProgress
+        brand={defaultFunnel.brand}
+        progress={{ ...defaultFunnel.progress, layout: "segments", stages }}
+        pages={defaultFunnel.pages}
+        step={2}
+      />,
+    );
+    expect(html).toContain("funnel-progress-segments");
+    expect(html).toContain("Bewerbung");
+    expect(html).toContain("Matching");
+    expect(html).toContain("Kennenlernen");
+    expect(html).toContain('data-state="current"');
+    expect(html).toContain('aria-valuenow="50"');
+  });
+
+  it("zeigt die simple Balken-Variante nur als Schritt und Balken oben", () => {
+    const html = renderToStaticMarkup(
+      <FunnelProgress
+        brand={defaultFunnel.brand}
+        progress={{ ...defaultFunnel.progress, layout: "bar" }}
+        pages={defaultFunnel.pages}
+        step={0}
+      />,
+    );
+    expect(html).toContain("funnel-progress-bar");
+    expect(html).toContain("Schritt 1 von 4");
+    expect(html).toContain("funnel-progress-track");
+    expect(html.indexOf("funnel-progress-meta")).toBeLessThan(html.indexOf("funnel-progress-track"));
+    expect(html).not.toContain("funnel-progress-list");
+    expect(html).not.toContain("Job-Check");
+    expect(html).not.toContain("Kurzprofil");
+  });
+
+  it("hält den Kompakt-Balken oben und wiederholt die Seitenüberschrift nicht", () => {
+    const html = renderToStaticMarkup(
+      <FunnelProgress
+        brand={defaultFunnel.brand}
+        progress={{ ...defaultFunnel.progress, layout: "reduced" }}
+        pages={defaultFunnel.pages}
+        step={0}
+      />,
+    );
+    expect(html).toContain("funnel-progress-reduced");
+    expect(html).toContain("Schritt 1 von 4");
+    expect(html).toContain("funnel-progress-track");
+    expect(html).not.toContain("funnel-progress-reduced-copy");
+    expect(html).not.toContain("Job-Check");
+    expect(html.indexOf("funnel-progress-reduced-head")).toBeLessThan(html.indexOf("funnel-progress-track"));
+  });
+
+  it("zeigt bei Icon-Varianten den aktuellen Stufennamen als eine Zeile", () => {
+    const html = renderToStaticMarkup(
+      <FunnelProgress
+        brand={defaultFunnel.brand}
+        progress={{ ...defaultFunnel.progress, layout: "icons" }}
+        pages={defaultFunnel.pages}
+        step={0}
+      />,
+    );
+    expect(html).toContain("funnel-progress-current-label");
+    expect(html).toContain("Job-Check");
   });
 
   it("färbt aktive Elemente mit Override statt Branding", () => {
     const html = renderToStaticMarkup(
       <FunnelProgress
         brand={defaultFunnel.brand}
-        progress={{ layout: "minimal", colors: { ...defaultFunnel.progress.colors, active: "#C8102E" } }}
+        progress={{ ...defaultFunnel.progress, layout: "minimal", colors: { ...defaultFunnel.progress.colors, active: "#C8102E" } }}
         pages={defaultFunnel.pages}
         step={0}
       />,
     );
     expect(html).toContain("#C8102E");
+  });
+
+  it.each(["percent", "bar", "reduced"] as const)("hält Variante %s über der Seitenüberschrift", (layout) => {
+    const start = defaultFunnel.pages[0] as StartPage;
+    const html = renderToStaticMarkup(
+      <FunnelChrome
+        brand={defaultFunnel.brand}
+        socialProof={defaultFunnel.socialProof}
+        privacyUrl={defaultFunnel.privacyUrl}
+        privacyLabel={defaultFunnel.privacyLabel}
+        imprintUrl="/impressum"
+        step={0}
+        totalSteps={defaultFunnel.pages.length}
+        showProgress
+        pages={defaultFunnel.pages}
+        progress={{ ...defaultFunnel.progress, layout }}
+      >
+        <StartStep page={start} onContinue={() => undefined} />
+      </FunnelChrome>,
+    );
+    expect(html.indexOf("funnel-progress-track")).toBeGreaterThan(-1);
+    expect(html.indexOf("funnel-progress")).toBeLessThan(html.indexOf("funnel-main"));
+    expect(html.indexOf("funnel-progress-track")).toBeLessThan(html.indexOf("page-start-title"));
   });
 });

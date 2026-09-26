@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
 import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
-import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
+import { DEFAULT_PROGRESS, defaultProgressStages, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { IconPicker } from "@/components/admin/IconPicker";
 import { FunnelLibraryIconSync } from "@/components/funnel/FunnelLibraryIconSync";
 import { stripFormattedText } from "@shared/formattedText";
 import { ProgressLayoutPicker } from "@/components/admin/ProgressLayoutPicker";
+import { ProgressStagesField } from "@/components/admin/ProgressStagesField";
 import { BenefitsTileGapPicker } from "@/components/admin/BenefitsTileGapPicker";
 import { BenefitsTileLayoutPicker } from "@/components/admin/BenefitsTileLayoutPicker";
 import { StartBadgesField } from "@/components/admin/StartBadgesField";
@@ -345,21 +346,30 @@ export default function FunnelEditor() {
                 <FormattedTextField value={selectedPage.description} rows={3} onChange={value => patchPage({ description: value }, false)} />
               </FormRow>
               <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
-              <div className="grid gap-3 rounded-2xl border p-4">
-                <div>
+              {resolveProgressLayout(config.progress?.layout) === "segments" ? (
+                <div className="grid gap-2 rounded-2xl border p-4">
                   <p className="text-sm font-bold">Stufe in der Fortschrittsanzeige</p>
-                  <p className="text-xs text-muted-foreground">Öffentlicher Name dieser Seite in der Statusleiste. Leer = interner Seitenname.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Bei beschrifteten Balken gehören Anzahl, Labels, Startseiten und Farben zur Variante unter Global → Fortschrittsanzeige.
+                  </p>
                 </div>
-                <FormRow label="Stufenname"><Input value={selectedPage.progressTitle ?? ""} placeholder={selectedPage.name} onChange={event => patchPage({ progressTitle: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
-                <FormRow label="Kurztext (optional)"><Input value={selectedPage.progressHint ?? ""} placeholder="z. B. Passt der Job zu dir?" onChange={event => patchPage({ progressHint: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
-                <FormRow label="Icon dieser Stufe">
-                  <IconPicker
-                    value={selectedPage.progressIcon ?? "sparkles"}
-                    color={config.brand.accentColor}
-                    onChange={icon => patchPage({ progressIcon: icon } as Partial<FunnelPage>)}
-                  />
-                </FormRow>
-              </div>
+              ) : (
+                <div className="grid gap-3 rounded-2xl border p-4">
+                  <div>
+                    <p className="text-sm font-bold">Stufe in der Fortschrittsanzeige</p>
+                    <p className="text-xs text-muted-foreground">Öffentlicher Name dieser Seite in der Statusleiste. Leer = interner Seitenname. Andere Optiken unter Global → Fortschrittsanzeige → Variante wählen.</p>
+                  </div>
+                  <FormRow label="Stufenname"><Input value={selectedPage.progressTitle ?? ""} placeholder={selectedPage.name} onChange={event => patchPage({ progressTitle: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
+                  <FormRow label="Kurztext (optional)"><Input value={selectedPage.progressHint ?? ""} placeholder="z. B. Passt der Job zu dir?" onChange={event => patchPage({ progressHint: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
+                  <FormRow label="Icon dieser Stufe">
+                    <IconPicker
+                      value={selectedPage.progressIcon ?? "sparkles"}
+                      color={config.brand.accentColor}
+                      onChange={icon => patchPage({ progressIcon: icon } as Partial<FunnelPage>)}
+                    />
+                  </FormRow>
+                </div>
+              )}
 
               {selectedPage.type === "start" && (
                 <StartPageFields
@@ -649,6 +659,7 @@ function ProgressSettings({
       progress: {
         layout: resolveProgressLayout(patch.layout ?? current.progress?.layout),
         colors: { ...DEFAULT_PROGRESS.colors, ...(current.progress?.colors ?? {}), ...(patch.colors ?? {}) },
+        stages: patch.stages ?? current.progress?.stages ?? [],
       },
     }), immediate);
   };
@@ -660,26 +671,47 @@ function ProgressSettings({
     <div className="grid gap-4 rounded-2xl border p-4">
       <div>
         <p className="text-sm font-bold">Fortschrittsanzeige</p>
-        <p className="text-xs text-muted-foreground">Gilt für alle Seiten. Stufentexte änderst du auf der jeweiligen Seite oder hier in der Liste.</p>
+        <p className="text-xs text-muted-foreground">Über „Variante wählen“. Simple Variante ist „Nur Balken“. Beschriftete Balken: Anzahl, Labels und Startseite frei. Farben darunter.</p>
       </div>
-      <ProgressLayoutPicker value={resolveProgressLayout(progress.layout)} onChange={layout => patchProgress({ layout })} />
-      <div className="grid gap-3">
-        {config.pages.map((page, index) => (
-          <div key={page.id} className={`grid gap-2 rounded-xl border bg-slate-50 p-3 sm:grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_170px] ${isFunnelPageHidden(page) ? "opacity-50 grayscale" : ""}`}>
-            <span className="pt-2 text-xs font-bold text-muted-foreground">{isFunnelPageHidden(page) ? "–" : index + 1}</span>
-            <Input value={page.progressTitle ?? ""} placeholder={page.name} onChange={event => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressTitle: event.target.value } as FunnelPage : item) }), false)} />
-            <Input value={page.progressHint ?? ""} placeholder="Kurztext" onChange={event => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressHint: event.target.value } as FunnelPage : item) }), false)} />
-            <IconPicker value={page.progressIcon ?? "sparkles"} color={config.brand.accentColor} onChange={icon => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressIcon: icon } as FunnelPage : item) }))} />
-          </div>
-        ))}
-      </div>
+      <ProgressLayoutPicker
+        value={resolveProgressLayout(progress.layout)}
+        onChange={layout => patchProgress({
+          layout,
+          stages: layout === "segments" && (progress.stages?.length ?? 0) === 0 ? defaultProgressStages(config.pages) : progress.stages,
+        })}
+      />
+      {resolveProgressLayout(progress.layout) === "segments" ? (
+        <ProgressStagesField pages={config.pages} stages={progress.stages ?? []} onChange={stages => patchProgress({ stages }, false)} />
+      ) : (
+        <div className="grid gap-3">
+          {config.pages.map((page, index) => (
+            <div key={page.id} className={`grid gap-2 rounded-xl border bg-slate-50 p-3 sm:grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_170px] ${isFunnelPageHidden(page) ? "opacity-50 grayscale" : ""}`}>
+              <span className="pt-2 text-xs font-bold text-muted-foreground">{isFunnelPageHidden(page) ? "–" : index + 1}</span>
+              <Input value={page.progressTitle ?? ""} placeholder={page.name} onChange={event => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressTitle: event.target.value } as FunnelPage : item) }), false)} />
+              <Input value={page.progressHint ?? ""} placeholder="Kurztext" onChange={event => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressHint: event.target.value } as FunnelPage : item) }), false)} />
+              <IconPicker value={page.progressIcon ?? "sparkles"} color={config.brand.accentColor} onChange={icon => changeConfig(current => ({ ...current, pages: current.pages.map(item => item.id === page.id ? { ...item, progressIcon: icon } as FunnelPage : item) }))} />
+            </div>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <OptionalProgressColor label="Aktive Stufe" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
-        <OptionalProgressColor label="Erledigte Stufe" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
-        <OptionalProgressColor label="Kommende Stufe" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
-        <OptionalProgressColor label="Balken / Linie" value={progress.colors.track} fallback={resolved.track} onChange={value => patchColor("track", value)} />
-        <OptionalProgressColor label="Stufentext" value={progress.colors.text} fallback={resolved.text} onChange={value => patchColor("text", value)} />
-        <OptionalProgressColor label="Nebentext" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
+        {resolveProgressLayout(progress.layout) === "segments" ? (
+          <>
+            <OptionalProgressColor label="Aktiver Balken" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
+            <OptionalProgressColor label="Erledigter Balken" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
+            <OptionalProgressColor label="Leerer Balken" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
+            <OptionalProgressColor label="Beschriftung" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
+          </>
+        ) : (
+          <>
+            <OptionalProgressColor label="Aktive Stufe" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
+            <OptionalProgressColor label="Erledigte Stufe" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
+            <OptionalProgressColor label="Kommende Stufe" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
+            <OptionalProgressColor label="Balken / Linie" value={progress.colors.track} fallback={resolved.track} onChange={value => patchColor("track", value)} />
+            <OptionalProgressColor label="Stufentext" value={progress.colors.text} fallback={resolved.text} onChange={value => patchColor("text", value)} />
+            <OptionalProgressColor label="Nebentext" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
+          </>
+        )}
       </div>
     </div>
   );
