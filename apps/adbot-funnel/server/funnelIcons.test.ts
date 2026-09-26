@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ADBOT_FUNNEL_ICONS, FUNNEL_OPTION_ICON_LABELS, FUNNEL_OPTION_ICONS, isAdbotFunnelIcon } from "@shared/funnel";
+import { visiblePickerIcons } from "@shared/funnelIconCatalog";
 
 describe("visueller Funnel-Icon-Katalog", () => {
   it("enthält mindestens 40 eindeutige, vollständig beschriftete Symbole", () => {
@@ -12,5 +13,10 @@ describe("visueller Funnel-Icon-Katalog", () => {
     expect(ADBOT_FUNNEL_ICONS.length).toBeGreaterThanOrEqual(12);
     expect(ADBOT_FUNNEL_ICONS.every(icon => icon.startsWith("adbot-") && isAdbotFunnelIcon(icon))).toBe(true);
     expect(isAdbotFunnelIcon("calendar")).toBe(false);
+  });
+
+  it("zeigt in der Auswahl keine Herkunftsgruppen und kein doppeltes Auto", () => {
+    expect(visiblePickerIcons().includes("car")).toBe(false);
+    expect(visiblePickerIcons().includes("adbot-company-car")).toBe(true);
   });
 });

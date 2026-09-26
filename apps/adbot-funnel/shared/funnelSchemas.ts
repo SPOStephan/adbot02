@@ -1,17 +1,26 @@
 import { z } from "zod";
-import { BENEFITS_TILE_LAYOUTS, FUNNEL_OPTION_ICONS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { isSelectableFunnelIcon } from "./funnelIconCatalog";
+import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
 import { DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS } from "./progressLayout";
 import { DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
-const iconSchema = z.enum(FUNNEL_OPTION_ICONS);
+const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
+
+function formattedTextSchema(maxPlain: number, minPlain = 0) {
+  return z.string().max(Math.max(maxPlain * 4, maxPlain + 80)).transform(sanitizeFormattedText).refine(value => {
+    const plain = stripFormattedText(value);
+    return plain.length >= minPlain && plain.length <= maxPlain;
+  }, minPlain > 0 ? `Text muss zwischen ${minPlain} und ${maxPlain} Zeichen haben.` : `Text darf höchstens ${maxPlain} Zeichen haben.`);
+}
 const optionalHttpsUrlSchema = z.string().max(2048).refine(value => value === "" || /^https:\/\//i.test(value), "Es ist nur eine absolute HTTPS-Adresse zulässig.");
 
 const optionSchema = z.object({
   id: z.string().min(1),
-  label: z.string().min(1).max(160),
+  label: formattedTextSchema(160, 1),
   value: z.string().min(1).max(160),
   icon: iconSchema,
-  description: z.string().max(500).optional(),
+  description: formattedTextSchema(500).optional(),
   leadValue: z.number().min(0).max(10_000).optional(),
 });
 
@@ -19,9 +28,9 @@ const pageBaseSchema = z.object({
   id: z.string().min(1),
   type: z.enum(PAGE_TYPES),
   name: z.string().min(1).max(120),
-  eyebrow: z.string().max(160),
-  title: z.string().min(1).max(300),
-  description: z.string().max(1200),
+  eyebrow: formattedTextSchema(160),
+  title: formattedTextSchema(300, 1),
+  description: formattedTextSchema(1200),
   buttonLabel: z.string().min(1).max(100),
   progressTitle: z.string().max(80).default(""),
   progressHint: z.string().max(160).default(""),
@@ -37,8 +46,8 @@ const optionalHexColorSchema = z.string().max(16).refine(
 const startBenefitSchema = z.object({
   id: z.string().min(1),
   icon: iconSchema,
-  title: z.string().min(1).max(120),
-  text: z.string().max(MAX_START_BENEFIT_TEXT),
+  title: formattedTextSchema(120, 1),
+  text: formattedTextSchema(MAX_START_BENEFIT_TEXT),
   color: optionalHexColorSchema.optional(),
 });
 
@@ -59,8 +68,8 @@ const startPageSchema = pageBaseSchema.extend({
   layout: z.enum(START_PAGE_LAYOUTS).default("classic"),
   heroImageUrl: z.string().max(2048),
   bullets: z.array(z.string().min(1).max(240)).max(8),
-  trustNote: z.string().max(300),
-  benefitsBandTitle: z.string().max(200).default(""),
+  trustNote: formattedTextSchema(300),
+  benefitsBandTitle: formattedTextSchema(200).default(""),
   secondaryButtonLabel: z.string().max(100).default(""),
   benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
   benefitsTileLayout: z.enum(BENEFITS_TILE_LAYOUTS).default(DEFAULT_BENEFITS_TILE_LAYOUT),
@@ -90,13 +99,13 @@ const contactFieldSchema = z.object({
 const contactPageSchema = pageBaseSchema.extend({
   type: z.literal("contact"),
   fields: z.array(contactFieldSchema).min(1).max(5),
-  consentLabel: z.string().min(1).max(1200),
+  consentLabel: formattedTextSchema(1200, 1),
   consentRequired: z.boolean(),
   resumeEnabled: z.boolean(),
   resumeRequired: z.boolean(),
   resumeLabel: z.string().min(1).max(200),
-  successTitle: z.string().min(1).max(300),
-  successText: z.string().min(1).max(1200),
+  successTitle: formattedTextSchema(300, 1),
+  successText: formattedTextSchema(1200, 1),
 });
 
 export const funnelPageSchema = z.discriminatedUnion("type", [
@@ -146,8 +155,8 @@ export const funnelConfigSchema = z
     }),
     socialProof: z.object({
       enabled: z.boolean(),
-      eyebrow: z.string().max(160),
-      text: z.string().max(500),
+      eyebrow: formattedTextSchema(160),
+      text: formattedTextSchema(500),
     }),
     privacyUrl: z.string().url(),
     privacyLabel: z.string().min(1).max(160),

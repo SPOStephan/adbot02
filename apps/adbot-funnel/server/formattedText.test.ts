@@ -1,0 +1,25 @@
+import { describe, expect, it } from "vitest";
+import { isBlankFormattedText, sanitizeFormattedText, stripFormattedText } from "@shared/formattedText";
+
+describe("formatierter Funnel-Text", () => {
+  it("lässt Fett, Kursiv, Unterstrich und Hexfarbe zu", () => {
+    const html = sanitizeFormattedText('Hallo <b>fett</b> <i>kursiv</i> <u>unten</u> <span style="color: rgb(1, 101, 195)">blau</span>');
+    expect(html).toContain("<b>fett</b>");
+    expect(html).toContain("<i>kursiv</i>");
+    expect(html).toContain("<u>unten</u>");
+    expect(html).toContain('style="color: #0165C3"');
+    expect(stripFormattedText(html)).toBe("Hallo fett kursiv unten blau");
+  });
+
+  it("entfernt Scripts und fremde Attribute", () => {
+    const html = sanitizeFormattedText('<b onclick="alert(1)">ok</b><script>alert(1)</script><img src=x onerror=alert(1)>');
+    expect(html).toBe("<b>ok</b>");
+    expect(html).not.toContain("script");
+    expect(html).not.toContain("onclick");
+  });
+
+  it("erkennt leeren Markup-Text", () => {
+    expect(isBlankFormattedText("<b>  </b>")).toBe(true);
+    expect(isBlankFormattedText("<b>Hallo</b>")).toBe(false);
+  });
+});

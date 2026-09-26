@@ -2,6 +2,7 @@ import type { KeyboardEvent } from "react";
 import type { ChoicePage } from "@shared/funnel";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
+import { FormattedText } from "./FormattedText";
 
 type ChoiceStepProps = {
   page: ChoicePage;
@@ -27,9 +28,9 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
   return (
     <section className="funnel-step funnel-question-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-question-copy">
-        {page.eyebrow && <p className="funnel-eyebrow">{page.eyebrow}</p>}
-        <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
-        <p id={`${page.id}-description`} className="funnel-description">{page.description}</p>
+        {page.eyebrow && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
+        <FormattedText as="h1" id={`${page.id}-title`} tabIndex={-1} value={page.title} />
+        <FormattedText as="p" id={`${page.id}-description`} className="funnel-description" value={page.description} />
       </div>
       <div className={page.type === "choice-grid" ? "funnel-choice-grid" : "funnel-choice-list"} role={page.allowMultiple ? "group" : "radiogroup"} aria-labelledby={`${page.id}-title`} aria-describedby={`${page.id}-description`}>
         {page.options.map((option, index) => {
@@ -47,7 +48,7 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
               onKeyDown={moveRadioFocus}
             >
               <span className="funnel-choice-icon"><FunnelIcon name={option.icon} /></span>
-              <span className="funnel-choice-text"><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</span>
+              <span className="funnel-choice-text"><FormattedText as="strong" value={option.label} />{option.description ? <FormattedText as="small" value={option.description} /> : null}</span>
               <span className="funnel-choice-check"><Check size={16} /></span>
             </button>
           );

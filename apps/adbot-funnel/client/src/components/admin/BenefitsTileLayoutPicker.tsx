@@ -96,7 +96,7 @@ function TileLayoutThumbnail({ layout }: { layout: BenefitsTileLayout }) {
   return (
     <div className="grid grid-cols-2 gap-2 overflow-hidden rounded-xl border bg-white px-3 py-3">
       {Array.from({ length: 4 }, (_, index) => (
-        <span key={index} className="grid justify-items-center gap-1">
+        <span key={index} className="grid justify-items-center content-start items-start gap-1">
           <span className="size-4 rounded-full border-2 border-[#0165c3]" />
           <span className="h-1.5 w-10 rounded bg-slate-300" />
           <span className="h-1 w-12 rounded bg-slate-200" />

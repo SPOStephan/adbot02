@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
 import type { ApplicationContact, ContactPage } from "@shared/funnel";
 import { ArrowLeft, Check, FileText, Loader2, UploadCloud, X } from "lucide-react";
+import { FormattedText } from "./FormattedText";
 
 export type ResumeDraft = { file: File; dataBase64: string };
 
@@ -59,9 +60,9 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
   return (
     <section className="funnel-step funnel-contact-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-question-copy">
-        {page.eyebrow && <p className="funnel-eyebrow">{page.eyebrow}</p>}
-        <h1 id={`${page.id}-title`} tabIndex={-1}>{page.title}</h1>
-        <p className="funnel-description">{page.description}</p>
+        {page.eyebrow && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
+        <FormattedText as="h1" id={`${page.id}-title`} tabIndex={-1} value={page.title} />
+        <FormattedText as="p" className="funnel-description" value={page.description} />
       </div>
       <form className="funnel-contact-form" onSubmit={submit} aria-busy={pending} aria-describedby={error ? `${page.id}-error` : undefined}>
         <div className="funnel-field-grid">
@@ -88,7 +89,7 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
             )}
           </div>
         )}
-        <div className="funnel-consent"><input id={`${page.id}-consent`} type="checkbox" checked={consent} required={page.consentRequired} onChange={event => onConsentChange(event.target.checked)} /><label htmlFor={`${page.id}-consent`}>{page.consentLabel}{page.consentRequired && " *"}</label></div>
+        <div className="funnel-consent"><input id={`${page.id}-consent`} type="checkbox" checked={consent} required={page.consentRequired} onChange={event => onConsentChange(event.target.checked)} /><label htmlFor={`${page.id}-consent`}><FormattedText value={page.consentLabel} />{page.consentRequired && " *"}</label></div>
         {error && <div id={`${page.id}-error`} ref={errorRef} className="funnel-form-error" role="alert" tabIndex={-1}>{error}</div>}
         <div className="funnel-step-actions">
           <button className="funnel-secondary-button" type="button" onClick={onBack} disabled={pending}><ArrowLeft size={18} />Zurück</button>
