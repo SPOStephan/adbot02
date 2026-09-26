@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { StartStep } from "../client/src/components/funnel/StartStep";
+import { ADBOT_ICON_PICKER_VIEWBOX, ADBOT_ICON_VIEWBOX } from "../client/src/components/funnel/adbotIcons";
 import { defaultFunnel } from "../shared/defaultFunnel";
-import { defaultStartBenefits } from "../shared/startLayout";
+import { defaultStartBenefits, emptyStartBenefit } from "../shared/startLayout";
 import type { StartPage } from "../shared/funnel";
 import { stripSoftHyphens } from "../shared/hyphenateGerman";
 
@@ -58,6 +59,25 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("<small>");
     expect(html).toContain("(m/w/d)");
     expect(html).toContain("#607287");
+    expect(html).toContain('data-icon-fit="picker"');
+    expect(html).toContain(`viewBox="${ADBOT_ICON_PICKER_VIEWBOX}"`);
+    expect(html).not.toContain(ADBOT_ICON_VIEWBOX);
+  });
+
+  it("zeichnet Vorlagen- und neu hinzugefügte Vorteil-Icons in derselben vollen Größe", () => {
+    const added = emptyStartBenefit(() => "new-benefit");
+    const page: StartPage = {
+      ...getStartPage(),
+      layout: "benefits",
+      benefits: [...defaultStartBenefits(() => "tile").slice(0, 3), added],
+    };
+    const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(html).toContain("lucide-sparkles");
+    expect(stripSoftHyphens(html)).toContain("Neuer Vorteil");
+    expect(html.match(/data-icon-kind="adbot"/g)?.length).toBe(3);
+    expect(html.match(/data-icon-fit="picker"/g)?.length).toBe(3);
+    expect(html).toContain(`viewBox="${ADBOT_ICON_PICKER_VIEWBOX}"`);
+    expect(html).not.toContain(ADBOT_ICON_VIEWBOX);
   });
 
   it("setzt größere Überschrift und kleinere Überzeile als CSS-Variablen", () => {

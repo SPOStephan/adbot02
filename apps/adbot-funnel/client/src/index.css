@@ -755,7 +755,7 @@
     background: color-mix(in srgb, currentColor 12%, #ffffff);
   }
   .funnel-start-benefits-tiles.is-cards .funnel-start-benefits-icon svg,
-  .funnel-start-benefits-tiles.is-cards .funnel-start-benefits-icon span { width: 22px; height: 22px; }
+  .funnel-start-benefits-tiles.is-cards .funnel-start-benefits-icon span { width: 22px; height: 22px; transform: none; }
   .funnel-start-benefits-icon {
     width: 52px;
     height: 52px;
@@ -763,7 +763,7 @@
     place-items: center;
   }
   .funnel-start-benefits-icon svg,
-  .funnel-start-benefits-icon span { width: 44px; height: 44px; }
+  .funnel-start-benefits-icon span { width: 44px; height: 44px; transform: none; }
   .funnel-start-benefits-tiles strong {
     font-size: 14px;
     line-height: 1.25;
@@ -887,7 +887,7 @@
 .admin-live-preview .funnel-start-benefits-tiles.is-two-column.is-gap-medium { gap: 18px 18px; }
 .admin-live-preview .funnel-start-benefits-tiles.is-two-column.is-gap-large { gap: 20px 24px; }
 .admin-live-preview .funnel-start-benefits-icon svg,
-.admin-live-preview .funnel-start-benefits-icon span { width: 34px; height: 34px; }
+.admin-live-preview .funnel-start-benefits-icon span { width: 34px; height: 34px; transform: none; }
 .admin-live-preview .funnel-start-benefits-button { min-width: 0; }
 
 .hero-bg-focus-preview {
