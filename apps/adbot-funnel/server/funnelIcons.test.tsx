@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FunnelIcon } from "../client/src/components/funnel/FunnelIcon";
-import { ADBOT_ICON_STROKE, ADBOT_ICON_VIEWBOX } from "../client/src/components/funnel/adbotIcons";
+import { ADBOT_ICON_PICKER_STROKE, ADBOT_ICON_PICKER_VIEWBOX, ADBOT_ICON_STROKE, ADBOT_ICON_VIEWBOX } from "../client/src/components/funnel/adbotIcons";
 import { ADBOT_FUNNEL_ICONS, FUNNEL_OPTION_ICON_LABELS, FUNNEL_OPTION_ICONS, isAdbotFunnelIcon } from "@shared/funnel";
 import { visiblePickerIcons } from "@shared/funnelIconCatalog";
 import { placeholderFunnelIconSvg } from "@shared/funnelIconSvg";
@@ -34,5 +34,13 @@ describe("visueller Funnel-Icon-Katalog", () => {
     expect(adbot).toContain(`stroke-width="${ADBOT_ICON_STROKE}"`);
     expect(lucide).not.toContain("funnel-icon-own");
     expect(placeholderFunnelIconSvg("Test")).toContain('stroke-width="1.3"');
+  });
+
+  it("zeichnet Adbot-Icons in der Auswahl so groß und kräftig wie Lucide", () => {
+    const adbot = renderToStaticMarkup(<FunnelIcon name="adbot-company-car" fit="picker" />);
+    expect(adbot).toContain(`viewBox="${ADBOT_ICON_PICKER_VIEWBOX}"`);
+    expect(adbot).toContain(`stroke-width="${ADBOT_ICON_PICKER_STROKE}"`);
+    expect(adbot).toContain('data-icon-fit="picker"');
+    expect(adbot).not.toContain(ADBOT_ICON_VIEWBOX);
   });
 });

@@ -1,7 +1,12 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { isFunnelPageHidden, visibleFunnelPages } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
+
+const editorSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/admin/FunnelEditor.tsx"), "utf8");
 
 describe("Funnel-Seiteneditor", () => {
   it("dupliziert eine Auswahlseite mit eigenen IDs direkt hinter dem Original", () => {
@@ -40,5 +45,10 @@ describe("Funnel-Seiteneditor", () => {
     expect(toggleFunnelPageHidden(hidden, "page-role").pages[1]?.hidden).toBe(false);
     expect(toggleFunnelPageHidden(defaultFunnel, "page-start")).toBe(defaultFunnel);
     expect(toggleFunnelPageHidden(defaultFunnel, "page-contact")).toBe(defaultFunnel);
+  });
+
+  it("bietet das Hinzufügen einer Option oben und unter der Liste an", () => {
+    expect(editorSource.match(/Weitere Option hinzufügen/g)?.length).toBe(2);
+    expect(editorSource).toContain("page.options.length > 0");
   });
 });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, Eye, EyeOff, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
-import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
+import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
 import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
@@ -369,12 +369,9 @@ export default function FunnelEditor() {
                 />
               )}
 
-              {(selectedPage.type === "choice-grid" || selectedPage.type === "choice-list") && <>
-                <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Mehrfachauswahl</strong><small className="text-muted-foreground">Aus: Klick auf eine Kachel geht direkt weiter. An: mehrere Antworten, danach unten „Weiter“.</small></span><Switch checked={selectedPage.allowMultiple} onCheckedChange={checked => patchPage({ allowMultiple: checked } as Partial<FunnelPage>)} /></label>
-                <div className="grid gap-3"><div className="flex items-center justify-between"><Label>Antwortoptionen</Label><Button size="sm" variant="outline" onClick={() => patchPage({ options: [...selectedPage.options, { id: crypto.randomUUID(), label: "Neue Option", value: `option-${selectedPage.options.length + 1}`, icon: "sparkles" }] } as Partial<FunnelPage>)}>Option hinzufügen</Button></div>
-                  {selectedPage.options.map((option, optionIndex) => <div className="grid gap-2 rounded-xl border bg-slate-50 p-3" key={option.id}><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto]"><FormattedTextField value={option.label} rows={1} onChange={value => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, label: value, value: stripFormattedText(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || item.value } : item) } as Partial<FunnelPage>)} /><IconPicker value={option.icon} onChange={icon => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, icon } : item) } as Partial<FunnelPage>)} /><Button size="icon" variant="ghost" className="shrink-0 text-destructive" aria-label={`Option ${stripFormattedText(option.label)} löschen`} disabled={selectedPage.options.length <= 2} onClick={() => patchPage({ options: selectedPage.options.filter((_, index) => index !== optionIndex) } as Partial<FunnelPage>)}><Trash2 className="size-4" /></Button></div><FormattedTextField placeholder="Optionale Kurzbeschreibung" rows={2} value={option.description ?? ""} onChange={value => patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, description: value } : item) } as Partial<FunnelPage>)} /><FormRow label="Wert für Meta (€)" hint="Leer = kein Extra-Wert. Gute Antworten höher, schwache niedriger. Summe geht mit dem Lead an Meta."><Input inputMode="decimal" placeholder="z. B. 80" value={option.leadValue ?? ""} onChange={event => { const raw = event.target.value.trim().replace(",", "."); const nextValue = raw === "" ? undefined : Number(raw); patchPage({ options: selectedPage.options.map(item => item.id === option.id ? { ...item, leadValue: nextValue !== undefined && Number.isFinite(nextValue) && nextValue >= 0 && nextValue <= 10000 ? Math.round(nextValue * 100) / 100 : undefined } : item) } as Partial<FunnelPage>); }} /></FormRow></div>)}
-                </div>
-              </>}
+              {(selectedPage.type === "choice-grid" || selectedPage.type === "choice-list") && (
+                <ChoiceOptionsFields page={selectedPage} patch={patchPage} />
+              )}
 
               {selectedPage.type === "contact" && <ContactEditor page={selectedPage} patch={patchPage} />}
             </TabsContent>
@@ -434,6 +431,72 @@ export default function FunnelEditor() {
         <aside className="bg-slate-100 p-5"><div className="sticky top-24"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Live-Vorschau</p><p className="text-sm font-semibold">Mobil · 390 px</p></div><span className="h-2 w-2 rounded-full bg-emerald-500" /></div><EditorPreview config={config} page={selectedPage} /></div></aside>
       </div>
     </div>
+  );
+}
+
+function ChoiceOptionsFields({
+  page,
+  patch,
+}: {
+  page: ChoicePage;
+  patch: (value: Partial<FunnelPage>, immediate?: boolean) => void;
+}) {
+  const addOption = () => patch({
+    options: [...page.options, { id: crypto.randomUUID(), label: "Neue Option", value: `option-${page.options.length + 1}`, icon: "sparkles" }],
+  } as Partial<FunnelPage>);
+  return (
+    <>
+      <label className="flex items-center justify-between rounded-xl border p-3">
+        <span>
+          <strong className="block text-sm">Mehrfachauswahl</strong>
+          <small className="text-muted-foreground">Aus: Klick auf eine Kachel geht direkt weiter. An: mehrere Antworten, danach unten „Weiter“.</small>
+        </span>
+        <Switch checked={page.allowMultiple} onCheckedChange={checked => patch({ allowMultiple: checked } as Partial<FunnelPage>)} />
+      </label>
+      <div className="grid gap-3">
+        <div className="flex items-center justify-between">
+          <Label>Antwortoptionen</Label>
+          <Button size="sm" variant="outline" onClick={addOption}>Weitere Option hinzufügen</Button>
+        </div>
+        {page.options.map((option, optionIndex) => (
+          <div className="grid gap-2 rounded-xl border bg-slate-50 p-3" key={option.id}>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto]">
+              <FormattedTextField
+                value={option.label}
+                rows={1}
+                onChange={value => patch({ options: page.options.map(item => item.id === option.id ? { ...item, label: value, value: stripFormattedText(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || item.value } : item) } as Partial<FunnelPage>)}
+              />
+              <IconPicker value={option.icon} onChange={icon => patch({ options: page.options.map(item => item.id === option.id ? { ...item, icon } : item) } as Partial<FunnelPage>)} />
+              <Button size="icon" variant="ghost" className="shrink-0 text-destructive" aria-label={`Option ${stripFormattedText(option.label)} löschen`} disabled={page.options.length <= 2} onClick={() => patch({ options: page.options.filter((_, index) => index !== optionIndex) } as Partial<FunnelPage>)}>
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+            <FormattedTextField placeholder="Optionale Kurzbeschreibung" rows={2} value={option.description ?? ""} onChange={value => patch({ options: page.options.map(item => item.id === option.id ? { ...item, description: value } : item) } as Partial<FunnelPage>)} />
+            <FormRow label="Wert für Meta (€)" hint="Leer = kein Extra-Wert. Gute Antworten höher, schwache niedriger. Summe geht mit dem Lead an Meta.">
+              <Input
+                inputMode="decimal"
+                placeholder="z. B. 80"
+                value={option.leadValue ?? ""}
+                onChange={event => {
+                  const raw = event.target.value.trim().replace(",", ".");
+                  const nextValue = raw === "" ? undefined : Number(raw);
+                  patch({
+                    options: page.options.map(item => item.id === option.id
+                      ? { ...item, leadValue: nextValue !== undefined && Number.isFinite(nextValue) && nextValue >= 0 && nextValue <= 10000 ? Math.round(nextValue * 100) / 100 : undefined }
+                      : item),
+                  } as Partial<FunnelPage>);
+                }}
+              />
+            </FormRow>
+          </div>
+        ))}
+        {page.options.length > 0 && (
+          <Button size="sm" variant="outline" className="justify-center" onClick={addOption}>
+            Weitere Option hinzufügen
+          </Button>
+        )}
+      </div>
+    </>
   );
 }
 

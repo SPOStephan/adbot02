@@ -86,7 +86,7 @@ export function IconPicker({
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className="h-9 min-w-0 justify-between gap-2 bg-white px-2.5" aria-label={`Icon auswählen, aktuell ${currentLabel}`}>
           <span className="flex min-w-0 items-center gap-2">
-            <FunnelIcon name={value} className="size-4 shrink-0" color={swatch} />
+            <FunnelIcon name={value} className="size-4 shrink-0" color={swatch} fit="picker" />
             <span className="truncate text-xs">{currentLabel}</span>
           </span>
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -114,7 +114,7 @@ export function IconPicker({
               onKeyDown={event => handleIconKeyDown(event, index, icon.id)}
               className={`grid min-h-20 place-items-center gap-1 rounded-xl border p-2 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3] ${value === icon.id ? "border-[#0165c3] bg-[#0165c3]/10 text-[#0165c3] shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-[#0165c3]/40 hover:bg-slate-50"}`}
             >
-              <FunnelIcon name={icon.id} className="size-6" color={swatch} />
+              <FunnelIcon name={icon.id} className="size-6" color={swatch} fit="picker" />
               <span className="line-clamp-2 text-[10px] font-semibold leading-tight">{icon.label}</span>
             </button>
           ))}
