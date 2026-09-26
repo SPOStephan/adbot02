@@ -40,11 +40,33 @@ describe("FunnelProgress Markup", () => {
     expect(html).toContain('aria-valuenow="33"');
   });
 
+  it("zeigt beschriftete Balken und hält die zweite Stufe über die Frageseiten", () => {
+    const stages = [
+      { id: "s1", label: "Bewerbung", startPageId: "page-start" },
+      { id: "s2", label: "Matching", startPageId: "page-role" },
+      { id: "s3", label: "Kennenlernen", startPageId: "page-contact" },
+    ];
+    const html = renderToStaticMarkup(
+      <FunnelProgress
+        brand={defaultFunnel.brand}
+        progress={{ ...defaultFunnel.progress, layout: "segments", stages }}
+        pages={defaultFunnel.pages}
+        step={2}
+      />,
+    );
+    expect(html).toContain("funnel-progress-segments");
+    expect(html).toContain("Bewerbung");
+    expect(html).toContain("Matching");
+    expect(html).toContain("Kennenlernen");
+    expect(html).toContain('data-state="current"');
+    expect(html).toContain('aria-valuenow="50"');
+  });
+
   it("färbt aktive Elemente mit Override statt Branding", () => {
     const html = renderToStaticMarkup(
       <FunnelProgress
         brand={defaultFunnel.brand}
-        progress={{ layout: "minimal", colors: { ...defaultFunnel.progress.colors, active: "#C8102E" } }}
+        progress={{ ...defaultFunnel.progress, layout: "minimal", colors: { ...defaultFunnel.progress.colors, active: "#C8102E" } }}
         pages={defaultFunnel.pages}
         step={0}
       />,

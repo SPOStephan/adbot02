@@ -227,6 +227,43 @@
   .funnel-progress { width: min(calc(100% - 40px), 720px); margin: 4px auto 0; color: var(--fp-text, var(--funnel-ink)); }
   .funnel-progress-meta { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 7px; color: var(--fp-muted, var(--funnel-muted)); font-size: 11px; font-weight: 700; }
   .funnel-progress-track { height: 5px; background: var(--fp-track, #dbe6f0); border-radius: 999px; overflow: hidden; }
+  .funnel-progress-segments {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    gap: 8px 10px;
+    margin: 0;
+    padding: 6px 0 2px;
+    list-style: none;
+  }
+  .funnel-progress-segments li { display: grid; justify-items: center; gap: 8px; min-width: 0; text-align: center; }
+  .funnel-progress-segment-bar {
+    display: block;
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--fp-upcoming, #c5d3e0);
+  }
+  .funnel-progress-segments li[data-state="completed"] .funnel-progress-segment-bar {
+    background: var(--fp-completed, var(--funnel-accent));
+  }
+  .funnel-progress-segments li[data-state="current"] .funnel-progress-segment-bar {
+    background: var(--fp-active, var(--funnel-accent));
+  }
+  .funnel-progress-segments strong {
+    min-width: 0;
+    color: var(--fp-muted, var(--funnel-muted));
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .funnel-progress-segments li[data-state="completed"] strong {
+    color: var(--fp-completed, var(--funnel-accent));
+  }
+  .funnel-progress-segments li[data-state="current"] strong {
+    color: var(--fp-active, var(--funnel-accent));
+  }
+  .funnel-progress-segments li[data-state="upcoming"] strong { color: var(--fp-muted, var(--funnel-muted)); }
   .funnel-progress-value { height: 100%; min-width: 7px; background: var(--fp-active, var(--funnel-accent)); border-radius: inherit; transition: width 260ms cubic-bezier(0.23, 1, 0.32, 1); }
   .funnel-progress-list { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
   .funnel-progress-list li { display: grid; gap: 2px; }

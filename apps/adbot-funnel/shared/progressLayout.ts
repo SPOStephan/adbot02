@@ -5,6 +5,7 @@ import type {
   FunnelPageType,
   FunnelProgress,
   FunnelProgressColors,
+  FunnelProgressStage,
   ProgressLayout,
 } from "./funnel";
 import { PROGRESS_LAYOUTS, visibleFunnelPages } from "./funnel";
@@ -24,7 +25,10 @@ export const EMPTY_PROGRESS_COLORS: FunnelProgressColors = {
 export const DEFAULT_PROGRESS: FunnelProgress = {
   layout: DEFAULT_PROGRESS_LAYOUT,
   colors: { ...EMPTY_PROGRESS_COLORS },
+  stages: [],
 };
+
+export const MAX_PROGRESS_STAGES = 6;
 
 export const PROGRESS_LAYOUT_META: Array<{
   id: ProgressLayout;
@@ -32,6 +36,7 @@ export const PROGRESS_LAYOUT_META: Array<{
   description: string;
 }> = [
   { id: "percent", title: "Schritt & Prozent", description: "Die bisherige Anzeige: Schritt X von Y plus Fortschrittsbalken." },
+  { id: "segments", title: "Beschriftete Balken", description: "Getrennte Balken mit Label. Anzahl, Farbe und Startseite jeder Stufe sind frei wählbar." },
   { id: "minimal", title: "Modern & minimal", description: "Nummerierte Kreise auf einer Linie mit Titel und Kurztext." },
   { id: "icons", title: "Mit Icons", description: "Icon-Kreise statt Zahlen, plus Titel und Kurztext." },
   { id: "bar", title: "Fortschrittsleiste", description: "Balken oben, darunter alle Stufen als nummerierte Liste." },
@@ -97,7 +102,7 @@ export function resolveProgressColors(
   return {
     active: colors?.active || accent,
     completed: colors?.completed || accent,
-    upcoming: colors?.upcoming || "#dbe6f0",
+    upcoming: colors?.upcoming || "#c5d3e0",
     text: colors?.text || brand.textColor || "#10253f",
     muted: colors?.muted || "#607287",
     track: colors?.track || "#dbe6f0",
@@ -122,6 +127,74 @@ export function resolveProgressSteps(pages: FunnelPage[], step: number): Resolve
   });
 }
 
+export function defaultProgressStages(pages: FunnelPage[]): FunnelProgressStage[] {
+  const visible = visibleFunnelPages(pages);
+  if (visible.length === 0) return [];
+  const first = visible[0]!;
+  const second = visible[1];
+  const last = visible[visible.length - 1]!;
+  const stages: FunnelProgressStage[] = [{
+    id: `stage-${first.id}`,
+    label: resolveProgressStepCopy(first).title,
+    startPageId: first.id,
+  }];
+  if (second && second.id !== first.id) {
+    stages.push({
+      id: `stage-${second.id}`,
+      label: resolveProgressStepCopy(second).title,
+      startPageId: second.id,
+    });
+  }
+  if (last.id !== first.id && last.id !== second?.id) {
+    stages.push({
+      id: `stage-${last.id}`,
+      label: resolveProgressStepCopy(last).title,
+      startPageId: last.id,
+    });
+  }
+  return stages;
+}
+
+export function resolveProgressSegments(
+  pages: FunnelPage[],
+  step: number,
+  stages?: FunnelProgressStage[] | null,
+): ResolvedProgressStep[] {
+  const visible = visibleFunnelPages(pages);
+  if (visible.length === 0) return [];
+  const configured = (stages ?? []).filter(stage => stage.startPageId && visible.some(page => page.id === stage.startPageId));
+  const source = configured.length > 0 ? configured : visible.map(page => ({
+    id: page.id,
+    label: resolveProgressStepCopy(page).title,
+    startPageId: page.id,
+  }));
+  const unique: Array<FunnelProgressStage & { startIndex: number }> = [];
+  for (const stage of source) {
+    const startIndex = visible.findIndex(page => page.id === stage.startPageId);
+    if (startIndex < 0 || unique.some(item => item.startIndex === startIndex)) continue;
+    unique.push({
+      id: stage.id || `stage-${stage.startPageId}`,
+      label: stage.label.trim() || resolveProgressStepCopy(visible[startIndex]!).title,
+      startPageId: stage.startPageId,
+      startIndex,
+    });
+  }
+  unique.sort((left, right) => left.startIndex - right.startIndex);
+  const currentId = pages[step]?.id;
+  const currentVisibleIndex = visible.findIndex(page => page.id === currentId);
+  return unique.map((stage, index) => {
+    const nextStart = unique[index + 1]?.startIndex ?? visible.length;
+    const state = currentVisibleIndex < 0
+      ? "upcoming"
+      : currentVisibleIndex >= nextStart
+        ? "completed"
+        : currentVisibleIndex >= stage.startIndex
+          ? "current"
+          : "upcoming";
+    return { id: stage.id, title: stage.label, hint: "", icon: "", state };
+  });
+}
+
 export function normalizeProgress(input?: Partial<FunnelProgress> | null): FunnelProgress {
   const colors = input?.colors ?? EMPTY_PROGRESS_COLORS;
   return {
@@ -134,7 +207,28 @@ export function normalizeProgress(input?: Partial<FunnelProgress> | null): Funne
       muted: hexOrEmpty(colors.muted),
       track: hexOrEmpty(colors.track),
     },
+    stages: normalizeProgressStages(input?.stages),
   };
+}
+
+export function normalizeProgressStages(input?: FunnelProgressStage[] | null): FunnelProgressStage[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const stages: FunnelProgressStage[] = [];
+  for (const item of input) {
+    if (stages.length >= MAX_PROGRESS_STAGES) break;
+    const startPageId = typeof item?.startPageId === "string" ? item.startPageId.trim() : "";
+    const label = typeof item?.label === "string" ? item.label.trim().slice(0, 40) : "";
+    const id = typeof item?.id === "string" && item.id.trim() ? item.id.trim().slice(0, 80) : "";
+    if (!startPageId || seen.has(startPageId)) continue;
+    seen.add(startPageId);
+    stages.push({
+      id: id || `stage-${startPageId}`,
+      label,
+      startPageId,
+    });
+  }
+  return stages;
 }
 
 function hexOrEmpty(value: unknown): string {

@@ -5,6 +5,7 @@ import {
   progressPercent,
   resolveProgressColors,
   resolveProgressLayout,
+  resolveProgressSegments,
   resolveProgressSteps,
   type ResolvedProgressColors,
   type ResolvedProgressStep,
@@ -28,7 +29,9 @@ export function FunnelProgress({
 }) {
   const layout = resolveProgressLayout(progress.layout);
   const colors = resolveProgressColors(brand, progress.colors);
-  const steps = resolveProgressSteps(pages, step);
+  const steps = layout === "segments"
+    ? resolveProgressSegments(pages, step, progress.stages)
+    : resolveProgressSteps(pages, step);
   const total = Math.max(steps.length, 1);
   const currentVisibleIndex = steps.findIndex(item => item.state === "current");
   const currentIndex = currentVisibleIndex >= 0
@@ -56,6 +59,8 @@ export function FunnelProgress({
     >
       {layout === "percent" ? (
         <PercentProgress percent={percent} currentIndex={currentIndex} total={total} />
+      ) : layout === "segments" ? (
+        <SegmentProgress steps={steps} />
       ) : layout === "bar" ? (
         <BarProgress steps={steps} percent={percent} />
       ) : layout === "reduced" ? (
@@ -85,6 +90,19 @@ export function FunnelProgress({
         <MinimalProgress steps={steps} />
       )}
     </div>
+  );
+}
+
+function SegmentProgress({ steps }: { steps: ResolvedProgressStep[] }) {
+  return (
+    <ol className="funnel-progress-segments">
+      {steps.map(item => (
+        <li key={item.id} data-state={item.state}>
+          <span className="funnel-progress-segment-bar" aria-hidden="true" />
+          <strong>{item.title}</strong>
+        </li>
+      ))}
+    </ol>
   );
 }
 
