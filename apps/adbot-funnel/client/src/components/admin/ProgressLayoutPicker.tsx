@@ -62,6 +62,19 @@ export function ProgressLayoutPicker({
 }
 
 function ProgressThumbnail({ layout }: { layout: ProgressLayout }) {
+  if (layout === "segments") {
+    return (
+      <div className="grid grid-cols-3 gap-3 overflow-hidden rounded-xl border bg-white px-3 py-4">
+        {["Bewerbung", "Matching", "Gespräch"].map((label, index) => (
+          <span key={label} className="grid gap-2">
+            <span className={`h-1.5 rounded-full ${index === 0 ? "bg-[#0165c3]" : "bg-slate-200"}`} />
+            <span className={`text-[9px] font-bold ${index === 0 ? "text-[#0165c3]" : "text-slate-400"}`}>{label}</span>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
   if (layout === "percent" || layout === "bar" || layout === "reduced") {
     return (
       <div className="grid gap-2 overflow-hidden rounded-xl border bg-white p-3">

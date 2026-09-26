@@ -3,10 +3,12 @@ import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
 import {
   DEFAULT_PROGRESS_LAYOUT,
+  defaultProgressStages,
   normalizeProgress,
   progressPercent,
   resolveProgressColors,
   resolveProgressLayout,
+  resolveProgressSegments,
   resolveProgressStepCopy,
   resolveProgressSteps,
 } from "@shared/progressLayout";
@@ -95,5 +97,15 @@ describe("Fortschrittsanzeige", () => {
     expect(normalized.pages[0]?.progressTitle).toBe("");
     expect(normalized.pages[0]?.progressIcon).toBe("search");
     expect(normalized.pages.at(-1)?.progressIcon).toBe("handshake");
+  });
+
+  it("legt drei Balken an: Aufruf, zweite Seite, Adresseingabe", () => {
+    const stages = defaultProgressStages(defaultFunnel.pages);
+    expect(stages.map(stage => stage.startPageId)).toEqual(["page-start", "page-role", "page-contact"]);
+    expect(stages.map(stage => stage.label)).toEqual(["Job-Check", "Kurzprofil", "Kennenlernen"]);
+    expect(resolveProgressSegments(defaultFunnel.pages, 0, stages).map(item => item.state)).toEqual(["current", "upcoming", "upcoming"]);
+    expect(resolveProgressSegments(defaultFunnel.pages, 1, stages).map(item => item.state)).toEqual(["completed", "current", "upcoming"]);
+    expect(resolveProgressSegments(defaultFunnel.pages, 2, stages).map(item => item.state)).toEqual(["completed", "current", "upcoming"]);
+    expect(resolveProgressSegments(defaultFunnel.pages, 3, stages).map(item => item.state)).toEqual(["completed", "completed", "current"]);
   });
 });
