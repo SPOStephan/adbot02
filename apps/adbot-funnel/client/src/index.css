@@ -526,7 +526,16 @@
     padding: 32px 16px 8px;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 26px;
+  }
+  .funnel-start-benefits-tiles.is-two-column.is-gap-small {
     gap: 28px 14px;
+  }
+  .funnel-start-benefits-tiles.is-two-column.is-gap-medium {
+    gap: 28px 26px;
+  }
+  .funnel-start-benefits-tiles.is-two-column.is-gap-large {
+    gap: 32px 36px;
   }
   .funnel-start-benefits-tiles li {
     min-width: 0;
@@ -601,7 +610,10 @@
     .funnel-start-benefits-tiles.is-one-column { gap: 32px; padding-inline: 32px; }
     .funnel-start-benefits-hero h1 { font-size: clamp(2.2rem, 4vw, 3.4rem); max-width: 16ch; }
     .funnel-start-benefits-band { padding: 28px 32px; }
-    .funnel-start-benefits-tiles { gap: 42px 48px; padding: 56px 32px 12px; }
+    .funnel-start-benefits-tiles { padding: 56px 32px 12px; }
+    .funnel-start-benefits-tiles.is-two-column.is-gap-small { gap: 42px 48px; }
+    .funnel-start-benefits-tiles.is-two-column.is-gap-medium { gap: 42px 64px; }
+    .funnel-start-benefits-tiles.is-two-column.is-gap-large { gap: 48px 80px; }
     .funnel-start-benefits-tiles strong { font-size: 16px; }
     .funnel-start-benefits-tiles p { font-size: 13px; }
   }
@@ -638,7 +650,11 @@
 .admin-live-preview .funnel-start-benefits-hero { padding: 0 12px 18px; }
 .admin-live-preview .funnel-start-benefits-portrait { width: 88px; height: 88px; margin-bottom: 12px; }
 .admin-live-preview .funnel-start-benefits-hero h1 { font-size: 1.55rem; }
-.admin-live-preview .funnel-start-benefits-tiles { gap: 18px 10px; padding: 18px 10px 4px; }
+.admin-live-preview .funnel-start-benefits-tiles { padding: 18px 10px 4px; }
+.admin-live-preview .funnel-start-benefits-tiles.is-one-column { gap: 18px; }
+.admin-live-preview .funnel-start-benefits-tiles.is-two-column.is-gap-small { gap: 18px 10px; }
+.admin-live-preview .funnel-start-benefits-tiles.is-two-column.is-gap-medium { gap: 18px 18px; }
+.admin-live-preview .funnel-start-benefits-tiles.is-two-column.is-gap-large { gap: 20px 24px; }
 .admin-live-preview .funnel-start-benefits-icon svg,
 .admin-live-preview .funnel-start-benefits-icon span { width: 34px; height: 34px; }
 .admin-live-preview .funnel-start-benefits-button { min-width: 0; }

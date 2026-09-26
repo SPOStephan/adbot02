@@ -1,7 +1,8 @@
-import type { BenefitsTileLayout, FunnelOptionIcon, StartBadge, StartBenefit, StartPage, StartPageLayout } from "./funnel";
+import type { BenefitsTileGap, BenefitsTileLayout, FunnelOptionIcon, StartBadge, StartBenefit, StartPage, StartPageLayout } from "./funnel";
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
 export const DEFAULT_BENEFITS_TILE_LAYOUT: BenefitsTileLayout = "two-column";
+export const DEFAULT_BENEFITS_TILE_GAP: BenefitsTileGap = "medium";
 export const MAX_START_BENEFITS = 12;
 export const MAX_START_BADGES = 16;
 export const DEFAULT_HERO_BACKGROUND_OPACITY = 15;
@@ -44,11 +45,16 @@ export function resolveBenefitsTileLayout(value?: string | null): BenefitsTileLa
   return value === "one-column" ? "one-column" : DEFAULT_BENEFITS_TILE_LAYOUT;
 }
 
-export function emptyStartBadge(createId = () => crypto.randomUUID()): StartBadge {
+export function resolveBenefitsTileGap(value?: string | null): BenefitsTileGap {
+  if (value === "small" || value === "large") return value;
+  return DEFAULT_BENEFITS_TILE_GAP;
+}
+
+export function emptyStartBadge(createId: () => string = () => crypto.randomUUID()): StartBadge {
   return { id: createId(), label: "Neues Badge" };
 }
 
-export function badgeFromTemplate(label: string, createId = () => crypto.randomUUID()): StartBadge {
+export function badgeFromTemplate(label: string, createId: () => string = () => crypto.randomUUID()): StartBadge {
   return { id: createId(), label: label.slice(0, 80) };
 }
 
@@ -61,11 +67,11 @@ export function resolveBadgeColors(
   return { background, text };
 }
 
-export function defaultStartBenefits(createId = () => crypto.randomUUID()): StartBenefit[] {
+export function defaultStartBenefits(createId: () => string = () => crypto.randomUUID()): StartBenefit[] {
   return DEFAULT_BENEFIT_SEEDS.map(seed => ({ ...seed, id: createId() }));
 }
 
-export function benefitsFromBullets(bullets: string[], createId = () => crypto.randomUUID()): StartBenefit[] {
+export function benefitsFromBullets(bullets: string[], createId: () => string = () => crypto.randomUUID()): StartBenefit[] {
   const lines = bullets.map(item => item.trim()).filter(Boolean);
   if (lines.length === 0) return defaultStartBenefits(createId);
   return lines.slice(0, MAX_START_BENEFITS).map((line, index) => ({
@@ -76,7 +82,7 @@ export function benefitsFromBullets(bullets: string[], createId = () => crypto.r
   }));
 }
 
-export function emptyStartBenefit(createId = () => crypto.randomUUID()): StartBenefit {
+export function emptyStartBenefit(createId: () => string = () => crypto.randomUUID()): StartBenefit {
   return { id: createId(), icon: "sparkles", title: "Neuer Vorteil", text: "" };
 }
 

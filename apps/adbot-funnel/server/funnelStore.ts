@@ -21,7 +21,7 @@ import type {
   StartPage,
 } from "@shared/funnel";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
-import { clampHeroBackgroundOpacity, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundOpacity, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
@@ -165,6 +165,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         layout?: string;
         benefits?: StartBenefit[];
         benefitsTileLayout?: string;
+        benefitsTileGap?: string;
         badges?: StartBadge[];
         benefitsBandTitle?: string;
         secondaryButtonLabel?: string;
@@ -180,6 +181,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroBackgroundMobileUrl: typeof startPage.heroBackgroundMobileUrl === "string" ? startPage.heroBackgroundMobileUrl : "",
         heroBackgroundOpacity: clampHeroBackgroundOpacity(startPage.heroBackgroundOpacity),
         benefitsTileLayout: resolveBenefitsTileLayout(startPage.benefitsTileLayout),
+        benefitsTileGap: resolveBenefitsTileGap(startPage.benefitsTileGap),
         badges: Array.isArray(startPage.badges)
           ? startPage.badges.slice(0, MAX_START_BADGES).map(badge => ({
             id: badge.id || randomUUID(),

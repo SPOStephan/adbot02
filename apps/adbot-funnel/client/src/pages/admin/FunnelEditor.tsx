@@ -5,7 +5,7 @@ import { useLocation, useParams } from "wouter";
 import { canHideFunnelPage, isFunnelPageHidden, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
 import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
-import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { IconPicker } from "@/components/admin/IconPicker";
 import { FunnelLibraryIconSync } from "@/components/funnel/FunnelLibraryIconSync";
 import { stripFormattedText } from "@shared/formattedText";
 import { ProgressLayoutPicker } from "@/components/admin/ProgressLayoutPicker";
+import { BenefitsTileGapPicker } from "@/components/admin/BenefitsTileGapPicker";
 import { BenefitsTileLayoutPicker } from "@/components/admin/BenefitsTileLayoutPicker";
 import { StartBadgesField } from "@/components/admin/StartBadgesField";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
@@ -354,6 +355,8 @@ function StartPageFields({
   patch: (value: Partial<FunnelPage>, immediate?: boolean) => void;
 }) {
   const layout = resolveStartLayout(page);
+  const tileLayout = resolveBenefitsTileLayout(page.benefitsTileLayout);
+  const addBenefit = () => patch({ benefits: [...page.benefits, emptyStartBenefit()] } as Partial<FunnelPage>);
   return (
     <>
       {layout === "classic" && (
@@ -391,9 +394,15 @@ function StartPageFields({
             <Input value={page.secondaryButtonLabel} placeholder={page.buttonLabel} onChange={event => patch({ secondaryButtonLabel: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
           <BenefitsTileLayoutPicker
-            value={resolveBenefitsTileLayout(page.benefitsTileLayout)}
+            value={tileLayout}
             onChange={benefitsTileLayout => patch({ benefitsTileLayout } as Partial<FunnelPage>)}
           />
+          {tileLayout === "two-column" && (
+            <BenefitsTileGapPicker
+              value={resolveBenefitsTileGap(page.benefitsTileGap)}
+              onChange={benefitsTileGap => patch({ benefitsTileGap } as Partial<FunnelPage>)}
+            />
+          )}
           <div className="grid gap-3">
             <div className="flex items-center justify-between">
               <Label>Icon-Kacheln</Label>
@@ -401,9 +410,9 @@ function StartPageFields({
                 size="sm"
                 variant="outline"
                 disabled={page.benefits.length >= MAX_START_BENEFITS}
-                onClick={() => patch({ benefits: [...page.benefits, emptyStartBenefit()] } as Partial<FunnelPage>)}
+                onClick={addBenefit}
               >
-                Vorteil hinzufügen
+                Weiteren Vorteil hinzufügen
               </Button>
             </div>
             {page.benefits.map((benefit, index) => (
@@ -415,7 +424,7 @@ function StartPageFields({
                     <Trash2 className="size-4" />
                   </Button>
                 </div>
-                <FormattedTextField rows={resolveBenefitsTileLayout(page.benefitsTileLayout) === "one-column" ? 4 : 2} placeholder={resolveBenefitsTileLayout(page.benefitsTileLayout) === "one-column" ? "Längerer Erklärtext" : "Kurzer Erklärtext"} value={benefit.text} onChange={value => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, text: value } : item) } as Partial<FunnelPage>)} />
+                <FormattedTextField rows={tileLayout === "one-column" ? 4 : 2} placeholder={tileLayout === "one-column" ? "Längerer Erklärtext" : "Kurzer Erklärtext"} value={benefit.text} onChange={value => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, text: value } : item) } as Partial<FunnelPage>)} />
                 <IconColorField
                   label="Iconfarbe"
                   value={benefit.color}
@@ -424,6 +433,17 @@ function StartPageFields({
                 />
               </div>
             ))}
+            {page.benefits.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="justify-center"
+                disabled={page.benefits.length >= MAX_START_BENEFITS}
+                onClick={addBenefit}
+              >
+                Weiteren Vorteil hinzufügen
+              </Button>
+            )}
           </div>
         </>
       )}

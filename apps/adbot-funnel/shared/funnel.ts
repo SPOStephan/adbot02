@@ -2,6 +2,7 @@ export const PAGE_TYPES = ["start", "choice-grid", "choice-list", "contact"] as 
 export const FUNNEL_STATUSES = ["draft", "published", "paused", "archived"] as const;
 export const START_PAGE_LAYOUTS = ["classic", "benefits"] as const;
 export const BENEFITS_TILE_LAYOUTS = ["two-column", "one-column"] as const;
+export const BENEFITS_TILE_GAPS = ["small", "medium", "large"] as const;
 export const PROGRESS_LAYOUTS = [
   "percent",
   "minimal",
@@ -91,6 +92,7 @@ export type FunnelPageType = (typeof PAGE_TYPES)[number];
 export type FunnelStatus = (typeof FUNNEL_STATUSES)[number];
 export type StartPageLayout = (typeof START_PAGE_LAYOUTS)[number];
 export type BenefitsTileLayout = (typeof BENEFITS_TILE_LAYOUTS)[number];
+export type BenefitsTileGap = (typeof BENEFITS_TILE_GAPS)[number];
 export type ProgressLayout = (typeof PROGRESS_LAYOUTS)[number];
 
 export type FunnelOptionIcon = (typeof FUNNEL_OPTION_ICONS)[number];
@@ -245,6 +247,7 @@ export type StartPage = FunnelPageBase & {
   secondaryButtonLabel: string;
   benefits: StartBenefit[];
   benefitsTileLayout: BenefitsTileLayout;
+  benefitsTileGap: BenefitsTileGap;
   badges: StartBadge[];
   heroBackgroundAssetId: string;
   heroBackgroundDesktopUrl: string;
