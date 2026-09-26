@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
+import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
 import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
@@ -24,6 +24,7 @@ export function StartStep({
       <div className="funnel-copy">
         {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
         <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
+        {isPageSubtitleShown(page) && <FormattedText as="p" className="funnel-subtitle" value={page.subtitle} />}
         {isPageDescriptionShown(page) && <FormattedText as="p" className="funnel-description" value={page.description} />}
         <ul className="funnel-benefits">
           {page.bullets.map(bullet => <li key={bullet}><Check size={17} />{bullet}</li>)}
@@ -96,6 +97,7 @@ function BenefitsStartStep({
           ) : null}
           {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-start-benefits-kicker" value={page.eyebrow} />}
           <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
+          {isPageSubtitleShown(page) && <FormattedText as="p" className="funnel-start-benefits-subtitle" value={page.subtitle} />}
           {(page.badges ?? []).length > 0 && (
             <ul className="funnel-start-benefits-badges">
               {(page.badges ?? []).map(badge => {

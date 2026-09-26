@@ -322,8 +322,8 @@ export default function FunnelEditor() {
               )}
               <FormRow label="Interner Seitenname"><Input value={selectedPage.name} onChange={event => patchPage({ name: event.target.value }, false)} /></FormRow>
               <FormRow
-                label="Überzeile / Sub-Headline"
-                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Kleinere Zeile über der Überschrift, mit eigener Farbe. Markieren für Fett, Kursiv, Unterstrich, Farbe oder Kleiner. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                label="Überzeile"
+                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Kleine Zeile über der Überschrift. Markieren für Fett, Kursiv, Unterstrich, Farbe oder Kleiner. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
                 visible={isCopyFieldVisible(selectedPage.eyebrowVisible)}
                 onToggleVisible={() => patchPage({ eyebrowVisible: !isCopyFieldVisible(selectedPage.eyebrowVisible) } as Partial<FunnelPage>)}
               >
@@ -336,6 +336,14 @@ export default function FunnelEditor() {
                 onToggleVisible={() => patchPage({ titleVisible: !isCopyFieldVisible(selectedPage.titleVisible) } as Partial<FunnelPage>)}
               >
                 <FormattedTextField value={selectedPage.title} rows={2} onChange={value => patchPage({ title: value }, false)} />
+              </FormRow>
+              <FormRow
+                label="Sub-Headline"
+                hint={isCopyFieldVisible(selectedPage.subtitleVisible) ? "Kleinere Zeile unter der Überschrift, mit eigener Farbe. Leer lassen blendet sie aus." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                visible={isCopyFieldVisible(selectedPage.subtitleVisible)}
+                onToggleVisible={() => patchPage({ subtitleVisible: !isCopyFieldVisible(selectedPage.subtitleVisible) } as Partial<FunnelPage>)}
+              >
+                <FormattedTextField value={selectedPage.subtitle ?? ""} placeholder="Zum Beispiel: Du verkaufst Versicherungen" rows={1} onChange={value => patchPage({ subtitle: value } as Partial<FunnelPage>, false)} />
               </FormRow>
               <FormRow
                 label="Beschreibung"

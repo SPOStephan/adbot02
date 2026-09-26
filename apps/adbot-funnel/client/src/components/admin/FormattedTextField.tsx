@@ -1,11 +1,64 @@
 import { useEffect, useRef } from "react";
 import { Bold, Italic, Underline } from "lucide-react";
-import { sanitizeFormattedText } from "@shared/formattedText";
+import { normalizeCssColor, sanitizeFormattedText } from "@shared/formattedText";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 function runCommand(command: string, value?: string) {
   document.execCommand(command, false, value);
+}
+
+function unwrapColorSpans(root: ParentNode) {
+  for (const span of [...root.querySelectorAll("span")]) {
+    if (!/(?:^|;)\s*color\s*:/i.test(span.getAttribute("style") || "")) continue;
+    const parent = span.parentNode;
+    if (!parent) continue;
+    while (span.firstChild) parent.insertBefore(span.firstChild, span);
+    parent.removeChild(span);
+  }
+}
+
+function wrapNodeContents(parent: Node, wrapper: HTMLElement) {
+  while (parent.firstChild) wrapper.appendChild(parent.firstChild);
+  parent.appendChild(wrapper);
+}
+
+export function wrapSelectionInColor(color: string, editor?: HTMLElement | null) {
+  const hex = normalizeCssColor(color);
+  if (!hex) return;
+  const selection = window.getSelection();
+  const applyToEditor = () => {
+    if (!editor) return;
+    unwrapColorSpans(editor);
+    if (!editor.childNodes.length) return;
+    const span = document.createElement("span");
+    span.style.color = hex;
+    wrapNodeContents(editor, span);
+  };
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    applyToEditor();
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  if (editor && !editor.contains(range.commonAncestorContainer)) {
+    applyToEditor();
+    return;
+  }
+  const span = document.createElement("span");
+  span.style.color = hex;
+  try {
+    const contents = range.extractContents();
+    unwrapColorSpans(contents);
+    span.appendChild(contents);
+    range.insertNode(span);
+  } catch {
+    applyToEditor();
+    return;
+  }
+  selection.removeAllRanges();
+  const next = document.createRange();
+  next.selectNodeContents(span);
+  selection.addRange(next);
 }
 
 function wrapSelectionInSmall() {
@@ -58,6 +111,13 @@ export function FormattedTextField({
     if (node.innerHTML !== next) node.innerHTML = next;
   }, [value]);
 
+  const commit = () => {
+    if (!ref.current) return;
+    const next = sanitizeFormattedText(ref.current.innerHTML);
+    if (ref.current.innerHTML !== next) ref.current.innerHTML = next;
+    onChange(next);
+  };
+
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-1">
@@ -81,7 +141,7 @@ export function FormattedTextField({
           onClick={() => {
             wrapSelectionInSmall();
             ref.current?.focus();
-            if (ref.current) onChange(sanitizeFormattedText(ref.current.innerHTML));
+            commit();
           }}
         >
           <span className="text-[11px] font-bold leading-none">Klein</span>
@@ -95,9 +155,9 @@ export function FormattedTextField({
             defaultValue="#10253f"
             onMouseDown={event => event.preventDefault()}
             onChange={event => {
-              runCommand("foreColor", event.target.value);
+              wrapSelectionInColor(event.target.value, ref.current);
               ref.current?.focus();
-              if (ref.current) onChange(sanitizeFormattedText(ref.current.innerHTML));
+              commit();
             }}
           />
         </label>
@@ -117,10 +177,7 @@ export function FormattedTextField({
           onChange(ref.current.innerHTML);
         }}
         onBlur={() => {
-          if (!ref.current) return;
-          const next = sanitizeFormattedText(ref.current.innerHTML);
-          if (ref.current.innerHTML !== next) ref.current.innerHTML = next;
-          onChange(next);
+          commit();
         }}
       />
     </div>

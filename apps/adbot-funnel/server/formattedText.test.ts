@@ -20,6 +20,17 @@ describe("formatierter Funnel-Text", () => {
     expect(html).not.toContain("onclick");
   });
 
+  it("färbt Text aus font-Tags ein, statt ihn zu löschen", () => {
+    expect(sanitizeFormattedText('<font color="#0165c3">Du verkaufst Versicherungen</font>'))
+      .toBe('<span style="color: #0165C3">Du verkaufst Versicherungen</span>');
+    expect(sanitizeFormattedText('<font color="rgb(1, 101, 195)">Text</font>'))
+      .toBe('<span style="color: #0165C3">Text</span>');
+    expect(sanitizeFormattedText('<font color="#0af">Kurz</font>'))
+      .toBe('<span style="color: #00AAFF">Kurz</span>');
+    expect(sanitizeFormattedText("<font>Text ohne Farbe</font>")).toBe("Text ohne Farbe");
+    expect(stripFormattedText('<font color="#0165c3">Du verkaufst Versicherungen</font>')).toBe("Du verkaufst Versicherungen");
+  });
+
   it("erkennt leeren Markup-Text", () => {
     expect(isBlankFormattedText("<b>  </b>")).toBe(true);
     expect(isBlankFormattedText("<b>Hallo</b>")).toBe(false);

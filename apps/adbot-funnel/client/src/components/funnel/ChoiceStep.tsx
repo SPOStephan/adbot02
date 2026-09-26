@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from "react";
-import { choiceAdvancesOnSelect, isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown, type ChoicePage } from "@shared/funnel";
+import { choiceAdvancesOnSelect, isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type ChoicePage } from "@shared/funnel";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -31,6 +31,7 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
       <div className="funnel-question-copy">
         {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
         <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
+        {isPageSubtitleShown(page) && <FormattedText as="p" className="funnel-subtitle" value={page.subtitle} />}
         {descriptionShown && <FormattedText as="p" id={`${page.id}-description`} className="funnel-description" value={page.description} />}
       </div>
       <div className={page.type === "choice-grid" ? "funnel-choice-grid" : "funnel-choice-list"} role={page.allowMultiple ? "group" : "radiogroup"} aria-labelledby={`${page.id}-title`} aria-describedby={descriptionShown ? `${page.id}-description` : undefined}>

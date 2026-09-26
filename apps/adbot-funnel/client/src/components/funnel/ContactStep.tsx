@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
-import { isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown, type ApplicationContact, type ContactPage } from "@shared/funnel";
+import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type ApplicationContact, type ContactPage } from "@shared/funnel";
 import { ArrowLeft, Check, FileText, Loader2, UploadCloud, X } from "lucide-react";
 import { FormattedText } from "./FormattedText";
 
@@ -62,6 +62,7 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
       <div className="funnel-question-copy">
         {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
         <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
+        {isPageSubtitleShown(page) && <FormattedText as="p" className="funnel-subtitle" value={page.subtitle} />}
         {isPageDescriptionShown(page) && <FormattedText as="p" className="funnel-description" value={page.description} />}
       </div>
       <form className="funnel-contact-form" onSubmit={submit} aria-busy={pending} aria-describedby={error ? `${page.id}-error` : undefined}>

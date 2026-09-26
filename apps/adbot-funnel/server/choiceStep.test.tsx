@@ -21,6 +21,25 @@ describe("ChoiceStep Fortschritt", () => {
     expect(multiple).toContain(page.buttonLabel);
   });
 
+  it("setzt die Sub-Headline unter die Überschrift", () => {
+    const page: ChoicePage = {
+      ...getChoicePage(),
+      eyebrow: "Kurze Frage",
+      title: "Welcher Bereich passt am besten zu dir?",
+      subtitle: '<span style="color: #0165C3">Du verkaufst Versicherungen</span>',
+    };
+    const html = renderToStaticMarkup(<ChoiceStep page={page} selected={[]} onSelect={vi.fn()} onBack={vi.fn()} onContinue={vi.fn()} />);
+    expect(html).toContain("funnel-eyebrow");
+    expect(html).toContain("funnel-subtitle");
+    const eyebrowAt = html.indexOf("funnel-eyebrow");
+    const subtitleAt = html.indexOf("funnel-subtitle");
+    expect(eyebrowAt).toBeGreaterThan(-1);
+    expect(subtitleAt).toBeGreaterThan(eyebrowAt);
+    expect(html.slice(eyebrowAt, subtitleAt)).toMatch(/<h1\b/);
+    expect(stripSoftHyphens(html)).toContain("Du verkaufst Versicherungen");
+    expect(html).toContain("#0165C3");
+  });
+
   it("blendet Überzeile und Beschreibung aus, behält die Überschrift für Screenreader", () => {
     const page: ChoicePage = {
       ...getChoicePage(),

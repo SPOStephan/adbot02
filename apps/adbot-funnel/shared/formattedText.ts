@@ -48,10 +48,15 @@ function rgbToHex(r: number, g: number, b: number): string | null {
   return `#${[r, g, b].map(part => part.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 }
 
-function allowedColor(value: string): string | null {
+const SKIP_UNKNOWN_CHILDREN = new Set(["script", "style", "iframe", "object", "noscript", "textarea"]);
+
+export function normalizeCssColor(value: string): string | null {
   const hex = value.trim();
   if (/^#[0-9a-fA-F]{6}$/.test(hex)) return hex.toUpperCase();
-  const rgb = hex.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
+    return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`.toUpperCase();
+  }
+  const rgb = hex.match(/^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})(?:\s*[,/]\s*[\d.]+)?\s*\)$/i);
   if (!rgb) return null;
   return rgbToHex(Number(rgb[1]), Number(rgb[2]), Number(rgb[3]));
 }
@@ -60,7 +65,17 @@ function spanColor(attrs: string): string | null {
   const style = attrs.match(/\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
   const raw = style?.[1] ?? style?.[2] ?? "";
   const color = raw.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
-  return color ? allowedColor(color[1]) : null;
+  return color ? normalizeCssColor(color[1]) : null;
+}
+
+function fontColor(attrs: string): string | null {
+  const named = attrs.match(/\scolor\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+  const raw = named?.[1] ?? named?.[2] ?? named?.[3] ?? "";
+  return normalizeCssColor(raw) || spanColor(attrs);
+}
+
+function normalizeTag(tag: string): string {
+  return tag === "font" ? "span" : tag;
 }
 
 export function stripFormattedText(value: string): string {
@@ -109,7 +124,7 @@ export function sanitizeFormattedText(input: string): string {
     }
     const close = /^<\/([a-zA-Z]+)/.exec(chunk);
     if (close) {
-      const tag = close[1].toLowerCase();
+      const tag = normalizeTag(close[1].toLowerCase());
       const index = open.lastIndexOf(tag);
       if (index === -1) continue;
       while (open.length > index) {
@@ -121,8 +136,15 @@ export function sanitizeFormattedText(input: string): string {
     const openMatch = /^<([a-zA-Z]+)([^>]*)\/?>/.exec(chunk);
     if (!openMatch) continue;
     const tag = openMatch[1].toLowerCase();
+    if (tag === "font") {
+      const color = fontColor(openMatch[2] ?? "");
+      if (!color) continue;
+      open.push("span");
+      output += `<span style="color: ${color}">`;
+      continue;
+    }
     if (!ALLOWED_TAGS.has(tag)) {
-      if (!/\/>$/.test(chunk) && tag !== "br") skipping = tag;
+      if (SKIP_UNKNOWN_CHILDREN.has(tag) && !/\/>$/.test(chunk)) skipping = tag;
       continue;
     }
     if (tag === "br") {

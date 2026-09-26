@@ -25,10 +25,20 @@ describe("Funnel-Validierung", () => {
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages }).success).toBe(true);
   });
 
-  it("nimmt ausgeblendete Überzeile, Überschrift und Beschreibung an", () => {
-    const pages = defaultFunnel.pages.map(page => ({ ...page, eyebrowVisible: false, titleVisible: false, descriptionVisible: false }));
+  it("nimmt ausgeblendete Überzeile, Überschrift, Sub-Headline und Beschreibung an", () => {
+    const pages = defaultFunnel.pages.map(page => ({ ...page, eyebrowVisible: false, titleVisible: false, subtitleVisible: false, descriptionVisible: false }));
     const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages });
-    expect(parsed.pages.every(page => page.eyebrowVisible === false && page.titleVisible === false && page.descriptionVisible === false)).toBe(true);
+    expect(parsed.pages.every(page => page.eyebrowVisible === false && page.titleVisible === false && page.subtitleVisible === false && page.descriptionVisible === false)).toBe(true);
+  });
+
+  it("füllt eine fehlende Sub-Headline leer auf", () => {
+    const pages = defaultFunnel.pages.map(page => {
+      const next = { ...page };
+      Reflect.deleteProperty(next, "subtitle");
+      return next;
+    });
+    const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages });
+    expect(parsed.pages.every(page => page.subtitle === "")).toBe(true);
   });
 
   it("akzeptiert ausgeblendete Auswahlseiten und hält Start/Kontakt sichtbar", () => {
