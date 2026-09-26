@@ -136,10 +136,12 @@ assert.match(pageCopy, /zielgruppen:/);
 
 const traffic = read("src/components/TrafficLaunchCanary.tsx");
 assert.match(traffic, /toMetaAdSetTargeting\(await fetchCampaignGeoTarget\(\)\)/);
+assert.match(traffic, /as MetaAdSetTargeting/);
 assert.doesNotMatch(traffic, /materialize_meta_organic_boost_plan/);
 
 const lead = read("src/components/LeadLaunchCanary.tsx");
 assert.match(lead, /toMetaAdSetTargeting\(await fetchCampaignGeoTarget\(\)\)/);
+assert.match(lead, /as MetaAdSetTargeting/);
 
 const openaiForm = read("src/components/OpenAIAdsLaunchForm.tsx");
 assert.match(openaiForm, /pickOpenAILocationId/);

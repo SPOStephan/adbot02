@@ -79,9 +79,21 @@ export function fallbackCountryCode(geo: CampaignGeoTarget | null): string {
   return geo?.countryCode || "DE";
 }
 
-export function toMetaAdSetTargeting(geo: CampaignGeoTarget | null): {
-  geo_locations: Record<string, unknown>;
-} {
+export type MetaAdSetTargeting = {
+  geo_locations:
+    | { countries: string[] }
+    | {
+        custom_locations: Array<{
+          latitude: number;
+          longitude: number;
+          radius: number;
+          distance_unit: "kilometer";
+        }>;
+        location_types: Array<"home">;
+      };
+};
+
+export function toMetaAdSetTargeting(geo: CampaignGeoTarget | null): MetaAdSetTargeting {
   if (!geo) {
     return { geo_locations: { countries: ["DE"] } };
   }
