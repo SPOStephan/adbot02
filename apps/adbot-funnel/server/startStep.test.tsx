@@ -45,6 +45,21 @@ describe("StartStep Layouts", () => {
     expect(html).not.toContain("funnel-start-benefits-badges");
   });
 
+  it("blendet Überzeile und Beschreibung der Startseite aus", () => {
+    const page: StartPage = {
+      ...getStartPage(),
+      layout: "benefits",
+      eyebrow: "Wir suchen dich!",
+      eyebrowVisible: false,
+      descriptionVisible: false,
+      benefits: defaultStartBenefits(() => "tile"),
+    };
+    const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(html).not.toContain("Wir suchen dich!");
+    expect(html).not.toContain("funnel-start-benefits-lead");
+    expect(html).toContain(page.title);
+  });
+
   it("setzt einspaltige Kacheln, Portrait und Badges als eigene Elemente", () => {
     const page: StartPage = {
       ...getStartPage(),

@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { FunnelBrand, StartPage } from "@shared/funnel";
+import { isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
 import { clampHeroBackgroundFocusX, contrastOnAccent, resolveBadgeColors, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
@@ -22,9 +22,9 @@ export function StartStep({
   return (
     <section className="funnel-step funnel-start-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-copy">
-        {page.eyebrow && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
-        <FormattedText as="h1" id={`${page.id}-title`} tabIndex={-1} value={page.title} />
-        <FormattedText as="p" className="funnel-description" value={page.description} />
+        {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
+        <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
+        {isPageDescriptionShown(page) && <FormattedText as="p" className="funnel-description" value={page.description} />}
         <ul className="funnel-benefits">
           {page.bullets.map(bullet => <li key={bullet}><Check size={17} />{bullet}</li>)}
         </ul>
@@ -82,8 +82,8 @@ function BenefitsStartStep({
         )}
         <div className="funnel-start-benefits-hero-copy">
           {page.heroImageUrl.trim() ? <img className="funnel-start-benefits-portrait" src={page.heroImageUrl} alt="" /> : null}
-          {page.eyebrow && <FormattedText as="p" className="funnel-start-benefits-kicker" value={page.eyebrow} />}
-          <FormattedText as="h1" id={`${page.id}-title`} tabIndex={-1} value={page.title} />
+          {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-start-benefits-kicker" value={page.eyebrow} />}
+          <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />}
           {(page.badges ?? []).length > 0 && (
             <ul className="funnel-start-benefits-badges">
               {(page.badges ?? []).map(badge => {
@@ -100,7 +100,7 @@ function BenefitsStartStep({
               })}
             </ul>
           )}
-          {stripFormattedText(page.description) && <FormattedText as="p" className="funnel-start-benefits-lead" value={page.description} />}
+          {isPageDescriptionShown(page) && <FormattedText as="p" className="funnel-start-benefits-lead" value={page.description} />}
           <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
             {page.buttonLabel}
           </button>

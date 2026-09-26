@@ -25,6 +25,12 @@ describe("Funnel-Validierung", () => {
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, pages }).success).toBe(true);
   });
 
+  it("nimmt ausgeblendete Überzeile, Überschrift und Beschreibung an", () => {
+    const pages = defaultFunnel.pages.map(page => ({ ...page, eyebrowVisible: false, titleVisible: false, descriptionVisible: false }));
+    const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages });
+    expect(parsed.pages.every(page => page.eyebrowVisible === false && page.titleVisible === false && page.descriptionVisible === false)).toBe(true);
+  });
+
   it("akzeptiert ausgeblendete Auswahlseiten und hält Start/Kontakt sichtbar", () => {
     const hiddenChoice = defaultFunnel.pages.map(page => page.id === "page-role" ? { ...page, hidden: true } : page);
     const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages: hiddenChoice });

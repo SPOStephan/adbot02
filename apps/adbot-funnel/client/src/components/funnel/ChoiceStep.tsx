@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from "react";
-import type { ChoicePage } from "@shared/funnel";
+import { choiceAdvancesOnSelect, isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown, type ChoicePage } from "@shared/funnel";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -13,6 +13,7 @@ type ChoiceStepProps = {
 };
 
 export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: ChoiceStepProps) {
+  const descriptionShown = isPageDescriptionShown(page);
   const moveRadioFocus = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (page.allowMultiple || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
     const options = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? []);
@@ -28,11 +29,11 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
   return (
     <section className="funnel-step funnel-question-step" aria-labelledby={`${page.id}-title`}>
       <div className="funnel-question-copy">
-        {page.eyebrow && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
-        <FormattedText as="h1" id={`${page.id}-title`} tabIndex={-1} value={page.title} />
-        <FormattedText as="p" id={`${page.id}-description`} className="funnel-description" value={page.description} />
+        {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
+        <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
+        {descriptionShown && <FormattedText as="p" id={`${page.id}-description`} className="funnel-description" value={page.description} />}
       </div>
-      <div className={page.type === "choice-grid" ? "funnel-choice-grid" : "funnel-choice-list"} role={page.allowMultiple ? "group" : "radiogroup"} aria-labelledby={`${page.id}-title`} aria-describedby={`${page.id}-description`}>
+      <div className={page.type === "choice-grid" ? "funnel-choice-grid" : "funnel-choice-list"} role={page.allowMultiple ? "group" : "radiogroup"} aria-labelledby={`${page.id}-title`} aria-describedby={descriptionShown ? `${page.id}-description` : undefined}>
         {page.options.map((option, index) => {
           const active = selected.includes(option.value);
           return (
@@ -44,7 +45,10 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
               aria-checked={active}
               data-value={option.value}
               tabIndex={page.allowMultiple || active || (selected.length === 0 && index === 0) ? 0 : -1}
-              onClick={() => onSelect(option.value)}
+              onClick={() => {
+                onSelect(option.value);
+                if (choiceAdvancesOnSelect(page.allowMultiple)) onContinue();
+              }}
               onKeyDown={moveRadioFocus}
             >
               <span className="funnel-choice-icon"><FunnelIcon name={option.icon} /></span>
@@ -56,7 +60,9 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
       </div>
       <div className="funnel-step-actions">
         <button className="funnel-secondary-button" type="button" onClick={onBack}><ArrowLeft size={18} />Zurück</button>
-        <button className="funnel-primary-button" type="button" onClick={onContinue} disabled={selected.length === 0}>{page.buttonLabel}<ArrowRight size={18} /></button>
+        {page.allowMultiple && (
+          <button className="funnel-primary-button" type="button" onClick={onContinue} disabled={selected.length === 0}>{page.buttonLabel}<ArrowRight size={18} /></button>
+        )}
       </div>
     </section>
   );
