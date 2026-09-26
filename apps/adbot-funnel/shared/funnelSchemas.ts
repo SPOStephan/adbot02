@@ -77,6 +77,8 @@ const startPageSchema = pageBaseSchema.extend({
   benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
   benefitsTileLayout: z.enum(BENEFITS_TILE_LAYOUTS).default(DEFAULT_BENEFITS_TILE_LAYOUT),
   benefitsTileGap: z.enum(BENEFITS_TILE_GAPS).default(DEFAULT_BENEFITS_TILE_GAP),
+  benefitsSectionBackground: optionalHexColorSchema.default(""),
+  benefitsCardBackground: optionalHexColorSchema.default(""),
   badges: z.array(startBadgeSchema).max(MAX_START_BADGES).default([]),
   heroBackgroundAssetId: z.string().max(80).default(""),
   heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),

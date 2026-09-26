@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
-import { clampHeroBackgroundFocusX, contrastOnAccent, resolveBadgeColors, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, contrastOnAccent, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -68,6 +68,9 @@ function BenefitsStartStep({
   const tileLayout = resolveBenefitsTileLayout(page.benefitsTileLayout);
   const tileGap = resolveBenefitsTileGap(page.benefitsTileGap);
   const ink = brand?.textColor ?? "#10253f";
+  const cards = tileLayout === "cards";
+  const sectionBackground = cards ? resolveBenefitsSectionBackground(page.benefitsSectionBackground) : undefined;
+  const cardBackground = cards ? resolveBenefitsCardBackground(page.benefitsCardBackground) : undefined;
 
   return (
     <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`}>
@@ -115,7 +118,13 @@ function BenefitsStartStep({
       )}
 
       {page.benefits.length > 0 && (
-        <div className="funnel-start-benefits-tiles-wrap">
+        <div
+          className={`funnel-start-benefits-tiles-wrap${cards ? " is-cards" : ""}`}
+          style={cards ? {
+            background: sectionBackground,
+            "--benefits-card-bg": cardBackground,
+          } as CSSProperties : undefined}
+        >
           <ul className={`funnel-start-benefits-tiles is-${tileLayout} is-gap-${tileGap}`}>
             {page.benefits.map(benefit => {
               const iconColor = benefit.color || accent;
@@ -135,7 +144,7 @@ function BenefitsStartStep({
         </div>
       )}
 
-      <div className="funnel-start-benefits-cta-wrap">
+      <div className="funnel-start-benefits-cta-wrap" style={cards ? { background: sectionBackground } : undefined}>
         <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
           {bottomLabel}
         </button>

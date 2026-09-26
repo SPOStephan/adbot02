@@ -165,6 +165,14 @@ const logoUploadSchema = z.object({
   dataBase64: z.string().min(1).max(3_000_000),
 });
 
+const heroImageUploadSchema = z.object({
+  funnelId: funnelIdSchema,
+  fileName: z.string().min(1).max(160),
+  mimeType: z.enum(["image/webp", "image/jpeg"]),
+  size: z.number().int().positive().max(2 * 1024 * 1024),
+  dataBase64: z.string().min(1).max(3_000_000),
+});
+
 const metaServerSettingsSchema = z.object({
   funnelId: funnelIdSchema,
   accessToken: z.string().trim().min(20).max(4096).optional(),
@@ -227,6 +235,47 @@ function logoExtension(mimeType: z.infer<typeof logoUploadSchema>["mimeType"]) {
   if (mimeType === "image/png") return "png";
   if (mimeType === "image/webp") return "webp";
   return "jpg";
+}
+
+function hasValidOptimizedImageSignature(buffer: Buffer, mimeType: "image/webp" | "image/jpeg") {
+  if (mimeType === "image/jpeg") {
+    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  return buffer.length >= 12
+    && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46
+    && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+}
+
+async function storeHeroImage(
+  ownerUserId: string | null,
+  funnelId: string,
+  data: Buffer,
+  contentType: "image/webp" | "image/jpeg",
+) {
+  const extension = contentType === "image/webp" ? "webp" : "jpg";
+  if (isBunnyConfigured()) {
+    const stored = await uploadFunnelBytesToBunny({
+      ownerUserId,
+      filename: `portrait.${extension}`,
+      contentType,
+      data,
+      folder: "portraits",
+    });
+    return { url: stored.url, path: stored.bunnyPath };
+  }
+  try {
+    const stored = await storagePut(`funnels/${funnelId}/portraits/image-${crypto.randomUUID()}.${extension}`, data, contentType);
+    return { url: stored.url, path: stored.key };
+  } catch {
+    const stored = await uploadFunnelBytesToBunny({
+      ownerUserId,
+      filename: `portrait.${extension}`,
+      contentType,
+      data,
+      folder: "portraits",
+    });
+    return { url: stored.url, path: stored.bunnyPath };
+  }
 }
 
 function asOwnerUserId(value?: string | null) {
@@ -418,6 +467,17 @@ export const funnelRouter = router({
       funnelId: input.funnelId,
       ownerUserId: asOwnerUserId(owner?.userId || getTenantOwnerUserId(ctx.user)),
     });
+  }),
+
+  uploadHeroImage: adminProcedure.input(heroImageUploadSchema).mutation(async ({ input, ctx }) => {
+    await requireOwnedFunnel(input.funnelId, ctx.user);
+    const owner = await getFunnelOwner(input.funnelId);
+    const ownerUserId = asOwnerUserId(owner?.userId || getTenantOwnerUserId(ctx.user));
+    const buffer = Buffer.from(input.dataBase64, "base64");
+    if (buffer.byteLength !== input.size || !hasValidOptimizedImageSignature(buffer, input.mimeType)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Die Bilddatei ist beschädigt oder hat ein nicht unterstütztes Format." });
+    }
+    return storeHeroImage(ownerUserId, input.funnelId, buffer, input.mimeType);
   }),
 
   uploadHeroBackground: adminProcedure.input(heroBackgroundUploadSchema).mutation(async ({ input, ctx }) => {

@@ -1,5 +1,6 @@
 export const HERO_BACKGROUND_DESKTOP = { maxWidth: 1920, maxHeight: 1200 };
 export const HERO_BACKGROUND_MOBILE = { maxWidth: 1100, maxHeight: 1400 };
+export const HERO_IMAGE_MAX = { maxWidth: 1200, maxHeight: 1200 };
 
 /** Scale down to the max box. Never crop. Never upscale. Keeps the full motif. */
 export function scaleToMaxBox(

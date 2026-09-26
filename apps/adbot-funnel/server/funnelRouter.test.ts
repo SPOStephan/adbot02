@@ -221,6 +221,23 @@ describe("Funnel-Router", () => {
     );
     await admin.funnel.saveConfig({ ...config, brand: { ...config.brand, logoUrl: stored.url } });
     expect((await publicCaller.funnel.publicConfig({ slug: config.slug })).brand.logoUrl).toBe(stored.url);
+
+    const webp = Buffer.alloc(12);
+    webp[0] = 0x52; webp[1] = 0x49; webp[2] = 0x46; webp[3] = 0x46;
+    webp[8] = 0x57; webp[9] = 0x45; webp[10] = 0x42; webp[11] = 0x50;
+    const portrait = await admin.funnel.uploadHeroImage({
+      funnelId: config.id,
+      fileName: "portrait.png",
+      mimeType: "image/webp",
+      size: webp.byteLength,
+      dataBase64: webp.toString("base64"),
+    });
+    expect(portrait.url.length).toBeGreaterThan(0);
+    expect(storagePutMock).toHaveBeenCalledWith(
+      expect.stringMatching(new RegExp(`^funnels/${config.id}/portraits/image-[0-9a-f-]+\\.webp$`, "i")),
+      webp,
+      "image/webp",
+    );
   });
 
   it("nimmt zugeschnittene Hintergrundbilder in die Kundenbibliothek auf", async () => {

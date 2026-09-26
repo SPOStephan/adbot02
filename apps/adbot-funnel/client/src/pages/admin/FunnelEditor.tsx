@@ -5,7 +5,7 @@ import { useLocation, useParams } from "wouter";
 import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
 import { DEFAULT_PROGRESS, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
-import { benefitsFromBullets, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrandColorField } from "@/components/admin/BrandColorField";
 import { EditorPreview } from "@/components/admin/EditorPreview";
 import { HeroBackgroundField } from "@/components/admin/HeroBackgroundField";
+import { HeroImageField } from "@/components/admin/HeroImageField";
 import { IconColorField } from "@/components/admin/IconColorField";
 import { FormattedTextField } from "@/components/admin/FormattedTextField";
 import { IconPicker } from "@/components/admin/IconPicker";
@@ -518,9 +519,13 @@ function StartPageFields({
     <>
       {layout === "classic" && (
         <>
-          <FormRow label="Bild-URL" hint="Leer lassen, um die neutrale Illustration bzw. den reinen Text-Hero zu verwenden.">
-            <Input value={page.heroImageUrl} onChange={event => patch({ heroImageUrl: event.target.value } as Partial<FunnelPage>, false)} />
-          </FormRow>
+          <HeroImageField
+            funnelId={funnelId}
+            value={page.heroImageUrl}
+            label="Bildelement (optional)"
+            hint="Eigenes Foto statt der neutralen Illustration. Upload zu Bunny als WebP, oder eine vorhandene HTTPS-Adresse."
+            onChange={heroImageUrl => patch({ heroImageUrl } as Partial<FunnelPage>)}
+          />
           <FormRow label="Vorteile – eine Zeile pro Punkt">
             <Textarea value={page.bullets.join("\n")} rows={4} onChange={event => patch({ bullets: event.target.value.split("\n").filter(Boolean) } as Partial<FunnelPage>, false)} />
           </FormRow>
@@ -533,9 +538,11 @@ function StartPageFields({
       {layout === "benefits" && (
         <>
           <HeroBackgroundField funnelId={funnelId} page={page} onChange={next => patch(next as Partial<FunnelPage>)} />
-          <FormRow label="Bildelement (optional)" hint="Eigenes Foto als Element über der Überschrift, zum Beispiel ein Portrait. Unabhängig vom Hintergrundbild. Leer = kein Bildelement.">
-            <Input value={page.heroImageUrl} placeholder="https://…/portrait.jpg" onChange={event => patch({ heroImageUrl: event.target.value } as Partial<FunnelPage>, false)} />
-          </FormRow>
+          <HeroImageField
+            funnelId={funnelId}
+            value={page.heroImageUrl}
+            onChange={heroImageUrl => patch({ heroImageUrl } as Partial<FunnelPage>)}
+          />
           <StartBadgesField
             badges={page.badges ?? []}
             brandColor={brandColor}
@@ -560,6 +567,22 @@ function StartPageFields({
               onChange={benefitsTileGap => patch({ benefitsTileGap } as Partial<FunnelPage>)}
             />
           )}
+          {tileLayout === "cards" && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <OptionalStartColor
+                label="Bereichshintergrund"
+                value={page.benefitsSectionBackground}
+                fallback={DEFAULT_BENEFITS_SECTION_BACKGROUND}
+                onChange={benefitsSectionBackground => patch({ benefitsSectionBackground } as Partial<FunnelPage>)}
+              />
+              <OptionalStartColor
+                label="Kartenhintergrund"
+                value={page.benefitsCardBackground}
+                fallback={DEFAULT_BENEFITS_CARD_BACKGROUND}
+                onChange={benefitsCardBackground => patch({ benefitsCardBackground } as Partial<FunnelPage>)}
+              />
+            </div>
+          )}
           <div className="grid gap-3">
             <div className="flex items-center justify-between">
               <Label>Icon-Kacheln</Label>
@@ -581,7 +604,7 @@ function StartPageFields({
                     <Trash2 className="size-4" />
                   </Button>
                 </div>
-                <FormattedTextField rows={tileLayout === "one-column" ? 4 : 2} placeholder={tileLayout === "one-column" ? "Längerer Erklärtext" : "Kurzer Erklärtext"} value={benefit.text} onChange={value => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, text: value } : item) } as Partial<FunnelPage>)} />
+                <FormattedTextField rows={tileLayout === "one-column" || tileLayout === "cards" ? 4 : 2} placeholder={tileLayout === "two-column" ? "Kurzer Erklärtext" : "Längerer Erklärtext"} value={benefit.text} onChange={value => patch({ benefits: page.benefits.map(item => item.id === benefit.id ? { ...item, text: value } : item) } as Partial<FunnelPage>)} />
                 <IconColorField
                   label="Iconfarbe"
                   value={benefit.color}
@@ -655,6 +678,25 @@ function ProgressSettings({
         <OptionalProgressColor label="Stufentext" value={progress.colors.text} fallback={resolved.text} onChange={value => patchColor("text", value)} />
         <OptionalProgressColor label="Nebentext" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
       </div>
+    </div>
+  );
+}
+
+function OptionalStartColor({
+  label,
+  value,
+  fallback,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  fallback: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-1">
+      <BrandColorField label={label} value={value || fallback} onChange={onChange} hint={value ? "Eigene Farbe für dieses Element." : "Leer = Standard der Vorlage."} />
+      {value ? <Button type="button" size="sm" variant="ghost" className="justify-start px-0" onClick={() => onChange("")}>Standard verwenden</Button> : null}
     </div>
   );
 }
