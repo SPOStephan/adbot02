@@ -41,7 +41,7 @@ describe("Fortschrittsanzeige", () => {
     });
     expect(colors.active).toBe("#C8102E");
     expect(colors.completed).toBe("#0B6E4F");
-    expect(colors.upcoming).toBe("#dbe6f0");
+    expect(colors.upcoming).toBe("#c5d3e0");
   });
 
   it("nimmt Stufentexte vom Editor, sonst Seitenname", () => {
@@ -71,6 +71,18 @@ describe("Fortschrittsanzeige", () => {
   });
 
   it("akzeptiert Varianten und leere Farb-Overrides im Schema", () => {
+    expect(funnelConfigSchema.safeParse({
+      ...defaultFunnel,
+      progress: {
+        layout: "segments",
+        colors: { active: "#004D98", completed: "", upcoming: "", text: "", muted: "", track: "" },
+        stages: [
+          { id: "s1", label: "Bewerbung", startPageId: "page-start" },
+          { id: "s2", label: "Matching", startPageId: "page-role" },
+          { id: "s3", label: "Kennenlernen", startPageId: "page-contact" },
+        ],
+      },
+    }).success).toBe(true);
     expect(funnelConfigSchema.safeParse({
       ...defaultFunnel,
       progress: {

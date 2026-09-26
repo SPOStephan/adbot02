@@ -102,7 +102,7 @@ export function resolveProgressColors(
   return {
     active: colors?.active || accent,
     completed: colors?.completed || accent,
-    upcoming: colors?.upcoming || "#dbe6f0",
+    upcoming: colors?.upcoming || "#c5d3e0",
     text: colors?.text || brand.textColor || "#10253f",
     muted: colors?.muted || "#607287",
     track: colors?.track || "#dbe6f0",
