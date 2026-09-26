@@ -1,4 +1,4 @@
-import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type StartBadge, type StartBenefit, type StartPage, type StartPageLayout } from "./funnel";
+import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type HeroImageLayout, type StartBadge, type StartBenefit, type StartPage, type StartPageLayout } from "./funnel";
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
 export const DEFAULT_BENEFITS_TILE_LAYOUT: BenefitsTileLayout = "two-column";
@@ -9,6 +9,9 @@ export const MAX_START_BENEFITS = 12;
 export const MAX_START_BADGES = 16;
 export const DEFAULT_HERO_BACKGROUND_OPACITY = 15;
 export const DEFAULT_HERO_BACKGROUND_FOCUS_X = 50;
+export const DEFAULT_HERO_IMAGE_LAYOUT: HeroImageLayout = "circle";
+export const DEFAULT_HERO_IMAGE_RADIUS = 28;
+export const MAX_HERO_IMAGE_RADIUS = 80;
 export const MAX_START_BENEFIT_TEXT = 800;
 
 export const START_BADGE_TEMPLATES = [
@@ -82,6 +85,16 @@ export function resolveBenefitsCardBackground(value?: string | null): string {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
     ? value.toUpperCase()
     : DEFAULT_BENEFITS_CARD_BACKGROUND;
+}
+
+export function resolveHeroImageLayout(value?: string | null): HeroImageLayout {
+  return value === "wide" ? "wide" : DEFAULT_HERO_IMAGE_LAYOUT;
+}
+
+export function clampHeroImageRadius(value: unknown) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_HERO_IMAGE_RADIUS;
+  return Math.max(0, Math.min(MAX_HERO_IMAGE_RADIUS, Math.round(numeric)));
 }
 
 export function resolveBenefitsTileGap(value?: string | null): BenefitsTileGap {

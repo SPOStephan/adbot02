@@ -5,6 +5,7 @@ export const FUNNEL_STATUSES = ["draft", "published", "paused", "archived"] as c
 export const START_PAGE_LAYOUTS = ["classic", "benefits"] as const;
 export const BENEFITS_TILE_LAYOUTS = ["two-column", "one-column", "cards"] as const;
 export const BENEFITS_TILE_GAPS = ["small", "medium", "large"] as const;
+export const HERO_IMAGE_LAYOUTS = ["circle", "wide"] as const;
 export const PROGRESS_LAYOUTS = [
   "percent",
   "minimal",
@@ -95,6 +96,7 @@ export type FunnelStatus = (typeof FUNNEL_STATUSES)[number];
 export type StartPageLayout = (typeof START_PAGE_LAYOUTS)[number];
 export type BenefitsTileLayout = (typeof BENEFITS_TILE_LAYOUTS)[number];
 export type BenefitsTileGap = (typeof BENEFITS_TILE_GAPS)[number];
+export type HeroImageLayout = (typeof HERO_IMAGE_LAYOUTS)[number];
 export type ProgressLayout = (typeof PROGRESS_LAYOUTS)[number];
 
 export type FunnelOptionIcon = (typeof FUNNEL_OPTION_ICONS)[number];
@@ -267,6 +269,9 @@ export type StartPage = FunnelPageBase & {
   type: "start";
   layout: StartPageLayout;
   heroImageUrl: string;
+  heroImageLayout: HeroImageLayout;
+  /** Corner radius in px for the wide image. 0 = square corners. Ignored for circle. */
+  heroImageRadius: number;
   bullets: string[];
   trustNote: string;
   benefitsBandTitle: string;

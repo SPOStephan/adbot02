@@ -76,7 +76,11 @@ describe("StartStep Layouts", () => {
     };
     const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
     expect(html).toContain("funnel-start-benefits-portrait");
+    expect(html).toContain("is-circle");
     expect(html).toContain("https://cdn.example.org/portrait.jpg");
+    const wideImage = renderToStaticMarkup(<StartStep page={{ ...page, heroImageLayout: "wide", heroImageRadius: 0 }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(wideImage).toContain("is-wide");
+    expect(wideImage).toContain("--hero-image-radius:0px");
     expect(html).toContain("funnel-start-benefits-badges");
     expect(html).toContain("Homeoffice");
     expect(html).toContain("Fixum + Provision");

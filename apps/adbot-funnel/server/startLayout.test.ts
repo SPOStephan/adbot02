@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, contrastOnAccent, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -19,6 +19,11 @@ describe("Startseiten-Layouts", () => {
     expect(resolveBenefitsTileGap("small")).toBe("small");
     expect(resolveBenefitsTileGap("large")).toBe("large");
     expect(resolveBenefitsTileGap("wide")).toBe("medium");
+    expect(resolveHeroImageLayout("wide")).toBe("wide");
+    expect(resolveHeroImageLayout(undefined)).toBe(DEFAULT_HERO_IMAGE_LAYOUT);
+    expect(clampHeroImageRadius(0)).toBe(0);
+    expect(clampHeroImageRadius(140)).toBe(80);
+    expect(clampHeroImageRadius("x")).toBe(DEFAULT_HERO_IMAGE_RADIUS);
   });
 
   it("erzeugt Icon-Kacheln aus bestehenden Bullet-Zeilen", () => {
@@ -71,6 +76,18 @@ describe("Startseiten-Layouts", () => {
     expect(start.benefitsTileLayout).toBe("cards");
     expect(start.benefitsSectionBackground).toBe("#E8F2FB");
     expect(start.benefitsCardBackground).toBe("#FFFFFF");
+    const withWide = funnelConfigSchema.parse({
+      ...defaultFunnel,
+      pages: defaultFunnel.pages.map(page => page.type === "start"
+        ? { ...page, heroImageLayout: "wide" as const, heroImageRadius: 0 }
+        : page),
+    });
+    const wideStart = withWide.pages[0];
+    expect(wideStart?.type).toBe("start");
+    if (wideStart?.type === "start") {
+      expect(wideStart.heroImageLayout).toBe("wide");
+      expect(wideStart.heroImageRadius).toBe(0);
+    }
   });
 
   it("nimmt einspaltige Kacheln, Badges und Vorlagen an", () => {
@@ -109,6 +126,8 @@ describe("Startseiten-Layouts", () => {
       Reflect.deleteProperty(start, "benefitsBandTitle");
       Reflect.deleteProperty(start, "secondaryButtonLabel");
       Reflect.deleteProperty(start, "heroBackgroundFocusX");
+      Reflect.deleteProperty(start, "heroImageLayout");
+      Reflect.deleteProperty(start, "heroImageRadius");
     }
     const normalized = normalizeFunnelConfig(legacy, true);
     const page = normalized.pages[0];
@@ -126,6 +145,8 @@ describe("Startseiten-Layouts", () => {
       expect(page.heroBackgroundOpacity).toBe(15);
       expect(page.heroBackgroundFocusX).toBe(50);
       expect(page.heroBackgroundDesktopUrl).toBe("");
+      expect(page.heroImageLayout).toBe("circle");
+      expect(page.heroImageRadius).toBe(28);
     }
   });
 });
