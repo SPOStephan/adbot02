@@ -72,6 +72,7 @@ export function stripFormattedText(value: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/\u00AD/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -83,7 +84,7 @@ export function isBlankFormattedText(value: string): boolean {
 export function sanitizeFormattedText(input: string): string {
   if (!input) return "";
   const source = collapseEncodedAmpersands(input.replace(/\r\n/g, "\n"));
-  if (!/<[a-z/]/i.test(source)) return escapeHtml(decodeHtmlEntities(source));
+  if (!/<[a-z/]/i.test(source)) return escapeHtml(decodeHtmlEntities(source).replace(/\u00AD/g, ""));
 
   let output = "";
   const open: string[] = [];
@@ -99,11 +100,11 @@ export function sanitizeFormattedText(input: string): string {
       continue;
     }
     if (chunk.startsWith("&")) {
-      output += escapeHtml(chunk === "&" ? "&" : decodeEntity(chunk.slice(1, -1)));
+      output += escapeHtml((chunk === "&" ? "&" : decodeEntity(chunk.slice(1, -1))).replace(/\u00AD/g, ""));
       continue;
     }
     if (!chunk.startsWith("<")) {
-      output += escapeHtml(chunk);
+      output += escapeHtml(chunk.replace(/\u00AD/g, ""));
       continue;
     }
     const close = /^<\/([a-zA-Z]+)/.exec(chunk);

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ContactStep } from "../client/src/components/funnel/ContactStep";
 import { defaultFunnel } from "../shared/defaultFunnel";
 import type { ContactPage } from "../shared/funnel";
+import { stripSoftHyphens } from "../shared/hyphenateGerman";
 
 function getContactPage(): ContactPage {
   const page = defaultFunnel.pages.find((candidate): candidate is ContactPage => candidate.type === "contact");
@@ -37,7 +38,7 @@ describe("ContactStep Einwilligungen", () => {
 
     expect(privacyInput).toBeDefined();
     expect(privacyInput).toContain("required");
-    expect(html).toContain(contactPage.consentLabel);
+    expect(stripSoftHyphens(html)).toContain(contactPage.consentLabel);
   });
 
   it("rendert keine separate Meta-Tracking-Einwilligung", () => {

@@ -4,6 +4,7 @@ import { StartStep } from "../client/src/components/funnel/StartStep";
 import { defaultFunnel } from "../shared/defaultFunnel";
 import { defaultStartBenefits } from "../shared/startLayout";
 import type { StartPage } from "../shared/funnel";
+import { stripSoftHyphens } from "../shared/hyphenateGerman";
 
 function getStartPage(): StartPage {
   const page = defaultFunnel.pages.find((candidate): candidate is StartPage => candidate.type === "start");
@@ -30,12 +31,13 @@ describe("StartStep Layouts", () => {
       benefits: defaultStartBenefits(() => "tile"),
     };
     const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    const visible = stripSoftHyphens(html);
     expect(html).toContain("funnel-start-benefits");
     expect(html).toContain("funnel-start-benefits-tiles");
-    expect(html).toContain("Deine Vorteile bei uns");
-    expect(html).toContain("Wir suchen dich!");
+    expect(visible).toContain("Deine Vorteile bei uns");
+    expect(visible).toContain("Wir suchen dich!");
     expect(html).toContain("Jetzt bewerben");
-    expect(html).toContain("30 Tage Urlaub");
+    expect(visible).toContain("30 Tage Urlaub");
     expect(html).not.toContain("funnel-start-benefits-hero-bg");
     expect(html).toContain("funnel-start-benefits-tiles");
     expect(html).toContain("is-two-column");
@@ -57,7 +59,7 @@ describe("StartStep Layouts", () => {
     const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
     expect(html).not.toContain("Wir suchen dich!");
     expect(html).not.toContain("funnel-start-benefits-lead");
-    expect(html).toContain(page.title);
+    expect(stripSoftHyphens(html)).toContain(page.title);
   });
 
   it("setzt einspaltige Kacheln, Portrait und Badges als eigene Elemente", () => {

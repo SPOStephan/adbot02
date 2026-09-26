@@ -1,4 +1,5 @@
 import { sanitizeFormattedText, stripFormattedText } from "@shared/formattedText";
+import { hyphenateGermanHtml } from "@shared/hyphenateGerman";
 
 export function FormattedText({
   value,
@@ -13,7 +14,7 @@ export function FormattedText({
   id?: string;
   tabIndex?: number;
 }) {
-  const html = sanitizeFormattedText(value);
+  const html = hyphenateGermanHtml(sanitizeFormattedText(value));
   const plain = stripFormattedText(html);
   if (!plain && !html.includes("<br>")) {
     return <Tag className={className} id={id} tabIndex={tabIndex} />;
