@@ -25,7 +25,14 @@ function wrapNodeContents(parent: Node, wrapper: HTMLElement) {
   parent.appendChild(wrapper);
 }
 
-export function wrapSelectionInColor(color: string, editor?: HTMLElement | null) {
+function snapshotEditorRange(editor?: HTMLElement | null): Range | null {
+  const selection = window.getSelection();
+  if (!editor || !selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  const range = selection.getRangeAt(0);
+  return editor.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
+}
+
+export function wrapSelectionInColor(color: string, editor?: HTMLElement | null, preferredRange?: Range | null) {
   const hex = normalizeCssColor(color);
   if (!hex) return;
   const selection = window.getSelection();
@@ -37,12 +44,12 @@ export function wrapSelectionInColor(color: string, editor?: HTMLElement | null)
     span.style.color = hex;
     wrapNodeContents(editor, span);
   };
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-    applyToEditor();
-    return;
-  }
-  const range = selection.getRangeAt(0);
-  if (editor && !editor.contains(range.commonAncestorContainer)) {
+  const range = preferredRange && editor && editor.contains(preferredRange.commonAncestorContainer)
+    ? preferredRange
+    : selection && selection.rangeCount > 0
+      ? selection.getRangeAt(0)
+      : null;
+  if (!range || range.collapsed || (editor && !editor.contains(range.commonAncestorContainer))) {
     applyToEditor();
     return;
   }
@@ -57,10 +64,12 @@ export function wrapSelectionInColor(color: string, editor?: HTMLElement | null)
     applyToEditor();
     return;
   }
-  selection.removeAllRanges();
-  const next = document.createRange();
-  next.selectNodeContents(span);
-  selection.addRange(next);
+  if (selection && editor && selection.anchorNode && editor.contains(selection.anchorNode)) {
+    selection.removeAllRanges();
+    const next = document.createRange();
+    next.selectNodeContents(span);
+    selection.addRange(next);
+  }
 }
 
 function wrapSelectionInSmall() {
@@ -150,7 +159,9 @@ export function FormattedTextField({
   "aria-label"?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
   const [color, setColor] = useState("#10253F");
+  const [colorOpen, setColorOpen] = useState(false);
 
   useEffect(() => {
     const node = ref.current;
@@ -171,8 +182,7 @@ export function FormattedTextField({
     const hex = normalizeHexColor(next) ?? normalizeCssColor(next);
     if (!hex) return;
     setColor(hex);
-    wrapSelectionInColor(hex, ref.current);
-    ref.current?.focus();
+    wrapSelectionInColor(hex, ref.current, savedRangeRef.current);
     commit();
   };
 
@@ -204,7 +214,13 @@ export function FormattedTextField({
         >
           <span className="text-[11px] font-bold leading-none">Klein</span>
         </Button>
-        <Popover>
+        <Popover
+          open={colorOpen}
+          onOpenChange={open => {
+            if (open) savedRangeRef.current = snapshotEditorRange(ref.current);
+            setColorOpen(open);
+          }}
+        >
           <PopoverTrigger asChild>
             <Button
               type="button"
@@ -219,7 +235,13 @@ export function FormattedTextField({
               <span className="size-4 rounded-sm border" style={{ background: color }} aria-hidden="true" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-80" onOpenAutoFocus={event => event.preventDefault()}>
+          <PopoverContent
+            align="start"
+            className="w-80"
+            onOpenAutoFocus={event => event.preventDefault()}
+            onCloseAutoFocus={event => event.preventDefault()}
+            onFocusOutside={event => event.preventDefault()}
+          >
             <p className="mb-2 text-xs font-semibold">Schriftfarbe</p>
             <ColorValueEditor value={color} onChange={applyColor} ariaLabel="Schriftfarbe" />
           </PopoverContent>

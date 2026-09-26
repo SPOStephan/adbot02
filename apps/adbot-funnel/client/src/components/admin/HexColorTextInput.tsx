@@ -36,11 +36,9 @@ export function HexColorTextInput({
       title="Hexwert einkopieren, mit oder ohne #"
       onChange={event => applyDraft(event.target.value)}
       onPaste={event => {
-        const hex = normalizeHexColor(event.clipboardData.getData("text/plain"), { expandShort: true });
-        if (!hex) return;
         event.preventDefault();
-        setDraft(hex);
-        onCommit(hex);
+        event.stopPropagation();
+        applyDraft(event.clipboardData.getData("text/plain"), true);
       }}
       onBlur={() => {
         const hex = normalizeHexColor(draft, { expandShort: true });

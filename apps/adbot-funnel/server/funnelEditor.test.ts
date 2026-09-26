@@ -71,6 +71,10 @@ describe("Funnel-Seiteneditor", () => {
     expect(fieldSource).toContain("ColorValueEditor");
     expect(fieldSource).toContain("Schriftfarbe");
     expect(fieldSource).toContain("Popover");
+    expect(fieldSource).toContain("onFocusOutside");
+    const applyColorAt = fieldSource.indexOf("const applyColor");
+    expect(applyColorAt).toBeGreaterThan(-1);
+    expect(fieldSource.slice(applyColorAt, fieldSource.indexOf("return (", applyColorAt))).not.toContain("focus(");
     expect(editorSource).toContain("CopySizeStepper");
     expect(editorSource).toContain("eyebrowSizeStep");
     expect(editorSource).toContain("titleSizeStep");
@@ -96,6 +100,7 @@ describe("Funnel-Seiteneditor", () => {
     const iconColorSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/IconColorField.tsx"), "utf8");
     expect(hexSource).toContain("expandShort");
     expect(hexSource).toContain("onPaste");
+    expect(hexSource).toContain("stopPropagation");
     expect(hexSource).toContain("#0165C3 oder 0165C3");
     expect(editorSourceColor).toContain("Hexwert");
     expect(editorSourceColor).toContain("HexColorTextInput");
