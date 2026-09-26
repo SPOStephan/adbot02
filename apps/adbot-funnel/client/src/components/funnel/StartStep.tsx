@@ -83,7 +83,7 @@ function BenefitsStartStep({
         <div className="funnel-start-benefits-hero-copy">
           {page.heroImageUrl.trim() ? <img className="funnel-start-benefits-portrait" src={page.heroImageUrl} alt="" /> : null}
           {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-start-benefits-kicker" value={page.eyebrow} />}
-          <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />}
+          <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
           {(page.badges ?? []).length > 0 && (
             <ul className="funnel-start-benefits-badges">
               {(page.badges ?? []).map(badge => {
