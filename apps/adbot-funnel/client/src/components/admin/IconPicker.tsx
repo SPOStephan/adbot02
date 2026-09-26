@@ -14,10 +14,14 @@ export function IconPicker({
   value,
   onChange,
   color,
+  allowEmpty = false,
+  emptyLabel = "Kein Icon",
 }: {
   value: string;
   onChange: (value: string) => void;
   color?: string;
+  allowEmpty?: boolean;
+  emptyLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -56,9 +60,11 @@ export function IconPicker({
     iconButtonRefs.current[nextIndex]?.focus();
   };
   const swatch = color || "#0165c3";
-  const currentLabel = FUNNEL_OPTION_ICON_LABELS[value as keyof typeof FUNNEL_OPTION_ICON_LABELS]
-    ?? libraryIcons.find(icon => icon.id === value)?.label
-    ?? "Icon";
+  const currentLabel = !value && allowEmpty
+    ? emptyLabel
+    : FUNNEL_OPTION_ICON_LABELS[value as keyof typeof FUNNEL_OPTION_ICON_LABELS]
+      ?? libraryIcons.find(icon => icon.id === value)?.label
+      ?? "Icon";
 
   async function submitRequest() {
     setRequestError("");
@@ -86,7 +92,7 @@ export function IconPicker({
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className="h-9 min-w-0 justify-between gap-2 bg-white px-2.5" aria-label={`Icon auswählen, aktuell ${currentLabel}`}>
           <span className="flex min-w-0 items-center gap-2">
-            <FunnelIcon name={value} className="size-4 shrink-0" color={swatch} fit="picker" />
+            {value ? <FunnelIcon name={value} className="size-4 shrink-0" color={swatch} fit="picker" /> : null}
             <span className="truncate text-xs">{currentLabel}</span>
           </span>
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -101,6 +107,16 @@ export function IconPicker({
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input autoFocus className="pl-9" value={search} placeholder="Icon suchen …" aria-label="Icons durchsuchen" onChange={event => setSearch(event.target.value)} />
         </div>
+        {allowEmpty ? (
+          <button
+            type="button"
+            className={`mb-2 w-full rounded-xl border px-3 py-2 text-left text-xs font-semibold ${!value ? "border-[#0165c3] bg-[#0165c3]/10 text-[#0165c3]" : "border-slate-200 bg-white text-slate-700 hover:border-[#0165c3]/40"}`}
+            aria-pressed={!value}
+            onClick={() => selectIcon("")}
+          >
+            {emptyLabel}
+          </button>
+        ) : null}
         <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4" role="group" aria-label="Verfügbare Icons">
           {filtered.map((icon, index) => (
             <button

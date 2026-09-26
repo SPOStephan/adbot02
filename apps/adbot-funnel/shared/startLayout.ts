@@ -1,4 +1,5 @@
-import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type HeroImageLayout, type StartBadge, type StartBenefit, type StartPage, type StartPageLayout } from "./funnel";
+import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type HeroImageLayout, type StartBadge, type StartBadgeIconPosition, type StartBenefit, type StartPage, type StartPageLayout } from "./funnel";
+import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
 export const DEFAULT_BENEFITS_TILE_LAYOUT: BenefitsTileLayout = "two-column";
@@ -102,12 +103,22 @@ export function resolveBenefitsTileGap(value?: string | null): BenefitsTileGap {
   return DEFAULT_BENEFITS_TILE_GAP;
 }
 
+export const DEFAULT_BADGE_ICON_POSITION: StartBadgeIconPosition = "left";
+
 export function emptyStartBadge(createId: () => string = () => crypto.randomUUID()): StartBadge {
-  return { id: createId(), label: "Neues Badge" };
+  return { id: createId(), label: "Neues Badge", icon: "", iconPosition: DEFAULT_BADGE_ICON_POSITION };
 }
 
 export function badgeFromTemplate(label: string, createId: () => string = () => crypto.randomUUID()): StartBadge {
-  return { id: createId(), label: label.slice(0, 80) };
+  return { id: createId(), label: label.slice(0, 80), icon: "", iconPosition: DEFAULT_BADGE_ICON_POSITION };
+}
+
+export function resolveBadgeIcon(icon?: string | null): string {
+  return typeof icon === "string" && isSelectableFunnelIcon(icon) ? icon : "";
+}
+
+export function resolveBadgeIconPosition(value?: string | null): StartBadgeIconPosition {
+  return value === "right" ? "right" : DEFAULT_BADGE_ICON_POSITION;
 }
 
 export function moveStartBadge(badges: StartBadge[], fromId: string, toId: string): StartBadge[] {

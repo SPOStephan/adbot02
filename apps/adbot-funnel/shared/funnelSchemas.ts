@@ -66,6 +66,8 @@ const startBadgeSchema = z.object({
   label: z.string().min(1).max(80),
   backgroundColor: optionalHexColorSchema.optional(),
   textColor: optionalHexColorSchema.optional(),
+  icon: z.string().max(64).default("").refine(value => value === "" || isSelectableFunnelIcon(value), "Unbekanntes Icon."),
+  iconPosition: z.enum(["left", "right"]).default("left"),
 });
 
 const optionalAssetUrlSchema = z.string().max(2048).refine(
