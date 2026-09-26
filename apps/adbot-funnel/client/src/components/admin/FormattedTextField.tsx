@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Bold, Italic, Underline } from "lucide-react";
 import { normalizeCssColor, sanitizeFormattedText } from "@shared/formattedText";
+import { normalizeHexColor } from "@/lib/hexColor";
+import { HexColorTextInput } from "@/components/admin/HexColorTextInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -207,6 +209,18 @@ export function FormattedTextField({
             }}
           />
         </label>
+        <HexColorTextInput
+          value="#10253F"
+          className="h-8 w-[9.75rem] bg-white font-mono text-xs font-semibold uppercase"
+          ariaLabel="Schriftfarbe als Hexwert"
+          onCommit={hex => {
+            const color = normalizeHexColor(hex) ?? normalizeCssColor(hex);
+            if (!color) return;
+            wrapSelectionInColor(color, ref.current);
+            ref.current?.focus();
+            commit();
+          }}
+        />
       </div>
       <div
         ref={ref}

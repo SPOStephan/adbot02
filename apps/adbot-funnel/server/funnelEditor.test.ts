@@ -68,12 +68,21 @@ describe("Funnel-Seiteneditor", () => {
     expect(fieldSource).toContain("plainTextFromClipboard");
     expect(fieldSource).toContain("insertPlainTextAtSelection");
     expect(fieldSource).toContain('getData("text/plain")');
+    expect(fieldSource).toContain("HexColorTextInput");
+    expect(fieldSource).toContain("Schriftfarbe als Hexwert");
   });
 
   it("lässt den Abstand unter der Fortschrittsleiste in Pixeln einstellen", () => {
     expect(editorSource).toContain("Abstand zum Inhalt");
     expect(editorSource).toContain("contentGapPx");
     expect(editorSource).toContain("clampProgressContentGapPx");
+  });
+
+  it("nimmt Hexwerte in Farbfeldern mit und ohne Raute an", () => {
+    const hexSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/HexColorTextInput.tsx"), "utf8");
+    expect(hexSource).toContain("expandShort");
+    expect(hexSource).toContain("onPaste");
+    expect(hexSource).toContain("#0165C3 oder 0165C3");
   });
 
   it("lässt eingefügte Badges per Drag sortieren und per Doppelklick bearbeiten", () => {

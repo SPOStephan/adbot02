@@ -1,13 +1,23 @@
 export const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/;
 
+function hexDigits(input: string) {
+  return input.trim().replace(/^#/, "").replace(/[^0-9a-f]/gi, "").toUpperCase();
+}
+
+function expandShortHex(digits: string) {
+  return `${digits[0]}${digits[0]}${digits[1]}${digits[1]}${digits[2]}${digits[2]}`;
+}
+
 export function formatHexColorDraft(input: string) {
-  const digits = input.trim().replace(/^#/, "").replace(/[^0-9a-f]/gi, "").slice(0, 6).toUpperCase();
+  const digits = hexDigits(input).slice(0, 6);
   return digits ? `#${digits}` : "";
 }
 
-export function normalizeHexColor(input: string) {
-  const draft = formatHexColorDraft(input);
-  return HEX_COLOR_PATTERN.test(draft) ? draft : null;
+export function normalizeHexColor(input: string, options?: { expandShort?: boolean }) {
+  const digits = hexDigits(input);
+  if (options?.expandShort && digits.length === 3) return `#${expandShortHex(digits)}`;
+  const draft = digits.slice(0, 6);
+  return draft.length === 6 && HEX_COLOR_PATTERN.test(`#${draft}`) ? `#${draft}` : null;
 }
 
 export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
