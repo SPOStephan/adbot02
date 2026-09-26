@@ -53,7 +53,7 @@ import type { LucideFunnelIcon } from "@shared/funnel";
 import { isAdbotFunnelIcon } from "@shared/funnel";
 import { getFunnelLibraryIcon } from "@shared/funnelIconRuntime";
 import { sanitizeFunnelIconSvg } from "@shared/funnelIconSvg";
-import { adbotIconMap } from "./adbotIcons";
+import { AdbotIconFitContext, type AdbotIconFit, adbotIconMap } from "./adbotIcons";
 
 const lucideIcons = {
   "badge-check": BadgeCheck,
@@ -111,10 +111,12 @@ export function FunnelIcon({
   name,
   className,
   color,
+  fit = "tile",
 }: {
   name: string;
   className?: string;
   color?: string;
+  fit?: AdbotIconFit;
 }) {
   const style = color ? { color } : undefined;
   const ownClass = ["funnel-icon-own", className].filter(Boolean).join(" ");
@@ -122,12 +124,16 @@ export function FunnelIcon({
   if (custom) {
     const svg = sanitizeFunnelIconSvg(custom.svg);
     if (svg) {
-      return <span className={ownClass} data-icon-kind="custom" style={style} dangerouslySetInnerHTML={{ __html: svg }} />;
+      return <span className={ownClass} data-icon-kind="custom" data-icon-fit={fit} style={style} dangerouslySetInnerHTML={{ __html: svg }} />;
     }
   }
   if (isAdbotFunnelIcon(name)) {
     const Icon = adbotIconMap[name];
-    return <span className={ownClass} data-icon-kind="adbot" style={style}><Icon className="size-full" /></span>;
+    return (
+      <AdbotIconFitContext.Provider value={fit}>
+        <span className={ownClass} data-icon-kind="adbot" data-icon-fit={fit} style={style}><Icon className="size-full" /></span>
+      </AdbotIconFitContext.Provider>
+    );
   }
   const Icon = lucideIcons[name as LucideFunnelIcon] ?? Sparkles;
   return <Icon className={className} style={style} aria-hidden="true" strokeWidth={1.8} />;

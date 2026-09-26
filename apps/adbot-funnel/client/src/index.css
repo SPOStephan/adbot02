@@ -721,6 +721,9 @@
   transform: scale(0.76);
   transform-origin: center;
 }
+.funnel-icon-own[data-icon-fit="picker"][data-icon-kind="custom"] svg {
+  transform: none;
+}
 
 .funnel-formatted { display: inline; }
 .funnel-formatted b,

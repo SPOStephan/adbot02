@@ -1,13 +1,23 @@
-import type { ReactElement, ReactNode } from "react";
+import { createContext, useContext, type ReactElement, type ReactNode } from "react";
 import type { AdbotFunnelIcon } from "@shared/funnel";
 
 /** Extra viewBox padding so Adbot glyphs match Lucide’s optical size in the blue tile. */
 export const ADBOT_ICON_VIEWBOX = "-5 -5 34 34";
 export const ADBOT_ICON_STROKE = 1.3;
+/** In the admin picker, drop the tile padding and match Lucide’s 24×24 / 1.8 stroke. */
+export const ADBOT_ICON_PICKER_VIEWBOX = "0 0 24 24";
+export const ADBOT_ICON_PICKER_STROKE = 1.8;
+
+export type AdbotIconFit = "tile" | "picker";
+
+export const AdbotIconFitContext = createContext<AdbotIconFit>("tile");
 
 function StrokeIcon({ children, className }: { children: ReactNode; className?: string }) {
+  const fit = useContext(AdbotIconFitContext);
+  const viewBox = fit === "picker" ? ADBOT_ICON_PICKER_VIEWBOX : ADBOT_ICON_VIEWBOX;
+  const strokeWidth = fit === "picker" ? ADBOT_ICON_PICKER_STROKE : ADBOT_ICON_STROKE;
   return (
-    <svg className={className} viewBox={ADBOT_ICON_VIEWBOX} fill="none" stroke="currentColor" strokeWidth={ADBOT_ICON_STROKE} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg className={className} viewBox={viewBox} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {children}
     </svg>
   );

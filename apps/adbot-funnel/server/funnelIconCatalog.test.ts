@@ -35,6 +35,7 @@ describe("vereinheitlichter Icon-Katalog", () => {
     const picker = readFileSync(join(root, "client/src/components/admin/IconPicker.tsx"), "utf8");
     expect(picker).not.toContain('["lucide", "Lucide"]');
     expect(picker).toContain("Icon fehlt? Neu beauftragen");
+    expect(picker).toContain('fit="picker"');
     const css = readFileSync(join(root, "client/src/index.css"), "utf8");
     expect(css).toMatch(/\.funnel-start-benefits-tiles li \{[\s\S]*align-items: start;/);
   });
