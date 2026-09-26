@@ -143,7 +143,7 @@ function BenefitsStartStep({
               return (
                 <li key={benefit.id}>
                   <span className="funnel-start-benefits-icon" style={{ color: iconColor }}>
-                    <FunnelIcon name={benefit.icon} className="size-11" color={iconColor} />
+                    <FunnelIcon name={benefit.icon} className="size-11" color={iconColor} fit="picker" />
                   </span>
                   <span className="funnel-start-benefits-copy">
                     <FormattedText as="strong" value={benefit.title} />
