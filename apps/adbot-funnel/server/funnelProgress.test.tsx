@@ -154,4 +154,31 @@ describe("FunnelProgress Markup", () => {
     expect(html.indexOf("funnel-progress")).toBeLessThan(html.indexOf("funnel-main"));
     expect(html.indexOf("funnel-progress-track")).toBeLessThan(html.indexOf("page-start-title"));
   });
+
+  it("färbt Logo und Fortschritt mit dem oberen Start-Hintergrund", () => {
+    const start = { ...defaultFunnel.pages[0] as StartPage, layout: "benefits" as const, heroSectionBackground: "#FFF4E5" };
+    const html = renderToStaticMarkup(
+      <FunnelChrome
+        brand={defaultFunnel.brand}
+        socialProof={defaultFunnel.socialProof}
+        privacyUrl={defaultFunnel.privacyUrl}
+        privacyLabel={defaultFunnel.privacyLabel}
+        imprintUrl="/impressum"
+        step={0}
+        totalSteps={defaultFunnel.pages.length}
+        showProgress
+        fullBleed
+        topBackground="#FFF4E5"
+        pages={defaultFunnel.pages}
+        progress={defaultFunnel.progress}
+      >
+        <StartStep page={start} brand={defaultFunnel.brand} onContinue={() => undefined} />
+      </FunnelChrome>,
+    );
+    expect(html).toContain("funnel-start-top");
+    expect(html).toContain("has-hero-color");
+    expect(html).toContain("background:#FFF4E5");
+    expect(html.indexOf("funnel-start-top")).toBeLessThan(html.indexOf("funnel-start-benefits-band"));
+    expect(html.indexOf("funnel-header")).toBeLessThan(html.indexOf("funnel-start-benefits-band"));
+  });
 });

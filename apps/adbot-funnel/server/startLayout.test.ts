@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -67,6 +67,7 @@ describe("Startseiten-Layouts", () => {
         benefitsTileLayout: "cards" as const,
         benefitsSectionBackground: "#E8F2FB",
         benefitsCardBackground: "#FFFFFF",
+        heroSectionBackground: "#FFF4E5",
       }
       : page);
     const parsed = funnelConfigSchema.parse({ ...defaultFunnel, pages });
@@ -76,6 +77,7 @@ describe("Startseiten-Layouts", () => {
     expect(start.benefitsTileLayout).toBe("cards");
     expect(start.benefitsSectionBackground).toBe("#E8F2FB");
     expect(start.benefitsCardBackground).toBe("#FFFFFF");
+    expect(start.heroSectionBackground).toBe("#FFF4E5");
     const withWide = funnelConfigSchema.parse({
       ...defaultFunnel,
       pages: defaultFunnel.pages.map(page => page.type === "start"
@@ -109,6 +111,10 @@ describe("Startseiten-Layouts", () => {
     expect(start.benefitsTileLayout).toBe("one-column");
     expect(resolveBenefitsSectionBackground("")).toBe(DEFAULT_BENEFITS_SECTION_BACKGROUND);
     expect(resolveBenefitsCardBackground("#EEF7FF")).toBe("#EEF7FF");
+    expect(resolveHeroSectionBackground("", "#F4F8FC")).toBe("#F4F8FC");
+    expect(resolveHeroSectionBackground("#FFF4E5", "#F4F8FC")).toBe("#FFF4E5");
+    expect(customHeroSectionBackground("")).toBeUndefined();
+    expect(customHeroSectionBackground("#fff4e5")).toBe("#FFF4E5");
     expect(start.benefitsTileGap).toBe("medium");
     expect(start.badges.map(badge => badge.label)).toEqual(["Homeoffice", "10.000 €"]);
     expect(start.badges[0]).toMatchObject({ icon: "", iconPosition: "left" });
@@ -158,6 +164,7 @@ describe("Startseiten-Layouts", () => {
       expect(page.benefitsTileGap).toBe("medium");
       expect(page.benefitsSectionBackground).toBe("");
       expect(page.benefitsCardBackground).toBe("");
+      expect(page.heroSectionBackground).toBe("");
       expect(page.badges).toEqual([]);
       expect(page.heroBackgroundOpacity).toBe(15);
       expect(page.heroBackgroundFocusX).toBe(50);

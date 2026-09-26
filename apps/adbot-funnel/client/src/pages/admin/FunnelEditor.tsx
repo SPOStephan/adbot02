@@ -401,6 +401,7 @@ export default function FunnelEditor() {
                   funnelId={config.id}
                   page={selectedPage}
                   brandColor={config.brand.accentColor}
+                  brandBackground={config.brand.backgroundColor}
                   patch={patchPage}
                 />
               )}
@@ -540,11 +541,13 @@ function StartPageFields({
   funnelId,
   page,
   brandColor,
+  brandBackground,
   patch,
 }: {
   funnelId: string;
   page: StartPage;
   brandColor: string;
+  brandBackground: string;
   patch: (value: Partial<FunnelPage>, immediate?: boolean) => void;
 }) {
   const layout = resolveStartLayout(page);
@@ -572,6 +575,13 @@ function StartPageFields({
 
       {layout === "benefits" && (
         <>
+          <OptionalStartColor
+            label="Hintergrund oben"
+            value={page.heroSectionBackground}
+            fallback={brandBackground}
+            emptyHint="Leer = allgemeine Hintergrundfarbe."
+            onChange={heroSectionBackground => patch({ heroSectionBackground } as Partial<FunnelPage>)}
+          />
           <HeroBackgroundField funnelId={funnelId} page={page} onChange={next => patch(next as Partial<FunnelPage>)} />
           <HeroImageField
             funnelId={funnelId}
@@ -758,15 +768,17 @@ function OptionalStartColor({
   value,
   fallback,
   onChange,
+  emptyHint,
 }: {
   label: string;
   value: string;
   fallback: string;
   onChange: (value: string) => void;
+  emptyHint?: string;
 }) {
   return (
     <div className="grid gap-1">
-      <BrandColorField label={label} value={value || fallback} onChange={onChange} hint={value ? "Eigene Farbe für dieses Element." : "Leer = Standard der Vorlage."} />
+      <BrandColorField label={label} value={value || fallback} onChange={onChange} hint={value ? "Eigene Farbe für dieses Element." : (emptyHint ?? "Leer = Standard der Vorlage.")} />
       {value ? <Button type="button" size="sm" variant="ghost" className="justify-start px-0" onClick={() => onChange("")}>Standard verwenden</Button> : null}
     </div>
   );
