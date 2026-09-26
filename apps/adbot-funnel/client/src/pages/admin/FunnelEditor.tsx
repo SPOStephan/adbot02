@@ -123,21 +123,44 @@ export default function FunnelEditor() {
     },
     onError: error => toast.error(error.message),
   });
+  const logoUpload = trpc.funnel.uploadLogo.useMutation({
+    onSuccess: uploaded => {
+      changeConfig(current => ({ ...current, brand: { ...current.brand, logoUrl: uploaded.url } }));
+      toast.success("Logo hochgeladen.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const readImageBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
   const selectFavicon = async (file?: File) => {
     if (!file || !config) return;
     const mimeType = file.type === "image/png" ? "image/png" : /\.ico$/i.test(file.name) ? "image/x-icon" : "";
     if (!mimeType) { toast.error("Bitte eine PNG- oder ICO-Datei auswählen."); return; }
     if (file.size > 512 * 1024) { toast.error("Das Favicon darf maximal 512 KB groß sein."); return; }
     try {
-      const dataBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
-      faviconUpload.mutate({ funnelId: config.id, fileName: file.name, mimeType, size: file.size, dataBase64 });
+      faviconUpload.mutate({ funnelId: config.id, fileName: file.name, mimeType, size: file.size, dataBase64: await readImageBase64(file) });
     } catch {
       toast.error("Die Favicon-Datei konnte nicht gelesen werden.");
+    }
+  };
+  const selectLogo = async (file?: File) => {
+    if (!file || !config) return;
+    const mimeType = file.type === "image/png" || file.type === "image/webp" || file.type === "image/jpeg"
+      ? file.type
+      : /\.png$/i.test(file.name) ? "image/png"
+        : /\.webp$/i.test(file.name) ? "image/webp"
+          : /\.jpe?g$/i.test(file.name) ? "image/jpeg"
+            : "";
+    if (!mimeType) { toast.error("Bitte eine PNG-, JPG- oder WebP-Datei auswählen."); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("Das Logo darf maximal 2 MB groß sein."); return; }
+    try {
+      logoUpload.mutate({ funnelId: config.id, fileName: file.name, mimeType, size: file.size, dataBase64: await readImageBase64(file) });
+    } catch {
+      toast.error("Die Logo-Datei konnte nicht gelesen werden.");
     }
   };
   const patchPage = (patch: Partial<FunnelPage>, immediate = true) => changeConfig(current => ({ ...current, pages: current.pages.map(page => page.id === selectedId ? ({ ...page, ...patch } as FunnelPage) : page) }), immediate);
@@ -308,7 +331,23 @@ export default function FunnelEditor() {
               <ProgressSettings config={config} changeConfig={changeConfig} />
               <div className="grid gap-4 rounded-2xl border bg-slate-50/70 p-4">
                 <div><p className="text-sm font-bold">Logo & Browser-Icon</p><p className="text-xs text-muted-foreground">Diese Angaben gelten nur für diesen Funnel.</p></div>
-                <FormRow label="Logo-URL"><Input value={config.brand.logoUrl} onChange={event => changeConfig(current => ({ ...current, brand: { ...current.brand, logoUrl: event.target.value } }))} /></FormRow>
+                <div className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+                  <div className="grid h-16 place-items-center overflow-hidden rounded-2xl border bg-white px-2 shadow-sm">{config.brand.logoUrl ? <img className="max-h-12 max-w-full object-contain" src={config.brand.logoUrl} alt={config.brand.logoAlt || "Logo-Vorschau"} /> : <ImageIcon className="size-7 text-slate-400" aria-hidden="true" />}</div>
+                  <div className="grid gap-3">
+                    <FormRow label="Logo" hint="PNG, JPG oder WebP, maximal 2 MB. Erscheint oben im Funnel.">
+                      <div className="flex flex-wrap gap-2">
+                        <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border bg-white px-3 text-sm font-medium shadow-xs transition hover:bg-slate-100">
+                          <UploadCloud className="size-4" />{logoUpload.isPending ? "Wird hochgeladen …" : "Logo hochladen"}
+                          <input className="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" disabled={logoUpload.isPending} onChange={event => { void selectLogo(event.target.files?.[0]); event.target.value = ""; }} />
+                        </label>
+                        {config.brand.logoUrl && <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => changeConfig(current => ({ ...current, brand: { ...current.brand, logoUrl: "" } }))}><X className="size-4" />Entfernen</Button>}
+                      </div>
+                    </FormRow>
+                    <FormRow label="Oder Logo-URL" hint="Optional, wenn das Logo schon unter einer HTTPS-Adresse liegt.">
+                      <Input value={config.brand.logoUrl} placeholder="https://…/logo.png" onChange={event => changeConfig(current => ({ ...current, brand: { ...current.brand, logoUrl: event.target.value } }))} />
+                    </FormRow>
+                  </div>
+                </div>
                 <FormRow label="Logo-Alternativtext"><Input value={config.brand.logoAlt} onChange={event => changeConfig(current => ({ ...current, brand: { ...current.brand, logoAlt: event.target.value } }))} /></FormRow>
                 <div className="grid gap-3 sm:grid-cols-[72px_minmax(0,1fr)]">
                   <div className="grid size-[72px] place-items-center overflow-hidden rounded-2xl border bg-white shadow-sm">{config.brand.faviconUrl ? <img className="size-10 object-contain" src={config.brand.faviconUrl} alt="Favicon-Vorschau" /> : <ImageIcon className="size-7 text-slate-400" aria-hidden="true" />}</div>

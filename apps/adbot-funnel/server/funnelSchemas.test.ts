@@ -15,6 +15,8 @@ describe("Funnel-Validierung", () => {
   it("validiert Favicon-URLs und alle Antwortkasten-Farben", () => {
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, brand: { ...defaultFunnel.brand, faviconUrl: "/api/storage/favicon.png", choiceSelectedBackgroundColor: "#112233" } }).success).toBe(true);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, brand: { ...defaultFunnel.brand, faviconUrl: "javascript:alert(1)" } }).success).toBe(false);
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, brand: { ...defaultFunnel.brand, logoUrl: "/api/storage/logo.png" } }).success).toBe(true);
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, brand: { ...defaultFunnel.brand, logoUrl: "javascript:alert(1)" } }).success).toBe(false);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, brand: { ...defaultFunnel.brand, choiceBackgroundColor: "red" } }).success).toBe(false);
   });
 
