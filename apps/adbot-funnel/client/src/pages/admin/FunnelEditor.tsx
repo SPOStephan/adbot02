@@ -524,7 +524,7 @@ function StartPageFields({
             value={page.heroImageUrl}
             label="Bildelement (optional)"
             hint="Eigenes Foto statt der neutralen Illustration. Upload zu Bunny als WebP, oder eine vorhandene HTTPS-Adresse."
-            onChange={heroImageUrl => patch({ heroImageUrl } as Partial<FunnelPage>)}
+            onChange={next => patch(next as Partial<FunnelPage>)}
           />
           <FormRow label="Vorteile – eine Zeile pro Punkt">
             <Textarea value={page.bullets.join("\n")} rows={4} onChange={event => patch({ bullets: event.target.value.split("\n").filter(Boolean) } as Partial<FunnelPage>, false)} />
@@ -541,7 +541,10 @@ function StartPageFields({
           <HeroImageField
             funnelId={funnelId}
             value={page.heroImageUrl}
-            onChange={heroImageUrl => patch({ heroImageUrl } as Partial<FunnelPage>)}
+            layout={page.heroImageLayout}
+            radius={page.heroImageRadius}
+            showLayout
+            onChange={next => patch(next as Partial<FunnelPage>)}
           />
           <StartBadgesField
             badges={page.badges ?? []}

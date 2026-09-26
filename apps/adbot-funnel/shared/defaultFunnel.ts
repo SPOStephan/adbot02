@@ -72,6 +72,8 @@ export const defaultFunnel: FunnelConfig = {
       progressIcon: "search",
       layout: "classic",
       heroImageUrl: "",
+      heroImageLayout: "circle",
+      heroImageRadius: 28,
       bullets: ["Kein Anschreiben nötig", "Mobil in wenigen Minuten", "Schnelle persönliche Rückmeldung"],
       trustNote: "Kostenlos · Unverbindlich · Datenschutzkonform",
       benefitsBandTitle: "Deine Vorteile",
