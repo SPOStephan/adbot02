@@ -1,5 +1,5 @@
 import type { FunnelBrand, StartPage } from "@shared/funnel";
-import { contrastOnAccent, resolveBadgeColors, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { contrastOnAccent, resolveBadgeColors, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -64,6 +64,7 @@ function BenefitsStartStep({
   const backgroundUrl = page.heroBackgroundMobileUrl || page.heroBackgroundDesktopUrl;
   const opacity = Math.max(0, Math.min(100, page.heroBackgroundOpacity ?? 15)) / 100;
   const tileLayout = resolveBenefitsTileLayout(page.benefitsTileLayout);
+  const tileGap = resolveBenefitsTileGap(page.benefitsTileGap);
   const ink = brand?.textColor ?? "#10253f";
 
   return (
@@ -113,7 +114,7 @@ function BenefitsStartStep({
 
       {page.benefits.length > 0 && (
         <div className="funnel-start-benefits-tiles-wrap">
-          <ul className={`funnel-start-benefits-tiles is-${tileLayout}`}>
+          <ul className={`funnel-start-benefits-tiles is-${tileLayout} is-gap-${tileGap}`}>
             {page.benefits.map(benefit => {
               const iconColor = benefit.color || accent;
               return (

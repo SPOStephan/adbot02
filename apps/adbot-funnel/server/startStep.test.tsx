@@ -39,6 +39,7 @@ describe("StartStep Layouts", () => {
     expect(html).not.toContain("funnel-start-benefits-hero-bg");
     expect(html).toContain("funnel-start-benefits-tiles");
     expect(html).toContain("is-two-column");
+    expect(html).toContain("is-gap-medium");
     expect(html).toContain("funnel-start-benefits-copy");
     expect(html).not.toContain("funnel-start-benefits-portrait");
     expect(html).not.toContain("funnel-start-benefits-badges");
@@ -63,6 +64,8 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("Homeoffice");
     expect(html).toContain("Fixum + Provision");
     expect(html).toContain("is-one-column");
+    const wide = renderToStaticMarkup(<StartStep page={{ ...page, benefitsTileLayout: "two-column", benefitsTileGap: "large" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(wide).toContain("is-gap-large");
     expect(html).not.toContain("has-image");
     expect(html).not.toContain("funnel-start-benefits-hero-photo");
   });

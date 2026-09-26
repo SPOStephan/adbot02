@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, contrastOnAccent, defaultStartBenefits, resolveBadgeColors, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, contrastOnAccent, defaultStartBenefits, resolveBadgeColors, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -12,6 +12,11 @@ describe("Startseiten-Layouts", () => {
     expect(resolveBenefitsTileLayout("one-column")).toBe("one-column");
     expect(resolveBenefitsTileLayout("two-column")).toBe("two-column");
     expect(resolveBenefitsTileLayout(undefined)).toBe("two-column");
+    expect(resolveBenefitsTileGap(undefined)).toBe("medium");
+    expect(resolveBenefitsTileGap("medium")).toBe("medium");
+    expect(resolveBenefitsTileGap("small")).toBe("small");
+    expect(resolveBenefitsTileGap("large")).toBe("large");
+    expect(resolveBenefitsTileGap("wide")).toBe("medium");
   });
 
   it("erzeugt Icon-Kacheln aus bestehenden Bullet-Zeilen", () => {
@@ -64,6 +69,7 @@ describe("Startseiten-Layouts", () => {
     expect(start?.type).toBe("start");
     if (start?.type !== "start") throw new Error("Startseite fehlt");
     expect(start.benefitsTileLayout).toBe("one-column");
+    expect(start.benefitsTileGap).toBe("medium");
     expect(start.badges.map(badge => badge.label)).toEqual(["Homeoffice", "10.000 €"]);
     expect(resolveBadgeColors({ backgroundColor: "#0165C3" }, "#10253f")).toEqual({ background: "#0165C3", text: "#ffffff" });
   });
@@ -75,6 +81,7 @@ describe("Startseiten-Layouts", () => {
       Reflect.deleteProperty(start, "layout");
       Reflect.deleteProperty(start, "benefits");
       Reflect.deleteProperty(start, "benefitsTileLayout");
+      Reflect.deleteProperty(start, "benefitsTileGap");
       Reflect.deleteProperty(start, "badges");
       Reflect.deleteProperty(start, "benefitsBandTitle");
       Reflect.deleteProperty(start, "secondaryButtonLabel");
@@ -88,6 +95,7 @@ describe("Startseiten-Layouts", () => {
       expect(page.benefitsBandTitle).toBe("");
       expect(page.secondaryButtonLabel).toBe("");
       expect(page.benefitsTileLayout).toBe("two-column");
+      expect(page.benefitsTileGap).toBe("medium");
       expect(page.badges).toEqual([]);
       expect(page.heroBackgroundOpacity).toBe(15);
       expect(page.heroBackgroundDesktopUrl).toBe("");

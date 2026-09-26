@@ -78,6 +78,7 @@ export const defaultFunnel: FunnelConfig = {
       secondaryButtonLabel: "",
       benefits: [],
       benefitsTileLayout: "two-column",
+      benefitsTileGap: "medium",
       badges: [],
       heroBackgroundAssetId: "",
       heroBackgroundDesktopUrl: "",

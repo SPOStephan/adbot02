@@ -1,7 +1,8 @@
-import type { BenefitsTileLayout, FunnelOptionIcon, StartBadge, StartBenefit, StartPage, StartPageLayout } from "./funnel";
+import type { BenefitsTileGap, BenefitsTileLayout, FunnelOptionIcon, StartBadge, StartBenefit, StartPage, StartPageLayout } from "./funnel";
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
 export const DEFAULT_BENEFITS_TILE_LAYOUT: BenefitsTileLayout = "two-column";
+export const DEFAULT_BENEFITS_TILE_GAP: BenefitsTileGap = "medium";
 export const MAX_START_BENEFITS = 12;
 export const MAX_START_BADGES = 16;
 export const DEFAULT_HERO_BACKGROUND_OPACITY = 15;
@@ -42,6 +43,11 @@ export function resolveStartLayout(page: Pick<StartPage, "layout"> | { layout?: 
 
 export function resolveBenefitsTileLayout(value?: string | null): BenefitsTileLayout {
   return value === "one-column" ? "one-column" : DEFAULT_BENEFITS_TILE_LAYOUT;
+}
+
+export function resolveBenefitsTileGap(value?: string | null): BenefitsTileGap {
+  if (value === "small" || value === "large") return value;
+  return DEFAULT_BENEFITS_TILE_GAP;
 }
 
 export function emptyStartBadge(createId = () => crypto.randomUUID()): StartBadge {

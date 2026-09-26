@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
 import { DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS } from "./progressLayout";
-import { DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
+import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_OPACITY, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
 
@@ -73,6 +73,7 @@ const startPageSchema = pageBaseSchema.extend({
   secondaryButtonLabel: z.string().max(100).default(""),
   benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
   benefitsTileLayout: z.enum(BENEFITS_TILE_LAYOUTS).default(DEFAULT_BENEFITS_TILE_LAYOUT),
+  benefitsTileGap: z.enum(BENEFITS_TILE_GAPS).default(DEFAULT_BENEFITS_TILE_GAP),
   badges: z.array(startBadgeSchema).max(MAX_START_BADGES).default([]),
   heroBackgroundAssetId: z.string().max(80).default(""),
   heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),
