@@ -110,6 +110,18 @@ export function badgeFromTemplate(label: string, createId: () => string = () => 
   return { id: createId(), label: label.slice(0, 80) };
 }
 
+export function moveStartBadge(badges: StartBadge[], fromId: string, toId: string): StartBadge[] {
+  if (fromId === toId) return badges;
+  const from = badges.findIndex(badge => badge.id === fromId);
+  const to = badges.findIndex(badge => badge.id === toId);
+  if (from < 0 || to < 0) return badges;
+  const next = [...badges];
+  const [moved] = next.splice(from, 1);
+  if (!moved) return badges;
+  next.splice(to, 0, moved);
+  return next;
+}
+
 export function resolveBadgeColors(
   badge: Pick<StartBadge, "backgroundColor" | "textColor">,
   fallbackText: string,
