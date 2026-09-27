@@ -193,7 +193,14 @@ export function buildMetaLeadQualityEvent(
       name: application.contact.name,
       email: application.contact.email,
       phone: application.contact.phone,
+      fbp: application.metaFbp,
+      fbc: application.metaFbc,
     }),
+    original_event_data: {
+      event_name: config.metaTracking.eventName,
+      event_time: Math.floor(Date.parse(application.createdAt) / 1000),
+      event_id: application.metaEventId,
+    },
     custom_data: {
       ...conversionCustomData(config, application, {
         lead_event_source: "adbot",

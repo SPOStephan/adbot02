@@ -56,6 +56,8 @@ const application: ApplicationRecord = {
   contact: submission.contact,
   consentAt: "2026-07-28T12:00:00.000Z",
   metaEventId: submission.metaEventId,
+  metaFbp: submission.metaFbp,
+  metaFbc: submission.metaFbc,
   leadValue: 150,
   sourceUrl: submission.sourceUrl,
   utm: {},
@@ -91,7 +93,7 @@ describe("Meta Conversions API", () => {
     expect(JSON.stringify(event)).not.toContain("+49 123 456");
   });
 
-  it("meldet eine manuelle Gut-Bewertung als Subscribe mit Wert", () => {
+  it("meldet eine Gut-Bewertung als verknüpfte QualifiedLead-Stufe mit Wert", () => {
     const event = buildMetaLeadQualityEvent(
       config,
       application,
@@ -99,9 +101,16 @@ describe("Meta Conversions API", () => {
       "30000000-0000-4000-8000-000000000099",
       "2026-07-28T13:00:00.000Z",
     );
-    expect(event.event_name).toBe("Subscribe");
+    expect(event.event_name).toBe("QualifiedLead");
     expect(event.event_id).toBe("30000000-0000-4000-8000-000000000099");
     expect(event.action_source).toBe("system_generated");
+    expect(event.user_data.fbp).toBe(submission.metaFbp);
+    expect(event.user_data.fbc).toBe(submission.metaFbc);
+    expect(event.original_event_data).toEqual({
+      event_name: "Lead",
+      event_time: Math.floor(Date.parse(application.createdAt) / 1000),
+      event_id: application.metaEventId,
+    });
     expect(event.custom_data.lead_quality).toBe("good");
     expect(event.custom_data.value).toBe(150);
     expect(event.custom_data.lead_event_source).toBe("adbot");

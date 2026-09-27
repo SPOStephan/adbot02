@@ -38,6 +38,11 @@ import {
   type LaunchLibraryAsset,
 } from "@/lib/meta/creative-image-variants";
 import {
+  canUseQualifiedLeadOptimization,
+  metaOptimizationGoal,
+  type LeadPerformanceGoal,
+} from "@/lib/meta/lead-performance-goal";
+import {
   campaignPathForBinding,
   destinationUrlForHostname,
   type CustomerCustomDomainView,
@@ -438,6 +443,9 @@ export function LeadLaunchCanary({
     pickerAssets.find((asset) => asset.id === assetId) ?? null;
   const selectedPixel =
     data.pixels.find((pixel) => pixel.id === pixelRowId) ?? data.pixels[0] ?? null;
+  const [performanceGoal, setPerformanceGoal] =
+    useState<LeadPerformanceGoal>("volume");
+  const qualityCapiReady = canUseQualifiedLeadOptimization(selectedPixel);
   const [heldPlan, setHeldPlan] = useState<HeldPlan | null>(() => {
     for (const plan of data.recentLaunchPlans) {
       const held = toHeldFromRecent(plan, data.pixels);
@@ -454,6 +462,9 @@ export function LeadLaunchCanary({
       { label: "EUR", ready: currency === "EUR" },
       { label: "Launch-Policy aktiv", ready: policyLaunchReady },
       { label: "Pixel bestätigt", ready: Boolean(selectedPixel) },
+      ...(performanceGoal === "quality"
+        ? [{ label: "CAPI für qualifizierte Leads", ready: qualityCapiReady }]
+        : []),
       {
         label: "Creative bereit",
         ready: pickerAssets.length > 0 || Boolean(assetId),
@@ -462,8 +473,10 @@ export function LeadLaunchCanary({
     [
       assetId,
       currency,
+      performanceGoal,
       pickerAssets.length,
       policyLaunchReady,
+      qualityCapiReady,
       selectedPixel,
       writeScopeGranted,
     ],
@@ -553,6 +566,7 @@ export function LeadLaunchCanary({
   async function ensureLeadBlueprint(): Promise<string> {
     const template = structuredClone(DEFAULT_LEAD_BLUEPRINT);
     const employment = effectiveAdCategory === "employment";
+    template.ad_set.optimization_goal = metaOptimizationGoal(performanceGoal);
     const parts = buildLinkCreativeBlueprintParts({
       primaryTexts: structuralOn
         ? [primaryTexts[0] ?? (employment ? "Jetzt bewerben." : "Jetzt mehr erfahren.")]
@@ -1026,9 +1040,9 @@ export function LeadLaunchCanary({
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Separater Pfad vom Traffic-Canary: Objective{" "}
-            <span className="font-semibold">OUTCOME_LEADS</span>, Optimierung{" "}
-            <span className="font-semibold">OFFSITE_CONVERSIONS</span> auf dein
-            bestätigtes Pixel-Event. Destination = veröffentlichter Funnel.
+            <span className="font-semibold">OUTCOME_LEADS</span>. Du entscheidest,
+            ob Meta zunächst auf möglichst viele Leads oder – bei bestätigter CAPI –
+            auf qualifizierte Leads optimiert. Destination = veröffentlichter Funnel.
             Pixel-ID und Lead-Event kommen aus der globalen Verbindung unter{" "}
             <a
               className="font-semibold text-blue-700 underline-offset-2 hover:underline"
@@ -1198,6 +1212,29 @@ export function LeadLaunchCanary({
             required
             value={dailyBudget}
           />
+        </label>
+        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Performance-Ziel
+          <select
+            className={inputClass}
+            disabled={pending}
+            onChange={(event) =>
+              setPerformanceGoal(event.target.value as LeadPerformanceGoal)
+            }
+            value={performanceGoal}
+          >
+            <option value="volume">Möglichst viele Leads (Start ohne Qualitätsdaten)</option>
+            <option disabled={!qualityCapiReady} value="quality">
+              Möglichst viele qualifizierte Leads (CAPI-Feedback aktiv)
+            </option>
+          </select>
+          <span className="mt-1 block text-xs font-medium text-slate-500">
+            {performanceGoal === "quality"
+              ? "Meta optimiert dieses neue Ad Set auf Personen, die nach dem Absenden als guter Lead bewertet werden."
+              : qualityCapiReady
+                ? "Für neue Kampagnen mit genügend Bewertungsdaten kannst du später „qualifizierte Leads“ wählen. Bestehende Ad Sets werden nicht automatisch verändert."
+                : "Für den Start ohne Historie korrekt. Prüfe CAPI unter Tracking, bevor du später auf qualifizierte Leads umstellst."}
+          </span>
         </label>
         <div className="text-sm font-bold text-slate-800">
           Creative

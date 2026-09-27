@@ -1090,8 +1090,9 @@ export const funnelRouter = router({
           ? existing.leadQualityEventId
           : crypto.randomUUID();
       const sameRating = existing.leadQuality === input.quality && existing.leadQualityEventId;
-      const metaQuality = sameRating
-        ? { status: existing.leadQualityMetaStatus === "sent" ? "sent" as const : "skipped" as const, reason: "already_rated" }
+      const alreadySent = sameRating && existing.leadQualityMetaStatus === "sent";
+      const metaQuality = alreadySent
+        ? { status: "sent" as const, reason: "already_sent" }
         : await sendMetaLeadQualityEvent(config, { ...existing, leadQuality: input.quality }, input.quality, eventId, ratedAt);
       const application = await updateApplicationLeadQuality(input.id, {
         quality: input.quality,

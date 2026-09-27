@@ -45,12 +45,17 @@ describe("Mehr-Funnel-Speicher", () => {
       answers: { arbeitsbereich: ["vertrieb"] },
       contact: { name: "Erika Muster", email: "erika@example.org", phone: "+49 123" },
       consent: true,
+      metaEventId: "20000000-0000-4000-8000-000000000001",
+      metaFbp: "fb.1.123.456",
+      metaFbc: "fb.1.123.click",
       sourceUrl: "https://example.org/f/test-speicher",
       utm: { utm_source: "test" },
       resume: { key: "applications/test/cv.pdf", url: "/api/storage/applications/test/cv.pdf", fileName: "cv.pdf", mimeType: "application/pdf", size: 1200 },
     });
 
     expect(created.status).toBe("new");
+    expect(created.metaFbp).toBe("fb.1.123.456");
+    expect(created.metaFbc).toBe("fb.1.123.click");
     expect(created.resume?.fileName).toBe("cv.pdf");
     expect((await getApplication(created.id))?.contact.email).toBe("erika@example.org");
     expect((await listApplications()).some(item => item.id === created.id)).toBe(true);

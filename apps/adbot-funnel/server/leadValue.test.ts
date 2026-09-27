@@ -62,7 +62,7 @@ describe("Lead-Wert aus Funnel-Antworten", () => {
   });
 
   it("setzt Meta-Ereignisname und Wert für Gut/Schlecht", () => {
-    expect(resolveQualityEventName("good")).toBe("Subscribe");
+    expect(resolveQualityEventName("good")).toBe("QualifiedLead");
     expect(resolveQualityEventName("bad")).toBe("DisqualifiedLead");
     expect(resolveQualityEventValue("good", 150)).toBe(150);
     expect(resolveQualityEventValue("good", 150, { good: 200 })).toBe(200);
