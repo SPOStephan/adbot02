@@ -6,6 +6,7 @@ import type { FunnelConfig, FunnelStatus } from "@shared/funnel";
 import { FUNNEL_PURPOSE_OPTIONS, funnelPurposeOption, funnelSubmissionPlural, type FunnelPurpose } from "@shared/funnelPurpose";
 import { legalPagesAreValid } from "@shared/legalPages";
 import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
+import { shouldHydrateSettingsFromQuery } from "@/lib/settingsHydration";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,9 +62,13 @@ export default function Settings() {
   const { id: funnelId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
-  const query = trpc.funnel.adminConfig.useQuery(funnelId ? { id: funnelId } : undefined, { enabled: Boolean(funnelId) });
+  const query = trpc.funnel.adminConfig.useQuery(
+    funnelId ? { id: funnelId } : undefined,
+    { enabled: Boolean(funnelId), refetchOnMount: "always" },
+  );
   const [draft, setDraft] = useState<FunnelConfig>();
   const [savedConfig, setSavedConfig] = useState<FunnelConfig>();
+  const dirty = Boolean(draft && savedConfig && JSON.stringify(draft) !== JSON.stringify(savedConfig));
   const [copied, setCopied] = useState<"url" | "embed">();
   const [metaTestEventCode, setMetaTestEventCode] = useState("");
   const [savedMetaTestEventCode, setSavedMetaTestEventCode] = useState("");
@@ -74,7 +79,14 @@ export default function Settings() {
   const [accountNotices, setAccountNotices] = useState<Record<string, DomainNotice>>({});
   const [customNotices, setCustomNotices] = useState<Record<string, DomainNotice>>({});
 
-  useEffect(() => { if (query.data?.config) { setDraft(query.data.config); setSavedConfig(query.data.config); } }, [query.data?.config]);
+  useEffect(() => {
+    if (!query.data?.config || !shouldHydrateSettingsFromQuery({
+      fetchedAfterMount: query.isFetchedAfterMount,
+      hasLocalChanges: dirty,
+    })) return;
+    setDraft(query.data.config);
+    setSavedConfig(query.data.config);
+  }, [dirty, query.data?.config, query.isFetchedAfterMount]);
   useEffect(() => {
     if (!query.data?.metaServerSettings) return;
     setMetaTestEventCode(query.data.metaServerSettings.testEventCode);
@@ -83,6 +95,9 @@ export default function Settings() {
 
   const save = trpc.funnel.saveConfig.useMutation({
     onSuccess: async saved => {
+      utils.funnel.adminConfig.setData({ id: saved.id }, current =>
+        current ? { ...current, config: saved } : current,
+      );
       setDraft(saved);
       setSavedConfig(saved);
       await Promise.all([utils.funnel.adminConfig.invalidate({ id: saved.id }), utils.funnel.funnels.invalidate()]);
@@ -255,7 +270,6 @@ export default function Settings() {
   }, [customDomainsQuery.data, portalDomainsQuery.data, funnelId]);
   const directUrl = useMemo(() => `${window.location.origin}/f/${draft?.slug ?? "karriere"}`, [draft?.slug]);
   const customPublicUrl = readyCustomHost ? `https://${readyCustomHost.hostname}/` : null;
-  const dirty = Boolean(draft && savedConfig && JSON.stringify(draft) !== JSON.stringify(savedConfig));
   const legalValid = draft ? legalPagesAreValid(draft).ok : false;
   const metaServerDirty = Boolean(metaTestEventCode !== savedMetaTestEventCode);
   const embedCode = useMemo(() => `<iframe id="adbot-funnel" src="${directUrl}" title="Funnel" loading="lazy" style="width:100%;min-height:780px;border:0;border-radius:16px" allow="clipboard-write"></iframe>\n<script>\nwindow.addEventListener("message",function(event){\n  if(event.origin!==new URL("${directUrl}").origin)return;\n  if(!["adbot-funnel:resize","social-recruiting-funnel:resize"].includes(event.data?.type))return;\n  document.getElementById("adbot-funnel").style.height=event.data.height+"px";\n});\n</script>`, [directUrl]);
