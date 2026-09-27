@@ -74,8 +74,8 @@ import { pushFunnelCreativeHandoffToPortal } from "../portalCreativeHandoff";
 import { listFunnelLibraryIcons, requestFunnelLibraryIcon } from "../funnelIconStore";
 import {
   attachDomainToVercelProject,
+  ensureVercelDomainHttpsReady,
   removeDomainFromVercelProject,
-  verifyDomainOnVercelProject,
 } from "../vercelDomains";
 
 function validateSubmission(config: FunnelConfig, submission: z.infer<typeof applicationSubmissionSchema>) {
@@ -764,8 +764,8 @@ export const funnelRouter = router({
             domain.dnsTarget,
           );
           if (dns.ok) {
-            const verified = await verifyDomainOnVercelProject(domain.hostname);
-            if (!verified.ok) {
+            const verified = await ensureVercelDomainHttpsReady(domain.hostname);
+            if (!verified.ok || !verified.verified) {
               throw new TRPCError({
                 code: "PRECONDITION_FAILED",
                 message: verified.message,
@@ -845,8 +845,8 @@ export const funnelRouter = router({
             message: dns.message,
           });
         }
-        const vercel = await verifyDomainOnVercelProject(domain.hostname);
-        if (!vercel.ok) {
+        const vercel = await ensureVercelDomainHttpsReady(domain.hostname);
+        if (!vercel.ok || !vercel.verified) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message: vercel.message,
@@ -887,10 +887,16 @@ export const funnelRouter = router({
         });
       }
       const dns = await checkCustomDomainCname(domain.hostname, domain.dnsTarget);
-      if (dns.ok) {
-        void verifyDomainOnVercelProject(domain.hostname);
-      }
-      return dns;
+      if (!dns.ok) return { ok: false, message: dns.message, dns };
+      const vercel = await ensureVercelDomainHttpsReady(domain.hostname);
+      return {
+        ok: vercel.verified,
+        message: vercel.verified
+          ? `DNS und HTTPS für ${domain.hostname} sind bereit.`
+          : vercel.message,
+        dns,
+        vercel,
+      };
     }),
 
   revokeCustomDomain: adminProcedure
@@ -936,8 +942,10 @@ export const funnelRouter = router({
         if (!input.force) {
           const dns = await checkCustomDomainCname(domain.hostname, domain.dnsTarget);
           if (!dns.ok) throw new TRPCError({ code: "BAD_REQUEST", message: dns.message });
-          const vercel = await verifyDomainOnVercelProject(domain.hostname);
-          if (!vercel.ok) throw new TRPCError({ code: "PRECONDITION_FAILED", message: vercel.message });
+          const vercel = await ensureVercelDomainHttpsReady(domain.hostname);
+          if (!vercel.ok || !vercel.verified) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: vercel.message });
+          }
         }
         const ready = await markAccountDomainReady({ ownerUserId, domainId: input.domainId });
         void pushFunnelDomainUpsertToPortal({
@@ -968,8 +976,16 @@ export const funnelRouter = router({
       const domain = await getAccountDomainForOwner({ ownerUserId, domainId: input.domainId });
       if (!domain) throw new TRPCError({ code: "NOT_FOUND", message: "Account-Domain nicht gefunden." });
       const dns = await checkCustomDomainCname(domain.hostname, domain.dnsTarget);
-      if (dns.ok) void verifyDomainOnVercelProject(domain.hostname);
-      return dns;
+      if (!dns.ok) return { ok: false, message: dns.message, dns };
+      const vercel = await ensureVercelDomainHttpsReady(domain.hostname);
+      return {
+        ok: vercel.verified,
+        message: vercel.verified
+          ? `DNS und HTTPS für ${domain.hostname} sind bereit.`
+          : vercel.message,
+        dns,
+        vercel,
+      };
     }),
 
   revokeAccountDomain: adminProcedure

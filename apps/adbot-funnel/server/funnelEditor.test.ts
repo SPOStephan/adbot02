@@ -141,6 +141,9 @@ describe("Funnel-Seiteneditor", () => {
     expect(settingsSource).toContain("Für alle Funnel anbinden");
     expect(settingsSource).toContain("registerAccountDomain");
     expect(settingsSource).toContain("Account-Domain");
+    expect(settingsSource).toContain("DomainActionNotice");
+    expect(settingsSource).toContain("DNS/SSL erneut prüfen");
+    expect(settingsSource).not.toContain("https://Hostname/");
     expect(settingsSource).not.toContain("Domain registrieren");
     const appSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/App.tsx"), "utf8");
     expect(appSource).toContain("/f/:slug/datenschutz");
