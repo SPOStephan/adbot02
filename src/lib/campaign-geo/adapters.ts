@@ -1,5 +1,6 @@
 import {
   CITY_RADIUS_FALLBACK_KM,
+  META_EMPLOYMENT_RADIUS_MIN_KM,
   META_RADIUS_MAX_KM,
   META_RADIUS_MIN_KM,
   type CampaignGeoPlaceKind,
@@ -114,6 +115,24 @@ export function toMetaAdSetTargeting(geo: CampaignGeoTarget | null): MetaAdSetTa
     };
   }
   return { geo_locations: { countries: [fallbackCountryCode(geo)] } };
+}
+
+/** Employment campaigns in covered European countries require at least 17 km. */
+export function toMetaEmploymentAdSetTargeting(
+  geo: CampaignGeoTarget | null,
+): MetaAdSetTargeting {
+  const targeting = toMetaAdSetTargeting(geo);
+  if (!("custom_locations" in targeting.geo_locations)) return targeting;
+
+  return {
+    geo_locations: {
+      ...targeting.geo_locations,
+      custom_locations: targeting.geo_locations.custom_locations.map((location) => ({
+        ...location,
+        radius: Math.max(location.radius, META_EMPLOYMENT_RADIUS_MIN_KM),
+      })),
+    },
+  };
 }
 
 export function toOpenAIAdsLocationQuery(geo: CampaignGeoTarget): string {

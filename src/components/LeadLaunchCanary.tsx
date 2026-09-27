@@ -26,7 +26,8 @@ import type { LaunchAdActorOption } from "@/components/TrafficLaunchCanary";
 import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
 import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
 import {
-  toMetaAdSetTargeting,
+  fallbackCountryCode,
+  toMetaEmploymentAdSetTargeting,
   type MetaAdSetTargeting,
 } from "@/lib/campaign-geo/adapters";
 import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
@@ -106,7 +107,10 @@ type Props = {
 
 /** Lead blueprint — separate from Traffic (`LINK_CLICKS`). */
 const DEFAULT_LEAD_BLUEPRINT = {
-  campaign: { special_ad_categories: [] },
+  campaign: {
+    special_ad_categories: ["EMPLOYMENT"],
+    special_ad_category_country: ["DE"],
+  },
   ad_set: {
     billing_event: "IMPRESSIONS",
     optimization_goal: "OFFSITE_CONVERSIONS",
@@ -500,7 +504,9 @@ export function LeadLaunchCanary({
         parts.assetFeedSpec;
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
     }
-    template.ad_set.targeting = toMetaAdSetTargeting(await fetchCampaignGeoTarget());
+    const geo = await fetchCampaignGeoTarget();
+    template.campaign.special_ad_category_country = [fallbackCountryCode(geo)];
+    template.ad_set.targeting = toMetaEmploymentAdSetTargeting(geo);
 
     const saved = await apiJson<{ blueprintId?: string }>(
       "POST",

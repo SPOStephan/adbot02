@@ -61,6 +61,25 @@ assert.deepEqual(adapters.toGoogleAdsProximity(speyer), {
 });
 assert.equal(adapters.toTikTokLocation(speyer).mode, "proximity");
 
+const tightEmploymentRadius = adapters.parseCampaignGeoTarget({
+  placeLabel: "Speyer",
+  placeKind: "city",
+  countryCode: "DE",
+  latitude: 49.317,
+  longitude: 8.431,
+  radiusKm: 5,
+});
+assert.equal(
+  adapters.toMetaEmploymentAdSetTargeting(tightEmploymentRadius).geo_locations
+    .custom_locations[0].radius,
+  17,
+);
+assert.equal(
+  adapters.toMetaAdSetTargeting(tightEmploymentRadius).geo_locations
+    .custom_locations[0].radius,
+  5,
+);
+
 const cityNoRadius = adapters.parseCampaignGeoTarget({
   place_label: "Speyer",
   place_kind: "city",
@@ -86,6 +105,9 @@ const germany = adapters.parseCampaignGeoTarget({
 });
 assert.equal(adapters.effectiveRadiusKm(germany), null);
 assert.deepEqual(adapters.toMetaAdSetTargeting(germany), {
+  geo_locations: { countries: ["DE"] },
+});
+assert.deepEqual(adapters.toMetaEmploymentAdSetTargeting(germany), {
   geo_locations: { countries: ["DE"] },
 });
 assert.deepEqual(adapters.toGoogleAdsProximity(germany), {
@@ -140,7 +162,10 @@ assert.match(traffic, /as MetaAdSetTargeting/);
 assert.doesNotMatch(traffic, /materialize_meta_organic_boost_plan/);
 
 const lead = read("src/components/LeadLaunchCanary.tsx");
-assert.match(lead, /toMetaAdSetTargeting\(await fetchCampaignGeoTarget\(\)\)/);
+assert.match(lead, /special_ad_categories: \["EMPLOYMENT"\]/);
+assert.match(lead, /special_ad_category_country: \["DE"\]/);
+assert.match(lead, /special_ad_category_country = \[fallbackCountryCode\(geo\)\]/);
+assert.match(lead, /toMetaEmploymentAdSetTargeting\(geo\)/);
 assert.match(lead, /as MetaAdSetTargeting/);
 
 const openaiForm = read("src/components/OpenAIAdsLaunchForm.tsx");
