@@ -7,6 +7,7 @@ import { applyPostSubmitAction } from "@/lib/postSubmit";
 import { createMetaEventId, loadMetaPixel, readMetaBrowserIdentifiers, trackMetaConversion } from "@/lib/metaPixel";
 import { getBrowserHostname } from "@/lib/funnelHost";
 import { visibleFunnelPages, type ApplicationContact, type FunnelAnswers, type FunnelConfig } from "@shared/funnel";
+import { funnelPurposeOption } from "@shared/funnelPurpose";
 import { legalFooterLinks } from "@shared/legalPages";
 import { customHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
 import { FunnelChrome } from "@/components/funnel/FunnelChrome";
@@ -19,7 +20,11 @@ import { FunnelLibraryIconSync } from "@/components/funnel/FunnelLibraryIconSync
 function EmbedHeightReporter() {
   useEffect(() => {
     if (window.parent === window) return;
-    const report = () => window.parent.postMessage({ type: "social-recruiting-funnel:resize", height: document.documentElement.scrollHeight }, "*");
+    const report = () => {
+      const height = document.documentElement.scrollHeight;
+      window.parent.postMessage({ type: "adbot-funnel:resize", height }, "*");
+      window.parent.postMessage({ type: "social-recruiting-funnel:resize", height }, "*");
+    };
     const observer = new ResizeObserver(report);
     observer.observe(document.body);
     report();
@@ -122,7 +127,11 @@ function FunnelView({
           config.metaTracking.pixelId,
           config.metaTracking.eventName,
           metaEventId,
-          result.leadValue !== undefined ? { value: result.leadValue, currency: "EUR" } : undefined,
+          {
+            ...(result.leadValue !== undefined ? { value: result.leadValue, currency: "EUR" } : {}),
+            contentCategory: funnelPurposeOption(config.purpose).label,
+            contentName: config.title,
+          },
         );
       }
       pendingMetaEventId.current = undefined;

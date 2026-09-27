@@ -21,7 +21,7 @@ export async function processFunnelCreativeHandoff(
   payload: FunnelCreativeHandoffPayload,
 ): Promise<FunnelCreativeHandoffResult> {
   const admin = createAdminClient();
-  const tags = payload.tags.length > 0 ? payload.tags : ["jobs"];
+  const tags = payload.tags.length > 0 ? payload.tags : ["funnel"];
   const { data: existing } = await admin
     .from("funnel_creative_handoffs")
     .select("id,status,job_id")
@@ -29,6 +29,10 @@ export async function processFunnelCreativeHandoff(
     .eq("destination_url", payload.destinationUrl)
     .maybeSingle();
   if (existing && (existing.status === "SUCCEEDED" || existing.status === "QUEUED")) {
+    await admin
+      .from("funnel_creative_handoffs")
+      .update({ tags, title: payload.title, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
     return {
       status: existing.status,
       jobId: typeof existing.job_id === "string" ? existing.job_id : undefined,
@@ -68,7 +72,8 @@ export async function processFunnelCreativeHandoff(
       .eq("platform", "meta")
       .is("revoked_at", null)
       .maybeSingle();
-    const structure = resolveAdStructureTemplate({ kind: "job", tags });
+    const employment = tags.includes("employment") || tags.includes("jobs");
+    const structure = resolveAdStructureTemplate({ kind: employment ? "job" : "lead", tags });
     await loadAdLearningContext({
       userId: payload.sub,
       objective: "OUTCOME_LEADS",
@@ -79,7 +84,7 @@ export async function processFunnelCreativeHandoff(
       userId: payload.sub,
       destinationUrl: payload.destinationUrl,
       objective: "OUTCOME_LEADS",
-      industry: tags.includes("jobs") ? "Recruiting" : "",
+      industry: employment ? "Recruiting" : "",
       offer: payload.jobTitle || payload.title,
     });
     const generated = await generateLibraryCreativeNow({
@@ -89,8 +94,8 @@ export async function processFunnelCreativeHandoff(
       tags,
       prompt: [
         "Photorealistic advertising image, no text, no logos, no watermark.",
-        payload.jobTitle ? `Job: ${payload.jobTitle}` : `Funnel: ${payload.title}`,
-        payload.jobDescription ? `Role: ${payload.jobDescription}` : "",
+        payload.jobTitle ? `${employment ? "Job" : "Angebot"}: ${payload.jobTitle}` : `Funnel: ${payload.title}`,
+        payload.jobDescription ? `${employment ? "Rolle" : "Beschreibung"}: ${payload.jobDescription}` : "",
         formatStructureForPrompt(structure),
         `Destination: ${payload.destinationUrl}`,
       ]

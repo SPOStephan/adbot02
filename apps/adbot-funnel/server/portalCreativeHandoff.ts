@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { funnelPurposeTags, type FunnelPurpose } from "@shared/funnelPurpose";
 
 import { ENV } from "./_core/env";
 
@@ -77,6 +78,7 @@ export async function pushFunnelCreativeHandoffToPortal(input: {
   funnelId: string;
   slug: string;
   title: string;
+  purpose: FunnelPurpose;
   readyHostname?: string | null;
   jobTitle?: string;
   jobDescription?: string;
@@ -91,7 +93,7 @@ export async function pushFunnelCreativeHandoffToPortal(input: {
     destinationUrl,
     title: input.title,
     slug: input.slug,
-    tags: ["jobs"],
+    tags: funnelPurposeTags(input.purpose),
     jobTitle: input.jobTitle ?? input.title,
     jobDescription: input.jobDescription ?? "",
   });

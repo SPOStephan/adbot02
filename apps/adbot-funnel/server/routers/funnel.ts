@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { defaultFunnel } from "@shared/defaultFunnel";
+import { defaultFunnel, defaultFunnelForPurpose } from "@shared/defaultFunnel";
 import {
   applicationStatusSchema,
   applicationSubmissionSchema,
@@ -271,6 +271,23 @@ function ownerFromUser(user: User) {
   };
 }
 
+async function pushPublishedFunnelToPortal(config: FunnelConfig, user: User) {
+  const owner = await getFunnelOwner(config.id);
+  const domains = await listCustomDomainsForFunnel(config.id).catch(() => []);
+  const ready = domains.find(domain => domain.status === "READY");
+  const start = config.pages.find(page => page.type === "start");
+  await pushFunnelCreativeHandoffToPortal({
+    ownerUserId: owner?.userId ?? getTenantOwnerUserId(user),
+    funnelId: config.id,
+    slug: config.slug,
+    title: config.title,
+    purpose: config.purpose,
+    readyHostname: ready?.hostname ?? null,
+    jobTitle: start && start.type === "start" ? start.title : config.title,
+    jobDescription: start && start.type === "start" ? start.description : "",
+  });
+}
+
 export const funnelRouter = router({
   publicConfig: publicProcedure.input(z.object({
     slug: z.string().min(1),
@@ -440,7 +457,7 @@ export const funnelRouter = router({
 
   create: adminProcedure.input(createFunnelSchema).mutation(async ({ input, ctx }) => {
     const slug = await getUniqueFunnelSlug(input.slug || input.title);
-    const config = createFunnelFromTemplate(defaultFunnel, input.title, slug);
+    const config = createFunnelFromTemplate(defaultFunnelForPurpose(input.purpose), input.title, slug);
     const owner = isPlatformAdmin(ctx.user)
       ? {
           userId: input.ownerUserId ?? null,
@@ -558,14 +575,18 @@ export const funnelRouter = router({
   saveConfig: adminProcedure.input(funnelConfigSchema.safeExtend({
     notificationEmailWrite: z.enum(["set", "preserve"]).default("set"),
   })).mutation(async ({ input, ctx }) => {
-    await requireOwnedFunnel(input.id, ctx.user);
+    const existing = await requireOwnedFunnel(input.id, ctx.user);
     const slug = slugifyFunnel(input.slug);
     await assertSlugAvailable(slug, input.id);
     const { notificationEmailWrite, ...config } = input;
-    return saveFunnel(
+    const saved = await saveFunnel(
       { ...config, slug, isPublished: input.status === "published" },
       { notificationEmailWrite },
     );
+    if (saved.status === "published" && existing.purpose !== saved.purpose) {
+      await pushPublishedFunnelToPortal(saved, ctx.user);
+    }
+    return saved;
   }),
 
   saveMetaServerSettings: adminProcedure.input(metaServerSettingsSchema).mutation(async ({ input, ctx }) => {
@@ -1022,19 +1043,7 @@ export const funnelRouter = router({
       const config = await requireOwnedFunnel(input.id, ctx.user);
       const saved = await saveFunnel({ ...config, status: input.status, isPublished: input.status === "published" });
       if (input.status === "published" && config.status !== "published") {
-        const owner = await getFunnelOwner(input.id);
-        const domains = await listCustomDomainsForFunnel(input.id).catch(() => []);
-        const ready = domains.find(domain => domain.status === "READY");
-        const start = config.pages.find(page => page.type === "start");
-        void pushFunnelCreativeHandoffToPortal({
-          ownerUserId: owner?.userId ?? getTenantOwnerUserId(ctx.user),
-          funnelId: saved.id,
-          slug: saved.slug,
-          title: saved.title,
-          readyHostname: ready?.hostname ?? null,
-          jobTitle: start && start.type === "start" ? start.title : saved.title,
-          jobDescription: start && start.type === "start" ? start.description : "",
-        });
+        await pushPublishedFunnelToPortal(saved, ctx.user);
       }
       return saved;
     }),
@@ -1052,7 +1061,7 @@ export const funnelRouter = router({
 
   application: adminProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ input, ctx }) => {
     const application = await getApplication(input.id);
-    if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+    if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
     await requireOwnedFunnel(application.funnelId, ctx.user);
     const config = await getFunnelById(application.funnelId) ?? await getFunnel(application.funnelSlug) ?? undefined;
     return { ...application, displayAnswers: resolveApplicationAnswers(config, application.answers) };
@@ -1062,10 +1071,10 @@ export const funnelRouter = router({
     .input(z.object({ id: z.string().uuid(), status: applicationStatusSchema }))
     .mutation(async ({ input, ctx }) => {
       const existing = await getApplication(input.id);
-      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
       await requireOwnedFunnel(existing.funnelId, ctx.user);
       const application = await updateApplicationStatus(input.id, input.status);
-      if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
       return application;
     }),
 
@@ -1073,7 +1082,7 @@ export const funnelRouter = router({
     .input(z.object({ id: z.string().uuid(), quality: leadQualitySchema }))
     .mutation(async ({ input, ctx }) => {
       const existing = await getApplication(input.id);
-      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
       const config = await requireOwnedFunnel(existing.funnelId, ctx.user);
       const ratedAt = new Date().toISOString();
       const eventId =
@@ -1090,7 +1099,7 @@ export const funnelRouter = router({
         metaStatus: metaQuality.status,
         ratedAt: sameRating ? existing.leadQualityAt ?? ratedAt : ratedAt,
       });
-      if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Bewerbung nicht gefunden." });
+      if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
       return {
         ...application,
         displayAnswers: resolveApplicationAnswers(config, application.answers),
@@ -1102,7 +1111,7 @@ export const funnelRouter = router({
   exportCsv: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input, ctx }) => {
     const { applications, configs } = await applicationsWithConfigs(input?.funnelId, ctx.user);
     return {
-      fileName: `bewerbungen-${new Date().toISOString().slice(0, 10)}.csv`,
+      fileName: `funnel-eingaenge-${new Date().toISOString().slice(0, 10)}.csv`,
       mimeType: "text/csv;charset=utf-8",
       dataBase64: Buffer.from(buildApplicationsCsv(applications, configs), "utf8").toString("base64"),
     };
@@ -1111,7 +1120,7 @@ export const funnelRouter = router({
   exportPdf: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input, ctx }) => {
     const { applications, configs } = await applicationsWithConfigs(input?.funnelId, ctx.user);
     return {
-      fileName: `bewerbungen-${new Date().toISOString().slice(0, 10)}.pdf`,
+      fileName: `funnel-eingaenge-${new Date().toISOString().slice(0, 10)}.pdf`,
       mimeType: "application/pdf",
       dataBase64: (await buildApplicationsPdf(applications, configs)).toString("base64"),
     };

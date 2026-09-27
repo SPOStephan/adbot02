@@ -20,7 +20,7 @@ export function EditorPreview({ config, page }: { config: FunnelConfig; page: Fu
     <div className={`admin-live-preview ${hidden ? "opacity-60 grayscale" : ""}`}>
       {hidden ? (
         <p className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
-          Vorschau einer ausgeblendeten Seite – Bewerber sehen sie nicht.
+          Vorschau einer ausgeblendeten Seite – Besucher sehen sie nicht.
         </p>
       ) : null}
       <FunnelChrome brand={config.brand} socialProof={config.socialProof} {...legalFooterLinks(config, { imprintUrl: `/f/${config.slug}/impressum`, privacyUrl: `/f/${config.slug}/datenschutz` })} step={step} totalSteps={visible.length} showProgress={!hidden} pages={visible} progress={config.progress} fullBleed={page.type === "start" && resolveStartLayout(page) === "benefits"} topBackground={page.type === "start" && resolveStartLayout(page) === "benefits" ? customHeroSectionBackground(page.heroSectionBackground) : undefined}>

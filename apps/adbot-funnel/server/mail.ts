@@ -1,5 +1,6 @@
 import type { ApplicationRecord, FunnelConfig } from "@shared/funnel";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
+import { funnelSubmissionLabel } from "@shared/funnelPurpose";
 
 const escapeHtml = (value: unknown) =>
   String(value ?? "")
@@ -10,6 +11,7 @@ const escapeHtml = (value: unknown) =>
     .replaceAll("'", "&#039;");
 
 export function buildApplicationNotificationHtml(config: FunnelConfig, application: ApplicationRecord) {
+  const submissionLabel = funnelSubmissionLabel(config.purpose);
   const contactRows = Object.entries(application.contact)
     .map(([key, value]) => `<tr><td style="padding:6px 12px 6px 0;color:#5c6b7a">${escapeHtml(key)}</td><td style="padding:6px 0"><strong>${escapeHtml(value)}</strong></td></tr>`)
     .join("");
@@ -20,12 +22,12 @@ export function buildApplicationNotificationHtml(config: FunnelConfig, applicati
   return `
     <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;color:#10253f">
       <div style="height:8px;background:#0165c3;border-radius:8px 8px 0 0"></div>
-      <h1 style="font-size:24px;margin:28px 0 8px">Neue Bewerbung eingegangen</h1>
+      <h1 style="font-size:24px;margin:28px 0 8px">Neue ${escapeHtml(submissionLabel)} eingegangen</h1>
       <p style="color:#5c6b7a">Funnel: ${escapeHtml(config.title)} · ${escapeHtml(new Date(application.createdAt).toLocaleString("de-DE"))}</p>
       <h2 style="font-size:17px;margin-top:28px">Kontaktdaten</h2><table>${contactRows}</table>
       <h2 style="font-size:17px;margin-top:28px">Antworten</h2><table>${answerRows}</table>
       ${application.resume ? `<p style="margin-top:24px"><strong>Lebenslauf:</strong> ${escapeHtml(application.resume.fileName)}</p>` : ""}
-      <p style="margin-top:32px;color:#5c6b7a;font-size:13px">Die vollständige Bewerbung ist im geschützten Admin-Bereich verfügbar.</p>
+      <p style="margin-top:32px;color:#5c6b7a;font-size:13px">Der vollständige Eintrag ist im geschützten Admin-Bereich verfügbar.</p>
     </div>`;
 }
 
@@ -40,7 +42,7 @@ export async function sendApplicationNotification(config: FunnelConfig, applicat
     body: JSON.stringify({
       from,
       to: [config.notificationEmail],
-      subject: `Neue Bewerbung: ${application.contact.name ?? application.contact.email ?? application.id}`,
+      subject: `Neue ${funnelSubmissionLabel(config.purpose)}: ${application.contact.name ?? application.contact.email ?? application.id}`,
       html: buildApplicationNotificationHtml(config, application),
     }),
   });

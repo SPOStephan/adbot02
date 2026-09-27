@@ -3,12 +3,14 @@ import { ArrowLeft, Check, CheckCircle2, CircleAlert, Clipboard, ExternalLink, G
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import type { FunnelConfig, FunnelStatus } from "@shared/funnel";
+import { FUNNEL_PURPOSE_OPTIONS, funnelPurposeOption, funnelSubmissionPlural, type FunnelPurpose } from "@shared/funnelPurpose";
 import { legalPagesAreValid } from "@shared/legalPages";
 import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -48,7 +50,7 @@ function ChromeWildcardHostNotice() {
       <p className="mt-2">
         Die Adresse erst öffnen, wenn „DNS prüfen“ hier grün ist. Nicht auf „unsichere Seite weiter“
         klicken. Safari, Smartphone oder Chrome-Gastfenster prüfen die echte Route. Das <code>*</code>
-        für den Rest der Domain kann bleiben; die eigene Zeile (z. B. <code>jobs</code> → Vercel)
+        für den Rest der Domain kann bleiben; die eigene Zeile (z. B. <code>funnel</code> → Vercel)
         muss stehen.
       </p>
     </div>
@@ -256,7 +258,7 @@ export default function Settings() {
   const dirty = Boolean(draft && savedConfig && JSON.stringify(draft) !== JSON.stringify(savedConfig));
   const legalValid = draft ? legalPagesAreValid(draft).ok : false;
   const metaServerDirty = Boolean(metaTestEventCode !== savedMetaTestEventCode);
-  const embedCode = useMemo(() => `<iframe id="recruiting-funnel" src="${directUrl}" title="Karriere-Bewerbung" loading="lazy" style="width:100%;min-height:780px;border:0;border-radius:16px" allow="clipboard-write"></iframe>\n<script>\nwindow.addEventListener("message",function(event){\n  if(event.origin!==new URL("${directUrl}").origin)return;\n  if(event.data?.type!=="social-recruiting-funnel:resize")return;\n  document.getElementById("recruiting-funnel").style.height=event.data.height+"px";\n});\n</script>`, [directUrl]);
+  const embedCode = useMemo(() => `<iframe id="adbot-funnel" src="${directUrl}" title="Funnel" loading="lazy" style="width:100%;min-height:780px;border:0;border-radius:16px" allow="clipboard-write"></iframe>\n<script>\nwindow.addEventListener("message",function(event){\n  if(event.origin!==new URL("${directUrl}").origin)return;\n  if(!["adbot-funnel:resize","social-recruiting-funnel:resize"].includes(event.data?.type))return;\n  document.getElementById("adbot-funnel").style.height=event.data.height+"px";\n});\n</script>`, [directUrl]);
 
   const copy = async (value: string, key: "url" | "embed") => {
     try {
@@ -304,6 +306,7 @@ export default function Settings() {
   if (!funnelId) return <ErrorState message="Keine Funnel-ID angegeben." onBack={() => setLocation("/admin")} />;
   if (query.error) return <ErrorState message={query.error.message} onBack={() => setLocation("/admin")} />;
   if (query.isLoading || !draft || !query.data) return <div className="grid min-h-[60vh] place-items-center" role="status" aria-live="polite"><span className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="animate-spin text-[#0165c3]" aria-hidden="true" />Einstellungen werden geladen …</span></div>;
+  const submissionPlural = funnelSubmissionPlural(draft.purpose);
 
   const setPublished = (published: boolean) => setDraft(current => current ? {
     ...current,
@@ -324,8 +327,9 @@ export default function Settings() {
         <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Settings2 className="size-5" /></span><div><h2 className="font-bold">Funnel-Grundeinstellungen</h2><p className="text-xs text-muted-foreground">Titel, URL und technische Zustellung dieses Funnels.</p></div></div>
         <div className="mt-6 grid gap-5 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2"><Label htmlFor="funnel-title">Funnel-Titel</Label><Input id="funnel-title" maxLength={240} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} /></div>
+          <div className="space-y-2 sm:col-span-2"><Label htmlFor="funnel-purpose">Funnel-Zweck</Label><Select value={draft.purpose} onValueChange={purpose => setDraft({ ...draft, purpose: purpose as FunnelPurpose })}><SelectTrigger id="funnel-purpose"><SelectValue /></SelectTrigger><SelectContent>{FUNNEL_PURPOSE_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">{funnelPurposeOption(draft.purpose).description}</p></div>
           <div className="space-y-2"><Label htmlFor="funnel-slug">URL-Slug</Label><Input id="funnel-slug" value={draft.slug} onChange={event => setDraft({ ...draft, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} /><p className="text-xs text-muted-foreground">Muss über alle Funnel hinweg eindeutig sein.</p></div>
-          <div className="space-y-2"><Label htmlFor="notification-email">Empfänger-E-Mail</Label><Input id="notification-email" type="email" value={draft.notificationEmail} placeholder="recruiting@unternehmen.de" onChange={event => setDraft({ ...draft, notificationEmail: event.target.value })} /><p className="text-xs text-muted-foreground">An diese Adresse werden neue Bewerbungen dieses Funnels gemeldet.</p></div>
+          <div className="space-y-2"><Label htmlFor="notification-email">Empfänger-E-Mail</Label><Input id="notification-email" type="email" value={draft.notificationEmail} placeholder="anfragen@unternehmen.de" onChange={event => setDraft({ ...draft, notificationEmail: event.target.value })} /><p className="text-xs text-muted-foreground">An diese Adresse werden neue {submissionPlural.toLowerCase()} dieses Funnels gemeldet.</p></div>
           <div className="space-y-3 sm:col-span-2">
             <LegalPagesFields
               legal={draft.legal}
@@ -342,13 +346,13 @@ export default function Settings() {
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Signpost className="size-5" /></span><div><h2 className="font-bold">Nach erfolgreicher Bewerbung</h2><p className="text-xs text-muted-foreground">Erfolgsnachricht anzeigen oder nach bestätigter Speicherung sicher weiterleiten.</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Signpost className="size-5" /></span><div><h2 className="font-bold">Nach erfolgreichem Absenden</h2><p className="text-xs text-muted-foreground">Erfolgsnachricht anzeigen oder nach bestätigter Speicherung sicher weiterleiten.</p></div></div>
         <div className="mt-6 space-y-4">
           <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Verhalten nach dem Absenden">
             <button type="button" role="radio" aria-checked={draft.postSubmit.mode === "message"} className={`rounded-xl border p-4 text-left transition ${draft.postSubmit.mode === "message" ? "border-[#0165c3] bg-blue-50 ring-1 ring-[#0165c3]" : "hover:border-slate-300"}`} onClick={() => setDraft({ ...draft, postSubmit: { ...draft.postSubmit, mode: "message" } })}><strong className="block text-sm">Erfolgsnachricht</strong><span className="mt-1 block text-xs text-muted-foreground">Zeigt den im visuellen Editor gepflegten Titel und Text.</span></button>
-            <button type="button" role="radio" aria-checked={draft.postSubmit.mode === "redirect"} className={`rounded-xl border p-4 text-left transition ${draft.postSubmit.mode === "redirect" ? "border-[#0165c3] bg-blue-50 ring-1 ring-[#0165c3]" : "hover:border-slate-300"}`} onClick={() => setDraft({ ...draft, postSubmit: { ...draft.postSubmit, mode: "redirect" } })}><strong className="block text-sm">Weiterleitung</strong><span className="mt-1 block text-xs text-muted-foreground">Öffnet erst nach erfolgreicher Bewerbung eine externe HTTPS-Adresse.</span></button>
+            <button type="button" role="radio" aria-checked={draft.postSubmit.mode === "redirect"} className={`rounded-xl border p-4 text-left transition ${draft.postSubmit.mode === "redirect" ? "border-[#0165c3] bg-blue-50 ring-1 ring-[#0165c3]" : "hover:border-slate-300"}`} onClick={() => setDraft({ ...draft, postSubmit: { ...draft.postSubmit, mode: "redirect" } })}><strong className="block text-sm">Weiterleitung</strong><span className="mt-1 block text-xs text-muted-foreground">Öffnet erst nach erfolgreicher Speicherung eine externe HTTPS-Adresse.</span></button>
           </div>
-          {draft.postSubmit.mode === "redirect" && <div className="space-y-2"><Label htmlFor="redirect-url">Weiterleitungs-URL</Label><Input id="redirect-url" type="url" inputMode="url" placeholder="https://www.unternehmen.de/vielen-dank" value={draft.postSubmit.redirectUrl} onChange={event => setDraft({ ...draft, postSubmit: { ...draft.postSubmit, redirectUrl: event.target.value.trim() } })} /><p className="text-xs text-muted-foreground">Nur absolute HTTPS-Adressen werden gespeichert. Bei einem Fehler bleibt die Bewerbung trotzdem erhalten.</p></div>}
+          {draft.postSubmit.mode === "redirect" && <div className="space-y-2"><Label htmlFor="redirect-url">Weiterleitungs-URL</Label><Input id="redirect-url" type="url" inputMode="url" placeholder="https://www.unternehmen.de/vielen-dank" value={draft.postSubmit.redirectUrl} onChange={event => setDraft({ ...draft, postSubmit: { ...draft.postSubmit, redirectUrl: event.target.value.trim() } })} /><p className="text-xs text-muted-foreground">Nur absolute HTTPS-Adressen werden gespeichert. Bei einem Fehler bleibt der Eintrag trotzdem erhalten.</p></div>}
         </div>
       </section>
 
@@ -358,7 +362,7 @@ export default function Settings() {
           <div className="flex items-center justify-between gap-4 rounded-xl border p-4"><div><Label htmlFor="meta-enabled">Meta-Tracking aktiv</Label><p className="mt-1 text-xs leading-5 text-muted-foreground">Lädt den Browser-Pixel automatisch und meldet Conversions gemäß dem gewählten Zeitpunkt. Serverseitige CAPI (Lead und Gut/Schlecht) geht über die Meta-Verbindung im Adbot-Portal — ohne Events-Manager-Token.</p></div><Switch id="meta-enabled" checked={draft.metaTracking.enabled} onCheckedChange={enabled => setDraft({ ...draft, metaTracking: { ...draft.metaTracking, enabled } })} /></div>
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2"><Label htmlFor="meta-pixel-id">Meta Pixel-ID</Label><Input id="meta-pixel-id" inputMode="numeric" placeholder="123456789012345" value={draft.metaTracking.pixelId} onChange={event => setDraft({ ...draft, metaTracking: { ...draft.metaTracking, pixelId: event.target.value.replace(/\D/g, "").slice(0, 25) } })} /><p className="text-xs text-muted-foreground">Nur Ziffern; gilt für Browser-Pixel und Conversions API. Wird automatisch aus dem Adbot-Portal übernommen, wenn das Feld leer ist.</p></div>
-            <div className="space-y-2"><Label htmlFor="meta-event-name">Conversion-Event</Label><Input id="meta-event-name" value={draft.metaTracking.eventName} onChange={event => setDraft({ ...draft, metaTracking: { ...draft.metaTracking, eventName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") } })} /><p className="text-xs text-muted-foreground">Empfohlenes Standardereignis für Bewerbungen: <code>Lead</code>.</p></div>
+            <div className="space-y-2"><Label htmlFor="meta-event-name">Conversion-Event</Label><Input id="meta-event-name" value={draft.metaTracking.eventName} onChange={event => setDraft({ ...draft, metaTracking: { ...draft.metaTracking, eventName: event.target.value.replace(/[^A-Za-z0-9_]/g, "") } })} /><p className="text-xs text-muted-foreground">Empfohlenes Standardereignis für erfolgreiche Funnel-Abschlüsse: <code>Lead</code>.</p></div>
           </div>
           <div className="space-y-3">
             <Label>Conversion-Zeitpunkt</Label>
@@ -376,7 +380,7 @@ export default function Settings() {
           </div>
           <div className="rounded-xl border border-slate-200 p-4">
             <h3 className="text-sm font-bold">Lead-Qualität und Werte</h3>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">Antwortoptionen können im Editor einen Euro-Wert bekommen. Dieser Wert geht automatisch mit der Bewerbung als Lead an Meta. Zusätzlich kannst du einzelne Bewerbungen unter Bewerbungen mit Gut oder Schlecht bewerten — das sendet ein zweites Ereignis (`Subscribe` bzw. `DisqualifiedLead`) über die Meta-Verbindung im Portal.</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">Antwortoptionen können im Editor einen Euro-Wert bekommen. Dieser Wert geht automatisch mit dem Funnel-Eingang als Lead an Meta. Zusätzlich kannst du einzelne Eingänge mit Gut oder Schlecht bewerten — das sendet ein zweites Ereignis (`Subscribe` bzw. `DisqualifiedLead`) über die Meta-Verbindung im Portal.</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="meta-quality-good">Wert für gute Leads (€)</Label>
@@ -432,7 +436,7 @@ export default function Settings() {
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <Input
               aria-label="Account-Hostname"
-              placeholder="karriere.dein-unternehmen.de"
+              placeholder="funnel.dein-unternehmen.de"
               value={accountHostname}
               onChange={event => setAccountHostname(event.target.value.toLowerCase())}
             />
@@ -617,7 +621,7 @@ export default function Settings() {
             </li>
           ))}
           {(customDomainsQuery.data?.length ?? 0) === 0 ? (
-            <li className="text-sm text-muted-foreground">Noch keine bestehende Domain angebunden. Am zuverlässigsten eine Subdomain wie <code>karriere.dein-unternehmen.de</code> mit eigener CNAME-Zeile (nicht nur über <code>*</code>). Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
+            <li className="text-sm text-muted-foreground">Noch keine bestehende Domain angebunden. Am zuverlässigsten eine Subdomain wie <code>funnel.dein-unternehmen.de</code> mit eigener CNAME-Zeile (nicht nur über <code>*</code>). Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
           ) : null}
         </ul>
       </section>

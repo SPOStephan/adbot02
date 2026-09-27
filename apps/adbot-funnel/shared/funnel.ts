@@ -429,6 +429,7 @@ export type FunnelConfig = {
   id: string;
   slug: string;
   title: string;
+  purpose: import("./funnelPurpose").FunnelPurpose;
   status: FunnelStatus;
   isPublished: boolean;
   notificationEmail: string;
@@ -457,6 +458,7 @@ export type FunnelSummary = {
   id: string;
   slug: string;
   title: string;
+  purpose: import("./funnelPurpose").FunnelPurpose;
   status: FunnelStatus;
   applicationCount: number;
   newApplicationCount: number;

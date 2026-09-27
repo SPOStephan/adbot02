@@ -14,6 +14,7 @@ import {
 import { listReadyCustomerCustomDomains } from "@/lib/custom-domains/service";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
+import { listFunnelPurposeHints } from "@/lib/funnel-purpose-hints";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -24,6 +25,7 @@ export const maxDuration = 300;
 type PageProps = {
   searchParams: Promise<{
     assetId?: string | string[];
+    funnelUrl?: string | string[];
     ideaId?: string | string[];
   }>;
 };
@@ -31,7 +33,7 @@ type PageProps = {
 async function TrafficLaunchBody({
   query,
 }: {
-  query: { assetId?: string | string[]; ideaId?: string | string[] };
+  query: { assetId?: string | string[]; funnelUrl?: string | string[]; ideaId?: string | string[] };
 }) {
   const supabase = await createClient();
   const {
@@ -89,6 +91,7 @@ async function TrafficLaunchBody({
   } catch {
     readyCustomDomains = [];
   }
+  const funnelPurposeHints = await listFunnelPurposeHints(user.id).catch(() => []);
 
   const policyLaunchReady = Boolean(
     policyView?.status === "ACTIVE" &&
@@ -162,11 +165,19 @@ async function TrafficLaunchBody({
         data={onboardingData}
         facebookPages={launchFacebookPages}
         instagramAccounts={launchInstagramAccounts}
+        initialDestinationUrl={
+          typeof query.funnelUrl === "string" &&
+          query.funnelUrl.length <= 2_000 &&
+          query.funnelUrl.startsWith("https://")
+            ? query.funnelUrl
+            : null
+        }
         initialFacebookPageId={brandProfileView?.facebookPageId}
         initialInstagramActorId={brandProfileView?.instagramActorId}
         killSwitchMode={killSwitchView?.mode ?? "FREEZE_WRITES"}
         policyLaunchReady={policyLaunchReady}
         readyCustomDomains={readyCustomDomains}
+        funnelPurposeHints={funnelPurposeHints}
         writeScopeGranted={writeScopeGranted}
       />
     </div>

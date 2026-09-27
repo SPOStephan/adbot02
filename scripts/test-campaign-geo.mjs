@@ -162,10 +162,13 @@ assert.match(traffic, /as MetaAdSetTargeting/);
 assert.doesNotMatch(traffic, /materialize_meta_organic_boost_plan/);
 
 const lead = read("src/components/LeadLaunchCanary.tsx");
-assert.match(lead, /special_ad_categories: \["EMPLOYMENT"\]/);
-assert.match(lead, /special_ad_category_country: \["DE"\]/);
+assert.match(lead, /effectiveAdCategory === "employment"/);
+assert.match(lead, /special_ad_categories = \["EMPLOYMENT"\]/);
 assert.match(lead, /special_ad_category_country = \[fallbackCountryCode\(geo\)\]/);
 assert.match(lead, /toMetaEmploymentAdSetTargeting\(geo\)/);
+assert.match(lead, /special_ad_categories = \[\]/);
+assert.match(lead, /toMetaAdSetTargeting\(geo\)/);
+assert.match(lead, /funnelPurposeHints/);
 assert.match(lead, /as MetaAdSetTargeting/);
 
 const openaiForm = read("src/components/OpenAIAdsLaunchForm.tsx");

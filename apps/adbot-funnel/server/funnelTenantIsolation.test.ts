@@ -66,8 +66,8 @@ describe("Funnel Mandantentrennung", () => {
     const b = appRouter.createCaller(tenantB);
     const ops = appRouter.createCaller(platformAdmin);
 
-    const created = await a.funnel.create({ title: "Funnel A", slug: "funnel-a" });
-    await b.funnel.create({ title: "Funnel B", slug: "funnel-b" });
+    const created = await a.funnel.create({ title: "Funnel A", slug: "funnel-a", purpose: "lead_qualification" });
+    await b.funnel.create({ title: "Funnel B", slug: "funnel-b", purpose: "appointment" });
 
     const listA = await a.funnel.funnels();
     expect(listA).toHaveLength(1);
@@ -90,7 +90,7 @@ describe("Funnel Mandantentrennung", () => {
 
   it("verbietet setOwner für Kunden", async () => {
     const a = appRouter.createCaller(tenantA);
-    const created = await a.funnel.create({ title: "Funnel A", slug: "funnel-a" });
+    const created = await a.funnel.create({ title: "Funnel A", slug: "funnel-a", purpose: "lead_qualification" });
     await expect(
       a.funnel.setOwner({
         funnelId: created.id,

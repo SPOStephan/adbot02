@@ -32,7 +32,7 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutGrid, label: "Funnels", path: "/admin", matches: (location: string) => location === "/admin" || location.startsWith("/admin/funnels/") },
-  { icon: Inbox, label: "Bewerbungen", path: "/admin/applications", matches: (location: string) => location.startsWith("/admin/applications") },
+  { icon: Inbox, label: "Eingänge", path: "/admin/applications", matches: (location: string) => location.startsWith("/admin/applications") },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -182,7 +182,7 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold tracking-tight truncate">
-                    Recruiting Funnel
+                    Adbot Funnel
                   </span>
                 </div>
               ) : null}

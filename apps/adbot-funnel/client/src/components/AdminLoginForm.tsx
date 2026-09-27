@@ -44,7 +44,7 @@ export function AdminLoginForm({
         <div className="flex w-full max-w-md flex-col gap-6 rounded-2xl border bg-white p-8 shadow-sm">
           <div className="space-y-2 text-center">
             <h1 className="text-2xl font-semibold tracking-tight">
-              Bewerbungen
+              Adbot Funnel
             </h1>
             <p className="text-sm text-muted-foreground">
               Melde dich mit deinem Adbot-Konto an. Übersicht und Verwaltung

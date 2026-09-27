@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FUNNEL_PURPOSES } from "./funnelPurpose";
 import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, LEGAL_PAGE_MODES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
@@ -143,6 +144,7 @@ export const funnelConfigSchema = z
     id: funnelIdSchema,
     slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/),
     title: z.string().min(1).max(240),
+    purpose: z.enum(FUNNEL_PURPOSES),
     status: funnelStatusSchema,
     isPublished: z.boolean(),
     notificationEmail: z.union([z.literal(""), z.string().email()]),
@@ -260,14 +262,18 @@ export const funnelConfigSchema = z
     }
   });
 
-export const createFunnelSchema = z.object({
+const funnelOwnershipSchema = z.object({
   title: z.string().trim().min(1).max(240),
   slug: z.string().trim().max(120).optional(),
   ownerUserId: z.string().uuid().nullable().optional(),
   ownerEmail: z.string().trim().email().max(320).nullable().optional(),
 });
 
-export const duplicateFunnelSchema = createFunnelSchema.extend({
+export const createFunnelSchema = funnelOwnershipSchema.extend({
+  purpose: z.enum(FUNNEL_PURPOSES),
+});
+
+export const duplicateFunnelSchema = funnelOwnershipSchema.extend({
   sourceId: funnelIdSchema,
 });
 

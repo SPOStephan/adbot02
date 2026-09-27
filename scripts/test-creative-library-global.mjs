@@ -41,10 +41,17 @@ assert.match(structure, /job_title/);
 
 const handoff = read("src/lib/funnel-creative-handoff.ts");
 assert.match(handoff, /adbot_funnel_creative_handoff/);
+assert.match(handoff, /input\.tags \?\? \["funnel"\]/);
+
+const handoffService = read("src/lib/funnel-creative-handoff-service.ts");
+assert.match(handoffService, /tags\.includes\("employment"\)/);
+assert.match(handoffService, /employment \? "job" : "lead"/);
+assert.match(handoffService, /update\(\{ tags, title: payload\.title/);
 
 const funnel = read("apps/adbot-funnel/server/routers/funnel.ts");
 assert.match(funnel, /pushFunnelCreativeHandoffToPortal/);
 assert.match(funnel, /status === "published"/);
+assert.match(funnel, /purpose: config\.purpose/);
 
 const sqlTest = read("scripts/test-meta-creative-assets.sql");
 assert.match(sqlTest, /Creative claim must not depend on kill-switch/);

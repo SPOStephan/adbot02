@@ -380,7 +380,7 @@ export default function FunnelEditor() {
               <FormRow label="Interner Seitenname"><Input value={selectedPage.name} onChange={event => patchPage({ name: event.target.value }, false)} /></FormRow>
               <FormRow
                 label="Überzeile"
-                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Kleine Zeile über der Überschrift. Größe über die Pfeile, Standard bleibt die bisherige Größe. Markieren für Fett, Kursiv, Unterstrich, Farbe oder Kleiner. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                hint={isCopyFieldVisible(selectedPage.eyebrowVisible) ? "Kleine Zeile über der Überschrift. Größe über die Pfeile, Standard bleibt die bisherige Größe. Markieren für Fett, Kursiv, Unterstrich, Farbe oder Kleiner. Über das Auge ausblenden, ohne den Text zu löschen." : "Ausgeblendet – Besucher sehen diesen Text nicht."}
                 visible={isCopyFieldVisible(selectedPage.eyebrowVisible)}
                 onToggleVisible={() => patchPage({ eyebrowVisible: !isCopyFieldVisible(selectedPage.eyebrowVisible) } as Partial<FunnelPage>)}
                 sizeStep={selectedPage.eyebrowSizeStep}
@@ -390,7 +390,7 @@ export default function FunnelEditor() {
               </FormRow>
               <FormRow
                 label="Überschrift"
-                hint={isCopyFieldVisible(selectedPage.titleVisible) ? "Wörter markieren: Fett, Kursiv, Unterstrich, Farbe oder Kleiner – zum Beispiel (§34i) (m/w/d) in kleinerer Schrift. Größe über die Pfeile, Standard bleibt die bisherige Größe." : "Ausgeblendet – Bewerber sehen diese Überschrift nicht."}
+                hint={isCopyFieldVisible(selectedPage.titleVisible) ? "Wörter markieren: Fett, Kursiv, Unterstrich, Farbe oder Kleiner – zum Beispiel (§34i) (m/w/d) in kleinerer Schrift. Größe über die Pfeile, Standard bleibt die bisherige Größe." : "Ausgeblendet – Besucher sehen diese Überschrift nicht."}
                 visible={isCopyFieldVisible(selectedPage.titleVisible)}
                 onToggleVisible={() => patchPage({ titleVisible: !isCopyFieldVisible(selectedPage.titleVisible) } as Partial<FunnelPage>)}
                 sizeStep={selectedPage.titleSizeStep}
@@ -400,7 +400,7 @@ export default function FunnelEditor() {
               </FormRow>
               <FormRow
                 label="Sub-Headline"
-                hint={isCopyFieldVisible(selectedPage.subtitleVisible) ? "Kleinere Zeile unter der Überschrift, mit eigener Farbe. Größe über die Pfeile, Standard bleibt die bisherige Größe. Leer lassen blendet sie aus." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                hint={isCopyFieldVisible(selectedPage.subtitleVisible) ? "Kleinere Zeile unter der Überschrift, mit eigener Farbe. Größe über die Pfeile, Standard bleibt die bisherige Größe. Leer lassen blendet sie aus." : "Ausgeblendet – Besucher sehen diesen Text nicht."}
                 visible={isCopyFieldVisible(selectedPage.subtitleVisible)}
                 onToggleVisible={() => patchPage({ subtitleVisible: !isCopyFieldVisible(selectedPage.subtitleVisible) } as Partial<FunnelPage>)}
                 sizeStep={selectedPage.subtitleSizeStep}
@@ -410,7 +410,7 @@ export default function FunnelEditor() {
               </FormRow>
               <FormRow
                 label="Beschreibung"
-                hint={isCopyFieldVisible(selectedPage.descriptionVisible) ? "Größe über die Pfeile, Standard bleibt die bisherige Größe." : "Ausgeblendet – Bewerber sehen diesen Text nicht."}
+                hint={isCopyFieldVisible(selectedPage.descriptionVisible) ? "Größe über die Pfeile, Standard bleibt die bisherige Größe." : "Ausgeblendet – Besucher sehen diesen Text nicht."}
                 visible={isCopyFieldVisible(selectedPage.descriptionVisible)}
                 onToggleVisible={() => patchPage({ descriptionVisible: !isCopyFieldVisible(selectedPage.descriptionVisible) } as Partial<FunnelPage>)}
                 sizeStep={selectedPage.descriptionSizeStep}
@@ -433,7 +433,7 @@ export default function FunnelEditor() {
                     <p className="text-xs text-muted-foreground">Öffentlicher Name dieser Seite in der Statusleiste. Leer = interner Seitenname. Andere Optiken unter Global → Fortschrittsanzeige → Variante wählen.</p>
                   </div>
                   <FormRow label="Stufenname"><Input value={selectedPage.progressTitle ?? ""} placeholder={selectedPage.name} onChange={event => patchPage({ progressTitle: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
-                  <FormRow label="Kurztext (optional)"><Input value={selectedPage.progressHint ?? ""} placeholder="z. B. Passt der Job zu dir?" onChange={event => patchPage({ progressHint: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
+                  <FormRow label="Kurztext (optional)"><Input value={selectedPage.progressHint ?? ""} placeholder="z. B. Worum geht es dir?" onChange={event => patchPage({ progressHint: event.target.value } as Partial<FunnelPage>, false)} /></FormRow>
                   <FormRow label="Icon dieser Stufe">
                     <IconPicker
                       value={selectedPage.progressIcon ?? "sparkles"}
@@ -507,7 +507,7 @@ export default function FunnelEditor() {
               <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Social Proof anzeigen</strong><small className="text-muted-foreground">Vertrauenshinweis im Footer</small></span><Switch checked={config.socialProof.enabled} onCheckedChange={checked => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, enabled: checked } }))} /></label>
               <FormRow label="Social-Proof-Überschrift"><FormattedTextField rows={1} value={config.socialProof.eyebrow} onChange={value => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, eyebrow: value } }))} /></FormRow>
               <FormRow label="Social-Proof-Text"><FormattedTextField rows={3} value={config.socialProof.text} onChange={value => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, text: value } }))} /></FormRow>
-              <FormRow label="Empfänger-E-Mail"><Input type="email" placeholder="bewerbung@unternehmen.de" value={config.notificationEmail} onChange={event => changeConfig(current => ({ ...current, notificationEmail: event.target.value }))} /></FormRow>
+              <FormRow label="Empfänger-E-Mail"><Input type="email" placeholder="anfragen@unternehmen.de" value={config.notificationEmail} onChange={event => changeConfig(current => ({ ...current, notificationEmail: event.target.value }))} /></FormRow>
               <div className="grid gap-3 rounded-2xl border p-4">
                 <div>
                   <p className="text-sm font-bold">Impressum und Datenschutz</p>
