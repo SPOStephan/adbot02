@@ -956,6 +956,11 @@ export function AutomationControlCenter({
           initialFacebookPageId={brandProfile?.facebookPageId}
           initialInstagramActorId={brandProfile?.instagramActorId}
           killSwitchMode={killSwitch?.mode ?? "FREEZE_WRITES"}
+          launchPolicy={{
+            accountDailyHardCapMinor: policy?.accountDailyHardCapMinor ?? null,
+            campaignDailyHardCapMinor: policy?.campaignDailyHardCapMinor ?? null,
+            allowBudgetChanges: policy?.allowBudgetChanges ?? false,
+          }}
           policyLaunchReady={Boolean(
             policy?.status === "ACTIVE" &&
               policy.allowNewLaunches &&

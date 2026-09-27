@@ -103,6 +103,11 @@ type Props = {
   currency: string;
   killSwitchMode: "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED";
   policyLaunchReady: boolean;
+  launchPolicy: {
+    accountDailyHardCapMinor: number | null;
+    campaignDailyHardCapMinor: number | null;
+    allowBudgetChanges: boolean;
+  };
   writeScopeGranted: boolean;
   data: AutomationOnboardingData;
   /** Globale READY Custom Domains für Ziel-URL-Auswahl. */
@@ -247,6 +252,11 @@ function displayMinor(value: string): string {
   return `${padded.slice(0, -2)},${padded.slice(-2)} €`;
 }
 
+function policyLimitInput(value: number | null, fallback: string): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return fallback;
+  return (value / 100).toFixed(2);
+}
+
 function planLooksHeld(plan: RecentLaunchPlanView): boolean {
   if (plan.status === "HELD") return true;
   if (plan.status !== "PENDING") return false;
@@ -306,6 +316,7 @@ function toHeldFromRecent(
 export function LeadLaunchCanary({
   brandProfileId,
   currency,
+  launchPolicy,
   policyLaunchReady,
   writeScopeGranted,
   data,
@@ -320,6 +331,7 @@ export function LeadLaunchCanary({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [capiPending, setCapiPending] = useState(false);
+  const [policyPending, setPolicyPending] = useState(false);
   const [suggestPending, setSuggestPending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -552,6 +564,43 @@ export function LeadLaunchCanary({
       });
     } finally {
       setCapiPending(false);
+    }
+  }
+
+  async function enableCampaignLaunch() {
+    setPolicyPending(true);
+    setNotice(null);
+    try {
+      await apiJson("POST", "/api/meta/automation/launch-policy", {
+        accountDailyHardCap: policyLimitInput(
+          launchPolicy.accountDailyHardCapMinor,
+          "100.00",
+        ),
+        campaignDailyHardCap: policyLimitInput(
+          launchPolicy.campaignDailyHardCapMinor,
+          "50.00",
+        ),
+        allowBudgetChanges: launchPolicy.allowBudgetChanges,
+        allowStatusChanges: true,
+        allowNewLaunches: true,
+        enableAutomation: true,
+      });
+      setNotice({
+        tone: "success",
+        message:
+          "Kampagnenstart freigegeben. Bestehende Budgetgrenzen und die bisherige Budget-Automatik bleiben unverändert.",
+      });
+      refresh();
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Der Kampagnenstart konnte nicht freigegeben werden.",
+      });
+    } finally {
+      setPolicyPending(false);
     }
   }
 
@@ -1181,6 +1230,30 @@ export function LeadLaunchCanary({
           </li>
         ))}
       </ul>
+
+      {!policyLaunchReady ? (
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
+          <p className="font-extrabold">Kampagnenstart freigeben</p>
+          <p className="mt-1 max-w-3xl text-xs leading-5">
+            Erlaubt Adbot, diese von dir vorbereitete Kampagne nach der finalen
+            Bestätigung bei Meta anzulegen und zu aktivieren. Bestehende Konto- und
+            Kampagnenlimits sowie deine Budget-Automatik werden nicht verändert.
+          </p>
+          <button
+            className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+            disabled={policyPending || pending || !writeScopeGranted || currency !== "EUR"}
+            onClick={() => void enableCampaignLaunch()}
+            type="button"
+          >
+            {policyPending ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="size-4" />
+            )}
+            {policyPending ? "Wird freigegeben …" : "Kampagnenstart jetzt freigeben"}
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-3 lg:grid-cols-2">
         <div

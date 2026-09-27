@@ -312,6 +312,7 @@ async function reviveAndDrainOrganicBoost(input: {
 export async function saveCustomerPolicy(
   customer: MetaCustomer,
   command: PolicyCommand,
+  options: { triggerOrganicBoost?: boolean } = {},
 ): Promise<{
   policyId: string;
   managedBudgetOwnerCount: number;
@@ -368,6 +369,7 @@ export async function saveCustomerPolicy(
   // Kein zweiter Klick auf Sicherheitsschranke nötig.
   let organicBoost: MetaOrganicBoostPlannerResult | null = null;
   if (
+    options.triggerOrganicBoost !== false &&
     command.enableAutomation &&
     command.allowNewLaunches &&
     command.allowStatusChanges
