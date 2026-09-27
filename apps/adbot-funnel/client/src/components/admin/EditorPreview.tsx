@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { isFunnelPageHidden, visibleFunnelPages, type ContactPage, type FunnelConfig, type FunnelPage } from "@shared/funnel";
+import { legalFooterLinks } from "@shared/legalPages";
 import { customHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
 import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
@@ -22,7 +23,7 @@ export function EditorPreview({ config, page }: { config: FunnelConfig; page: Fu
           Vorschau einer ausgeblendeten Seite – Bewerber sehen sie nicht.
         </p>
       ) : null}
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} privacyUrl={config.privacyUrl} privacyLabel={config.privacyLabel} imprintUrl={`/f/${config.slug}/impressum`} step={step} totalSteps={visible.length} showProgress={!hidden} pages={visible} progress={config.progress} fullBleed={page.type === "start" && resolveStartLayout(page) === "benefits"} topBackground={page.type === "start" && resolveStartLayout(page) === "benefits" ? customHeroSectionBackground(page.heroSectionBackground) : undefined}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} {...legalFooterLinks(config, { imprintUrl: `/f/${config.slug}/impressum`, privacyUrl: `/f/${config.slug}/datenschutz` })} step={step} totalSteps={visible.length} showProgress={!hidden} pages={visible} progress={config.progress} fullBleed={page.type === "start" && resolveStartLayout(page) === "benefits"} topBackground={page.type === "start" && resolveStartLayout(page) === "benefits" ? customHeroSectionBackground(page.heroSectionBackground) : undefined}>
         {page.type === "start" ? (
           <StartStep page={page} brand={config.brand} onContinue={() => undefined} />
         ) : page.type === "choice-grid" || page.type === "choice-list" ? (

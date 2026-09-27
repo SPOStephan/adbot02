@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, LEGAL_PAGE_MODES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
 import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
@@ -183,11 +183,16 @@ export const funnelConfigSchema = z
       eyebrow: formattedTextSchema(160),
       text: formattedTextSchema(500),
     }),
-    privacyUrl: z.string().url(),
+    privacyUrl: optionalHttpsUrlSchema,
     privacyLabel: z.string().min(1).max(160),
     legal: z.object({
-      imprintTitle: z.string().trim().min(1, "Bitte gib eine Impressumsüberschrift ein.").max(160),
-      imprintContent: z.string().trim().min(1, "Bitte gib den Impressumsinhalt ein.").max(20_000),
+      imprintMode: z.enum(LEGAL_PAGE_MODES).default("internal"),
+      imprintTitle: z.string().max(160).default("Impressum"),
+      imprintContent: z.string().max(20_000).default(""),
+      imprintUrl: optionalHttpsUrlSchema.default(""),
+      privacyMode: z.enum(LEGAL_PAGE_MODES).default("external"),
+      privacyTitle: z.string().max(160).default("Datenschutzerklärung"),
+      privacyContent: z.string().max(20_000).default(""),
     }),
     postSubmit: z.object({
       mode: z.enum(["message", "redirect"]),
@@ -226,6 +231,26 @@ export const funnelConfigSchema = z
     const pageIds = config.pages.map(page => page.id);
     if (new Set(pageIds).size !== pageIds.length) {
       ctx.addIssue({ code: "custom", path: ["pages"], message: "Seiten-IDs müssen eindeutig sein." });
+    }
+    if (config.legal.imprintMode === "internal") {
+      if (!config.legal.imprintTitle.trim()) {
+        ctx.addIssue({ code: "custom", path: ["legal", "imprintTitle"], message: "Bitte gib eine Impressumsüberschrift ein." });
+      }
+      if (!config.legal.imprintContent.trim()) {
+        ctx.addIssue({ code: "custom", path: ["legal", "imprintContent"], message: "Bitte gib den Impressumsinhalt ein." });
+      }
+    } else if (!config.legal.imprintUrl) {
+      ctx.addIssue({ code: "custom", path: ["legal", "imprintUrl"], message: "Für das externe Impressum ist eine HTTPS-Adresse erforderlich." });
+    }
+    if (config.legal.privacyMode === "internal") {
+      if (!config.legal.privacyTitle.trim()) {
+        ctx.addIssue({ code: "custom", path: ["legal", "privacyTitle"], message: "Bitte gib eine Überschrift für die Datenschutz-Seite ein." });
+      }
+      if (!config.legal.privacyContent.trim()) {
+        ctx.addIssue({ code: "custom", path: ["legal", "privacyContent"], message: "Bitte gib den Inhalt der Datenschutz-Seite ein." });
+      }
+    } else if (!config.privacyUrl) {
+      ctx.addIssue({ code: "custom", path: ["privacyUrl"], message: "Für den externen Datenschutz ist eine HTTPS-Adresse erforderlich." });
     }
     if (config.postSubmit.mode === "redirect" && !config.postSubmit.redirectUrl) {
       ctx.addIssue({ code: "custom", path: ["postSubmit", "redirectUrl"], message: "Für die Weiterleitung ist eine HTTPS-Adresse erforderlich." });

@@ -47,8 +47,13 @@ export const defaultFunnel: FunnelConfig = {
   privacyUrl: "https://example.org/datenschutz",
   privacyLabel: "Datenschutzerklärung",
   legal: {
+    imprintMode: "internal",
     imprintTitle: "Impressum",
     imprintContent: "Die vollständigen Anbieterangaben für diesen Funnel werden derzeit ergänzt.",
+    imprintUrl: "",
+    privacyMode: "external",
+    privacyTitle: "Datenschutzerklärung",
+    privacyContent: "",
   },
   postSubmit: {
     mode: "message",

@@ -7,8 +7,9 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Funnel from "./pages/Funnel";
-import FunnelImprint from "./pages/FunnelImprint";
+import FunnelImprint, { FunnelPrivacy } from "./pages/FunnelImprint";
 import RootImprint from "./pages/RootImprint";
+import RootPrivacy from "./pages/RootPrivacy";
 
 const DashboardLayout = lazy(() => import("./components/DashboardLayout"));
 const FunnelLibrary = lazy(() => import("./pages/admin/FunnelLibrary"));
@@ -53,7 +54,9 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/impressum"} component={RootImprint} />
+      <Route path={"/datenschutz"} component={RootPrivacy} />
       <Route path={"/f/:slug/impressum"} component={FunnelImprint} />
+      <Route path={"/f/:slug/datenschutz"} component={FunnelPrivacy} />
       <Route path={"/f/:slug"} component={Funnel} />
       <Route path={"/admin/funnels/:id/editor"} component={EditorRoute} />
       <Route path={"/admin/funnels/:funnelId/applications/:id"} component={ApplicationDetailRoute} />

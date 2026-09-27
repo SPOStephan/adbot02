@@ -3,6 +3,8 @@ import { ArrowLeft, Check, CheckCircle2, CircleAlert, Clipboard, ExternalLink, G
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import type { FunnelConfig, FunnelStatus } from "@shared/funnel";
+import { legalPagesAreValid } from "@shared/legalPages";
+import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,7 +114,7 @@ export default function Settings() {
   const directUrl = useMemo(() => `${window.location.origin}/f/${draft?.slug ?? "karriere"}`, [draft?.slug]);
   const customPublicUrl = readyCustomHost ? `https://${readyCustomHost.hostname}/` : null;
   const dirty = Boolean(draft && savedConfig && JSON.stringify(draft) !== JSON.stringify(savedConfig));
-  const imprintValid = Boolean(draft?.legal.imprintTitle.trim() && draft?.legal.imprintContent.trim());
+  const legalValid = draft ? legalPagesAreValid(draft).ok : false;
   const metaServerDirty = Boolean(metaTestEventCode !== savedMetaTestEventCode);
   const embedCode = useMemo(() => `<iframe id="recruiting-funnel" src="${directUrl}" title="Karriere-Bewerbung" loading="lazy" style="width:100%;min-height:780px;border:0;border-radius:16px" allow="clipboard-write"></iframe>\n<script>\nwindow.addEventListener("message",function(event){\n  if(event.origin!==new URL("${directUrl}").origin)return;\n  if(event.data?.type!=="social-recruiting-funnel:resize")return;\n  document.getElementById("recruiting-funnel").style.height=event.data.height+"px";\n});\n</script>`, [directUrl]);
 
@@ -141,8 +143,9 @@ export default function Settings() {
 
   const persistSettings = async () => {
     if (!draft) return;
-    if (!draft.legal.imprintTitle.trim() || !draft.legal.imprintContent.trim()) {
-      toast.error("Bitte fülle Impressumsüberschrift und Impressumsinhalt vollständig aus.");
+    const legalCheck = legalPagesAreValid(draft);
+    if (!legalCheck.ok) {
+      toast.error(legalCheck.message);
       return;
     }
     try {
@@ -183,14 +186,19 @@ export default function Settings() {
           <div className="space-y-2 sm:col-span-2"><Label htmlFor="funnel-title">Funnel-Titel</Label><Input id="funnel-title" maxLength={240} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} /></div>
           <div className="space-y-2"><Label htmlFor="funnel-slug">URL-Slug</Label><Input id="funnel-slug" value={draft.slug} onChange={event => setDraft({ ...draft, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} /><p className="text-xs text-muted-foreground">Muss über alle Funnel hinweg eindeutig sein.</p></div>
           <div className="space-y-2"><Label htmlFor="notification-email">Empfänger-E-Mail</Label><Input id="notification-email" type="email" value={draft.notificationEmail} placeholder="recruiting@unternehmen.de" onChange={event => setDraft({ ...draft, notificationEmail: event.target.value })} /><p className="text-xs text-muted-foreground">An diese Adresse werden neue Bewerbungen dieses Funnels gemeldet.</p></div>
-          <div className="space-y-2 sm:col-span-2"><Label htmlFor="privacy-url">Datenschutz-URL</Label><Input id="privacy-url" type="url" value={draft.privacyUrl} onChange={event => setDraft({ ...draft, privacyUrl: event.target.value })} /></div>
-          <div className="space-y-2 sm:col-span-2"><Label htmlFor="imprint-title">Impressum – Überschrift <span className="text-destructive" aria-hidden="true">*</span></Label><Input id="imprint-title" required aria-required="true" aria-invalid={!draft.legal.imprintTitle.trim()} maxLength={160} value={draft.legal.imprintTitle} onChange={event => setDraft({ ...draft, legal: { ...draft.legal, imprintTitle: event.target.value } })} /></div>
-          <div className="space-y-2 sm:col-span-2"><Label htmlFor="imprint-content">Impressum – Inhalt <span className="text-destructive" aria-hidden="true">*</span></Label><Textarea id="imprint-content" required aria-required="true" aria-invalid={!draft.legal.imprintContent.trim()} aria-describedby="imprint-content-help" rows={10} maxLength={20_000} value={draft.legal.imprintContent} placeholder="Vollständige Anbieterangaben, Vertretungsberechtigte, Kontakt und gegebenenfalls Register- und Steuerangaben" onChange={event => setDraft({ ...draft, legal: { ...draft.legal, imprintContent: event.target.value } })} /><p id="imprint-content-help" className="text-xs text-muted-foreground">Pflichtangabe. Wird als reiner Text sicher unter <code>/f/{draft.slug}/impressum</code> ausgegeben. Absätze und Zeilenumbrüche bleiben erhalten.</p></div>
+          <div className="space-y-3 sm:col-span-2">
+            <LegalPagesFields
+              legal={draft.legal}
+              privacyUrl={draft.privacyUrl}
+              slug={draft.slug}
+              onChange={next => setDraft({ ...draft, ...next })}
+            />
+          </div>
           <div className="space-y-2 sm:col-span-2"><Label htmlFor="origins">Erlaubte Einbettungs-Domains <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="origins" rows={3} value={draft.allowedEmbedOrigins.join("\n")} placeholder="Nur bei Bedarf, z. B. https://www.unternehmen.de" onChange={event => setDraft({ ...draft, allowedEmbedOrigins: event.target.value.split("\n").map(value => value.trim()).filter(Boolean) })} /><p className="text-xs text-muted-foreground">Eine vollständige Domain pro Zeile inklusive https://.</p></div>
           <div className="flex items-center justify-between rounded-xl border p-4 sm:col-span-2"><div><Label htmlFor="published">Funnel veröffentlicht</Label><p className="mt-1 text-xs text-muted-foreground">Ausschalten pausiert einen bereits veröffentlichten Funnel. Archivierte Funnel stellst du in der Bibliothek wieder her.</p></div><Switch id="published" checked={draft.status === "published"} disabled={draft.status === "archived"} onCheckedChange={setPublished} /></div>
         </div>
         {save.error && <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{save.error.message}</p>}
-        <div className="mt-6 flex justify-end"><Button className="bg-[#0165c3] hover:bg-[#0154a3]" disabled={save.isPending || saveMetaServer.isPending || !draft.title.trim() || !imprintValid || (!dirty && !metaServerDirty)} aria-busy={save.isPending || saveMetaServer.isPending} onClick={persistSettings}>{save.isPending || saveMetaServer.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}{save.isPending || saveMetaServer.isPending ? "Wird gespeichert …" : "Einstellungen speichern"}</Button></div>
+        <div className="mt-6 flex justify-end"><Button className="bg-[#0165c3] hover:bg-[#0154a3]" disabled={save.isPending || saveMetaServer.isPending || !draft.title.trim() || !legalValid || (!dirty && !metaServerDirty)} aria-busy={save.isPending || saveMetaServer.isPending} onClick={persistSettings}>{save.isPending || saveMetaServer.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}{save.isPending || saveMetaServer.isPending ? "Wird gespeichert …" : "Einstellungen speichern"}</Button></div>
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
