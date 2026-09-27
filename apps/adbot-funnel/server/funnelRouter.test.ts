@@ -300,9 +300,11 @@ describe("Funnel-Router", () => {
   it("erstellt, dupliziert und filtert mehrere Funnel ohne Bewerbungen zu kopieren", async () => {
     const admin = appRouter.createCaller(adminContext);
     const publicCaller = appRouter.createCaller(publicContext);
-    const created = await admin.funnel.create({ title: "Vertrieb Nord", slug: "vertrieb-nord" });
-    const collisionSafe = await admin.funnel.create({ title: "Vertrieb Nord Zwei", slug: "vertrieb-nord" });
+    const created = await admin.funnel.create({ title: "Vertrieb Nord", slug: "vertrieb-nord", purpose: "lead_qualification" });
+    const collisionSafe = await admin.funnel.create({ title: "Vertrieb Nord Zwei", slug: "vertrieb-nord", purpose: "appointment" });
     expect(created.status).toBe("draft");
+    expect(created.purpose).toBe("lead_qualification");
+    expect(created.pages.some(page => page.type === "contact" && page.buttonLabel === "Anfrage absenden")).toBe(true);
     expect(collisionSafe.slug).toBe("vertrieb-nord-2");
 
     await admin.funnel.setFunnelStatus({ id: created.id, status: "published" });
@@ -320,6 +322,7 @@ describe("Funnel-Router", () => {
     const copy = await admin.funnel.duplicate({ sourceId: created.id, title: "Vertrieb Nord Kopie", slug: "vertrieb-nord-kopie" });
     expect(copy.id).not.toBe(created.id);
     expect(copy.status).toBe("draft");
+    expect(copy.purpose).toBe("lead_qualification");
     expect(copy.pages.map(page => page.id)).not.toEqual(created.pages.map(page => page.id));
     expect(await admin.funnel.applications({ funnelId: copy.id })).toEqual([]);
     expect(await admin.funnel.applications({ funnelId: created.id })).toHaveLength(1);
@@ -329,7 +332,7 @@ describe("Funnel-Router", () => {
   it("blendet gespeicherte Ideenseiten öffentlich aus und verlangt dort keine Antwort", async () => {
     const admin = appRouter.createCaller(adminContext);
     const publicCaller = appRouter.createCaller(publicContext);
-    const created = await admin.funnel.create({ title: "Ideen-Funnel", slug: "ideen-seiten" });
+    const created = await admin.funnel.create({ title: "Ideen-Funnel", slug: "ideen-seiten", purpose: "survey_other" });
     const hiddenRole = created.pages.find(page => page.type === "choice-grid");
     if (!hiddenRole || hiddenRole.type !== "choice-grid") throw new Error("Auswahlseite fehlt");
     const pages = created.pages.map(page => page.id === hiddenRole.id ? { ...page, hidden: true } : page);
@@ -352,13 +355,13 @@ describe("Funnel-Router", () => {
       consent: true,
     });
     expect(result.id).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(result.leadValue).toBe(80);
+    expect(result.leadValue).toBe(visibleChoice.options[2]!.leadValue);
   });
 
   it("liefert nur veröffentlichte Funnel öffentlich aus", async () => {
     const admin = appRouter.createCaller(adminContext);
     const publicCaller = appRouter.createCaller(publicContext);
-    const created = await admin.funnel.create({ title: "Technik", slug: "technik" });
+    const created = await admin.funnel.create({ title: "Technik", slug: "technik", purpose: "lead_qualification" });
     await expect(publicCaller.funnel.publicConfig({ slug: created.slug })).rejects.toMatchObject({ code: "NOT_FOUND" });
     await admin.funnel.setFunnelStatus({ id: created.id, status: "published" });
     expect((await publicCaller.funnel.publicConfig({ slug: created.slug })).id).toBe(created.id);

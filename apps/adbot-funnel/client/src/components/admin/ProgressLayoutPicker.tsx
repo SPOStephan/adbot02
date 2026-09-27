@@ -65,7 +65,7 @@ function ProgressThumbnail({ layout }: { layout: ProgressLayout }) {
   if (layout === "segments") {
     return (
       <div className="grid grid-cols-3 gap-2.5 overflow-hidden rounded-xl border bg-white px-3 py-4">
-        {["Bewerbung", "Matching", "Gespräch"].map((label, index) => (
+        {["Anliegen", "Auswahl", "Kontakt"].map((label, index) => (
           <span key={label} className="grid justify-items-center gap-2">
             <span className={`h-1.5 w-full rounded-full ${index === 0 ? "bg-[#0165c3]" : "bg-[#c5d3e0]"}`} />
             <span className={`text-center text-[9px] font-semibold ${index === 0 ? "text-[#0165c3]" : "text-slate-400"}`}>{label}</span>
@@ -92,7 +92,7 @@ function ProgressThumbnail({ layout }: { layout: ProgressLayout }) {
   if (layout === "chevrons") {
     return (
       <div className="flex overflow-hidden rounded-xl border bg-white">
-        <span className="flex-1 bg-[#0165c3] px-2 py-3 text-[9px] font-bold text-white">1 Job</span>
+        <span className="flex-1 bg-[#0165c3] px-2 py-3 text-[9px] font-bold text-white">1 Start</span>
         <span className="flex-1 bg-slate-100 px-2 py-3 text-[9px] text-slate-500">2 Profil</span>
       </div>
     );
@@ -101,7 +101,7 @@ function ProgressThumbnail({ layout }: { layout: ProgressLayout }) {
   if (layout === "chips") {
     return (
       <div className="grid grid-cols-3 gap-1 overflow-hidden rounded-xl border bg-white p-2">
-        <span className="rounded-lg bg-[#0165c3]/10 p-2 text-[9px] font-bold text-[#0165c3]">1 Job</span>
+        <span className="rounded-lg bg-[#0165c3]/10 p-2 text-[9px] font-bold text-[#0165c3]">1 Start</span>
         <span className="rounded-lg border p-2 text-[9px] text-slate-500">2 Profil</span>
         <span className="rounded-lg border p-2 text-[9px] text-slate-500">3 Talk</span>
       </div>

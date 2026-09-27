@@ -62,7 +62,7 @@ export default function ApplicationDetail() {
       <div className="grid min-h-[60vh] place-items-center" role="status" aria-live="polite">
         <span className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="animate-spin text-[#0165c3]" aria-hidden="true" />
-          Bewerbung wird geladen …
+          Eintrag wird geladen …
         </span>
       </div>
     );
@@ -72,9 +72,9 @@ export default function ApplicationDetail() {
       <div className="p-8">
         <Button variant="ghost" onClick={() => setLocation(backPath)}>
           <ArrowLeft className="size-4" />
-          Zur Bewerbungsübersicht
+          Zur Eingangsübersicht
         </Button>
-        <p className="mt-8 text-destructive" role="alert">{query.error?.message ?? "Bewerbung nicht gefunden."}</p>
+        <p className="mt-8 text-destructive" role="alert">{query.error?.message ?? "Eintrag nicht gefunden."}</p>
       </div>
     );
   }
@@ -83,7 +83,7 @@ export default function ApplicationDetail() {
     <div className="mx-auto w-full max-w-5xl space-y-6 p-2 sm:p-4">
       <Button variant="ghost" className="-ml-3" onClick={() => setLocation(backPath)}>
         <ArrowLeft className="size-4" />
-        Zur Bewerbungsübersicht
+        Zur Eingangsübersicht
       </Button>
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
@@ -96,7 +96,7 @@ export default function ApplicationDetail() {
               </button>
             )}
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">{application.contact.name || "Bewerbung ohne Namen"}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{application.contact.name || "Eintrag ohne Namen"}</h1>
           <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
             <CalendarDays className="size-4" aria-hidden="true" />
             Eingegangen am {new Date(application.createdAt).toLocaleString("de-DE")}
@@ -107,7 +107,7 @@ export default function ApplicationDetail() {
           onValueChange={status => update.mutate({ id: application.id, status: status as ApplicationStatus })}
           disabled={update.isPending}
         >
-          <SelectTrigger className="w-full bg-white sm:w-48" aria-label="Bewerbungsstatus ändern" aria-busy={update.isPending}>
+          <SelectTrigger className="w-full bg-white sm:w-48" aria-label="Status ändern" aria-busy={update.isPending}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -125,7 +125,7 @@ export default function ApplicationDetail() {
             <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
               Gut oder schlecht bewertet Meta-Optimierung: Gute Leads gehen als Standardereignis{" "}
               <code>Subscribe</code> mit Wert zurück, schlechte als <code>DisqualifiedLead</code>.
-              So lernt Meta, mehr Bewerbungen wie die guten zu finden. Das verändert keine laufende Kampagne automatisch.
+              So lernt Meta, mehr qualifizierte Kontakte wie die guten zu finden. Das verändert keine laufende Kampagne automatisch.
             </p>
           </div>
           <div className="text-sm">

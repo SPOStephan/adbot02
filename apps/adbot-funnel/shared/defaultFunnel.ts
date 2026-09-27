@@ -1,4 +1,5 @@
-import type { FunnelConfig } from "./funnel";
+import type { ContactPage, FunnelConfig } from "./funnel";
+import type { FunnelPurpose } from "./funnelPurpose";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
 
 export const DEFAULT_FUNNEL_ID = "10000000-0000-4000-8000-000000000001";
@@ -8,6 +9,7 @@ export const defaultFunnel: FunnelConfig = {
   id: DEFAULT_FUNNEL_ID,
   slug: "karriere",
   title: "Deine Karriere bei uns",
+  purpose: "recruiting",
   status: "published",
   isPublished: true,
   notificationEmail: "",
@@ -172,3 +174,74 @@ export const defaultFunnel: FunnelConfig = {
     },
   ],
 };
+
+export function defaultFunnelForPurpose(purpose: FunnelPurpose): FunnelConfig {
+  const template = structuredClone(defaultFunnel);
+  template.purpose = purpose;
+  if (purpose === "recruiting") return template;
+
+  template.socialProof = {
+    enabled: true,
+    eyebrow: "Schnell & unkompliziert",
+    text: "In rund 2 Minuten ausfüllen – unverbindlich und datenschutzkonform.",
+  };
+  template.pages = template.pages.map(page => {
+    if (page.type === "start") {
+      return {
+        ...page,
+        eyebrow: "Nur wenige Schritte",
+        title: "Finde heraus, ob unser Angebot zu dir passt.",
+        description: "Beantworte wenige kurze Fragen. Anschließend können wir dein Anliegen gezielt bearbeiten.",
+        progressTitle: "Schnell-Check",
+        progressHint: "Worum geht es dir?",
+        bullets: ["In wenigen Minuten", "Unverbindlich", "Persönliche Rückmeldung"],
+      };
+    }
+    if (page.type === "choice-grid") {
+      return {
+        ...page,
+        name: "Anliegen",
+        title: "Worum geht es dir?",
+        description: "Wähle die Antwort, die am besten zu deinem Anliegen passt.",
+        questionKey: "anliegen",
+        options: [
+          { id: "need-advice", label: "Beratung", value: "beratung", icon: "message-circle", leadValue: 60 },
+          { id: "need-offer", label: "Angebot", value: "angebot", icon: "file-text", leadValue: 70 },
+          { id: "need-info", label: "Informationen", value: "informationen", icon: "info", leadValue: 30 },
+          { id: "need-other", label: "Sonstiges", value: "sonstiges", icon: "sparkles", leadValue: 20 },
+        ],
+      };
+    }
+    if (page.type === "choice-list") {
+      return {
+        ...page,
+        name: "Priorität",
+        title: "Was ist dir besonders wichtig?",
+        description: "Eine kurze Einschätzung hilft uns bei der passenden Rückmeldung.",
+        questionKey: "prioritaet",
+        options: [
+          { id: "priority-quality", label: "Qualität", value: "qualitaet", icon: "star", leadValue: 60 },
+          { id: "priority-speed", label: "Schnelle Umsetzung", value: "geschwindigkeit", icon: "rocket", leadValue: 50 },
+          { id: "priority-price", label: "Preis", value: "preis", icon: "coins", leadValue: 40 },
+          { id: "priority-unsure", label: "Ich bin noch unsicher", value: "unsicher", icon: "help-circle", leadValue: 20 },
+        ],
+      };
+    }
+    if (page.type !== "contact") return page;
+    const contact: ContactPage = {
+      ...page,
+      title: "Fast geschafft – wie erreichen wir dich?",
+      description: "Hinterlasse deine Kontaktdaten. Wir melden uns persönlich bei dir.",
+      buttonLabel: "Anfrage absenden",
+      progressTitle: "Kontakt",
+      progressHint: "Wir melden uns bei dir",
+      consentLabel: "Ich stimme der Verarbeitung meiner Angaben zum Zweck der Bearbeitung meiner Anfrage zu.",
+      resumeEnabled: false,
+      resumeRequired: false,
+      successTitle: "Vielen Dank für deine Anfrage!",
+      successText: "Deine Angaben sind sicher eingegangen. Wir melden uns zeitnah persönlich bei dir.",
+    };
+    return contact;
+  });
+  return template;
+}

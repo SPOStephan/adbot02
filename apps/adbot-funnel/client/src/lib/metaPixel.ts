@@ -56,12 +56,12 @@ export function trackMetaConversion(
   pixelId: string,
   eventName: string,
   eventId: string,
-  extras?: { value?: number; currency?: string },
+  extras?: { value?: number; currency?: string; contentCategory?: string; contentName?: string },
 ) {
   if (!loadMetaPixel(pixelId) || !window.fbq) return false;
   const payload: Record<string, string | number> = {
-    content_category: "Recruiting",
-    content_name: "Completed application",
+    content_category: extras?.contentCategory ?? "Funnel",
+    content_name: extras?.contentName ?? "Completed funnel",
   };
   if (extras?.value !== undefined) {
     payload.value = extras.value;

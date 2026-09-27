@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { FUNNEL_STATUSES } from "@shared/funnel";
+import { normalizeFunnelPurpose } from "@shared/funnelPurpose";
 import { isSelectableFunnelIcon } from "@shared/funnelIconCatalog";
 import { sanitizeFormattedText } from "@shared/formattedText";
 import type {
@@ -45,7 +46,8 @@ type WithOptionalEyebrow<T> = T extends FunnelPage ? Omit<T, "eyebrow" | "progre
   progressIcon?: string;
 } : never;
 type LegacyFunnelPage = WithOptionalEyebrow<FunnelPage>;
-type LegacyFunnelConfig = Omit<FunnelConfig, "status" | "brand" | "legal" | "postSubmit" | "metaTracking" | "progress" | "pages"> & {
+type LegacyFunnelConfig = Omit<FunnelConfig, "purpose" | "status" | "brand" | "legal" | "postSubmit" | "metaTracking" | "progress" | "pages"> & {
+  purpose?: FunnelConfig["purpose"];
   status?: FunnelStatus;
   brand?: Partial<FunnelBrand>;
   legal?: Partial<FunnelConfig["legal"]>;
@@ -229,6 +231,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
   }) as FunnelPage[];
   return {
     ...publicConfig,
+    purpose: normalizeFunnelPurpose(config.purpose),
     brand: { ...defaultFunnel.brand, ...(config.brand ?? {}) },
     progress: normalizeProgress(config.progress),
     legal: normalizeFunnelLegal(config.legal),
@@ -505,6 +508,7 @@ function toFunnelSummary(
     id: config.id,
     slug: config.slug,
     title: config.title,
+    purpose: config.purpose,
     status: config.status,
     applicationCount,
     newApplicationCount,

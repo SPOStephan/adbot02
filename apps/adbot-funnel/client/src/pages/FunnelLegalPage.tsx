@@ -97,7 +97,7 @@ export function LegalPageView({
       <section className="funnel-legal" aria-labelledby="funnel-legal-title">
         <a className="funnel-legal-back" href={funnelUrl}>
           <ArrowLeft size={16} aria-hidden="true" />
-          Zurück zur Bewerbung
+          Zurück zum Funnel
         </a>
         <div className="funnel-legal-card">
           <h1 id="funnel-legal-title">{copy.title}</h1>

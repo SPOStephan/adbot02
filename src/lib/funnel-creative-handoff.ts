@@ -90,7 +90,7 @@ export function createFunnelCreativeHandoffToken(input: {
     destinationUrl: input.destinationUrl,
     title: input.title.slice(0, 160),
     slug: input.slug.slice(0, 120),
-    tags: (input.tags ?? ["jobs"]).slice(0, 8),
+    tags: (input.tags ?? ["funnel"]).slice(0, 8),
     jobTitle: (input.jobTitle ?? "").slice(0, 80),
     jobDescription: (input.jobDescription ?? "").slice(0, 280),
     iat: issuedAt,

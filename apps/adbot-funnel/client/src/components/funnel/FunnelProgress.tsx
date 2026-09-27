@@ -45,7 +45,7 @@ export function FunnelProgress({
     <div
       className={`funnel-progress funnel-progress-${layout}`}
       role="progressbar"
-      aria-label="Bewerbungsfortschritt"
+      aria-label="Funnel-Fortschritt"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent}

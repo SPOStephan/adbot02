@@ -5,6 +5,7 @@ import type {
   FunnelConfig,
   LeadQuality,
 } from "@shared/funnel";
+import { funnelPurposeOption } from "@shared/funnelPurpose";
 import {
   DEFAULT_LEAD_QUALITY_META,
   resolveQualityEventName,
@@ -134,7 +135,7 @@ function conversionCustomData(
   extra: Record<string, string | number> = {},
 ) {
   const customData: Record<string, string | number> = {
-    content_category: "Recruiting",
+    content_category: funnelPurposeOption(config.purpose).label,
     content_name: config.title,
     funnel_slug: config.slug,
   };

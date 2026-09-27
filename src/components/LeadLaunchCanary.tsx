@@ -27,6 +27,7 @@ import { CreativeTextVariantFields } from "@/components/CreativeTextVariantField
 import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
 import {
   fallbackCountryCode,
+  toMetaAdSetTargeting,
   toMetaEmploymentAdSetTargeting,
   type MetaAdSetTargeting,
 } from "@/lib/campaign-geo/adapters";
@@ -42,6 +43,7 @@ import {
   type CustomerCustomDomainView,
 } from "@/lib/custom-domains/types";
 import { FUNNEL_SITE_URL } from "@/lib/site-urls";
+import type { FunnelAdCategory, FunnelPurposeHint } from "@/lib/funnel-purpose-hint-types";
 
 type Notice = { tone: "success" | "error"; message: string } | null;
 
@@ -99,17 +101,19 @@ type Props = {
   data: AutomationOnboardingData;
   /** Globale READY Custom Domains für Ziel-URL-Auswahl. */
   readyCustomDomains?: CustomerCustomDomainView[];
+  funnelPurposeHints?: FunnelPurposeHint[];
   facebookPages?: LaunchAdActorOption[];
   instagramAccounts?: LaunchAdActorOption[];
+  initialDestinationUrl?: string | null;
   initialFacebookPageId?: string | null;
   initialInstagramActorId?: string | null;
 };
 
 /** Lead blueprint — separate from Traffic (`LINK_CLICKS`). */
 const DEFAULT_LEAD_BLUEPRINT = {
-  campaign: {
-    special_ad_categories: ["EMPLOYMENT"],
-    special_ad_category_country: ["DE"],
+  campaign: { special_ad_categories: [] as string[] } as {
+    special_ad_categories: string[];
+    special_ad_category_country?: string[];
   },
   ad_set: {
     billing_event: "IMPRESSIONS",
@@ -209,6 +213,28 @@ function parseLandingUrl(raw: string): { href: string; hostname: string } {
   return { href: url.toString(), hostname };
 }
 
+function normalizedDestinationKey(raw: string): string | null {
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== "https:") return null;
+    url.search = "";
+    url.hash = "";
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return `${url.origin.toLowerCase()}${pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+function purposeHintForUrl(
+  hints: readonly FunnelPurposeHint[],
+  destinationUrl: string,
+): FunnelPurposeHint | null {
+  const key = normalizedDestinationKey(destinationUrl);
+  if (!key) return null;
+  return hints.find(hint => normalizedDestinationKey(hint.destinationUrl) === key) ?? null;
+}
+
 function displayMinor(value: string): string {
   if (!/^[0-9]+$/.test(value)) return "—";
   const padded = value.padStart(3, "0");
@@ -278,8 +304,10 @@ export function LeadLaunchCanary({
   writeScopeGranted,
   data,
   readyCustomDomains = [],
+  funnelPurposeHints = [],
   facebookPages = [],
   instagramAccounts = [],
+  initialDestinationUrl = null,
   initialFacebookPageId = null,
   initialInstagramActorId = null,
 }: Props) {
@@ -291,6 +319,9 @@ export function LeadLaunchCanary({
   const [prepareElapsedSec, setPrepareElapsedSec] = useState(0);
   const defaultFunnelHint = `${FUNNEL_SITE_URL}/f/`;
   const [destinationUrl, setDestinationUrl] = useState(() => {
+    if (initialDestinationUrl) return initialDestinationUrl;
+    const firstFunnel = funnelPurposeHints[0];
+    if (firstFunnel) return firstFunnel.destinationUrl;
     const firstReady = readyCustomDomains[0];
     return firstReady
       ? destinationUrlForHostname(
@@ -300,8 +331,50 @@ export function LeadLaunchCanary({
       : defaultFunnelHint;
   });
   const [destinationMode, setDestinationMode] = useState<string>(() =>
-    readyCustomDomains[0] ? readyCustomDomains[0].id : "manual",
+    initialDestinationUrl
+      ? "manual"
+      : funnelPurposeHints[0]
+      ? "funnel:0"
+      : readyCustomDomains[0]
+        ? readyCustomDomains[0].id
+        : "manual",
   );
+  const [adCategory, setAdCategory] = useState<FunnelAdCategory | "">("");
+  const preloadedPurposeHint = useMemo(
+    () => purposeHintForUrl(funnelPurposeHints, destinationUrl),
+    [destinationUrl, funnelPurposeHints],
+  );
+  const destinationKey = normalizedDestinationKey(destinationUrl);
+  const [resolvedPurpose, setResolvedPurpose] = useState<{
+    key: string;
+    hint: FunnelPurposeHint | null;
+  } | null>(null);
+  useEffect(() => {
+    if (preloadedPurposeHint || !destinationKey) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      fetch(`/api/funnel-purpose?url=${encodeURIComponent(destinationUrl.trim())}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(response => response.ok ? response.json() : null)
+        .then((result: { hint?: FunnelPurposeHint | null } | null) => {
+          if (!controller.signal.aborted) setResolvedPurpose({ key: destinationKey, hint: result?.hint ?? null });
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setResolvedPurpose({ key: destinationKey, hint: null });
+        });
+    }, 300);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [destinationKey, destinationUrl, preloadedPurposeHint]);
+  const resolvedPurposeHint = resolvedPurpose?.key === destinationKey
+    ? resolvedPurpose.hint
+    : null;
+  const detectedPurposeHint = preloadedPurposeHint ?? resolvedPurposeHint;
+  const effectiveAdCategory = detectedPurposeHint?.category ?? adCategory;
   const [dailyBudget, setDailyBudget] = useState("20.00");
   const [facebookPageId, setFacebookPageId] = useState(
     initialFacebookPageId &&
@@ -315,8 +388,8 @@ export function LeadLaunchCanary({
       ? initialInstagramActorId
       : (instagramAccounts[0]?.id ?? ""),
   );
-  const [primaryTexts, setPrimaryTexts] = useState<string[]>(["Jetzt bewerben."]);
-  const [headlines, setHeadlines] = useState<string[]>(["Jetzt bewerben"]);
+  const [primaryTexts, setPrimaryTexts] = useState<string[]>(["Jetzt mehr erfahren."]);
+  const [headlines, setHeadlines] = useState<string[]>(["Mehr erfahren"]);
   const [descriptions, setDescriptions] = useState<string[]>([""]);
   const [structuralMode, setStructuralMode] = useState<
     "off" | "two_ads" | "two_ad_sets" | "funnel_split"
@@ -330,8 +403,8 @@ export function LeadLaunchCanary({
   const [dynamicCreativeImages, setDynamicCreativeImages] = useState(false);
   const [includeFormatSiblings, setIncludeFormatSiblings] = useState(true);
   const [extraAssetIds, setExtraAssetIds] = useState<string[]>([]);
-  const [ad2Primary, setAd2Primary] = useState("Jetzt bewerben — Variante B.");
-  const [ad2Headline, setAd2Headline] = useState("Stelle sichern");
+  const [ad2Primary, setAd2Primary] = useState("Jetzt mehr erfahren — Variante B.");
+  const [ad2Headline, setAd2Headline] = useState("Mehr erfahren");
   const [ad2Description, setAd2Description] = useState("");
   const [pixelRowId, setPixelRowId] = useState(data.pixels[0]?.id ?? "");
   const [pickerAssets, setPickerAssets] = useState<PickerAsset[]>(() =>
@@ -479,19 +552,20 @@ export function LeadLaunchCanary({
    */
   async function ensureLeadBlueprint(): Promise<string> {
     const template = structuredClone(DEFAULT_LEAD_BLUEPRINT);
+    const employment = effectiveAdCategory === "employment";
     const parts = buildLinkCreativeBlueprintParts({
       primaryTexts: structuralOn
-        ? [primaryTexts[0] ?? "Jetzt bewerben."]
+        ? [primaryTexts[0] ?? (employment ? "Jetzt bewerben." : "Jetzt mehr erfahren.")]
         : primaryTexts,
       headlines: structuralOn
-        ? [headlines[0] ?? "Jetzt bewerben"]
+        ? [headlines[0] ?? (employment ? "Jetzt bewerben" : "Mehr erfahren")]
         : headlines,
       descriptions: structuralOn
         ? [descriptions[0] ?? ""]
         : descriptions,
-      callToActionType: "APPLY_NOW",
-      defaultPrimary: "Jetzt bewerben.",
-      defaultHeadline: "Jetzt bewerben",
+      callToActionType: employment ? "APPLY_NOW" : "LEARN_MORE",
+      defaultPrimary: employment ? "Jetzt bewerben." : "Jetzt mehr erfahren.",
+      defaultHeadline: employment ? "Jetzt bewerben" : "Mehr erfahren",
       forceDynamicCreative:
         !structuralOn &&
         dynamicCreativeImages &&
@@ -505,8 +579,15 @@ export function LeadLaunchCanary({
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
     }
     const geo = await fetchCampaignGeoTarget();
-    template.campaign.special_ad_category_country = [fallbackCountryCode(geo)];
-    template.ad_set.targeting = toMetaEmploymentAdSetTargeting(geo);
+    if (employment) {
+      template.campaign.special_ad_categories = ["EMPLOYMENT"];
+      template.campaign.special_ad_category_country = [fallbackCountryCode(geo)];
+      template.ad_set.targeting = toMetaEmploymentAdSetTargeting(geo);
+    } else {
+      template.campaign.special_ad_categories = [];
+      delete template.campaign.special_ad_category_country;
+      template.ad_set.targeting = toMetaAdSetTargeting(geo);
+    }
 
     const saved = await apiJson<{ blueprintId?: string }>(
       "POST",
@@ -594,6 +675,9 @@ export function LeadLaunchCanary({
       if (facebookPages.length > 0 && !facebookPageId) {
         throw new Error("Bitte die Facebook-Seite für die Anzeige wählen.");
       }
+      if (!effectiveAdCategory) {
+        throw new Error("Bitte die Anzeigenkategorie wählen.");
+      }
 
       const landing = parseLandingUrl(destinationUrl);
       const variantLanding =
@@ -602,6 +686,12 @@ export function LeadLaunchCanary({
           : null;
       if (variantLanding && variantLanding.href === landing.href) {
         throw new Error("Funnel B braucht eine andere URL als Funnel A.");
+      }
+      const variantPurposeHint = variantLanding
+        ? purposeHintForUrl(funnelPurposeHints, variantLanding.href)
+        : null;
+      if (variantPurposeHint && variantPurposeHint.category !== effectiveAdCategory) {
+        throw new Error("Funnel A und Funnel B müssen dieselbe Anzeigenkategorie haben.");
       }
       // Do NOT freeze here: server prepare uses a transient FREEZE window and
       // restores Freigeben so Beitrag-Push AUTO is not stranded.
@@ -619,13 +709,13 @@ export function LeadLaunchCanary({
       const structuralAds = structuralOn
         ? [
             {
-              message: (primaryTexts[0] ?? "").trim() || "Jetzt bewerben.",
-              name: (headlines[0] ?? "").trim() || "Jetzt bewerben",
+              message: (primaryTexts[0] ?? "").trim() || (effectiveAdCategory === "employment" ? "Jetzt bewerben." : "Jetzt mehr erfahren."),
+              name: (headlines[0] ?? "").trim() || (effectiveAdCategory === "employment" ? "Jetzt bewerben" : "Mehr erfahren"),
               description: (descriptions[0] ?? "").trim(),
             },
             {
-              message: ad2Primary.trim() || "Jetzt bewerben — Variante B.",
-              name: ad2Headline.trim() || "Stelle sichern",
+              message: ad2Primary.trim() || (effectiveAdCategory === "employment" ? "Jetzt bewerben — Variante B." : "Jetzt mehr erfahren — Variante B."),
+              name: ad2Headline.trim() || (effectiveAdCategory === "employment" ? "Stelle sichern" : "Mehr erfahren"),
               description: ad2Description.trim(),
             },
           ]
@@ -1146,13 +1236,18 @@ export function LeadLaunchCanary({
           </button>
         </div>
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">
-          Ziel-Domain
+          Funnel / Ziel-Domain
           <select
             className={inputClass}
             disabled={pending || suggestPending}
             onChange={(event) => {
               const value = event.target.value;
               setDestinationMode(value);
+              if (value.startsWith("funnel:")) {
+                const selectedFunnel = funnelPurposeHints[Number(value.slice(7))];
+                if (selectedFunnel) setDestinationUrl(selectedFunnel.destinationUrl);
+                return;
+              }
               if (value === "manual") {
                 setDestinationUrl(defaultFunnelHint);
                 return;
@@ -1171,6 +1266,11 @@ export function LeadLaunchCanary({
             }}
             value={destinationMode}
           >
+            {funnelPurposeHints.map((hint, index) => (
+              <option key={`${hint.destinationUrl}:${index}`} value={`funnel:${index}`}>
+                {hint.title} · {hint.category === "employment" ? "Jobanzeige" : "Lead-Funnel"}
+              </option>
+            ))}
             {readyCustomDomains.map((domain) => (
               <option key={domain.id} value={domain.id}>
                 {domain.hostname}
@@ -1218,6 +1318,29 @@ export function LeadLaunchCanary({
           <span className="mt-1 block text-xs font-medium text-slate-500">
             Veröffentlichter Funnel oder Custom Domain. Domain muss in Meta für
             Conversion-Tracking passen (wird beim Launch geprüft).
+          </span>
+        </label>
+        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Anzeigenkategorie
+          <select
+            className={inputClass}
+            disabled={pending || suggestPending || Boolean(detectedPurposeHint)}
+            onChange={(event) => setAdCategory(event.target.value as FunnelAdCategory)}
+            required
+            value={effectiveAdCategory}
+          >
+            <option disabled value="">Bitte auswählen …</option>
+            <option value="standard">Normale Lead-Kampagne</option>
+            <option value="employment">Social Recruiting / Jobanzeige (EMPLOYMENT)</option>
+          </select>
+          <span className="mt-1 block text-xs font-medium text-slate-500">
+            {detectedPurposeHint
+              ? `Automatisch aus dem Funnel „${detectedPurposeHint.title}“ übernommen.`
+              : effectiveAdCategory === "employment"
+                ? "Adbot setzt EMPLOYMENT und erweitert kleinere Umkreise automatisch auf mindestens 17 km."
+                : effectiveAdCategory === "standard"
+                  ? "Keine Meta-Sonderkategorie; die normale regionale Einstellung bleibt unverändert."
+                  : "Bei Adbot-Funnel wird die Auswahl künftig automatisch aus dem Funnel-Zweck übernommen."}
           </span>
         </label>
         <div className="lg:col-span-2">

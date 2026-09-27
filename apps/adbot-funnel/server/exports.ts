@@ -68,7 +68,7 @@ export async function buildApplicationsPdf(applications: ApplicationRecord[], co
       }
     };
     page.drawRectangle({ x: 0, y: 834, width: 595, height: 8, color: rgb(0.004, 0.396, 0.765) });
-    drawLine(`Bewerbung ${index + 1} von ${applications.length}`, { bold: true, size: 18 });
+    drawLine(`Eintrag ${index + 1} von ${applications.length}`, { bold: true, size: 18 });
     drawLine(`${new Date(application.createdAt).toLocaleString("de-DE")} · Status: ${application.status}`, { color: rgb(0.36, 0.42, 0.48) });
     y -= 8;
     drawLine("Kontaktdaten", { bold: true, size: 13 });
@@ -84,7 +84,7 @@ export async function buildApplicationsPdf(applications: ApplicationRecord[], co
   }
   if (applications.length === 0) {
     const page = document.addPage([595, 842]);
-    page.drawText("Noch keine Bewerbungen vorhanden.", { x: 48, y: 780, size: 15, font: bold });
+    page.drawText("Noch keine Funnel-Eingänge vorhanden.", { x: 48, y: 780, size: 15, font: bold });
   }
   return Buffer.from(await document.save());
 }

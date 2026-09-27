@@ -15,3 +15,9 @@ export function portalFunnelSsoUrl(nextPath = "/admin"): string {
   if (next !== "/admin") url.searchParams.set("next", next);
   return url.toString();
 }
+
+export function portalCampaignLaunchUrl(funnelUrl: string): string {
+  const url = new URL("/dashboard/traffic-launch", `${portalBaseUrl()}/`);
+  url.searchParams.set("funnelUrl", funnelUrl);
+  return url.toString();
+}
