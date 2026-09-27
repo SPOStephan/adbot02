@@ -53,6 +53,16 @@ import {
   registerCustomDomain,
   revokeCustomDomain,
 } from "../funnelCustomDomains";
+import {
+  getAccountDomainForOwner,
+  listAccountDomainsForOwner,
+  markAccountDomainReady,
+  registerAccountDomain,
+  revokeAccountDomain,
+} from "../funnelAccountDomains";
+import { findHostnameBindingClash } from "../funnelDomainClash";
+import { resolveRequestFunnelHost } from "../resolveFunnelRequestHost";
+import { funnelAllowedOnHost, type PublicFunnelListItem } from "../../shared/funnelHostResolve";
 import { checkCustomDomainCname } from "../customDomainDns";
 import { isSharedFunnelHost, normalizeHostname } from "../../shared/funnelHosts";
 import {
@@ -290,13 +300,56 @@ function ownerFromUser(user: User) {
 }
 
 export const funnelRouter = router({
-  publicConfig: publicProcedure.input(z.object({ slug: z.string().min(1) })).query(async ({ input }) => {
-    const config = await getFunnel(input.slug);
-    const fallback = input.slug === "karriere" ? await getOrCreateDefaultFunnel() : null;
-    const result = config ?? fallback;
+  publicConfig: publicProcedure.input(z.object({
+    slug: z.string().min(1),
+    hostname: z.string().max(253).optional(),
+  })).query(async ({ input }) => {
+    const host = await resolveRequestFunnelHost(input.hostname ?? "");
+    const fallback = input.slug === "karriere" && host.kind === "platform" ? await getOrCreateDefaultFunnel() : null;
+    const result = (await getFunnel(input.slug)) ?? fallback;
     if (!result || result.status !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
+    const owner = await getFunnelOwner(result.id);
+    if (!funnelAllowedOnHost({
+      host,
+      funnelId: result.id,
+      funnelSlug: result.slug,
+      ownerUserId: owner?.userId ?? null,
+    })) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
+    }
     return toPublicFunnelConfig(result);
   }),
+
+  publicCatalogByHost: publicProcedure
+    .input(z.object({ hostname: z.string().min(1).max(253) }))
+    .query(async ({ input }) => {
+      const host = await resolveRequestFunnelHost(input.hostname);
+      if (host.kind === "platform") {
+        return { kind: "platform" as const, hostname: host.hostname, funnels: [] as PublicFunnelListItem[] };
+      }
+      if (host.kind === "funnel") {
+        const config = await getFunnelById(host.funnelId);
+        if (!config || config.status !== "published") {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Kein Funnel für diesen Host hinterlegt." });
+        }
+        return {
+          kind: "funnel" as const,
+          hostname: host.hostname,
+          funnels: [{ slug: config.slug, title: config.title }] satisfies PublicFunnelListItem[],
+        };
+      }
+      if (host.kind === "account") {
+        const owned = await listFunnels({ ownerUserId: host.ownerUserId });
+        return {
+          kind: "account" as const,
+          hostname: host.hostname,
+          funnels: owned
+            .filter(item => item.status === "published")
+            .map(item => ({ slug: item.slug, title: item.title })) satisfies PublicFunnelListItem[],
+        };
+      }
+      throw new TRPCError({ code: "NOT_FOUND", message: "Kein Funnel für diesen Host hinterlegt." });
+    }),
 
   libraryIcons: publicProcedure.query(() => listFunnelLibraryIcons()),
 
@@ -340,8 +393,20 @@ export const funnelRouter = router({
     }),
 
   submit: publicProcedure.input(applicationSubmissionSchema).mutation(async ({ input, ctx }) => {
-    const config = (await getFunnel(input.funnelSlug)) ?? (input.funnelSlug === "karriere" ? await getOrCreateDefaultFunnel() : null);
+    // sourceUrl is tracking only — never authorize the host from it.
+    const host = await resolveRequestFunnelHost(normalizeHostname(input.hostname ?? ""));
+    const config = (await getFunnel(input.funnelSlug))
+      ?? (input.funnelSlug === "karriere" && host.kind === "platform" ? await getOrCreateDefaultFunnel() : null);
     if (!config) throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
+    const owner = await getFunnelOwner(config.id);
+    if (!funnelAllowedOnHost({
+      host,
+      funnelId: config.id,
+      funnelSlug: config.slug,
+      ownerUserId: owner?.userId ?? null,
+    })) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
+    }
     validateSubmission(config, input);
 
     let resume: ResumeMetadata | undefined;
@@ -521,6 +586,12 @@ export const funnelRouter = router({
       return listCustomDomainsForFunnel(input.funnelId);
     }),
 
+  accountDomains: adminProcedure.query(async ({ ctx }) => {
+    const ownerUserId = getTenantOwnerUserId(ctx.user);
+    if (!ownerUserId) return [];
+    return listAccountDomainsForOwner(ownerUserId);
+  }),
+
   registerCustomDomain: adminProcedure
     .input(
       z.object({
@@ -532,6 +603,13 @@ export const funnelRouter = router({
     .mutation(async ({ input, ctx }) => {
       const funnel = await requireOwnedFunnel(input.funnelId, ctx.user);
       try {
+        const clash = await findHostnameBindingClash(input.hostname);
+        if (clash?.kind === "account") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Diese Domain ist bereits als Account-Domain gebunden. Alle Funnel laufen dort unter /f/…",
+          });
+        }
         const domain = await registerCustomDomain({
           funnelId: input.funnelId,
           hostname: input.hostname,
@@ -562,6 +640,62 @@ export const funnelRouter = router({
             error instanceof Error
               ? error.message
               : "Custom Domain konnte nicht registriert werden.",
+        });
+      }
+    }),
+
+  registerAccountDomain: adminProcedure
+    .input(z.object({
+      hostname: z.string().min(3).max(253),
+      notes: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const ownerUserId = getTenantOwnerUserId(ctx.user);
+      if (!ownerUserId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Account-Domains gelten für Kundenkonten, nicht für den Plattform-Admin.",
+        });
+      }
+      try {
+        const clash = await findHostnameBindingClash(input.hostname);
+        if (clash?.kind === "funnel") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Diese Domain ist bereits an einen einzelnen Funnel gebunden.",
+          });
+        }
+        const domain = await registerAccountDomain({
+          ownerUserId,
+          hostname: input.hostname,
+          notes: input.notes,
+        });
+        const vercel = await attachDomainToVercelProject(domain.hostname);
+        if (!vercel.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: vercel.message,
+          });
+        }
+        void pushFunnelDomainUpsertToPortal({
+          ownerUserId,
+          hostname: domain.hostname,
+          status: domain.status === "READY" ? "READY" : "PENDING_DNS",
+          dnsTarget: domain.dnsTarget,
+          funnelId: ownerUserId,
+          funnelTitle: "Alle Funnel",
+          toolDomainId: domain.id,
+          bindingKind: "account",
+        });
+        return { ...domain, vercel };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Account-Domain konnte nicht angebunden werden.",
         });
       }
     }),
@@ -602,6 +736,13 @@ export const funnelRouter = router({
         throw new TRPCError({
           code: "CONFLICT",
           message: "Diese Domain ist bereits an ein Freebie gebunden.",
+        });
+      }
+      const clash = await findHostnameBindingClash(match.hostname);
+      if (clash?.kind === "account") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Diese Domain ist bereits als Account-Domain gebunden. Alle Funnel laufen dort unter /f/…",
         });
       }
       try {
@@ -772,6 +913,83 @@ export const funnelRouter = router({
             error instanceof Error
               ? error.message
               : "Custom Domain konnte nicht zurückgezogen werden.",
+        });
+      }
+    }),
+
+  markAccountDomainReady: adminProcedure
+    .input(z.object({
+      domainId: z.string().uuid(),
+      force: z.boolean().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const ownerUserId = getTenantOwnerUserId(ctx.user);
+      if (!ownerUserId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Account-Domains gelten für Kundenkonten." });
+      }
+      try {
+        if (input.force && !isPlatformAdmin(ctx.user)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "DNS-Override nur für Plattform-Admins." });
+        }
+        const domain = await getAccountDomainForOwner({ ownerUserId, domainId: input.domainId });
+        if (!domain) throw new TRPCError({ code: "NOT_FOUND", message: "Account-Domain nicht gefunden." });
+        if (!input.force) {
+          const dns = await checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+          if (!dns.ok) throw new TRPCError({ code: "BAD_REQUEST", message: dns.message });
+          const vercel = await verifyDomainOnVercelProject(domain.hostname);
+          if (!vercel.ok) throw new TRPCError({ code: "PRECONDITION_FAILED", message: vercel.message });
+        }
+        const ready = await markAccountDomainReady({ ownerUserId, domainId: input.domainId });
+        void pushFunnelDomainUpsertToPortal({
+          ownerUserId,
+          hostname: ready.hostname,
+          status: "READY",
+          dnsTarget: ready.dnsTarget,
+          funnelId: ownerUserId,
+          funnelTitle: "Alle Funnel",
+          toolDomainId: ready.id,
+          bindingKind: "account",
+        });
+        return ready;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: error instanceof Error ? error.message : "Account-Domain konnte nicht aktiviert werden.",
+        });
+      }
+    }),
+
+  verifyAccountDomainDns: adminProcedure
+    .input(z.object({ domainId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const ownerUserId = getTenantOwnerUserId(ctx.user);
+      if (!ownerUserId) throw new TRPCError({ code: "BAD_REQUEST", message: "Account-Domains gelten für Kundenkonten." });
+      const domain = await getAccountDomainForOwner({ ownerUserId, domainId: input.domainId });
+      if (!domain) throw new TRPCError({ code: "NOT_FOUND", message: "Account-Domain nicht gefunden." });
+      const dns = await checkCustomDomainCname(domain.hostname, domain.dnsTarget);
+      if (dns.ok) void verifyDomainOnVercelProject(domain.hostname);
+      return dns;
+    }),
+
+  revokeAccountDomain: adminProcedure
+    .input(z.object({ domainId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const ownerUserId = getTenantOwnerUserId(ctx.user);
+      if (!ownerUserId) throw new TRPCError({ code: "BAD_REQUEST", message: "Account-Domains gelten für Kundenkonten." });
+      try {
+        const revoked = await revokeAccountDomain({ ownerUserId, domainId: input.domainId });
+        void pushFunnelDomainRevokeToPortal({
+          ownerUserId,
+          hostname: revoked.hostname,
+          toolDomainId: revoked.id,
+        });
+        void removeDomainFromVercelProject(revoked.hostname);
+        return revoked;
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: error instanceof Error ? error.message : "Account-Domain konnte nicht zurückgezogen werden.",
         });
       }
     }),

@@ -36,6 +36,7 @@ import {
   type LaunchLibraryAsset,
 } from "@/lib/meta/creative-image-variants";
 import {
+  campaignPathForBinding,
   destinationUrlForHostname,
   type CustomerCustomDomainView,
 } from "@/lib/custom-domains/types";
@@ -288,7 +289,10 @@ export function LeadLaunchCanary({
   const [destinationUrl, setDestinationUrl] = useState(() => {
     const firstReady = readyCustomDomains[0];
     return firstReady
-      ? destinationUrlForHostname(firstReady.hostname)
+      ? destinationUrlForHostname(
+          firstReady.hostname,
+          campaignPathForBinding(firstReady.bindingKind),
+        )
       : defaultFunnelHint;
   });
   const [destinationMode, setDestinationMode] = useState<string>(() =>
@@ -1151,7 +1155,12 @@ export function LeadLaunchCanary({
                 (domain) => domain.id === value,
               );
               if (selected) {
-                setDestinationUrl(destinationUrlForHostname(selected.hostname));
+                setDestinationUrl(
+                  destinationUrlForHostname(
+                    selected.hostname,
+                    campaignPathForBinding(selected.bindingKind),
+                  ),
+                );
               }
             }}
             value={destinationMode}

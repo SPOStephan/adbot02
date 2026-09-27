@@ -25,6 +25,7 @@ export default function Settings() {
   const [metaTestEventCode, setMetaTestEventCode] = useState("");
   const [savedMetaTestEventCode, setSavedMetaTestEventCode] = useState("");
   const [customHostname, setCustomHostname] = useState("");
+  const [accountHostname, setAccountHostname] = useState("");
 
   useEffect(() => { if (query.data?.config) { setDraft(query.data.config); setSavedConfig(query.data.config); } }, [query.data?.config]);
   useEffect(() => {
@@ -99,7 +100,41 @@ export default function Settings() {
     },
     onError: error => toast.error(error.message),
   });
+  const accountDomainsQuery = trpc.funnel.accountDomains.useQuery(undefined, { enabled: Boolean(funnelId) });
+  const registerAccountDomain = trpc.funnel.registerAccountDomain.useMutation({
+    onSuccess: async () => {
+      setAccountHostname("");
+      await accountDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
+      toast.success("Account-Domain angebunden — alle Funnel unter /f/…");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const markAccountDomainReady = trpc.funnel.markAccountDomainReady.useMutation({
+    onSuccess: async () => {
+      await accountDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
+      toast.success("Account-Domain aktiv — Stellenliste unter https://Hostname/");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const verifyAccountDomainDns = trpc.funnel.verifyAccountDomainDns.useMutation({
+    onSuccess: result => {
+      if (result.ok) toast.success(result.message);
+      else toast.error(result.message);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const revokeAccountDomain = trpc.funnel.revokeAccountDomain.useMutation({
+    onSuccess: async () => {
+      await accountDomainsQuery.refetch();
+      await portalDomainsQuery.refetch();
+      toast.success("Account-Domain zurückgezogen");
+    },
+    onError: error => toast.error(error.message),
+  });
   const readyCustomHost = (customDomainsQuery.data ?? []).find(domain => domain.status === "READY");
+  const readyAccountHost = (accountDomainsQuery.data ?? []).find(domain => domain.status === "READY");
   const bindablePortalDomains = useMemo(() => {
     const localHosts = new Set(
       (customDomainsQuery.data ?? []).map(domain => domain.hostname),
@@ -253,7 +288,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Bestehende Domain anbinden</h2><p className="text-xs text-muted-foreground">Keine Domain-Registrierung oder -Kauf. Du bindest eine Domain, die du schon besitzt, an genau diesen Funnel. SSL/Hosting setzt Adbot automatisch. Danach CNAME setzen und DNS prüfen — Root-URL zeigt diesen Funnel. Shared-Host `/f/…` bleibt parallel. Nicht parallel am Freebie binden.</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Bestehende Domain anbinden</h2><p className="text-xs text-muted-foreground">Kein Domainkauf. Zwei Stufen: Account-Domain = alle Funnel dieses Kontos unter /f/slug (günstig / klickwerk-Muster). Funnel-Domain = Root zeigt nur diesen Funnel. Nicht parallel am Freebie binden.</p></div></div>
         {bindablePortalDomains.length > 0 ? (
           <div className="mt-5 rounded-xl border border-dashed border-slate-200 p-4">
             <p className="text-sm font-semibold">Aus Adbot-Domains übernehmen</p>
@@ -283,10 +318,72 @@ export default function Settings() {
             </ul>
           </div>
         ) : null}
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+          <p className="text-sm font-bold">Account-Domain — alle Funnel</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Root zeigt die Stellenliste. Jeder Funnel liegt unter <code>https://Domain/f/slug</code>. Admin landet auf dieser Domain.
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <Input
+              aria-label="Account-Hostname"
+              placeholder="karriere.dein-unternehmen.de"
+              value={accountHostname}
+              onChange={event => setAccountHostname(event.target.value.toLowerCase())}
+            />
+            <Button
+              variant="outline"
+              disabled={!accountHostname.trim() || registerAccountDomain.isPending}
+              onClick={() => registerAccountDomain.mutate({ hostname: accountHostname.trim() })}
+            >
+              {registerAccountDomain.isPending ? <Loader2 className="size-4 animate-spin" /> : <Globe className="size-4" />}
+              Für alle Funnel anbinden
+            </Button>
+          </div>
+          <ul className="mt-4 space-y-3">
+            {(accountDomainsQuery.data ?? []).map(domain => (
+              <li className="rounded-xl border bg-white p-3" key={domain.id}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold">{domain.hostname}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Status {domain.status} · CNAME → <code>{domain.dnsTarget}</code>
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                      CNAME auf <code>{domain.dnsTarget}</code>, dann aktivieren. Liste:{" "}
+                      <code>https://{domain.hostname}/</code> · dieser Funnel:{" "}
+                      <code>https://{domain.hostname}/f/{draft.slug}</code>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {domain.status === "PENDING_DNS" ? (
+                      <>
+                        <Button size="sm" variant="outline" disabled={verifyAccountDomainDns.isPending} onClick={() => verifyAccountDomainDns.mutate({ domainId: domain.id })}>
+                          Nur DNS prüfen
+                        </Button>
+                        <Button size="sm" className="bg-[#0165c3] hover:bg-[#0154a3]" disabled={markAccountDomainReady.isPending} onClick={() => markAccountDomainReady.mutate({ domainId: domain.id })}>
+                          DNS prüfen & aktivieren
+                        </Button>
+                      </>
+                    ) : null}
+                    {domain.status === "READY" ? (
+                      <Button size="sm" variant="outline" onClick={() => window.open(`https://${domain.hostname}/`, "_blank", "noopener,noreferrer")}>
+                        <ExternalLink className="size-4" />Öffnen
+                      </Button>
+                    ) : null}
+                    <Button size="sm" variant="ghost" disabled={revokeAccountDomain.isPending} onClick={() => revokeAccountDomain.mutate({ domainId: domain.id })}>
+                      Zurückziehen
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="mt-6 text-sm font-bold">Nur dieser Funnel — Root-URL</p>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <Input
             aria-label="Custom Hostname"
-            placeholder="karriere.dein-unternehmen.de"
+            placeholder="mechatroniker.dein-unternehmen.de"
             value={customHostname}
             onChange={event => setCustomHostname(event.target.value.toLowerCase())}
           />
@@ -393,6 +490,20 @@ export default function Settings() {
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
         <h2 className="font-bold">Direktlink und optionale WordPress-Einbettung</h2><p className="mt-1 text-sm text-muted-foreground">Der Funnel funktioniert vollständig über die eigenständige URL; die Einbettung ist nur eine zusätzliche Möglichkeit.</p>
         <div className="mt-5 space-y-2"><Label htmlFor="public-funnel-url">Öffentliche Funnel-URL (Shared Host)</Label><div className="flex gap-2"><Input id="public-funnel-url" readOnly value={directUrl} /><Button variant="outline" size="icon" aria-label="URL kopieren" onClick={() => copy(directUrl, "url")}>{copied === "url" ? <Check className="size-4" aria-hidden="true" /> : <Clipboard className="size-4" aria-hidden="true" />}</Button><Button variant="outline" size="icon" aria-label="Funnel öffnen" disabled={draft.status !== "published"} onClick={() => window.open(directUrl, "_blank", "noopener,noreferrer")}><ExternalLink className="size-4" aria-hidden="true" /></Button></div>{draft.status !== "published" && <p className="text-xs text-amber-700">Die URL wird erst nach der Veröffentlichung erreichbar.</p>}</div>
+        {readyAccountHost ? (
+          <div className="mt-5 space-y-2">
+            <Label htmlFor="account-funnel-url">Account-Domain URL dieses Funnels</Label>
+            <div className="flex gap-2">
+              <Input id="account-funnel-url" readOnly value={`https://${readyAccountHost.hostname}/f/${draft.slug}`} />
+              <Button variant="outline" size="icon" aria-label="Account-URL kopieren" onClick={() => copy(`https://${readyAccountHost.hostname}/f/${draft.slug}`, "url")}>
+                {copied === "url" ? <Check className="size-4" aria-hidden="true" /> : <Clipboard className="size-4" aria-hidden="true" />}
+              </Button>
+              <Button variant="outline" size="icon" aria-label="Account-Domain öffnen" disabled={draft.status !== "published"} onClick={() => window.open(`https://${readyAccountHost.hostname}/f/${draft.slug}`, "_blank", "noopener,noreferrer")}>
+                <ExternalLink className="size-4" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
         {customPublicUrl ? (
           <div className="mt-5 space-y-2">
             <Label htmlFor="custom-funnel-url">Custom Domain URL</Label>

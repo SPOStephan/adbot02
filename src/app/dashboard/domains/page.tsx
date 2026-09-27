@@ -64,8 +64,8 @@ async function DomainsBody() {
           <li>
             <span className="font-semibold text-slate-800">Funnel / Freebie</span>
             : bestehende Domain dort oder hier anbinden (kein Kauf). Sync zeigt Herkunft und Bindung in
-            dieser Liste. Kunde setzt nur CNAME — SSL/Hosting wird automatisch
-            gesetzt. An einen Funnel gebundene READY-Domain ist auch die
+            dieser Liste. Account-Domain = alle Funnel unter /f/slug. Funnel-Domain = Root eines Funnels.
+            Kunde setzt nur CNAME — SSL/Hosting wird automatisch gesetzt. An einen Funnel gebundene READY-Domain ist auch die
             Adresse für Bewerbungsübersicht und Verwaltung. Eine Domain nicht
             an Funnel und Freebie gleichzeitig binden.
           </li>

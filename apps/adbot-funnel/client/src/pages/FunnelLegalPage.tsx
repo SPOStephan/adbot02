@@ -111,7 +111,7 @@ export function LegalPageView({
 export default function FunnelImprint() {
   const [, params] = useRoute("/f/:slug/impressum");
   const slug = params?.slug ?? "karriere";
-  const query = trpc.funnel.publicConfig.useQuery({ slug });
+  const query = trpc.funnel.publicConfig.useQuery({ slug, hostname: getBrowserHostname() });
   return (
     <LegalPageView
       kind="imprint"
@@ -128,7 +128,7 @@ export default function FunnelImprint() {
 export function FunnelPrivacy() {
   const [, params] = useRoute("/f/:slug/datenschutz");
   const slug = params?.slug ?? "karriere";
-  const query = trpc.funnel.publicConfig.useQuery({ slug });
+  const query = trpc.funnel.publicConfig.useQuery({ slug, hostname: getBrowserHostname() });
   return (
     <LegalPageView
       kind="privacy"

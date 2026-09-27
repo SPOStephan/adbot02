@@ -15,7 +15,7 @@ export type PortalDomainListItem = {
   status: "PENDING_DNS" | "READY";
   dnsTarget: string;
   origin: "portal" | "funnel" | "freebie";
-  bindingKind: "none" | "funnel" | "freebie";
+  bindingKind: "none" | "funnel" | "freebie" | "account";
   bindingRef: string | null;
   bindingLabel: string;
 };
@@ -48,6 +48,7 @@ function createToken(input: {
   dnsTarget?: string;
   bindingRef?: string | null;
   bindingLabel?: string;
+  bindingKind?: "funnel" | "account";
   toolDomainId?: string | null;
 }): string | null {
   const secret = ENV.funnelSsoSecret;
@@ -66,6 +67,7 @@ function createToken(input: {
     dnsTarget: input.dnsTarget,
     bindingRef: input.bindingRef,
     bindingLabel: input.bindingLabel,
+    bindingKind: input.bindingKind,
     toolDomainId: input.toolDomainId,
     nonce: randomBytes(24).toString("base64url"),
     iat: issuedAt,
@@ -116,6 +118,7 @@ export async function pushFunnelDomainUpsertToPortal(input: {
   funnelId: string;
   funnelTitle?: string;
   toolDomainId: string;
+  bindingKind?: "funnel" | "account";
 }): Promise<void> {
   const token = createToken({
     userId: input.ownerUserId ?? "",
@@ -125,6 +128,7 @@ export async function pushFunnelDomainUpsertToPortal(input: {
     dnsTarget: input.dnsTarget,
     bindingRef: input.funnelId,
     bindingLabel: input.funnelTitle ?? "",
+    bindingKind: input.bindingKind,
     toolDomainId: input.toolDomainId,
   });
   if (!token) return;

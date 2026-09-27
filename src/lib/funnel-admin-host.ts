@@ -56,16 +56,28 @@ export function isSafeCustomerFunnelHostname(hostname: string): boolean {
   return true;
 }
 
-export function resolveCustomerFunnelAdminHostname(
+export function resolveCustomerFunnelAdminTarget(
   domains: FunnelAdminDomainHint[],
-): string | null {
+): { hostname: string; nextPath: string } | null {
+  for (const domain of domains) {
+    if (domain.status !== "READY") continue;
+    if (domain.bindingKind !== "account") continue;
+    if (!isSafeCustomerFunnelHostname(domain.hostname)) continue;
+    return { hostname: normalizeCustomHostname(domain.hostname), nextPath: "/admin" };
+  }
   for (const domain of domains) {
     if (domain.status !== "READY") continue;
     if (domain.bindingKind !== "funnel") continue;
     if (!isSafeCustomerFunnelHostname(domain.hostname)) continue;
-    return normalizeCustomHostname(domain.hostname);
+    return { hostname: normalizeCustomHostname(domain.hostname), nextPath: "/admin/applications" };
   }
   return null;
+}
+
+export function resolveCustomerFunnelAdminHostname(
+  domains: FunnelAdminDomainHint[],
+): string | null {
+  return resolveCustomerFunnelAdminTarget(domains)?.hostname ?? null;
 }
 
 export function sharedFunnelHostname(): string {

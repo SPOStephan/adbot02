@@ -5,7 +5,7 @@ import {
   createFunnelSsoConsumeUrl,
   defaultFunnelAdminPath,
   isAllowedFunnelAdminPath,
-  resolveCustomerFunnelAdminHostname,
+  resolveCustomerFunnelAdminTarget,
   sharedFunnelHostname,
 } from "@/lib/funnel-admin-host";
 import { createFunnelSsoToken } from "@/lib/funnel-sso";
@@ -53,14 +53,17 @@ export async function GET(request: NextRequest) {
     });
 
     let hostname: string | null = null;
+    let boundNext: string | null = null;
     try {
       const domains = await listCustomerCustomDomains(user.id);
-      hostname = resolveCustomerFunnelAdminHostname(domains);
+      const target = resolveCustomerFunnelAdminTarget(domains);
+      hostname = target?.hostname ?? null;
+      boundNext = target?.nextPath ?? null;
     } catch (error) {
       console.warn("[funnel-sso] Custom-Domain für Admin nicht lesbar", error);
     }
 
-    const nextPath = requestedNext ?? defaultFunnelAdminPath(Boolean(hostname));
+    const nextPath = requestedNext ?? boundNext ?? defaultFunnelAdminPath(Boolean(hostname));
     const audienceHostname = hostname ?? sharedFunnelHostname();
     const token = createFunnelSsoToken({
       userId: user.id,

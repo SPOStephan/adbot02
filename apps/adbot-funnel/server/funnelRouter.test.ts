@@ -82,6 +82,27 @@ describe("Funnel-Router", () => {
     expect(result.leadValue).toBe(150);
   });
 
+  it("liefert den Shared-Funnel nicht auf unbekannten Custom-Hosts", async () => {
+    const caller = appRouter.createCaller(publicContext);
+    await expect(
+      caller.funnel.publicConfig({ slug: "karriere", hostname: "fremd.example" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      caller.funnel.submit({
+        funnelSlug: "karriere",
+        answers: { arbeitsbereich: ["vertrieb"], berufserfahrung: ["3-plus"] },
+        contact: { name: "Erika Muster", email: "erika@example.org", phone: "+49 123" },
+        consent: true,
+        hostname: "fremd.example",
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      caller.funnel.publicCatalogByHost({ hostname: "fremd.example" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const catalog = await caller.funnel.publicCatalogByHost({ hostname: "funnel.adbot.one" });
+    expect(catalog.kind).toBe("platform");
+  });
+
   it("speichert eine manuelle Gut-Bewertung auch ohne CAPI-Token", async () => {
     const admin = appRouter.createCaller(adminContext);
     const publicCaller = appRouter.createCaller(publicContext);

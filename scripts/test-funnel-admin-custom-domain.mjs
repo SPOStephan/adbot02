@@ -52,6 +52,19 @@ assert.equal(
 );
 assert.equal(
   hostModule.resolveCustomerFunnelAdminHostname([
+    { hostname: "jobs.kunde.de", status: "READY", bindingKind: "account" },
+    { hostname: "eine.kunde.de", status: "READY", bindingKind: "funnel" },
+  ]),
+  "jobs.kunde.de",
+);
+assert.equal(
+  hostModule.resolveCustomerFunnelAdminTarget([
+    { hostname: "jobs.kunde.de", status: "READY", bindingKind: "account" },
+  ]).nextPath,
+  "/admin",
+);
+assert.equal(
+  hostModule.resolveCustomerFunnelAdminHostname([
     { hostname: "funnel.adbot.one", status: "READY", bindingKind: "funnel" },
   ]),
   null,
@@ -71,7 +84,7 @@ const ssoRoute = await readFile(
   path.join(root, "src/app/api/funnel/sso/route.ts"),
   "utf8",
 );
-assert.match(ssoRoute, /resolveCustomerFunnelAdminHostname/);
+assert.match(ssoRoute, /resolveCustomerFunnelAdminTarget/);
 assert.match(ssoRoute, /createFunnelSsoConsumeUrl/);
 assert.match(ssoRoute, /audienceHostname/);
 

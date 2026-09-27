@@ -4,7 +4,7 @@ export type CustomerCustomDomainStatus =
   | "REVOKED";
 
 export type CustomerCustomDomainOrigin = "portal" | "funnel" | "freebie";
-export type CustomerCustomDomainBindingKind = "none" | "funnel" | "freebie";
+export type CustomerCustomDomainBindingKind = "none" | "funnel" | "freebie" | "account";
 
 export type CustomerCustomDomainView = {
   id: string;
@@ -52,8 +52,17 @@ export function assertValidCustomHostname(hostname: string) {
   }
 }
 
-export function destinationUrlForHostname(hostname: string): string {
-  return `https://${normalizeCustomHostname(hostname)}/`;
+export function campaignPathForBinding(
+  kind: CustomerCustomDomainBindingKind,
+): string {
+  return kind === "account" ? "/f/" : "/";
+}
+
+export function destinationUrlForHostname(hostname: string, path = "/"): string {
+  const host = normalizeCustomHostname(hostname);
+  const suffix = path.startsWith("/") ? path : `/${path}`;
+  if (suffix === "/") return `https://${host}/`;
+  return `https://${host}${suffix}`;
 }
 
 export function originLabel(origin: CustomerCustomDomainOrigin): string {
@@ -67,6 +76,7 @@ export function bindingLabelText(
   label: string,
 ): string {
   if (kind === "none") return "Nicht an Funnel/Freebie gebunden";
+  if (kind === "account") return "Alle Funnel dieses Kontos (/f/…)";
   const tool = kind === "funnel" ? "Funnel" : "Freebie";
   return label.trim() ? `${tool}: ${label.trim()}` : `Gebunden an ${tool}`;
 }
