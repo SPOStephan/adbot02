@@ -31,6 +31,20 @@ export function accountFunnelUrl(hostname: string, slug: string): string {
   return `https://${normalizeHostname(hostname)}${accountFunnelPath(slug)}`;
 }
 
+export function preferredPublicFunnelUrl(input: {
+  slug: string;
+  readyCustomHostname?: string | null;
+  readyAccountHostname?: string | null;
+  fallbackOrigin?: string | null;
+}): string {
+  const custom = (input.readyCustomHostname ?? "").trim();
+  if (custom) return `https://${normalizeHostname(custom)}/`;
+  const account = (input.readyAccountHostname ?? "").trim();
+  if (account) return accountFunnelUrl(account, input.slug);
+  const origin = (input.fallbackOrigin ?? "").replace(/\/+$/, "");
+  return `${origin}${accountFunnelPath(input.slug)}`;
+}
+
 export function resolveFunnelHostKind(input: {
   hostname: string;
   extraSharedHosts?: string | null;

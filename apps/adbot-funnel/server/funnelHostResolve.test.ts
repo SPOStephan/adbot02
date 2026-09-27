@@ -4,6 +4,7 @@ import {
   accountFunnelUrl,
   funnelAllowedOnHost,
   hostnameFromSourceUrl,
+  preferredPublicFunnelUrl,
   resolveFunnelHostKind,
 } from "../shared/funnelHostResolve";
 
@@ -48,5 +49,23 @@ describe("Funnel-Host-Auflösung", () => {
       "https://karriere.kunde.de/f/mechatroniker",
     );
     expect(hostnameFromSourceUrl("https://karriere.kunde.de/f/mechatroniker")).toBe("karriere.kunde.de");
+  });
+
+  it("öffnet öffentlich zuerst Funnel-Root, dann Account-Domain, dann Shared Host", () => {
+    expect(preferredPublicFunnelUrl({
+      slug: "vertrieb01",
+      readyCustomHostname: "mechatroniker.kunde.de",
+      readyAccountHostname: "jobs.kunde.de",
+      fallbackOrigin: "https://funnel.adbot.one",
+    })).toBe("https://mechatroniker.kunde.de/");
+    expect(preferredPublicFunnelUrl({
+      slug: "vertrieb01",
+      readyAccountHostname: "Jobs.Boncred.info",
+      fallbackOrigin: "https://funnel.adbot.one",
+    })).toBe("https://jobs.boncred.info/f/vertrieb01");
+    expect(preferredPublicFunnelUrl({
+      slug: "vertrieb01",
+      fallbackOrigin: "https://funnel.adbot.one",
+    })).toBe("https://funnel.adbot.one/f/vertrieb01");
   });
 });

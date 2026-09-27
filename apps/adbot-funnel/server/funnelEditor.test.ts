@@ -141,6 +141,12 @@ describe("Funnel-Seiteneditor", () => {
     expect(settingsSource).toContain("Für alle Funnel anbinden");
     expect(settingsSource).toContain("registerAccountDomain");
     expect(settingsSource).toContain("Account-Domain");
+    expect(editorSource).toContain("preferredPublicFunnelUrl");
+    expect(editorSource).toContain("href={publicUrl}");
+    const librarySource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/admin/FunnelLibrary.tsx"), "utf8");
+    expect(librarySource).toContain("preferredPublicFunnelUrl");
+    expect(librarySource).toContain("window.open(publicUrl");
+    expect(librarySource).not.toContain("window.open(`/f/${funnel.slug}`");
     expect(settingsSource).toContain("DomainActionNotice");
     expect(settingsSource).toContain("DNS/SSL erneut prüfen");
     expect(settingsSource).not.toContain("https://Hostname/");
