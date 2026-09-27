@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { ArrowLeftRight, GripVertical, Trash2 } from "lucide-react";
 import type { StartBadge } from "@shared/funnel";
 import { badgeFromTemplate, emptyStartBadge, MAX_START_BADGES, moveStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, START_BADGE_TEMPLATES } from "@shared/startLayout";
@@ -14,10 +14,12 @@ const BADGE_DRAG_TYPE = "application/x-adbot-start-badge";
 export function StartBadgesField({
   badges,
   brandColor,
+  fallbackTextColor,
   onChange,
 }: {
   badges: StartBadge[];
   brandColor: string;
+  fallbackTextColor: string;
   onChange: (badges: StartBadge[]) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export function StartBadgesField({
       {badges.length > 0 ? (
         <ul className="flex flex-wrap gap-2" aria-label="Eingefügte Badges, ziehen zum Sortieren">
           {badges.map(badge => {
-            const colors = resolveBadgeColors(badge, brandColor);
+            const colors = resolveBadgeColors(badge, fallbackTextColor, brandColor);
             const isDragging = draggingId === badge.id;
             const isDropTarget = dropTargetId === badge.id && draggingId !== badge.id;
             const isEditing = editingId === badge.id;
@@ -76,7 +78,7 @@ export function StartBadgesField({
               <li
                 key={badge.id}
                 className={`inline-flex max-w-full items-center gap-1 rounded-full border px-1 py-1 ${isDropTarget ? "ring-2 ring-[#0165c3]" : ""} ${isDragging ? "opacity-50" : ""} ${isEditing ? "ring-2 ring-slate-400" : ""}`}
-                style={{ background: colors.background, color: colors.text, borderColor: badge.backgroundColor || "color-mix(in srgb, #10253f 14%, transparent)" }}
+                style={{ background: colors.background, color: colors.text, borderColor: badge.backgroundColor || "color-mix(in srgb, #10253f 14%, transparent)", "--badge-fg": colors.text } as CSSProperties}
                 onDragOver={event => {
                   if (!draggingId) return;
                   event.preventDefault();
@@ -162,7 +164,7 @@ export function StartBadgesField({
             <p className="text-xs text-muted-foreground">Übernimmt die Textfarbe des Badges. Standard links vom Text.</p>
             <IconPicker
               value={resolveBadgeIcon(editing.icon)}
-              color={resolveBadgeColors(editing, brandColor).text}
+              color={resolveBadgeColors(editing, fallbackTextColor, brandColor).text}
               allowEmpty
               emptyLabel="Kein Icon"
               onChange={icon => patch(editing.id, { icon })}
@@ -190,7 +192,9 @@ export function StartBadgesField({
             <IconColorField
               label="Textfarbe"
               value={editing.textColor}
-              brandColor={brandColor}
+              brandColor={resolveBadgeColors({ backgroundColor: editing.backgroundColor }, fallbackTextColor, brandColor).text}
+              presetLabel="Automatisch"
+              resetLabel="Automatisch verwenden"
               onChange={color => patch(editing.id, { textColor: color })}
             />
           </div>

@@ -132,6 +132,10 @@ describe("Startseiten-Layouts", () => {
       expect(withIcon.badges[0]).toMatchObject({ icon: "users", iconPosition: "right" });
     }
     expect(resolveBadgeColors({ backgroundColor: "#0165C3" }, "#10253f")).toEqual({ background: "#0165C3", text: "#ffffff" });
+    expect(resolveBadgeColors({ backgroundColor: "#0165C3" }, "#10253f", "#0165C3")).toEqual({ background: "#0165C3", text: "#ffffff" });
+    expect(resolveBadgeColors({ backgroundColor: "#E8F2FB" }, "#10253f", "#0165C3")).toEqual({ background: "#E8F2FB", text: "#0165C3" });
+    expect(resolveBadgeColors({ backgroundColor: "#E8F2FB", textColor: "#C8102E" }, "#10253f", "#0165C3")).toEqual({ background: "#E8F2FB", text: "#C8102E" });
+    expect(resolveBadgeColors({ backgroundColor: "#e8f2fb", textColor: "#0165c3" }, "#10253f")).toEqual({ background: "#E8F2FB", text: "#0165C3" });
     expect(moveStartBadge(start.badges, "badge-2", "badge-1").map(badge => badge.id)).toEqual(["badge-2", "badge-1"]);
     expect(moveStartBadge(start.badges, "badge-1", "badge-1")).toBe(start.badges);
     expect(moveStartBadge(start.badges, "fehlt", "badge-1")).toBe(start.badges);

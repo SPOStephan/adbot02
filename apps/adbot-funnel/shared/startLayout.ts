@@ -150,10 +150,18 @@ export function moveStartBadge(badges: StartBadge[], fromId: string, toId: strin
 export function resolveBadgeColors(
   badge: Pick<StartBadge, "backgroundColor" | "textColor">,
   fallbackText: string,
+  brandAccent?: string,
 ): { background: string; text: string } {
-  const background = badge.backgroundColor || "#ffffff";
-  const text = badge.textColor || (badge.backgroundColor ? contrastOnAccent(background) : fallbackText);
-  return { background, text };
+  const background = optionalStartHex(badge.backgroundColor) || "#FFFFFF";
+  const explicit = optionalStartHex(badge.textColor);
+  if (explicit) return { background, text: explicit };
+  const hasCustomBackground = Boolean(optionalStartHex(badge.backgroundColor));
+  const accent = optionalStartHex(brandAccent);
+  if (hasCustomBackground) {
+    if (accent && accent !== background) return { background, text: accent };
+    return { background, text: contrastOnAccent(background) };
+  }
+  return { background, text: optionalStartHex(fallbackText) || "#10253F" };
 }
 
 export function defaultStartBenefits(createId: () => string = () => crypto.randomUUID()): StartBenefit[] {

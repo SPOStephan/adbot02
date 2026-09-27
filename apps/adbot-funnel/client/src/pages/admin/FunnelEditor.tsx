@@ -402,6 +402,7 @@ export default function FunnelEditor() {
                   page={selectedPage}
                   brandColor={config.brand.accentColor}
                   brandBackground={config.brand.backgroundColor}
+                  brandTextColor={config.brand.textColor}
                   patch={patchPage}
                 />
               )}
@@ -542,12 +543,14 @@ function StartPageFields({
   page,
   brandColor,
   brandBackground,
+  brandTextColor,
   patch,
 }: {
   funnelId: string;
   page: StartPage;
   brandColor: string;
   brandBackground: string;
+  brandTextColor: string;
   patch: (value: Partial<FunnelPage>, immediate?: boolean) => void;
 }) {
   const layout = resolveStartLayout(page);
@@ -594,6 +597,7 @@ function StartPageFields({
           <StartBadgesField
             badges={page.badges ?? []}
             brandColor={brandColor}
+            fallbackTextColor={brandTextColor}
             onChange={badges => patch({ badges } as Partial<FunnelPage>)}
           />
           <FormRow label="Trenner-Überschrift" hint="Volle Fläche in der Brandingfarbe, z. B. „Deine Vorteile bei uns“.">

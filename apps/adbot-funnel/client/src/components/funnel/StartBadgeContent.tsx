@@ -14,6 +14,6 @@ export function StartBadgeContent({
   const mark = icon
     ? <FunnelIcon name={icon} className="funnel-start-benefits-badge-icon" color={color} fit="picker" />
     : null;
-  const text = <span>{badge.label}</span>;
+  const text = <span className="funnel-start-benefits-badge-label" style={{ color }}>{badge.label}</span>;
   return position === "right" ? <>{text}{mark}</> : <>{mark}{text}</>;
 }

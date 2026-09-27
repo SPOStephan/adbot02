@@ -107,12 +107,17 @@ function BenefitsStartStep({
           {(page.badges ?? []).length > 0 && (
             <ul className="funnel-start-benefits-badges">
               {(page.badges ?? []).map(badge => {
-                const colors = resolveBadgeColors(badge, ink);
+                const colors = resolveBadgeColors(badge, ink, brand?.accentColor);
                 return (
                   <li
                     key={badge.id}
                     className="funnel-start-benefits-badge"
-                    style={{ background: colors.background, color: colors.text, borderColor: badge.backgroundColor || "color-mix(in srgb, var(--funnel-ink) 14%, transparent)" }}
+                    style={{
+                      background: colors.background,
+                      color: colors.text,
+                      borderColor: badge.backgroundColor || "color-mix(in srgb, var(--funnel-ink) 14%, transparent)",
+                      "--badge-fg": colors.text,
+                    } as CSSProperties}
                   >
                     <StartBadgeContent badge={badge} color={colors.text} />
                   </li>
