@@ -15,8 +15,8 @@ import {
 import { isFunnelPageHidden, toPublicFunnelConfig, type ApplicationSubmission, type FunnelConfig, type ResumeMetadata } from "@shared/funnel";
 import { stripFormattedText } from "@shared/formattedText";
 import type { User } from "../../drizzle/schema";
-import { isBunnyConfigured, uploadFunnelBytesToBunny } from "../bunny";
 import { createFunnelMediaAsset, listFunnelMediaAssets } from "../funnelMediaStore";
+import { storePublicFunnelImage } from "../publicFunnelImageStore";
 import { storagePut } from "../storage";
 import { adminProcedure, publicProcedure, router } from "../_core/trpc";
 import { getTenantOwnerUserId, isPlatformAdmin } from "../_core/session";
@@ -198,27 +198,14 @@ async function storeHeroVariant(
   contentType: "image/webp" | "image/jpeg",
 ) {
   const extension = contentType === "image/webp" ? "webp" : "jpg";
-  if (isBunnyConfigured()) {
-    const stored = await uploadFunnelBytesToBunny({
-      ownerUserId,
-      filename: `${variant}.${extension}`,
-      contentType,
-      data,
-    });
-    return { url: stored.url, path: stored.bunnyPath };
-  }
-  try {
-    const stored = await storagePut(`funnels/${funnelId}/backgrounds/${variant}-${crypto.randomUUID()}.${extension}`, data, contentType);
-    return { url: stored.url, path: stored.key };
-  } catch {
-    const stored = await uploadFunnelBytesToBunny({
-      ownerUserId,
-      filename: `${variant}.${extension}`,
-      contentType,
-      data,
-    });
-    return { url: stored.url, path: stored.bunnyPath };
-  }
+  return storePublicFunnelImage({
+    funnelId,
+    ownerUserId,
+    folder: "backgrounds",
+    filename: `${variant}.${extension}`,
+    contentType,
+    data,
+  });
 }
 
 function hasValidPngSignature(buffer: Buffer) {
@@ -263,29 +250,14 @@ async function storeHeroImage(
   contentType: "image/webp" | "image/jpeg",
 ) {
   const extension = contentType === "image/webp" ? "webp" : "jpg";
-  if (isBunnyConfigured()) {
-    const stored = await uploadFunnelBytesToBunny({
-      ownerUserId,
-      filename: `portrait.${extension}`,
-      contentType,
-      data,
-      folder: "portraits",
-    });
-    return { url: stored.url, path: stored.bunnyPath };
-  }
-  try {
-    const stored = await storagePut(`funnels/${funnelId}/portraits/image-${crypto.randomUUID()}.${extension}`, data, contentType);
-    return { url: stored.url, path: stored.key };
-  } catch {
-    const stored = await uploadFunnelBytesToBunny({
-      ownerUserId,
-      filename: `portrait.${extension}`,
-      contentType,
-      data,
-      folder: "portraits",
-    });
-    return { url: stored.url, path: stored.bunnyPath };
-  }
+  return storePublicFunnelImage({
+    funnelId,
+    ownerUserId,
+    folder: "portraits",
+    filename: `portrait.${extension}`,
+    contentType,
+    data,
+  });
 }
 
 function asOwnerUserId(value?: string | null) {
@@ -513,7 +485,15 @@ export const funnelRouter = router({
     }
     const extension = input.mimeType === "image/png" ? "png" : "ico";
     const contentType = input.mimeType === "image/png" ? "image/png" : "image/x-icon";
-    return storagePut(`funnels/${input.funnelId}/branding/favicon-${crypto.randomUUID()}.${extension}`, buffer, contentType);
+    const owner = await getFunnelOwner(input.funnelId);
+    return storePublicFunnelImage({
+      funnelId: input.funnelId,
+      ownerUserId: asOwnerUserId(owner?.userId || getTenantOwnerUserId(ctx.user)),
+      folder: "branding",
+      filename: `favicon.${extension}`,
+      contentType,
+      data: buffer,
+    });
   }),
 
   uploadLogo: adminProcedure.input(logoUploadSchema).mutation(async ({ input, ctx }) => {
@@ -522,7 +502,15 @@ export const funnelRouter = router({
     if (buffer.byteLength !== input.size || !hasValidLogoSignature(buffer, input.mimeType)) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Die Logo-Datei ist beschädigt oder hat ein nicht unterstütztes Format." });
     }
-    return storagePut(`funnels/${input.funnelId}/branding/logo-${crypto.randomUUID()}.${logoExtension(input.mimeType)}`, buffer, input.mimeType);
+    const owner = await getFunnelOwner(input.funnelId);
+    return storePublicFunnelImage({
+      funnelId: input.funnelId,
+      ownerUserId: asOwnerUserId(owner?.userId || getTenantOwnerUserId(ctx.user)),
+      folder: "branding",
+      filename: `logo.${logoExtension(input.mimeType)}`,
+      contentType: input.mimeType,
+      data: buffer,
+    });
   }),
 
   mediaLibrary: adminProcedure.input(z.object({ funnelId: funnelIdSchema })).query(async ({ input, ctx }) => {

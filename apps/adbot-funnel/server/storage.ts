@@ -67,6 +67,32 @@ export async function storageGet(
   return { key, url: `/api/storage/${key}` };
 }
 
+export function contentTypeFromStorageKey(relKey: string): string {
+  const key = normalizeKey(relKey).toLowerCase();
+  if (key.endsWith(".png")) return "image/png";
+  if (key.endsWith(".webp")) return "image/webp";
+  if (key.endsWith(".jpg") || key.endsWith(".jpeg")) return "image/jpeg";
+  if (key.endsWith(".gif")) return "image/gif";
+  if (key.endsWith(".ico")) return "image/x-icon";
+  if (key.endsWith(".svg")) return "image/svg+xml";
+  return "application/octet-stream";
+}
+
+export async function storageDownload(
+  relKey: string,
+): Promise<{ body: Buffer; contentType: string }> {
+  const supabase = requireStorage();
+  const key = normalizeKey(relKey);
+  const { data, error } = await supabase.storage.from(ENV.storageBucket).download(key);
+  if (error || !data) {
+    throw new Error(`Storage download failed: ${error?.message ?? "empty response"}`);
+  }
+  return {
+    body: Buffer.from(await data.arrayBuffer()),
+    contentType: data.type || contentTypeFromStorageKey(key),
+  };
+}
+
 export async function storageGetSignedUrl(
   relKey: string,
   expiresInSeconds = 3600,

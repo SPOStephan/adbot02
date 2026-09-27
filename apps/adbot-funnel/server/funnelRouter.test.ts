@@ -5,6 +5,10 @@ import { appRouter } from "./routers";
 
 const { storagePutMock } = vi.hoisted(() => ({ storagePutMock: vi.fn() }));
 vi.mock("./storage", () => ({ storagePut: storagePutMock }));
+vi.mock("./bunny", () => ({
+  isBunnyConfigured: () => false,
+  uploadFunnelBytesToBunny: vi.fn(),
+}));
 
 const originalSupabaseUrl = process.env.SUPABASE_URL;
 const originalSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -200,7 +204,7 @@ describe("Funnel-Router", () => {
       dataBase64: png.toString("base64"),
     });
     expect(storagePutMock).toHaveBeenCalledWith(
-      expect.stringMatching(new RegExp(`^funnels/${config.id}/branding/favicon-[0-9a-f-]+\\.png$`, "i")),
+      expect.stringMatching(new RegExp(`^funnels/${config.id}/branding/[0-9a-f-]+-favicon\\.png$`, "i")),
       png,
       "image/png",
     );
@@ -236,7 +240,7 @@ describe("Funnel-Router", () => {
       dataBase64: png.toString("base64"),
     });
     expect(storagePutMock).toHaveBeenCalledWith(
-      expect.stringMatching(new RegExp(`^funnels/${config.id}/branding/logo-[0-9a-f-]+\\.png$`, "i")),
+      expect.stringMatching(new RegExp(`^funnels/${config.id}/branding/[0-9a-f-]+-logo\\.png$`, "i")),
       png,
       "image/png",
     );
@@ -255,7 +259,7 @@ describe("Funnel-Router", () => {
     });
     expect(portrait.url.length).toBeGreaterThan(0);
     expect(storagePutMock).toHaveBeenCalledWith(
-      expect.stringMatching(new RegExp(`^funnels/${config.id}/portraits/image-[0-9a-f-]+\\.webp$`, "i")),
+      expect.stringMatching(new RegExp(`^funnels/${config.id}/portraits/[0-9a-f-]+-portrait\\.webp$`, "i")),
       webp,
       "image/webp",
     );
