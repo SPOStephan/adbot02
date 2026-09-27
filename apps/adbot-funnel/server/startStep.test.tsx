@@ -141,6 +141,8 @@ describe("StartStep Layouts", () => {
     expect(firstIconAt).toBeLessThan(homeAt);
     expect(secondIconAt).toBeGreaterThan(fixumAt);
     expect(html).toContain("#0165C3");
+    expect(html).toContain("color:#0165C3");
+    expect(html).toContain("--badge-fg:#0165C3");
     expect(html).toContain("is-one-column");
     const wide = renderToStaticMarkup(<StartStep page={{ ...page, benefitsTileLayout: "two-column", benefitsTileGap: "large" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
     expect(wide).toContain("is-gap-large");
@@ -184,5 +186,21 @@ describe("StartStep Layouts", () => {
     const fallback = renderToStaticMarkup(<StartStep page={{ ...page, heroSectionBackground: "" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
     expect(fallback).not.toContain("has-hero-color");
     expect(fallback).not.toContain("background:#FFF4E5");
+  });
+
+  it("nimmt die Badge-Schriftfarbe, sonst die Brandingfarbe auf eigener Fläche", () => {
+    const page: StartPage = {
+      ...getStartPage(),
+      layout: "benefits",
+      badges: [
+        { id: "badge-brand", label: "Quereinsteiger willkommen", backgroundColor: "#E8F2FB" },
+        { id: "badge-custom", label: "30 Tage Urlaub", backgroundColor: "#E8F2FB", textColor: "#C8102E" },
+      ],
+    };
+    const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(html).toContain("color:#0165C3");
+    expect(html).toContain("color:#C8102E");
+    expect(html).toContain("--badge-fg:#0165C3");
+    expect(html).toContain("--badge-fg:#C8102E");
   });
 });

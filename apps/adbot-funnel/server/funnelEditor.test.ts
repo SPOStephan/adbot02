@@ -116,6 +116,8 @@ describe("Funnel-Seiteneditor", () => {
     expect(badgesSource).toContain("Badge-Text");
     expect(badgesSource).toContain("Hintergrund");
     expect(badgesSource).toContain("Textfarbe");
+    expect(badgesSource).toContain("Automatisch");
+    expect(badgesSource).toContain("fallbackTextColor");
     expect(badgesSource).toContain("IconPicker");
     expect(badgesSource).toContain("allowEmpty");
     expect(badgesSource).toContain("Icon nach rechts");
