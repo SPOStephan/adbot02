@@ -145,6 +145,15 @@ describe("Funnel-Seiteneditor", () => {
     const appSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/App.tsx"), "utf8");
     expect(appSource).toContain("/f/:slug/datenschutz");
     expect(appSource).toContain("/datenschutz");
+    const accountIndex = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/AccountFunnelIndex.tsx"), "utf8");
+    expect(accountIndex).toContain("AccountHostLegal");
+    expect(accountIndex).toContain("/impressum");
+    const rootImprint = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/RootImprint.tsx"), "utf8");
+    expect(rootImprint).toContain("publicCatalogByHost");
+    expect(rootImprint).toContain("AccountHostLegal");
+    const rootPrivacy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/RootPrivacy.tsx"), "utf8");
+    expect(rootPrivacy).toContain("publicCatalogByHost");
+    expect(rootPrivacy).toContain("AccountHostLegal");
   });
 
   it("speichert Badge- und Start-Hintergrundfarbe beim ersten Persist, auch wenn ein Save noch läuft", () => {
