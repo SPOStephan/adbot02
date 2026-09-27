@@ -89,6 +89,15 @@ describe("Funnel-Validierung", () => {
     }).success).toBe(true);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, legal: { ...defaultFunnel.legal, imprintTitle: "   " } }).success).toBe(false);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, legal: { ...defaultFunnel.legal, imprintContent: "\n  \t" } }).success).toBe(false);
+    expect(funnelConfigSchema.safeParse({
+      ...defaultFunnel,
+      legal: { ...defaultFunnel.legal, imprintMode: "external", imprintUrl: "https://firma.de/impressum" },
+    }).success).toBe(true);
+    expect(funnelConfigSchema.safeParse({
+      ...defaultFunnel,
+      privacyUrl: "",
+      legal: { ...defaultFunnel.legal, privacyMode: "internal", privacyTitle: "Datenschutz", privacyContent: "Text" },
+    }).success).toBe(true);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, postSubmit: { mode: "redirect", redirectUrl: "http://example.org" } }).success).toBe(false);
     expect(funnelConfigSchema.safeParse({ ...defaultFunnel, metaTracking: { ...defaultFunnel.metaTracking, enabled: true, pixelId: "" } }).success).toBe(false);
     expect(funnelConfigSchema.safeParse({

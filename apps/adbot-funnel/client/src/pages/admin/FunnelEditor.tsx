@@ -30,6 +30,7 @@ import { BenefitsTileGapPicker } from "@/components/admin/BenefitsTileGapPicker"
 import { BenefitsTileLayoutPicker } from "@/components/admin/BenefitsTileLayoutPicker";
 import { StartBadgesField } from "@/components/admin/StartBadgesField";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
+import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
 import { useFunnelEditorHistory } from "@/hooks/useFunnelEditorHistory";
 
 const pageLabels: Record<FunnelPage["type"], string> = { start: "Startseite", "choice-grid": "Symbolkacheln", "choice-list": "Buttonliste", contact: "Kontaktformular" };
@@ -460,7 +461,18 @@ export default function FunnelEditor() {
               <FormRow label="Social-Proof-Überschrift"><FormattedTextField rows={1} value={config.socialProof.eyebrow} onChange={value => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, eyebrow: value } }))} /></FormRow>
               <FormRow label="Social-Proof-Text"><FormattedTextField rows={3} value={config.socialProof.text} onChange={value => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, text: value } }))} /></FormRow>
               <FormRow label="Empfänger-E-Mail"><Input type="email" placeholder="bewerbung@unternehmen.de" value={config.notificationEmail} onChange={event => changeConfig(current => ({ ...current, notificationEmail: event.target.value }))} /></FormRow>
-              <FormRow label="Datenschutz-URL"><Input type="url" value={config.privacyUrl} onChange={event => changeConfig(current => ({ ...current, privacyUrl: event.target.value }))} /></FormRow>
+              <div className="grid gap-3 rounded-2xl border p-4">
+                <div>
+                  <p className="text-sm font-bold">Impressum und Datenschutz</p>
+                  <p className="text-xs text-muted-foreground">Jeweils eigene Seite in Adbot oder Weiterleitung zu einer vorhandenen HTTPS-Adresse.</p>
+                </div>
+                <LegalPagesFields
+                  legal={config.legal}
+                  privacyUrl={config.privacyUrl}
+                  slug={config.slug}
+                  onChange={next => changeConfig(current => ({ ...current, ...next }))}
+                />
+              </div>
               <FormRow label="Erlaubte WordPress-Domains" hint="Eine vollständige https://-Adresse pro Zeile."><Textarea rows={3} value={config.allowedEmbedOrigins.join("\n")} onChange={event => changeConfig(current => ({ ...current, allowedEmbedOrigins: event.target.value.split("\n").map(value => value.trim()).filter(Boolean) }))} /></FormRow>
             </TabsContent>
           </Tabs>

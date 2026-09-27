@@ -125,4 +125,19 @@ describe("Funnel-Seiteneditor", () => {
     const pickerSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/IconPicker.tsx"), "utf8");
     expect(pickerSource).toContain("Kein Icon");
   });
+
+  it("bietet für Impressum und Datenschutz eigene Seite oder externe URL", () => {
+    expect(editorSource).toContain("LegalPagesFields");
+    expect(editorSource).toContain("Impressum und Datenschutz");
+    const legalSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/LegalPagesFields.tsx"), "utf8");
+    expect(legalSource).toContain("Eigene Seite in Adbot");
+    expect(legalSource).toContain("Externe URL");
+    expect(legalSource).toContain("privacyMode");
+    expect(legalSource).toContain("imprintMode");
+    const settingsSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/admin/Settings.tsx"), "utf8");
+    expect(settingsSource).toContain("LegalPagesFields");
+    const appSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/App.tsx"), "utf8");
+    expect(appSource).toContain("/f/:slug/datenschutz");
+    expect(appSource).toContain("/datenschutz");
+  });
 });

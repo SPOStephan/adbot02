@@ -390,9 +390,18 @@ export type FunnelSocialProof = {
   text: string;
 };
 
+export const LEGAL_PAGE_MODES = ["internal", "external"] as const;
+export type LegalPageMode = (typeof LEGAL_PAGE_MODES)[number];
+
 export type FunnelLegal = {
+  imprintMode: LegalPageMode;
   imprintTitle: string;
   imprintContent: string;
+  /** Used when imprintMode is external. */
+  imprintUrl: string;
+  privacyMode: LegalPageMode;
+  privacyTitle: string;
+  privacyContent: string;
 };
 
 export type FunnelPostSubmit = {

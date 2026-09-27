@@ -10,7 +10,9 @@ type FunnelChromeProps = PropsWithChildren<{
   socialProof: FunnelSocialProof;
   privacyUrl: string;
   privacyLabel: string;
+  privacyExternal?: boolean;
   imprintUrl: string;
+  imprintExternal?: boolean;
   step: number;
   totalSteps: number;
   showProgress: boolean;
@@ -28,7 +30,9 @@ export function FunnelChrome({
   socialProof,
   privacyUrl,
   privacyLabel,
+  privacyExternal = false,
   imprintUrl,
+  imprintExternal = false,
   step,
   totalSteps,
   showProgress,
@@ -101,8 +105,8 @@ export function FunnelChrome({
           </div>
         )}
         <nav className="funnel-legal-links" aria-label="Rechtliche Hinweise">
-          <a href={privacyUrl} target="_blank" rel="noreferrer">{privacyLabel}</a>
-          <a href={imprintUrl}>Impressum</a>
+          <a href={privacyUrl} {...(privacyExternal ? { target: "_blank", rel: "noreferrer" } : {})}>{privacyLabel}</a>
+          <a href={imprintUrl} {...(imprintExternal ? { target: "_blank", rel: "noreferrer" } : {})}>Impressum</a>
         </nav>
       </footer>
     </div>

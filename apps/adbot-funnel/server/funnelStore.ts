@@ -22,6 +22,7 @@ import type {
 } from "@shared/funnel";
 import { clampCopySizeStep } from "@shared/copySize";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
+import { normalizeFunnelLegal } from "@shared/legalPages";
 import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
@@ -230,7 +231,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
     ...publicConfig,
     brand: { ...defaultFunnel.brand, ...(config.brand ?? {}) },
     progress: normalizeProgress(config.progress),
-    legal: { ...defaultFunnel.legal, ...(config.legal ?? {}) },
+    legal: normalizeFunnelLegal(config.legal),
     postSubmit: { ...defaultFunnel.postSubmit, ...(config.postSubmit ?? {}) },
     metaTracking: {
       ...defaultFunnel.metaTracking,
