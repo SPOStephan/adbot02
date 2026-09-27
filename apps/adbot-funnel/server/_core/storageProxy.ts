@@ -1,21 +1,27 @@
 import type { Express, Request, Response } from "express";
+import { isPublicFunnelStorageKey } from "../publicFunnelStorage";
 import { storageGetSignedUrl } from "../storage";
 import { authenticateRequest } from "./session";
 
 async function handleStorageDownload(req: Request, res: Response, key: string) {
   try {
-    const user = await authenticateRequest(req);
-    if (!user || user.role !== "admin") {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-
     if (!key || key.includes("..")) {
       res.status(400).json({ error: "Invalid storage key" });
       return;
     }
 
-    const signedUrl = await storageGetSignedUrl(key, 300);
+    if (!isPublicFunnelStorageKey(key)) {
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+    }
+
+    const signedUrl = await storageGetSignedUrl(key, isPublicFunnelStorageKey(key) ? 3600 : 300);
+    if (isPublicFunnelStorageKey(key)) {
+      res.setHeader("Cache-Control", "public, max-age=300");
+    }
     res.redirect(302, signedUrl);
   } catch (error) {
     console.error("[Storage] Signed URL proxy failed", error);
