@@ -102,6 +102,7 @@ export default function FunnelEditor() {
   const history = useFunnelEditorHistory();
   const loadedIdRef = useRef<string | null>(null);
   const configRef = useRef<FunnelConfig | undefined>(undefined);
+  const loadedNotificationEmailRef = useRef("");
   const selectedIdRef = useRef("");
   const autosaveTimerRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -124,6 +125,7 @@ export default function FunnelEditor() {
     if (loadedIdRef.current === query.data.config.id && configRef.current) return;
     loadedIdRef.current = query.data.config.id;
     configRef.current = query.data.config;
+    loadedNotificationEmailRef.current = query.data.config.notificationEmail;
     selectedIdRef.current = query.data.config.pages[0]?.id ?? "";
     saveController.reset();
     setConfig(query.data.config);
@@ -136,8 +138,11 @@ export default function FunnelEditor() {
   const persist = (silent: boolean) => {
     const request = saveController.requestPersist(silent);
     if (request.action !== "start" || !request.payload) return;
-    save.mutate(request.payload, {
+    const payload = request.payload;
+    const notificationEmailWrite = payload.notificationEmail === loadedNotificationEmailRef.current ? "preserve" : "set";
+    save.mutate({ ...payload, notificationEmailWrite }, {
       onSuccess: async () => {
+        if (notificationEmailWrite === "set") loadedNotificationEmailRef.current = payload.notificationEmail;
         const result = saveController.finishPersist(true);
         if (result.clearDirty) {
           setDirty(false);

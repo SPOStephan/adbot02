@@ -289,7 +289,7 @@ export default function Settings() {
       return;
     }
     try {
-      if (dirty) await save.mutateAsync({ ...draft, isPublished: draft.status === "published" });
+      if (dirty) await save.mutateAsync({ ...draft, isPublished: draft.status === "published", notificationEmailWrite: "set" });
       if (metaServerDirty) await saveMetaServer.mutateAsync({
         funnelId: draft.id,
         clearAccessToken: false,
