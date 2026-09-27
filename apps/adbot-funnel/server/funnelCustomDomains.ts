@@ -104,6 +104,35 @@ export async function listCustomDomainsForFunnel(
   return (data ?? []).map(row => mapRow(row as Record<string, unknown>));
 }
 
+export async function findActiveCustomDomain(
+  hostname: string
+): Promise<FunnelCustomDomain | null> {
+  const normalized = normalizeCustomHostname(hostname);
+  const supabase = getSupabase();
+  if (!supabase) {
+    return (
+      memoryDomains.find(
+        item =>
+          item.hostname === normalized &&
+          item.status !== "REVOKED" &&
+          !item.revokedAt
+      ) ?? null
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("funnel_custom_domains")
+    .select(
+      "id,funnel_id,hostname,status,dns_target,notes,created_at,updated_at,revoked_at"
+    )
+    .eq("hostname", normalized)
+    .in("status", ["PENDING_DNS", "READY"])
+    .is("revoked_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapRow(data as Record<string, unknown>) : null;
+}
+
 export async function getFunnelIdByCustomHostname(
   hostname: string
 ): Promise<string | null> {

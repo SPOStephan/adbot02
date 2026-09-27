@@ -22,6 +22,7 @@ export type ToolDomainSyncPayload = {
   dnsTarget?: string;
   bindingRef?: string | null;
   bindingLabel?: string;
+  bindingKind?: "funnel" | "account";
   toolDomainId?: string | null;
   nonce: string;
   iat: number;

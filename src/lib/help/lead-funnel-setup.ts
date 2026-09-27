@@ -53,8 +53,8 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
     actionLabel: "Zu Domains",
     details: [
       "Unter Domains oder im Funnel eine bestehende Subdomain anbinden — kein Domainkauf. Adbot setzt SSL und Hosting; du trägst nur den CNAME beim Domain-Anbieter ein.",
-      "DNS prüfen, bis der Status READY ist. Root-URL zeigt den gebundenen Funnel. Bewerbungsübersicht und Verwaltung liegen danach auf derselben Domain.",
-      "Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden. Jede Domain gehört genau einem Funnel.",
+      "Account-Domain: alle Funnel unter /f/slug, Root ist die Liste. Funnel-Domain: Root ist genau ein Funnel.",
+      "DNS prüfen, bis der Status READY ist. Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden.",
     ],
   },
   {

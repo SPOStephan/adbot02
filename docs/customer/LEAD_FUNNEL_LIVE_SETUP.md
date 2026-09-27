@@ -23,10 +23,11 @@ Funnel und Freebie übernehmen die ID automatisch, wenn dort noch keine andere s
 Das ist **kein Domainkauf**. Du bindest eine Domain, die du schon besitzt.
 
 1. Unter **Domains** oder im Funnel eine bestehende Subdomain anbinden (z. B. `karriere.dein-unternehmen.de`).
-2. Nur den CNAME beim Domain-Anbieter setzen. SSL und Hosting legt Adbot an.
-3. DNS prüfen, bis der Status **READY** ist. Root-URL zeigt genau diesen einen Funnel.
-4. Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden.
-5. Ist die Domain an den Funnel gebunden, liegen Bewerbungsübersicht und Verwaltung auf genau dieser Domain (`/admin/applications`). „Funnel öffnen“ im Portal meldet dich dort an.
+2. **Account-Domain** = alle Funnel unter `/f/slug`, Root ist die Liste. **Funnel-Domain** = Root zeigt nur diesen einen Funnel.
+3. Nur den CNAME beim Domain-Anbieter setzen. SSL und Hosting legt Adbot an.
+4. DNS prüfen, bis der Status **READY** ist.
+5. Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden.
+6. Account-Domain: Admin unter `/admin`. Funnel-Domain: Bewerbungsübersicht auf genau dieser Domain (`/admin/applications`). „Funnel öffnen“ im Portal meldet dich dort an.
 
 ## 4. Lead-Canary starten
 

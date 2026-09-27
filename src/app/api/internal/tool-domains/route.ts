@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
         dnsTarget: payload.dnsTarget,
         bindingRef: payload.bindingRef,
         bindingLabel: payload.bindingLabel,
+        bindingKind: payload.bindingKind,
         toolDomainId: payload.toolDomainId,
       });
       return json({ ok: true, domain });

@@ -113,6 +113,7 @@ function FunnelView({
       metaEventId,
       ...metaBrowserIdentifiers,
       sourceUrl: window.location.href,
+      hostname: getBrowserHostname(),
       utm,
       resume: resume ? { fileName: resume.file.name, mimeType: resume.file.type as "application/pdf", size: resume.file.size, dataBase64: resume.dataBase64 } : undefined,
     }, { onSuccess: result => {
@@ -151,7 +152,8 @@ function FunnelView({
 export default function Funnel() {
   const [, params] = useRoute("/f/:slug");
   const slug = params?.slug ?? "karriere";
-  const query = trpc.funnel.publicConfig.useQuery({ slug });
+  const hostname = getBrowserHostname();
+  const query = trpc.funnel.publicConfig.useQuery({ slug, hostname });
   return (
     <FunnelView
       config={query.data}

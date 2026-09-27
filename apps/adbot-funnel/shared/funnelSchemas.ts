@@ -293,6 +293,7 @@ export const applicationSubmissionSchema = z
     metaFbp: z.string().max(255).optional(),
     metaFbc: z.string().max(255).optional(),
     sourceUrl: z.string().url().max(2048).optional(),
+    hostname: z.string().max(253).optional(),
     utm: z.record(z.string(), z.string().max(500)).optional(),
     resume: z
       .object({

@@ -79,6 +79,13 @@ test("portal wiring for global domains", () => {
   assert.match(binding, /Angelegt in/);
   assert.match(lead, /readyCustomDomains/);
   assert.match(lead, /Ziel-Domain/);
+  assert.match(lead, /campaignPathForBinding/);
+  const domainTypes = readFileSync(
+    join(root, "src/lib/custom-domains/types.ts"),
+    "utf8",
+  );
+  assert.match(domainTypes, /function campaignPathForBinding/);
+  assert.match(domainTypes, /kind === "account" \? "\/f\/"/);
   assert.match(migration, /customer_custom_domains/);
   assert.match(api, /action === "register"/);
   assert.match(api, /action === "verify"/);
@@ -117,6 +124,18 @@ test("portal wiring for global domains", () => {
 
   assert.match(bindingMigration, /binding_kind/);
   assert.match(bindingMigration, /origin/);
+  const accountMigration = readFileSync(
+    join(root, "supabase/migrations/20260927120000_customer_custom_domains_account_binding.sql"),
+    "utf8",
+  );
+  assert.match(accountMigration, /'account'/);
+  const funnelAccountMigration = readFileSync(
+    join(root, "apps/adbot-funnel/supabase/migrations/20260927120000_funnel_account_domains.sql"),
+    "utf8",
+  );
+  assert.match(funnelAccountMigration, /funnel_account_domains/);
+  assert.match(funnelRouter, /registerAccountDomain/);
+  assert.match(funnelRouter, /publicCatalogByHost/);
   assert.match(toolDomainApi, /verifyToolDomainSyncToken/);
   assert.match(toolDomainApi, /upsertCustomerCustomDomainFromTool/);
   assert.match(funnelSync, /pushFunnelDomainUpsertToPortal/);

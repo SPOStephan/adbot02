@@ -36,7 +36,7 @@ function asOrigin(value: unknown): CustomerCustomDomainOrigin {
 }
 
 function asBindingKind(value: unknown): CustomerCustomDomainBindingKind {
-  if (value === "funnel" || value === "freebie" || value === "none") {
+  if (value === "funnel" || value === "freebie" || value === "none" || value === "account") {
     return value;
   }
   return "none";
@@ -385,6 +385,7 @@ export async function upsertCustomerCustomDomainFromTool(input: {
   dnsTarget?: string;
   bindingRef?: string | null;
   bindingLabel?: string;
+  bindingKind?: CustomerCustomDomainBindingKind;
   toolDomainId?: string | null;
 }): Promise<CustomerCustomDomainView> {
   const hostname = normalizeCustomHostname(input.hostname);
@@ -421,13 +422,20 @@ export async function upsertCustomerCustomDomainFromTool(input: {
       );
     }
     const existingBinding = asBindingKind(existing.binding_kind);
-    if (existingBinding !== "none" && existingBinding !== input.tool) {
+    const nextBinding = input.bindingKind === "account" ? "account" : input.tool;
+    if (
+      existingBinding !== "none" &&
+      existingBinding !== nextBinding &&
+      !(existingBinding === "funnel" && nextBinding === "funnel")
+    ) {
       throw new CustomDomainServiceError(
         "bound_other_tool",
         409,
-        existingBinding === "funnel"
-          ? "Diese Domain ist bereits an einen Funnel gebunden."
-          : "Diese Domain ist bereits an ein Freebie gebunden.",
+        existingBinding === "account"
+          ? "Diese Domain ist bereits als Account-Domain für alle Funnel gebunden."
+          : existingBinding === "funnel"
+            ? "Diese Domain ist bereits an einen Funnel gebunden."
+            : "Diese Domain ist bereits an ein Freebie gebunden.",
       );
     }
 
@@ -436,7 +444,7 @@ export async function upsertCustomerCustomDomainFromTool(input: {
       .update({
         status: input.status,
         dns_target: dnsTarget,
-        binding_kind: input.tool,
+        binding_kind: input.bindingKind === "account" ? "account" : input.tool,
         binding_ref: bindingRef,
         binding_label: bindingLabel,
         tool_domain_id: toolDomainId,
@@ -485,7 +493,7 @@ export async function upsertCustomerCustomDomainFromTool(input: {
           : "",
       last_dns_check_at: input.status === "READY" ? now : null,
       origin: input.tool,
-      binding_kind: input.tool,
+      binding_kind: input.bindingKind === "account" ? "account" : input.tool,
       binding_ref: bindingRef,
       binding_label: bindingLabel,
       tool_domain_id: toolDomainId,
@@ -534,7 +542,7 @@ export async function unbindOrRevokeCustomerCustomDomainFromTool(input: {
   if (error || !existing) return;
 
   const binding = asBindingKind(existing.binding_kind);
-  if (binding !== "none" && binding !== input.tool) return;
+  if (binding !== "none" && binding !== input.tool && !(input.tool === "funnel" && binding === "account")) return;
   if (
     input.toolDomainId &&
     existing.tool_domain_id &&
