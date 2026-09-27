@@ -137,6 +137,9 @@ describe("Funnel-Seiteneditor", () => {
     expect(legalSource).toContain("imprintMode");
     const settingsSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/admin/Settings.tsx"), "utf8");
     expect(settingsSource).toContain("LegalPagesFields");
+    expect(settingsSource).toContain("Bestehende Domain anbinden");
+    expect(settingsSource).toContain("Keine Domain-Registrierung oder -Kauf");
+    expect(settingsSource).not.toContain("Domain registrieren");
     const appSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/App.tsx"), "utf8");
     expect(appSource).toContain("/f/:slug/datenschutz");
     expect(appSource).toContain("/datenschutz");

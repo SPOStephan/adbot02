@@ -63,7 +63,7 @@ export default function Settings() {
       await customDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
       toast.success(
-        "Domain registriert (Hosting automatisch) — erscheint unter Adbot → Domains",
+        "Bestehende Domain angebunden (Hosting automatisch) — erscheint unter Adbot → Domains",
       );
     },
     onError: error => toast.error(error.message),
@@ -253,7 +253,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Custom Domain</h2><p className="text-xs text-muted-foreground">Hier anlegen (wird unter Adbot → Domains sichtbar) oder eine Portal-Domain übernehmen. Beim Registrieren hinterlegen wir SSL/Hosting automatisch. Danach DNS prüfen — Root-URL zeigt diesen Funnel. Shared-Host `/f/…` bleibt parallel. Nicht parallel am Freebie binden.</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Bestehende Domain anbinden</h2><p className="text-xs text-muted-foreground">Keine Domain-Registrierung oder -Kauf. Du bindest eine Domain, die du schon besitzt, an genau diesen Funnel. SSL/Hosting setzt Adbot automatisch. Danach CNAME setzen und DNS prüfen — Root-URL zeigt diesen Funnel. Shared-Host `/f/…` bleibt parallel. Nicht parallel am Freebie binden.</p></div></div>
         {bindablePortalDomains.length > 0 ? (
           <div className="mt-5 rounded-xl border border-dashed border-slate-200 p-4">
             <p className="text-sm font-semibold">Aus Adbot-Domains übernehmen</p>
@@ -302,7 +302,7 @@ export default function Settings() {
             }
           >
             {registerCustomDomain.isPending ? <Loader2 className="size-4 animate-spin" /> : <Globe className="size-4" />}
-            Domain registrieren
+            Domain anbinden
           </Button>
         </div>
         <ul className="mt-5 space-y-3">
@@ -315,7 +315,8 @@ export default function Settings() {
                     Status {domain.status} · CNAME → <code>{domain.dnsTarget}</code>
                   </p>
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    1) CNAME <code>{domain.hostname}</code> → <code>{domain.dnsTarget}</code>{" "}
+                    1) Beim Domain-Anbieter CNAME <code>{domain.hostname}</code> → <code>{domain.dnsTarget}</code>{" "}
+                    (Subdomain, nicht die nackte Root-Domain).{" "}
                     2) „DNS prüfen & aktivieren“. Öffentliche URL danach:{" "}
                     <code>https://{domain.hostname}/</code>
                   </p>
@@ -384,7 +385,7 @@ export default function Settings() {
             </li>
           ))}
           {(customDomainsQuery.data?.length ?? 0) === 0 ? (
-            <li className="text-sm text-muted-foreground">Noch keine Custom Domain registriert. Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
+            <li className="text-sm text-muted-foreground">Noch keine bestehende Domain angebunden. Am zuverlässigsten eine Subdomain wie <code>karriere.dein-unternehmen.de</code>. Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
           ) : null}
         </ul>
       </section>

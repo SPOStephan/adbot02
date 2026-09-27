@@ -18,11 +18,13 @@ Funnel und Freebie übernehmen die ID automatisch, wenn dort noch keine andere s
 3. Eventname: `Lead`. Zeitpunkt: **Beim Absenden**.
 4. Serverseitige CAPI (Lead und Gut/Schlecht) nutzt die geprüfte Meta-Verbindung im Portal. Kein Events-Manager-Token.
 
-## 3. Domain anlegen und bestätigen
+## 3. Bestehende Domain anbinden und bestätigen
 
-1. Unter **Domains** eine eigene HTTPS-Domain anlegen oder sie im Funnel hinterlegen.
+Das ist **kein Domainkauf**. Du bindest eine Domain, die du schon besitzt.
+
+1. Unter **Domains** oder im Funnel eine bestehende Subdomain anbinden (z. B. `karriere.dein-unternehmen.de`).
 2. Nur den CNAME beim Domain-Anbieter setzen. SSL und Hosting legt Adbot an.
-3. DNS prüfen, bis der Status **READY** ist. Root-URL zeigt den Funnel.
+3. DNS prüfen, bis der Status **READY** ist. Root-URL zeigt genau diesen einen Funnel.
 4. Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden.
 5. Ist die Domain an den Funnel gebunden, liegen Bewerbungsübersicht und Verwaltung auf genau dieser Domain (`/admin/applications`). „Funnel öffnen“ im Portal meldet dich dort an.
 

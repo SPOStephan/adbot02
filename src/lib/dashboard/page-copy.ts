@@ -63,7 +63,7 @@ export const DASHBOARD_PAGE_COPY = {
     eyebrow: "Global",
     title: "Domains",
     description:
-      "Optional global anlegen — oder in Funnel/Freebie. Alles erscheint hier; Kampagnen nutzen READY-Domains als Ziel-URL.",
+      "Bestehende Domains anbinden — global oder im Funnel/Freebie. Kein Domainkauf. Kampagnen nutzen READY-Domains als Ziel-URL.",
   },
   creatives: {
     eyebrow: "Creatives",
