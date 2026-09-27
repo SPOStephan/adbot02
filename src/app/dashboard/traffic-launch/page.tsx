@@ -197,6 +197,11 @@ async function TrafficLaunchBody({
         initialFacebookPageId={brandProfileView?.facebookPageId}
         initialInstagramActorId={brandProfileView?.instagramActorId}
         killSwitchMode={killSwitchView?.mode ?? "FREEZE_WRITES"}
+        launchPolicy={{
+          accountDailyHardCapMinor: policyView?.accountDailyHardCapMinor ?? null,
+          campaignDailyHardCapMinor: policyView?.campaignDailyHardCapMinor ?? null,
+          allowBudgetChanges: policyView?.allowBudgetChanges ?? false,
+        }}
         policyLaunchReady={policyLaunchReady}
         readyCustomDomains={readyCustomDomains}
         funnelPurposeHints={funnelPurposeHints}

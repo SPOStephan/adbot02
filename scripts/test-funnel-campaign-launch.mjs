@@ -23,6 +23,8 @@ assert.match(lead, /initialFunnelIndex >= 0/);
 assert.match(lead, /action: "probe"/);
 assert.match(lead, /Conversions API jetzt prüfen/);
 assert.match(lead, /Funnel-Tracking synchronisieren/);
+assert.match(lead, /Kampagnenstart jetzt freigeben/);
+assert.match(lead, /\/api\/meta\/automation\/launch-policy/);
 assert.match(lead, /Automatische Zielgruppenfindung durch Meta/);
 assert.match(lead, /Werbemittel wählen oder hochladen/);
 assert.doesNotMatch(lead, />\s*Lead Canary\s*</);
@@ -33,6 +35,13 @@ assert.match(service, /capi_probe_status: probed\.status/);
 assert.match(service, /\.eq\("pixel_id", probed\.pixelId\)/);
 assert.match(service, /pushSoftMetaPixelToFunnel\(\{/);
 assert.match(service, /customEventType: updatedPixel\.custom_event_type/);
+assert.match(service, /options\.triggerOrganicBoost !== false/);
+
+const launchPolicyRoute = read(
+  "src/app/api/meta/automation/launch-policy/route.ts",
+);
+assert.match(launchPolicyRoute, /parsePolicyCommand/);
+assert.match(launchPolicyRoute, /triggerOrganicBoost: false/);
 
 const pageCopy = read("src/lib/dashboard/page-copy.ts");
 assert.match(pageCopy, /title: "Meta-Kampagnen starten"/);
