@@ -512,6 +512,8 @@ export type ApplicationRecord = {
   consentAt: string;
   trackingConsentAt?: string;
   metaEventId?: string;
+  metaFbp?: string;
+  metaFbc?: string;
   leadValue?: number;
   leadQuality?: LeadQuality;
   leadQualityAt?: string;

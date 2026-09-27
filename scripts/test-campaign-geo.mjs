@@ -26,6 +26,12 @@ const adapters = await import(
       "src/lib/campaign-geo/types.ts",
       "src/lib/campaign-geo/adapters.ts",
     ]),
+    ).toString("base64")}`
+);
+
+const leadPerformance = await import(
+  `data:text/javascript;base64,${Buffer.from(
+    transpile(["src/lib/meta/lead-performance-goal.ts"]),
   ).toString("base64")}`
 );
 
@@ -170,6 +176,24 @@ assert.match(lead, /special_ad_categories = \[\]/);
 assert.match(lead, /toMetaAdSetTargeting\(geo\)/);
 assert.match(lead, /funnelPurposeHints/);
 assert.match(lead, /as MetaAdSetTargeting/);
+assert.match(lead, /metaOptimizationGoal\(performanceGoal\)/);
+assert.match(lead, /Möglichst viele qualifizierte Leads/);
+assert.equal(leadPerformance.metaOptimizationGoal("volume"), "OFFSITE_CONVERSIONS");
+assert.equal(leadPerformance.metaOptimizationGoal("quality"), "QUALITY_LEAD");
+assert.equal(
+  leadPerformance.canUseQualifiedLeadOptimization({
+    capiViaConnection: false,
+    capiProbeStatus: "untested",
+  }),
+  false,
+);
+assert.equal(
+  leadPerformance.canUseQualifiedLeadOptimization({
+    capiViaConnection: true,
+    capiProbeStatus: "untested",
+  }),
+  true,
+);
 
 const openaiForm = read("src/components/OpenAIAdsLaunchForm.tsx");
 assert.match(openaiForm, /pickOpenAILocationId/);

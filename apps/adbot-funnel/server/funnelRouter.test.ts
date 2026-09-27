@@ -138,7 +138,8 @@ describe("Funnel-Router", () => {
     expect(rated.metaQuality).toBe("skipped");
     expect(rated.metaQualityReason).toBe("tracking_disabled");
     const again = await admin.funnel.rateLeadQuality({ id: submitted.id, quality: "good" });
-    expect(again.metaQualityReason).toBe("already_rated");
+    expect(again.leadQualityEventId).toBe(rated.leadQualityEventId);
+    expect(again.metaQualityReason).toBe("tracking_disabled");
   });
 
   it("liefert im Bewerbungs-Dashboard interne Seitennamen statt technischer Question-IDs", async () => {

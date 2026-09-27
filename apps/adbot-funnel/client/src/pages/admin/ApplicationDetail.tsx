@@ -13,17 +13,15 @@ function qualityLabel(quality?: LeadQuality) {
 }
 
 function metaQualityHint(status?: string, reason?: string) {
-  if (status === "sent") return "An Meta gesendet. Kampagnen können später auf qualifizierte Leads (Subscribe) optimieren.";
+  if (status === "sent" && reason === "already_sent") return "Diese Bewertung wurde bereits von Meta bestätigt.";
+  if (status === "sent") return "Meta hat die Qualitätsstufe bestätigt. Neue Ad Sets können mit dem Performance-Ziel „qualifizierte Leads“ darauf optimieren.";
   if (status === "skipped" && reason === "browser_only") {
-    return "Bewertung gespeichert. Für die Rückmeldung an Meta hinterlege in den Funnel-Einstellungen ein Conversions-API-Token.";
+    return "Bewertung gespeichert. Prüfe die CAPI-Verbindung unter Tracking und sende dieselbe Bewertung danach erneut.";
   }
   if (status === "skipped" && reason === "tracking_disabled") {
-    return "Bewertung gespeichert. Schalte Meta-Tracking im Funnel ein, damit Gut/Schlecht an Meta gehen.";
+    return "Bewertung gespeichert. Schalte Meta-Tracking im Funnel ein und sende dieselbe Bewertung danach erneut.";
   }
-  if (status === "skipped" && reason === "already_rated") {
-    return "Diese Bewertung ist bereits gespeichert.";
-  }
-  if (status === "failed") return "Bewertung gespeichert, Meta hat das Ereignis nicht bestätigt. Bitte Token und Pixel prüfen.";
+  if (status === "failed") return "Bewertung gespeichert, aber von Meta nicht bestätigt. Prüfe CAPI und klicke dieselbe Bewertung zum erneuten Senden an.";
   if (status === "skipped") return "Bewertung gespeichert, aber noch nicht an Meta gemeldet.";
   return null;
 }
@@ -123,9 +121,10 @@ export default function ApplicationDetail() {
           <div>
             <h2 className="font-bold">Lead-Qualität für Meta</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Gut oder schlecht bewertet Meta-Optimierung: Gute Leads gehen als Standardereignis{" "}
-              <code>Subscribe</code> mit Wert zurück, schlechte als <code>DisqualifiedLead</code>.
-              So lernt Meta, mehr qualifizierte Kontakte wie die guten zu finden. Das verändert keine laufende Kampagne automatisch.
+              Gute Leads gehen als Qualitätsstufe <code>QualifiedLead</code> mit Wert zurück,
+              schlechte als <code>DisqualifiedLead</code>. Meta kann diese Rückmeldungen bei
+              neuen Ad Sets mit dem Performance-Ziel „qualifizierte Leads“ verwenden. Laufende
+              Lead-Volumen-Kampagnen werden nicht automatisch umgestellt.
             </p>
           </div>
           <div className="text-sm">
@@ -142,7 +141,7 @@ export default function ApplicationDetail() {
             onClick={() => rate.mutate({ id: application.id, quality: "good" })}
           >
             {rate.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <ThumbsUp className="size-4" />}
-            Gut
+            {application.leadQuality === "good" && application.leadQualityMetaStatus !== "sent" ? "Gut erneut senden" : "Gut"}
           </Button>
           <Button
             variant={application.leadQuality === "bad" ? "destructive" : "outline"}
@@ -150,7 +149,7 @@ export default function ApplicationDetail() {
             onClick={() => rate.mutate({ id: application.id, quality: "bad" })}
           >
             <ThumbsDown className="size-4" />
-            Schlecht
+            {application.leadQuality === "bad" && application.leadQualityMetaStatus !== "sent" ? "Schlecht erneut senden" : "Schlecht"}
           </Button>
         </div>
         {application.leadQualityAt && (

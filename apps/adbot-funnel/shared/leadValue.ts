@@ -4,7 +4,7 @@ export const LEAD_QUALITY_VALUES = ["good", "bad"] as const;
 
 export const DEFAULT_LEAD_QUALITY_META = {
   currency: "EUR",
-  goodEventName: "Subscribe",
+  goodEventName: "QualifiedLead",
   badEventName: "DisqualifiedLead",
   goodValue: 100,
   badValue: 0,
