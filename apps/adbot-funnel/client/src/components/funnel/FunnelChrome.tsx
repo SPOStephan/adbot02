@@ -15,6 +15,8 @@ type FunnelChromeProps = PropsWithChildren<{
   totalSteps: number;
   showProgress: boolean;
   fullBleed?: boolean;
+  /** Optional fill for logo + progress on the benefits start page. */
+  topBackground?: string;
   pages?: FunnelConfig["pages"];
   progress?: FunnelConfig["progress"];
   onBack?: () => void;
@@ -31,6 +33,7 @@ export function FunnelChrome({
   totalSteps,
   showProgress,
   fullBleed = false,
+  topBackground,
   pages,
   progress,
   onBack,
@@ -51,9 +54,8 @@ export function FunnelChrome({
     "--funnel-choice-selected-text": brand.choiceSelectedTextColor,
     "--funnel-choice-selected-border": brand.choiceSelectedBorderColor,
   } as CSSProperties;
-  return (
-    <div className={`funnel-canvas${fullBleed ? " funnel-canvas-benefits" : ""}`} lang="de" style={brandStyle}>
-      <a className="funnel-skip-link" href="#funnel-content">Zum Hauptinhalt springen</a>
+  const top = (
+    <>
       <header className="funnel-header" aria-label="Funnel-Kopfbereich">
         <div className="funnel-logo-wrap">
           {brand.logoUrl ? (
@@ -78,6 +80,16 @@ export function FunnelChrome({
           onForward={onForward}
         />
       ) : null}
+    </>
+  );
+  return (
+    <div className={`funnel-canvas${fullBleed ? " funnel-canvas-benefits" : ""}${fullBleed && topBackground ? " has-hero-color" : ""}`} lang="de" style={brandStyle}>
+      <a className="funnel-skip-link" href="#funnel-content">Zum Hauptinhalt springen</a>
+      {fullBleed ? (
+        <div className="funnel-start-top" style={topBackground ? { background: topBackground } : undefined}>
+          {top}
+        </div>
+      ) : top}
 
       <main id="funnel-content" className="funnel-main">{children}</main>
 

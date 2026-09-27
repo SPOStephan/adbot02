@@ -50,6 +50,7 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("Jetzt bewerben");
     expect(visible).toContain("30 Tage Urlaub");
     expect(html).not.toContain("funnel-start-benefits-hero-bg");
+    expect(html).not.toContain("has-hero-color");
     expect(html).toContain("funnel-start-benefits-tiles");
     expect(html).toContain("is-two-column");
     expect(html).toContain("is-gap-medium");
@@ -166,5 +167,22 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("https://cdn.example.org/mobile.webp");
     expect(html).toContain("opacity:0.2");
     expect(html).toContain("--hero-bg-focus-x:20%");
+  });
+
+  it("färbt nur den Hero über dem Vorteile-Trenner, sonst den allgemeinen Hintergrund", () => {
+    const page: StartPage = {
+      ...getStartPage(),
+      layout: "benefits",
+      heroSectionBackground: "#FFF4E5",
+      benefitsBandTitle: "Deine Vorteile",
+      benefits: defaultStartBenefits(() => "tile"),
+    };
+    const html = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(html).toContain("has-hero-color");
+    expect(html).toContain("background:#FFF4E5");
+    expect(html.indexOf("background:#FFF4E5")).toBeLessThan(html.indexOf("funnel-start-benefits-band"));
+    const fallback = renderToStaticMarkup(<StartStep page={{ ...page, heroSectionBackground: "" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(fallback).not.toContain("has-hero-color");
+    expect(fallback).not.toContain("background:#FFF4E5");
   });
 });

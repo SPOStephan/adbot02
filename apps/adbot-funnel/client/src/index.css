@@ -528,6 +528,10 @@
     .funnel-start-step { gap: 70px; }
   }
 
+  .funnel-canvas-benefits {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .funnel-start-top { display: grid; }
   .funnel-canvas-benefits .funnel-main {
     width: 100%;
     max-width: none;

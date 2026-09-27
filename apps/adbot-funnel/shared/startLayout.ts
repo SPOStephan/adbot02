@@ -76,10 +76,24 @@ export function resolveBenefitsTileLayout(value?: string | null): BenefitsTileLa
     : DEFAULT_BENEFITS_TILE_LAYOUT;
 }
 
-export function resolveBenefitsSectionBackground(value?: string | null): string {
+function optionalStartHex(value?: string | null): string {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
     ? value.toUpperCase()
-    : DEFAULT_BENEFITS_SECTION_BACKGROUND;
+    : "";
+}
+
+export function resolveBenefitsSectionBackground(value?: string | null): string {
+  return optionalStartHex(value) || DEFAULT_BENEFITS_SECTION_BACKGROUND;
+}
+
+/** Empty override = the general brand background. */
+export function resolveHeroSectionBackground(value?: string | null, fallback?: string | null): string {
+  return optionalStartHex(value) || optionalStartHex(fallback) || DEFAULT_BENEFITS_SECTION_BACKGROUND;
+}
+
+/** Valid custom hex, otherwise undefined so the canvas color remains visible. */
+export function customHeroSectionBackground(value?: string | null): string | undefined {
+  return optionalStartHex(value) || undefined;
 }
 
 export function resolveBenefitsCardBackground(value?: string | null): string {

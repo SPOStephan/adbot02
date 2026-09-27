@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { copySizeCssVars } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
-import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -76,10 +76,14 @@ function BenefitsStartStep({
   const cardBackground = cards ? resolveBenefitsCardBackground(page.benefitsCardBackground) : undefined;
   const imageLayout = resolveHeroImageLayout(page.heroImageLayout);
   const imageRadius = clampHeroImageRadius(page.heroImageRadius);
+  const heroBackground = customHeroSectionBackground(page.heroSectionBackground);
 
   return (
     <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
-      <div className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? ` has-portrait is-image-${imageLayout}` : ""}${backgroundUrl ? " has-background" : ""}`}>
+      <div
+        className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? ` has-portrait is-image-${imageLayout}` : ""}${backgroundUrl ? " has-background" : ""}${heroBackground ? " has-hero-color" : ""}`}
+        style={heroBackground ? { background: heroBackground } : undefined}
+      >
         {backgroundUrl && (
           <div className="funnel-start-benefits-hero-bg" aria-hidden="true" style={{ "--hero-bg-focus-x": `${focusX}%` } as CSSProperties}>
             <picture>

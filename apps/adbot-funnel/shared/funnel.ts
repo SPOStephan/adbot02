@@ -302,6 +302,8 @@ export type StartPage = FunnelPageBase & {
   benefitsSectionBackground: string;
   /** Empty = white cards. Only used by the cards template. */
   benefitsCardBackground: string;
+  /** Empty = brand background. Colors everything above the Vorteile band. */
+  heroSectionBackground: string;
   badges: StartBadge[];
   heroBackgroundAssetId: string;
   heroBackgroundDesktopUrl: string;
