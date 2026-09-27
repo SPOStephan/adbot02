@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldHydrateSettingsFromQuery } from "../client/src/lib/settingsHydration";
+import {
+  SETTINGS_QUERY_OPTIONS,
+  shouldHydrateSettingsFromQuery,
+} from "../client/src/lib/settingsHydration";
 
 describe("settings query hydration", () => {
+  it("startet beim Zurückwechseln aus der Zwischenablage keinen Fokus-Refetch", () => {
+    expect(SETTINGS_QUERY_OPTIONS.refetchOnWindowFocus).toBe(false);
+  });
+
   it("zeigt beim Wiederöffnen keinen alten Cachewert vor der frischen Serverantwort", () => {
     expect(shouldHydrateSettingsFromQuery({
       fetchedAfterMount: false,

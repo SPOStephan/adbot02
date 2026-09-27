@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { ArrowLeft, Check, CheckCircle2, CircleAlert, Clipboard, ExternalLink, Globe, KeyRound, Loader2, Save, Settings2, Signpost, Target } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
@@ -6,7 +6,7 @@ import type { FunnelConfig, FunnelStatus } from "@shared/funnel";
 import { FUNNEL_PURPOSE_OPTIONS, funnelPurposeOption, funnelSubmissionPlural, type FunnelPurpose } from "@shared/funnelPurpose";
 import { legalPagesAreValid } from "@shared/legalPages";
 import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
-import { shouldHydrateSettingsFromQuery } from "@/lib/settingsHydration";
+import { SETTINGS_QUERY_OPTIONS, shouldHydrateSettingsFromQuery } from "@/lib/settingsHydration";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,10 +64,15 @@ export default function Settings() {
   const utils = trpc.useUtils();
   const query = trpc.funnel.adminConfig.useQuery(
     funnelId ? { id: funnelId } : undefined,
-    { enabled: Boolean(funnelId), refetchOnMount: "always" },
+    { enabled: Boolean(funnelId), ...SETTINGS_QUERY_OPTIONS },
   );
-  const [draft, setDraft] = useState<FunnelConfig>();
+  const [draft, setDraftState] = useState<FunnelConfig>();
   const [savedConfig, setSavedConfig] = useState<FunnelConfig>();
+  const hasLocalDraftChanges = useRef(false);
+  const setDraft = useCallback((next: SetStateAction<FunnelConfig | undefined>) => {
+    hasLocalDraftChanges.current = true;
+    setDraftState(next);
+  }, []);
   const dirty = Boolean(draft && savedConfig && JSON.stringify(draft) !== JSON.stringify(savedConfig));
   const [copied, setCopied] = useState<"url" | "embed">();
   const [metaTestEventCode, setMetaTestEventCode] = useState("");
@@ -82,9 +87,9 @@ export default function Settings() {
   useEffect(() => {
     if (!query.data?.config || !shouldHydrateSettingsFromQuery({
       fetchedAfterMount: query.isFetchedAfterMount,
-      hasLocalChanges: dirty,
+      hasLocalChanges: hasLocalDraftChanges.current || dirty,
     })) return;
-    setDraft(query.data.config);
+    setDraftState(query.data.config);
     setSavedConfig(query.data.config);
   }, [dirty, query.data?.config, query.isFetchedAfterMount]);
   useEffect(() => {
@@ -98,7 +103,8 @@ export default function Settings() {
       utils.funnel.adminConfig.setData({ id: saved.id }, current =>
         current ? { ...current, config: saved } : current,
       );
-      setDraft(saved);
+      hasLocalDraftChanges.current = false;
+      setDraftState(saved);
       setSavedConfig(saved);
       await Promise.all([utils.funnel.adminConfig.invalidate({ id: saved.id }), utils.funnel.funnels.invalidate()]);
       toast.success("Einstellungen gespeichert");
