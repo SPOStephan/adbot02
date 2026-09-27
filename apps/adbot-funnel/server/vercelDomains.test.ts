@@ -2,6 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 
 import {
   attachDomainToVercelProject,
+  ensureVercelDomainHttpsReady,
   getVercelDomainApiConfig,
   isVercelDomainApiConfigured,
   removeDomainFromVercelProject,
@@ -81,6 +82,29 @@ describe("vercelDomains API", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
       "/domains/leads.example.de/verify",
     );
+  });
+
+  it("aktiviert HTTPS erst, wenn Vercel verified liefert", async () => {
+    process.env.ADBOT_VERCEL_API_TOKEN = "x".repeat(40);
+    process.env.VERCEL_PROJECT_ID = "prj_test";
+    const fetchMock = vi.fn(async (url: string) => {
+      const path = String(url);
+      if (path.includes("/domains") && !path.includes("/verify") && path.includes("prj_test")) {
+        if (path.endsWith("/domains") || path.includes("/domains?")) {
+          return { status: 200, json: async () => ({ name: "jobs.example.de", verified: false }) };
+        }
+        return { status: 200, json: async () => ({ name: "jobs.example.de", verified: false }) };
+      }
+      if (path.includes("/verify")) {
+        return { status: 200, json: async () => ({ verified: false }) };
+      }
+      return { status: 200, json: async () => ({}) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = await ensureVercelDomainHttpsReady("jobs.example.de");
+    expect(pending.ok).toBe(false);
+    expect(pending.verified).toBe(false);
+    expect(pending.message).toMatch(/Zertifikat/);
   });
 
   it("remove treats 404 as success", async () => {

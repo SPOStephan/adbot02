@@ -247,6 +247,92 @@ export async function verifyDomainOnVercelProject(
   };
 }
 
+export async function getVercelProjectDomain(
+  hostname: string,
+): Promise<VercelDomainResult> {
+  const config = getVercelDomainApiConfig();
+  if (!config) {
+    return {
+      ok: false,
+      configured: false,
+      alreadyAttached: false,
+      verified: false,
+      message:
+        "Vercel-Domain-API nicht konfiguriert (ADBOT_VERCEL_API_TOKEN + VERCEL_PROJECT_ID).",
+      verification: [],
+    };
+  }
+
+  const path = `/v9/projects/${encodeURIComponent(config.projectId)}/domains/${encodeURIComponent(hostname)}${teamQuery(config.teamId)}`;
+  const { status, body } = await vercelFetch(path, { method: "GET" });
+  if (status === 404) {
+    return {
+      ok: false,
+      configured: true,
+      alreadyAttached: false,
+      verified: false,
+      message: `Domain ${hostname} ist noch nicht am Vercel-Projekt hinterlegt.`,
+      verification: [],
+    };
+  }
+  if (status < 200 || status >= 300) {
+    return {
+      ok: false,
+      configured: true,
+      alreadyAttached: false,
+      verified: false,
+      message: errorMessage(body, `Vercel-Status für ${hostname} nicht lesbar.`),
+      verification: mapVerification(body),
+    };
+  }
+  return {
+    ok: true,
+    configured: true,
+    alreadyAttached: true,
+    verified: body.verified === true,
+    message:
+      body.verified === true
+        ? `HTTPS für ${hostname} ist bereit.`
+        : `Vercel hat ${hostname} noch nicht verifiziert — das Zertifikat wird noch ausgestellt.`,
+    verification: mapVerification(body),
+  };
+}
+
+/** Attach + verify; READY only when Vercel reports the hostname as verified (SSL issued). */
+export async function ensureVercelDomainHttpsReady(
+  hostname: string,
+): Promise<VercelDomainResult> {
+  const attached = await attachDomainToVercelProject(hostname);
+  if (!attached.ok) return attached;
+
+  const verified = await verifyDomainOnVercelProject(hostname);
+  if (!verified.ok && !verified.alreadyAttached) return verified;
+
+  const current = await getVercelProjectDomain(hostname);
+  if (current.verified || verified.verified) {
+    return {
+      ok: true,
+      configured: true,
+      alreadyAttached: true,
+      verified: true,
+      message: `HTTPS für ${hostname} ist bereit.`,
+      verification: current.verification,
+    };
+  }
+
+  return {
+    ok: false,
+    configured: true,
+    alreadyAttached: true,
+    verified: false,
+    message:
+      `DNS für ${hostname} kann schon stimmen, das HTTPS-Zertifikat ist aber noch nicht fertig. ` +
+      `Ein bis zwei Minuten warten, dann erneut „DNS prüfen“. Die Adresse nicht öffnen, ` +
+      `solange der Browser einen Zertifikatsfehler zeigt.`,
+    verification: current.verification.length ? current.verification : verified.verification,
+  };
+}
+
 /** Best-effort remove; ignores missing domain. */
 export async function removeDomainFromVercelProject(
   hostname: string,

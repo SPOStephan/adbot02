@@ -14,6 +14,25 @@ import { Textarea } from "@/components/ui/textarea";
 
 const statusLabels: Record<FunnelStatus, string> = { draft: "Entwurf", published: "Veröffentlicht", paused: "Pausiert", archived: "Archiviert" };
 
+type DomainNotice = { tone: "success" | "error"; text: string };
+
+function DomainActionNotice({ notice }: { notice?: DomainNotice }) {
+  if (!notice) return null;
+  const error = notice.tone === "error";
+  return (
+    <p
+      className={`domain-action-notice mt-3 rounded-xl border px-3 py-2 text-sm leading-5 ${
+        error
+          ? "border-rose-200 bg-rose-50 text-rose-900"
+          : "border-emerald-200 bg-emerald-50 text-emerald-950"
+      }`}
+      role={error ? "alert" : "status"}
+    >
+      {notice.text}
+    </p>
+  );
+}
+
 export default function Settings() {
   const { id: funnelId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -26,6 +45,10 @@ export default function Settings() {
   const [savedMetaTestEventCode, setSavedMetaTestEventCode] = useState("");
   const [customHostname, setCustomHostname] = useState("");
   const [accountHostname, setAccountHostname] = useState("");
+  const [accountSectionNotice, setAccountSectionNotice] = useState<DomainNotice>();
+  const [customSectionNotice, setCustomSectionNotice] = useState<DomainNotice>();
+  const [accountNotices, setAccountNotices] = useState<Record<string, DomainNotice>>({});
+  const [customNotices, setCustomNotices] = useState<Record<string, DomainNotice>>({});
 
   useEffect(() => { if (query.data?.config) { setDraft(query.data.config); setSavedConfig(query.data.config); } }, [query.data?.config]);
   useEffect(() => {
@@ -59,79 +82,127 @@ export default function Settings() {
     enabled: Boolean(funnelId),
   });
   const registerCustomDomain = trpc.funnel.registerCustomDomain.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (domain) => {
       setCustomHostname("");
       await customDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
-      toast.success(
-        "Bestehende Domain angebunden (Hosting automatisch) — erscheint unter Adbot → Domains",
-      );
+      setCustomSectionNotice({
+        tone: "success",
+        text: `${domain.hostname} angebunden. CNAME auf ${domain.dnsTarget} setzen, dann DNS prüfen.`,
+      });
     },
-    onError: error => toast.error(error.message),
+    onError: error => setCustomSectionNotice({ tone: "error", text: error.message }),
   });
   const bindPortalDomain = trpc.funnel.bindPortalDomain.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (domain) => {
       await customDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
-      toast.success("Portal-Domain an diesen Funnel gebunden");
+      setCustomSectionNotice({
+        tone: "success",
+        text: `${domain.hostname} an diesen Funnel gebunden.`,
+      });
     },
-    onError: error => toast.error(error.message),
+    onError: error => setCustomSectionNotice({ tone: "error", text: error.message }),
   });
   const markCustomDomainReady = trpc.funnel.markCustomDomainReady.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (domain) => {
       await customDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
-      toast.success("Domain aktiv — Funnel unter https://Hostname/ erreichbar");
+      setCustomNotices(current => ({
+        ...current,
+        [domain.id]: {
+          tone: "success",
+          text: `Aktiv. Funnel unter https://${domain.hostname}/ — bei einem Zertifikatsfehler ein bis zwei Minuten warten und neu laden.`,
+        },
+      }));
     },
-    onError: error => toast.error(error.message),
+    onError: (error, input) => {
+      setCustomNotices(current => ({
+        ...current,
+        [input.domainId]: { tone: "error", text: error.message },
+      }));
+    },
   });
   const verifyCustomDomainDns = trpc.funnel.verifyCustomDomainDns.useMutation({
-    onSuccess: result => {
-      if (result.ok) toast.success(result.message);
-      else toast.error(result.message);
+    onSuccess: (result, input) => {
+      setCustomNotices(current => ({
+        ...current,
+        [input.domainId]: { tone: result.ok ? "success" : "error", text: result.message },
+      }));
     },
-    onError: error => toast.error(error.message),
+    onError: error => setCustomSectionNotice({ tone: "error", text: error.message }),
   });
   const revokeCustomDomain = trpc.funnel.revokeCustomDomain.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (domain) => {
       await customDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
-      toast.success("Custom Domain zurückgezogen");
+      setCustomNotices(current => {
+        const next = { ...current };
+        delete next[domain.id];
+        return next;
+      });
+      setCustomSectionNotice({ tone: "success", text: `${domain.hostname} zurückgezogen.` });
     },
-    onError: error => toast.error(error.message),
+    onError: error => setCustomSectionNotice({ tone: "error", text: error.message }),
   });
   const accountDomainsQuery = trpc.funnel.accountDomains.useQuery(undefined, { enabled: Boolean(funnelId) });
   const registerAccountDomain = trpc.funnel.registerAccountDomain.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (domain) => {
       setAccountHostname("");
       await accountDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
-      toast.success("Account-Domain angebunden — alle Funnel unter /f/…");
+      setAccountSectionNotice({
+        tone: "success",
+        text: `${domain.hostname} angebunden. CNAME auf ${domain.dnsTarget} setzen, dann DNS prüfen.`,
+      });
     },
-    onError: error => toast.error(error.message),
+    onError: error => setAccountSectionNotice({ tone: "error", text: error.message }),
   });
   const markAccountDomainReady = trpc.funnel.markAccountDomainReady.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (domain) => {
       await accountDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
-      toast.success("Account-Domain aktiv — Stellenliste unter https://Hostname/");
+      setAccountNotices(current => ({
+        ...current,
+        [domain.id]: {
+          tone: "success",
+          text: `Aktiv. Liste unter https://${domain.hostname}/ — bei einem Zertifikatsfehler ein bis zwei Minuten warten und neu laden.`,
+        },
+      }));
     },
-    onError: error => toast.error(error.message),
+    onError: (error, input) => {
+      setAccountNotices(current => ({
+        ...current,
+        [input.domainId]: { tone: "error", text: error.message },
+      }));
+    },
   });
   const verifyAccountDomainDns = trpc.funnel.verifyAccountDomainDns.useMutation({
-    onSuccess: result => {
-      if (result.ok) toast.success(result.message);
-      else toast.error(result.message);
+    onSuccess: (result, input) => {
+      setAccountNotices(current => ({
+        ...current,
+        [input.domainId]: { tone: result.ok ? "success" : "error", text: result.message },
+      }));
     },
-    onError: error => toast.error(error.message),
+    onError: (error, input) => {
+      setAccountNotices(current => ({
+        ...current,
+        [input.domainId]: { tone: "error", text: error.message },
+      }));
+    },
   });
   const revokeAccountDomain = trpc.funnel.revokeAccountDomain.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (domain) => {
       await accountDomainsQuery.refetch();
       await portalDomainsQuery.refetch();
-      toast.success("Account-Domain zurückgezogen");
+      setAccountNotices(current => {
+        const next = { ...current };
+        delete next[domain.id];
+        return next;
+      });
+      setAccountSectionNotice({ tone: "success", text: `${domain.hostname} zurückgezogen.` });
     },
-    onError: error => toast.error(error.message),
+    onError: error => setAccountSectionNotice({ tone: "error", text: error.message }),
   });
   const readyCustomHost = (customDomainsQuery.data ?? []).find(domain => domain.status === "READY");
   const readyAccountHost = (accountDomainsQuery.data ?? []).find(domain => domain.status === "READY");
@@ -339,6 +410,7 @@ export default function Settings() {
               Für alle Funnel anbinden
             </Button>
           </div>
+          <DomainActionNotice notice={accountSectionNotice} />
           <ul className="mt-4 space-y-3">
             {(accountDomainsQuery.data ?? []).map(domain => (
               <li className="rounded-xl border bg-white p-3" key={domain.id}>
@@ -358,23 +430,32 @@ export default function Settings() {
                     {domain.status === "PENDING_DNS" ? (
                       <>
                         <Button size="sm" variant="outline" disabled={verifyAccountDomainDns.isPending} onClick={() => verifyAccountDomainDns.mutate({ domainId: domain.id })}>
+                          {verifyAccountDomainDns.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
                           Nur DNS prüfen
                         </Button>
                         <Button size="sm" className="bg-[#0165c3] hover:bg-[#0154a3]" disabled={markAccountDomainReady.isPending} onClick={() => markAccountDomainReady.mutate({ domainId: domain.id })}>
+                          {markAccountDomainReady.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
                           DNS prüfen & aktivieren
                         </Button>
                       </>
                     ) : null}
                     {domain.status === "READY" ? (
-                      <Button size="sm" variant="outline" onClick={() => window.open(`https://${domain.hostname}/`, "_blank", "noopener,noreferrer")}>
-                        <ExternalLink className="size-4" />Öffnen
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" disabled={verifyAccountDomainDns.isPending} onClick={() => verifyAccountDomainDns.mutate({ domainId: domain.id })}>
+                          {verifyAccountDomainDns.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                          DNS/SSL erneut prüfen
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => window.open(`https://${domain.hostname}/`, "_blank", "noopener,noreferrer")}>
+                          <ExternalLink className="size-4" />Öffnen
+                        </Button>
+                      </>
                     ) : null}
                     <Button size="sm" variant="ghost" disabled={revokeAccountDomain.isPending} onClick={() => revokeAccountDomain.mutate({ domainId: domain.id })}>
                       Zurückziehen
                     </Button>
                   </div>
                 </div>
+                <DomainActionNotice notice={accountNotices[domain.id]} />
               </li>
             ))}
           </ul>
@@ -402,6 +483,7 @@ export default function Settings() {
             Domain anbinden
           </Button>
         </div>
+        <DomainActionNotice notice={customSectionNotice} />
         <ul className="mt-5 space-y-3">
           {(customDomainsQuery.data ?? []).map(domain => (
             <li className="rounded-xl border p-4" key={domain.id}>
@@ -454,14 +536,31 @@ export default function Settings() {
                     </>
                   ) : null}
                   {domain.status === "READY" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => window.open(`https://${domain.hostname}/`, "_blank", "noopener,noreferrer")}
-                    >
-                      <ExternalLink className="size-4" />
-                      Öffnen
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={verifyCustomDomainDns.isPending}
+                        onClick={() =>
+                          funnelId &&
+                          verifyCustomDomainDns.mutate({
+                            funnelId,
+                            domainId: domain.id,
+                          })
+                        }
+                      >
+                        {verifyCustomDomainDns.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                        DNS/SSL erneut prüfen
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(`https://${domain.hostname}/`, "_blank", "noopener,noreferrer")}
+                      >
+                        <ExternalLink className="size-4" />
+                        Öffnen
+                      </Button>
+                    </>
                   ) : null}
                   <Button
                     size="sm"
@@ -479,6 +578,7 @@ export default function Settings() {
                   </Button>
                 </div>
               </div>
+              <DomainActionNotice notice={customNotices[domain.id]} />
             </li>
           ))}
           {(customDomainsQuery.data?.length ?? 0) === 0 ? (
