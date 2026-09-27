@@ -15,14 +15,15 @@ export function certificateLooksLikeOldHoster(name: string, issuer: string): boo
   return /kasserver|all-inkl|strato\.de|ionos|1und1|hosteurope|world4you|mittwald/.test(hay);
 }
 
-export function chromeHostReuseWarning(hostname: string): string {
+export function chromeWildcardHostWarning(hostname: string): string {
   const host = hostname.trim().toLowerCase();
   return (
-    `Chrome merkt sich bei vielen Besuchern den alten Hoster — Warnung oder „zu oft weitergeleitet“. ` +
-    `Nicht auf „unsichere Seite“ klicken: das landet auf dem alten Webspace (404 oder Schleife). ` +
-    `Safari, Handy oder Chrome-Gastfenster prüfen die echte Adresse. ` +
-    `Zuverlässig für alle Chrome-Nutzer: eine Subdomain, die beim Hoster noch nie als Website lag, ` +
-    `statt einer wiederverwendeten wie ${host}.`
+    `Chrome kann ${host} trotzdem über ein Wildcard-CNAME „*“ beim Hoster öffnen ` +
+    `(erster Aufruf, bevor der eigene CNAME überall ankommt). Dann warnt er oder zeigt „zu oft weitergeleitet“. ` +
+    `Das trifft auch eine brandneue Subdomain — sie muss vorher keine Website gewesen sein. ` +
+    `Nicht auf „unsichere Seite“ klicken: das landet auf dem Webspace (404 oder Schleife). ` +
+    `Safari, Handy oder Chrome-Gastfenster prüfen die echte Route. ` +
+    `Adresse erst öffnen, wenn die Prüfung hier grün ist.`
   );
 }
 
@@ -36,15 +37,15 @@ export function describePublicHttpsProbe(input: {
   const host = input.hostname.trim().toLowerCase();
   if (input.looksLikeOldHoster) {
     return (
-      `Die Adresse zeigt noch auf den alten Webspace (Zertifikat ${input.certificateName || "Hoster"}). ` +
-      `CNAME prüfen und die Subdomain im Hoster vom Webspace lösen. ` +
+      `Die Adresse zeigt noch auf den Hoster-Webspace (Zertifikat ${input.certificateName || "Hoster"}). ` +
+      `Eigene CNAME-Zeile prüfen; ein Wildcard-„*“ auf den Webspace fängt neue Subdomains ab, bis der eigene Eintrag überall ankommt. ` +
       `Solange das so ist, sieht Chrome bei Kunden die Zertifikatswarnung. Nicht aktivieren.`
     );
   }
   if (input.matchesHostname) {
     return (
       `Im Internet liegt das richtige Zertifikat (${input.certificateName}). ` +
-      chromeHostReuseWarning(host)
+      chromeWildcardHostWarning(host)
     );
   }
   return `Zertifikat lautet ${input.certificateName || "unbekannt"}, nicht ${host}. Noch nicht als Kampagnen-URL nutzen.`;

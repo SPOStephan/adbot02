@@ -148,9 +148,11 @@ describe("Funnel-Seiteneditor", () => {
     expect(librarySource).toContain("window.open(publicUrl");
     expect(librarySource).not.toContain("window.open(`/f/${funnel.slug}`");
     expect(settingsSource).toContain("DomainActionNotice");
-    expect(settingsSource).toContain("ChromeHostReuseNotice");
-    expect(settingsSource).toContain("noch nie als Website");
+    expect(settingsSource).toContain("ChromeWildcardHostNotice");
+    expect(settingsSource).toContain("Wildcard-DNS");
+    expect(settingsSource).toContain("brandneue");
     expect(settingsSource).toContain("unsichere Seite");
+    expect(settingsSource).not.toContain("wiederverwendet");
     expect(settingsSource).toContain("DNS/SSL erneut prüfen");
     expect(settingsSource).not.toContain("https://Hostname/");
     expect(settingsSource).not.toContain("Domain registrieren");

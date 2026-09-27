@@ -41,13 +41,13 @@ describe("requireCustomerHostnameHttps", () => {
       issuer: "Sectigo",
       matchesHostname: false,
       looksLikeOldHoster: true,
-      message: "Die Adresse zeigt noch auf den alten Webspace (Zertifikat *.kasserver.com). Nicht aktivieren.",
+      message: "Die Adresse zeigt noch auf den Hoster-Webspace (Zertifikat *.kasserver.com). Nicht aktivieren.",
     });
 
     const result = await requireCustomerHostnameHttps("jobs.boncred.info");
     expect(result.ok).toBe(false);
     expect(result.verified).toBe(false);
-    expect(result.message).toContain("alten Webspace");
+    expect(result.message).toContain("Hoster-Webspace");
   });
 
   it("bleibt bereit, warnt aber vor Chrome-Altlast wenn das Internet schon stimmt", async () => {

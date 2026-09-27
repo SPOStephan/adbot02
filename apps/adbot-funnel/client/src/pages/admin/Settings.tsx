@@ -34,20 +34,22 @@ function DomainActionNotice({ notice }: { notice?: DomainNotice }) {
   );
 }
 
-function ChromeHostReuseNotice() {
+function ChromeWildcardHostNotice() {
   return (
-    <div className="chrome-host-reuse-notice mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-950" role="note">
-      <p className="font-bold">Chrome und wiederverwendete Subdomains</p>
+    <div className="chrome-wildcard-host-notice mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-950" role="note">
+      <p className="font-bold">Chrome und Wildcard-DNS beim Hoster</p>
       <p className="mt-1">
-        Nimm eine Subdomain, die beim Hoster (All-Inkl, Strato, IONOS …) noch nie als Website lag.
-        Eine Adresse wie <code>jobs.</code>, die vorher auf den Webspace zeigte, kann in Chrome bei
-        jedem Besucher das alte Zertifikat oder eine Weiterleitungsschleife behalten — auch wenn DNS
-        und Handy schon stimmen.
+        Steht bei All-Inkl, Strato oder IONOS ein CNAME <code>*</code> auf den Webspace, kann Chrome
+        eine <strong>brandneue</strong> Subdomain trotzdem dort öffnen — besonders beim ersten
+        Aufruf, bevor der eigene CNAME überall ankommt. Dann erscheint das Hoster-Zertifikat
+        (<code>*.kasserver.com</code>) oder eine Weiterleitungsschleife. Die Subdomain muss vorher
+        keine Website gewesen sein.
       </p>
       <p className="mt-2">
-        Nicht auf „unsichere Seite weiter“ klicken. Das landet auf dem alten Webspace (404 oder
-        Schleife). Safari, Smartphone oder Chrome-Gastfenster prüfen die echte Adresse. Zuverlässig:
-        neue, unbenutzte Subdomain (z. B. <code>karriere.</code> oder <code>bewerbung.</code>).
+        Die Adresse erst öffnen, wenn „DNS prüfen“ hier grün ist. Nicht auf „unsichere Seite weiter“
+        klicken. Safari, Smartphone oder Chrome-Gastfenster prüfen die echte Route. Das <code>*</code>
+        für den Rest der Domain kann bleiben; die eigene Zeile (z. B. <code>jobs</code> → Vercel)
+        muss stehen.
       </p>
     </div>
   );
@@ -392,7 +394,7 @@ export default function Settings() {
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Bestehende Domain anbinden</h2><p className="text-xs text-muted-foreground">Kein Domainkauf. Zwei Stufen: Account-Domain = alle Funnel dieses Kontos unter /f/slug (günstig / klickwerk-Muster). Funnel-Domain = Root zeigt nur diesen Funnel. Nicht parallel am Freebie binden.</p></div></div>
-        <ChromeHostReuseNotice />
+        <ChromeWildcardHostNotice />
         {bindablePortalDomains.length > 0 ? (
           <div className="mt-5 rounded-xl border border-dashed border-slate-200 p-4">
             <p className="text-sm font-semibold">Aus Adbot-Domains übernehmen</p>
@@ -615,7 +617,7 @@ export default function Settings() {
             </li>
           ))}
           {(customDomainsQuery.data?.length ?? 0) === 0 ? (
-            <li className="text-sm text-muted-foreground">Noch keine bestehende Domain angebunden. Am zuverlässigsten eine Subdomain, die beim Hoster noch nie als Website lag, z. B. <code>karriere.dein-unternehmen.de</code>. Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
+            <li className="text-sm text-muted-foreground">Noch keine bestehende Domain angebunden. Am zuverlässigsten eine Subdomain wie <code>karriere.dein-unternehmen.de</code> mit eigener CNAME-Zeile (nicht nur über <code>*</code>). Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
           ) : null}
         </ul>
       </section>

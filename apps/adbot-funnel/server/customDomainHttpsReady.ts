@@ -1,5 +1,5 @@
 import {
-  chromeHostReuseWarning,
+  chromeWildcardHostWarning,
   probePublicHttpsCertificate,
   type PublicHttpsProbe,
 } from "./customDomainHttpsProbe";
@@ -43,7 +43,7 @@ export async function requireCustomerHostnameHttps(
     };
   }
 
-  const chrome = chromeHostReuseWarning(host);
+  const chrome = chromeWildcardHostWarning(host);
   return {
     ok: true,
     verified: true,
