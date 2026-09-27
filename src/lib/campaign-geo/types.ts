@@ -38,6 +38,8 @@ export type PlatformGeoCapability = {
 export const CITY_RADIUS_FALLBACK_KM = 25;
 export const META_RADIUS_MIN_KM = 1;
 export const META_RADIUS_MAX_KM = 80;
+/** Meta minimum for Employment targeting in covered European countries. */
+export const META_EMPLOYMENT_RADIUS_MIN_KM = 17;
 
 export const PLATFORM_GEO_CAPABILITIES: PlatformGeoCapability[] = [
   {
