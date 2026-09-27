@@ -14,22 +14,42 @@ import { Textarea } from "@/components/ui/textarea";
 
 const statusLabels: Record<FunnelStatus, string> = { draft: "Entwurf", published: "Veröffentlicht", paused: "Pausiert", archived: "Archiviert" };
 
-type DomainNotice = { tone: "success" | "error"; text: string };
+type DomainNotice = { tone: "success" | "warning" | "error"; text: string };
 
 function DomainActionNotice({ notice }: { notice?: DomainNotice }) {
   if (!notice) return null;
-  const error = notice.tone === "error";
+  const toneClass =
+    notice.tone === "error"
+      ? "border-rose-200 bg-rose-50 text-rose-900"
+      : notice.tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-950"
+        : "border-emerald-200 bg-emerald-50 text-emerald-950";
   return (
     <p
-      className={`domain-action-notice mt-3 rounded-xl border px-3 py-2 text-sm leading-5 ${
-        error
-          ? "border-rose-200 bg-rose-50 text-rose-900"
-          : "border-emerald-200 bg-emerald-50 text-emerald-950"
-      }`}
-      role={error ? "alert" : "status"}
+      className={`domain-action-notice mt-3 rounded-xl border px-3 py-2 text-sm leading-5 ${toneClass}`}
+      role={notice.tone === "error" ? "alert" : "status"}
     >
       {notice.text}
     </p>
+  );
+}
+
+function ChromeHostReuseNotice() {
+  return (
+    <div className="chrome-host-reuse-notice mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-950" role="note">
+      <p className="font-bold">Chrome und wiederverwendete Subdomains</p>
+      <p className="mt-1">
+        Nimm eine Subdomain, die beim Hoster (All-Inkl, Strato, IONOS …) noch nie als Website lag.
+        Eine Adresse wie <code>jobs.</code>, die vorher auf den Webspace zeigte, kann in Chrome bei
+        jedem Besucher das alte Zertifikat oder eine Weiterleitungsschleife behalten — auch wenn DNS
+        und Handy schon stimmen.
+      </p>
+      <p className="mt-2">
+        Nicht auf „unsichere Seite weiter“ klicken. Das landet auf dem alten Webspace (404 oder
+        Schleife). Safari, Smartphone oder Chrome-Gastfenster prüfen die echte Adresse. Zuverlässig:
+        neue, unbenutzte Subdomain (z. B. <code>karriere.</code> oder <code>bewerbung.</code>).
+      </p>
+    </div>
   );
 }
 
@@ -111,8 +131,11 @@ export default function Settings() {
       setCustomNotices(current => ({
         ...current,
         [domain.id]: {
-          tone: "success",
-          text: `Aktiv. Funnel unter https://${domain.hostname}/ — bei einem Zertifikatsfehler ein bis zwei Minuten warten und neu laden.`,
+          tone: "warning",
+          text:
+            "httpsMessage" in domain && typeof domain.httpsMessage === "string" && domain.httpsMessage
+              ? domain.httpsMessage
+              : `Aktiv. Funnel unter https://${domain.hostname}/. Chrome-Hinweis unten beachten — nicht auf unsichere Seite klicken.`,
         },
       }));
     },
@@ -127,7 +150,10 @@ export default function Settings() {
     onSuccess: (result, input) => {
       setCustomNotices(current => ({
         ...current,
-        [input.domainId]: { tone: result.ok ? "success" : "error", text: result.message },
+        [input.domainId]: {
+          tone: result.ok ? (result.warning ? "warning" : "success") : "error",
+          text: result.message,
+        },
       }));
     },
     onError: error => setCustomSectionNotice({ tone: "error", text: error.message }),
@@ -165,8 +191,11 @@ export default function Settings() {
       setAccountNotices(current => ({
         ...current,
         [domain.id]: {
-          tone: "success",
-          text: `Aktiv. Liste unter https://${domain.hostname}/ — bei einem Zertifikatsfehler ein bis zwei Minuten warten und neu laden.`,
+          tone: "warning",
+          text:
+            "httpsMessage" in domain && typeof domain.httpsMessage === "string" && domain.httpsMessage
+              ? domain.httpsMessage
+              : `Aktiv. Liste unter https://${domain.hostname}/. Chrome-Hinweis unten beachten — nicht auf unsichere Seite klicken.`,
         },
       }));
     },
@@ -181,7 +210,10 @@ export default function Settings() {
     onSuccess: (result, input) => {
       setAccountNotices(current => ({
         ...current,
-        [input.domainId]: { tone: result.ok ? "success" : "error", text: result.message },
+        [input.domainId]: {
+          tone: result.ok ? (result.warning ? "warning" : "success") : "error",
+          text: result.message,
+        },
       }));
     },
     onError: (error, input) => {
@@ -360,6 +392,7 @@ export default function Settings() {
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Globe className="size-5" /></span><div><h2 className="font-bold">Bestehende Domain anbinden</h2><p className="text-xs text-muted-foreground">Kein Domainkauf. Zwei Stufen: Account-Domain = alle Funnel dieses Kontos unter /f/slug (günstig / klickwerk-Muster). Funnel-Domain = Root zeigt nur diesen Funnel. Nicht parallel am Freebie binden.</p></div></div>
+        <ChromeHostReuseNotice />
         {bindablePortalDomains.length > 0 ? (
           <div className="mt-5 rounded-xl border border-dashed border-slate-200 p-4">
             <p className="text-sm font-semibold">Aus Adbot-Domains übernehmen</p>
@@ -582,7 +615,7 @@ export default function Settings() {
             </li>
           ))}
           {(customDomainsQuery.data?.length ?? 0) === 0 ? (
-            <li className="text-sm text-muted-foreground">Noch keine bestehende Domain angebunden. Am zuverlässigsten eine Subdomain wie <code>karriere.dein-unternehmen.de</code>. Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
+            <li className="text-sm text-muted-foreground">Noch keine bestehende Domain angebunden. Am zuverlässigsten eine Subdomain, die beim Hoster noch nie als Website lag, z. B. <code>karriere.dein-unternehmen.de</code>. Der Shared-Host-Pfad `/f/…` bleibt unverändert nutzbar.</li>
           ) : null}
         </ul>
       </section>

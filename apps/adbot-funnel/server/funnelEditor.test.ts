@@ -148,9 +148,13 @@ describe("Funnel-Seiteneditor", () => {
     expect(librarySource).toContain("window.open(publicUrl");
     expect(librarySource).not.toContain("window.open(`/f/${funnel.slug}`");
     expect(settingsSource).toContain("DomainActionNotice");
+    expect(settingsSource).toContain("ChromeHostReuseNotice");
+    expect(settingsSource).toContain("noch nie als Website");
+    expect(settingsSource).toContain("unsichere Seite");
     expect(settingsSource).toContain("DNS/SSL erneut prüfen");
     expect(settingsSource).not.toContain("https://Hostname/");
     expect(settingsSource).not.toContain("Domain registrieren");
+    expect(settingsSource).not.toContain("ein bis zwei Minuten warten und neu laden");
     const appSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/App.tsx"), "utf8");
     expect(appSource).toContain("/f/:slug/datenschutz");
     expect(appSource).toContain("/datenschutz");
