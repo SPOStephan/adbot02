@@ -8,6 +8,7 @@ import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, patchFunnelPage,
 import { createEditorSaveController } from "@/lib/editorSave";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +86,11 @@ export default function FunnelEditor() {
   const { id: funnelId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const query = trpc.funnel.adminConfig.useQuery(funnelId ? { id: funnelId } : undefined, { enabled: Boolean(funnelId) });
+  const accountDomainsQuery = trpc.funnel.accountDomains.useQuery();
+  const customDomainsQuery = trpc.funnel.customDomains.useQuery(
+    { funnelId: funnelId! },
+    { enabled: Boolean(funnelId) },
+  );
   const utils = trpc.useUtils();
   const save = trpc.funnel.saveConfig.useMutation({
     onError: error => toast.error(error.message),
@@ -244,6 +250,13 @@ export default function FunnelEditor() {
 
   if (!funnelId) return <div className="grid min-h-[60vh] place-items-center gap-3 p-6 text-center" role="alert"><div><p className="font-semibold text-destructive">Keine Funnel-ID angegeben.</p><Button className="mt-4" variant="outline" onClick={() => setLocation("/admin")}>Zur Funnel-Bibliothek</Button></div></div>;
   if (query.error) return <div className="grid min-h-[60vh] place-items-center gap-3 p-6 text-center" role="alert"><div><p className="font-semibold text-destructive">{query.error.message}</p><Button className="mt-4" variant="outline" onClick={() => setLocation("/admin")}>Zur Funnel-Bibliothek</Button></div></div>;
+  const publicUrl = preferredPublicFunnelUrl({
+    slug: config?.slug ?? "",
+    readyCustomHostname: (customDomainsQuery.data ?? []).find(domain => domain.status === "READY")?.hostname,
+    readyAccountHostname: (accountDomainsQuery.data ?? []).find(domain => domain.status === "READY")?.hostname,
+    fallbackOrigin: typeof window === "undefined" ? "" : window.location.origin,
+  });
+
   if (query.isLoading || !config || !selectedPage) return <div className="min-h-[60vh] grid place-items-center text-muted-foreground" role="status" aria-live="polite"><span className="flex items-center gap-2 text-sm"><Loader2 className="animate-spin" aria-hidden="true" />Editor wird geladen …</span></div>;
 
   const selectedIndex = config.pages.findIndex(page => page.id === selectedPage.id);
@@ -297,7 +310,7 @@ export default function FunnelEditor() {
           {save.error && <span className="hidden max-w-52 truncate text-xs text-destructive lg:inline" role="alert">{save.error.message}</span>}
           <Button type="button" size="icon" className="size-10 rounded-full border bg-white shadow-sm" variant="outline" aria-label="Letzten Schritt rückgängig machen" title="Rückgängig" disabled={!history.canUndo} onClick={undoLast}><Undo2 className="size-5" /></Button>
           <Button variant="outline" onClick={() => navigateSafely(`/admin/funnels/${config.id}/settings`)}><Settings2 className="size-4" />Einstellungen</Button>
-          <Button variant="outline" asChild={config.status === "published"} disabled={config.status !== "published"}>{config.status === "published" ? <a href={`/f/${config.slug}`} target="_blank" rel="noreferrer"><ExternalLink className="size-4" />Öffnen</a> : <span title="Veröffentliche den Funnel zuerst"><ExternalLink className="size-4" />Nicht öffentlich</span>}</Button>
+          <Button variant="outline" asChild={config.status === "published"} disabled={config.status !== "published"}>{config.status === "published" ? <a href={publicUrl} target="_blank" rel="noreferrer"><ExternalLink className="size-4" />Öffnen</a> : <span title="Veröffentliche den Funnel zuerst"><ExternalLink className="size-4" />Nicht öffentlich</span>}</Button>
           <Button className="bg-[#0165c3] hover:bg-[#004d98]" disabled={!dirty || save.isPending} aria-busy={save.isPending} onClick={() => persistNow(false)}>{save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}Speichern</Button>
         </div>
       </header>
