@@ -48,3 +48,17 @@ export function toggleFunnelPageHidden(config: FunnelConfig, pageId: string): Fu
   if (!page) return config;
   return setFunnelPageHidden(config, pageId, !isFunnelPageHidden(page));
 }
+
+export type FunnelPagePatch = Partial<FunnelPage> | ((page: FunnelPage) => Partial<FunnelPage>);
+
+export function applyFunnelPagePatch(page: FunnelPage, patch: FunnelPagePatch): FunnelPage {
+  const next = typeof patch === "function" ? patch(page) : patch;
+  return { ...page, ...next } as FunnelPage;
+}
+
+export function patchFunnelPage(config: FunnelConfig, pageId: string, patch: FunnelPagePatch): FunnelConfig {
+  return {
+    ...config,
+    pages: config.pages.map(page => page.id === pageId ? applyFunnelPagePatch(page, patch) : page),
+  };
+}

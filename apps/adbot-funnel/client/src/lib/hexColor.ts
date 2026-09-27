@@ -41,3 +41,19 @@ export function parseRgbComponent(input: string) {
   if (!Number.isFinite(value) || value < 0 || value > 255) return null;
   return value;
 }
+
+export type RgbDraft = { r: string; g: string; b: string };
+
+export function nextRgbDraft(draft: RgbDraft, part: keyof RgbDraft, raw: string): RgbDraft {
+  return { ...draft, [part]: raw };
+}
+
+export function hexFromRgbDraft(draft: RgbDraft) {
+  const parsed = {
+    r: parseRgbComponent(draft.r),
+    g: parseRgbComponent(draft.g),
+    b: parseRgbComponent(draft.b),
+  };
+  if (parsed.r === null || parsed.g === null || parsed.b === null) return null;
+  return rgbToHex(parsed.r, parsed.g, parsed.b);
+}

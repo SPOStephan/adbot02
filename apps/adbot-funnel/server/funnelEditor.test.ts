@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { isFunnelPageHidden, visibleFunnelPages } from "@shared/funnel";
-import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
+import { applyFunnelPagePatch, deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, patchFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
+import { patchStartBadge } from "@shared/startLayout";
 
 const editorSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/admin/FunnelEditor.tsx"), "utf8");
 
@@ -139,5 +140,50 @@ describe("Funnel-Seiteneditor", () => {
     const appSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/App.tsx"), "utf8");
     expect(appSource).toContain("/f/:slug/datenschutz");
     expect(appSource).toContain("/datenschutz");
+  });
+
+  it("speichert Badge- und Start-Hintergrundfarbe beim ersten Persist, auch wenn ein Save noch läuft", () => {
+    expect(editorSource).toContain("createEditorSaveController");
+    expect(editorSource).toContain("bumpRevision");
+    expect(editorSource).toContain("finishPersist");
+    expect(editorSource).toContain("persistNow");
+    expect(editorSource).toContain("configRef.current = next");
+    expect(editorSource).toContain("patchFunnelPage");
+    expect(editorSource).not.toContain("persist(config, false)");
+    expect(editorSource).not.toContain("if (!next || save.isPending) return");
+    const badgesSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/StartBadgesField.tsx"), "utf8");
+    expect(badgesSource).toContain("patchStartBadge");
+    expect(badgesSource).toContain("onChange(current =>");
+    const colorSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../client/src/components/admin/ColorValueEditor.tsx"), "utf8");
+    expect(colorSource).toContain("rgbDraftRef");
+    expect(colorSource).toContain("nextRgbDraft");
+    const start = defaultFunnel.pages[0];
+    if (start?.type !== "start") throw new Error("Startseite fehlt");
+    const seeded = applyFunnelPagePatch(start, {
+      heroSectionBackground: "",
+      badges: [{ id: "badge-1", label: "Homeoffice", icon: "", iconPosition: "left" as const }],
+    });
+    const withHero = applyFunnelPagePatch(seeded, { heroSectionBackground: "#FFF4E5" });
+    const withBadgeColor = applyFunnelPagePatch(withHero, current => ({
+      badges: patchStartBadge(
+        current.type === "start" ? current.badges ?? [] : [],
+        "badge-1",
+        { backgroundColor: "#0165C3" },
+      ),
+    }));
+    const withBothColors = applyFunnelPagePatch(withBadgeColor, current => ({
+      badges: patchStartBadge(
+        current.type === "start" ? current.badges ?? [] : [],
+        "badge-1",
+        { textColor: "#FFFFFF" },
+      ),
+    }));
+    if (withBothColors.type !== "start") throw new Error("Startseite fehlt");
+    expect(withBothColors.heroSectionBackground).toBe("#FFF4E5");
+    expect(withBothColors.badges[0]).toMatchObject({ backgroundColor: "#0165C3", textColor: "#FFFFFF" });
+    const saved = patchFunnelPage(defaultFunnel, start.id, { heroSectionBackground: "#FFF4E5" });
+    const savedStart = saved.pages[0];
+    if (savedStart?.type !== "start") throw new Error("Startseite fehlt");
+    expect(savedStart.heroSectionBackground).toBe("#FFF4E5");
   });
 });

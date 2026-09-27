@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HexColorTextInput } from "@/components/admin/HexColorTextInput";
 import { Input } from "@/components/ui/input";
-import { hexToRgb, normalizeHexColor, parseRgbComponent, rgbToHex } from "@/lib/hexColor";
+import { hexFromRgbDraft, hexToRgb, nextRgbDraft, normalizeHexColor } from "@/lib/hexColor";
 
 const FALLBACK_HEX = "#10253F";
 
@@ -17,22 +17,22 @@ export function ColorValueEditor({
   const hex = normalizeHexColor(value) ?? FALLBACK_HEX;
   const rgb = hexToRgb(hex) ?? { r: 16, g: 37, b: 63 };
   const [rgbDraft, setRgbDraft] = useState({ r: String(rgb.r), g: String(rgb.g), b: String(rgb.b) });
+  const rgbDraftRef = useRef(rgbDraft);
+  rgbDraftRef.current = rgbDraft;
 
   useEffect(() => {
     const parsed = hexToRgb(hex) ?? { r: 16, g: 37, b: 63 };
-    setRgbDraft({ r: String(parsed.r), g: String(parsed.g), b: String(parsed.b) });
+    const next = { r: String(parsed.r), g: String(parsed.g), b: String(parsed.b) };
+    rgbDraftRef.current = next;
+    setRgbDraft(next);
   }, [hex]);
 
   const commitRgb = (part: "r" | "g" | "b", raw: string) => {
-    const nextDraft = { ...rgbDraft, [part]: raw };
+    const nextDraft = nextRgbDraft(rgbDraftRef.current, part, raw);
+    rgbDraftRef.current = nextDraft;
     setRgbDraft(nextDraft);
-    const parsed = {
-      r: parseRgbComponent(nextDraft.r),
-      g: parseRgbComponent(nextDraft.g),
-      b: parseRgbComponent(nextDraft.b),
-    };
-    if (parsed.r === null || parsed.g === null || parsed.b === null) return;
-    onChange(rgbToHex(parsed.r, parsed.g, parsed.b));
+    const committed = hexFromRgbDraft(nextDraft);
+    if (committed) onChange(committed);
   };
 
   return (

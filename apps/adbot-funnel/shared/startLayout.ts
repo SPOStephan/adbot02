@@ -147,6 +147,10 @@ export function moveStartBadge(badges: StartBadge[], fromId: string, toId: strin
   return next;
 }
 
+export function patchStartBadge(badges: StartBadge[], id: string, next: Partial<StartBadge>): StartBadge[] {
+  return badges.map(item => item.id === id ? { ...item, ...next } : item);
+}
+
 export function resolveBadgeColors(
   badge: Pick<StartBadge, "backgroundColor" | "textColor">,
   fallbackText: string,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, patchStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -139,6 +139,12 @@ describe("Startseiten-Layouts", () => {
     expect(moveStartBadge(start.badges, "badge-2", "badge-1").map(badge => badge.id)).toEqual(["badge-2", "badge-1"]);
     expect(moveStartBadge(start.badges, "badge-1", "badge-1")).toBe(start.badges);
     expect(moveStartBadge(start.badges, "fehlt", "badge-1")).toBe(start.badges);
+    const colored = patchStartBadge(
+      patchStartBadge(start.badges, "badge-1", { backgroundColor: "#0165C3" }),
+      "badge-1",
+      { textColor: "#FFFFFF" },
+    );
+    expect(colored[0]).toMatchObject({ backgroundColor: "#0165C3", textColor: "#FFFFFF" });
   });
 
   it("normalisiert Bestands-Startseiten ohne Layout-Felder", () => {

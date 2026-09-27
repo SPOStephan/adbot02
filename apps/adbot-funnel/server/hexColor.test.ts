@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHexColorDraft, hexToRgb, normalizeHexColor, parseRgbComponent, rgbToHex } from "../client/src/lib/hexColor";
+import { formatHexColorDraft, hexFromRgbDraft, hexToRgb, nextRgbDraft, normalizeHexColor, parseRgbComponent, rgbToHex } from "../client/src/lib/hexColor";
 
 describe("direkte Hex-Farbeingabe", () => {
   it("akzeptiert eingefügte Werte mit und ohne Raute und normalisiert Großschreibung", () => {
@@ -29,5 +29,13 @@ describe("direkte Hex-Farbeingabe", () => {
     expect(parseRgbComponent("255")).toBe(255);
     expect(parseRgbComponent("256")).toBeNull();
     expect(parseRgbComponent("")).toBeNull();
+  });
+
+  it("führt schnelle RGB-Eingaben nacheinander zusammen, statt den ersten Kanal zu verlieren", () => {
+    let draft = { r: "1", g: "101", b: "195" };
+    draft = nextRgbDraft(draft, "r", "255");
+    draft = nextRgbDraft(draft, "g", "80");
+    expect(hexFromRgbDraft(draft)).toBe("#FF50C3");
+    expect(hexFromRgbDraft(nextRgbDraft(draft, "b", "x"))).toBeNull();
   });
 });

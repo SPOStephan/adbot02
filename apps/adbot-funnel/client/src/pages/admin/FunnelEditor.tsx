@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
 import { clampCopySizeStep } from "@shared/copySize";
 import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
-import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, toggleFunnelPageHidden } from "@shared/funnelEditor";
+import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, patchFunnelPage, toggleFunnelPageHidden, type FunnelPagePatch } from "@shared/funnelEditor";
+import { createEditorSaveController } from "@/lib/editorSave";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { trpc } from "@/lib/trpc";
@@ -95,10 +96,15 @@ export default function FunnelEditor() {
   const history = useFunnelEditorHistory();
   const loadedIdRef = useRef<string | null>(null);
   const configRef = useRef<FunnelConfig | undefined>(undefined);
+  const selectedIdRef = useRef("");
   const autosaveTimerRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const saveController = useRef(createEditorSaveController<FunnelConfig>({
+    getLatest: () => configRef.current,
+  })).current;
 
   useEffect(() => { configRef.current = config; }, [config]);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -111,6 +117,9 @@ export default function FunnelEditor() {
     if (!query.data?.config) return;
     if (loadedIdRef.current === query.data.config.id && configRef.current) return;
     loadedIdRef.current = query.data.config.id;
+    configRef.current = query.data.config;
+    selectedIdRef.current = query.data.config.pages[0]?.id ?? "";
+    saveController.reset();
     setConfig(query.data.config);
     setSelectedId(query.data.config.pages[0]?.id ?? "");
     setDirty(false);
@@ -118,47 +127,65 @@ export default function FunnelEditor() {
     setAutosaveLabel("");
   }, [query.data?.config]);
 
-  const persist = (next: FunnelConfig, silent: boolean) => {
-    save.mutate(next, {
+  const persist = (silent: boolean) => {
+    const request = saveController.requestPersist(silent);
+    if (request.action !== "start" || !request.payload) return;
+    save.mutate(request.payload, {
       onSuccess: async () => {
-        setDirty(false);
-        setAutosaveLabel(silent ? "Automatisch gespeichert" : "Gespeichert");
-        if (!silent) {
-          toast.success("Funnel gespeichert");
-          await utils.funnel.funnels.invalidate();
+        const result = saveController.finishPersist(true);
+        if (result.clearDirty) {
+          setDirty(false);
+          setAutosaveLabel(silent ? "Automatisch gespeichert" : "Gespeichert");
+          if (!silent) {
+            toast.success("Funnel gespeichert");
+            await utils.funnel.funnels.invalidate();
+          }
         }
+        if (result.replay) persist(result.replay.silent);
+      },
+      onError: () => {
+        const result = saveController.finishPersist(false);
+        if (result.replay) persist(result.replay.silent);
       },
     });
+  };
+
+  const persistNow = (silent: boolean) => {
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    persist(silent);
   };
 
   const scheduleAutosave = () => {
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = window.setTimeout(() => {
-      const next = configRef.current;
-      if (!next || save.isPending) return;
-      persist(next, true);
+      persist(true);
     }, 1500);
   };
 
   useEffect(() => {
     intervalRef.current = window.setInterval(() => {
-      const next = configRef.current;
-      if (!next || !dirty || save.isPending) return;
-      persist(next, true);
+      if (!configRef.current || !dirty) return;
+      persist(true);
     }, 60_000);
     return () => {
       if (intervalRef.current) window.clearInterval(intervalRef.current);
       if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     };
-  }, [dirty, save.isPending]);
+  }, [dirty]);
 
   const selectedPage = useMemo(() => config?.pages.find(page => page.id === selectedId) ?? config?.pages[0], [config, selectedId]);
   const changeConfig = (updater: (current: FunnelConfig) => FunnelConfig, immediate = true) => {
     setConfig(current => {
       if (!current) return current;
       history.record(current, immediate);
-      return updater(current);
+      const next = updater(current);
+      configRef.current = next;
+      return next;
     });
+    saveController.bumpRevision();
     setDirty(true);
     scheduleAutosave();
   };
@@ -209,7 +236,7 @@ export default function FunnelEditor() {
       toast.error("Die Logo-Datei konnte nicht gelesen werden.");
     }
   };
-  const patchPage = (patch: Partial<FunnelPage>, immediate = true) => changeConfig(current => ({ ...current, pages: current.pages.map(page => page.id === selectedId ? ({ ...page, ...patch } as FunnelPage) : page) }), immediate);
+  const patchPage = (patch: FunnelPagePatch, immediate = true) => changeConfig(current => patchFunnelPage(current, selectedIdRef.current, patch), immediate);
   const navigateSafely = (path: string) => {
     if (dirty && !window.confirm("Ungespeicherte Änderungen verwerfen?")) return;
     setLocation(path);
@@ -223,6 +250,8 @@ export default function FunnelEditor() {
   const undoLast = () => {
     const previous = history.undo();
     if (!previous) return;
+    configRef.current = previous;
+    saveController.bumpRevision();
     setConfig(previous);
     setSelectedId(current => previous.pages.some(page => page.id === current) ? current : previous.pages[0]?.id ?? "");
     setDirty(true);
@@ -269,7 +298,7 @@ export default function FunnelEditor() {
           <Button type="button" size="icon" className="size-10 rounded-full border bg-white shadow-sm" variant="outline" aria-label="Letzten Schritt rückgängig machen" title="Rückgängig" disabled={!history.canUndo} onClick={undoLast}><Undo2 className="size-5" /></Button>
           <Button variant="outline" onClick={() => navigateSafely(`/admin/funnels/${config.id}/settings`)}><Settings2 className="size-4" />Einstellungen</Button>
           <Button variant="outline" asChild={config.status === "published"} disabled={config.status !== "published"}>{config.status === "published" ? <a href={`/f/${config.slug}`} target="_blank" rel="noreferrer"><ExternalLink className="size-4" />Öffnen</a> : <span title="Veröffentliche den Funnel zuerst"><ExternalLink className="size-4" />Nicht öffentlich</span>}</Button>
-          <Button className="bg-[#0165c3] hover:bg-[#004d98]" disabled={!dirty || save.isPending} aria-busy={save.isPending} onClick={() => persist(config, false)}>{save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}Speichern</Button>
+          <Button className="bg-[#0165c3] hover:bg-[#004d98]" disabled={!dirty || save.isPending} aria-busy={save.isPending} onClick={() => persistNow(false)}>{save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}Speichern</Button>
         </div>
       </header>
 
@@ -489,7 +518,7 @@ function ChoiceOptionsFields({
   patch,
 }: {
   page: ChoicePage;
-  patch: (value: Partial<FunnelPage>, immediate?: boolean) => void;
+  patch: (value: FunnelPagePatch, immediate?: boolean) => void;
 }) {
   const addOption = () => patch({
     options: [...page.options, { id: crypto.randomUUID(), label: "Neue Option", value: `option-${page.options.length + 1}`, icon: "sparkles" }],
@@ -563,7 +592,7 @@ function StartPageFields({
   brandColor: string;
   brandBackground: string;
   brandTextColor: string;
-  patch: (value: Partial<FunnelPage>, immediate?: boolean) => void;
+  patch: (value: FunnelPagePatch, immediate?: boolean) => void;
 }) {
   const layout = resolveStartLayout(page);
   const tileLayout = resolveBenefitsTileLayout(page.benefitsTileLayout);
@@ -610,7 +639,9 @@ function StartPageFields({
             badges={page.badges ?? []}
             brandColor={brandColor}
             fallbackTextColor={brandTextColor}
-            onChange={badges => patch({ badges } as Partial<FunnelPage>)}
+            onChange={update => patch(current => ({
+              badges: update(current.type === "start" ? current.badges ?? [] : []),
+            }))}
           />
           <FormRow label="Trenner-Überschrift" hint="Volle Fläche in der Brandingfarbe, z. B. „Deine Vorteile bei uns“.">
             <FormattedTextField rows={1} value={page.benefitsBandTitle} onChange={value => patch({ benefitsBandTitle: value } as Partial<FunnelPage>, false)} />
@@ -819,6 +850,6 @@ function OptionalProgressColor({
   );
 }
 
-function ContactEditor({ page, patch }: { page: ContactPage; patch: (value: Partial<FunnelPage>) => void }) {
+function ContactEditor({ page, patch }: { page: ContactPage; patch: (value: FunnelPagePatch) => void }) {
   return <div className="grid gap-4"><Label>Formularfelder</Label>{page.fields.map(field => <div key={field.key} className="grid gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex items-center justify-between gap-3"><strong className="text-sm">{field.key}</strong><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs">Aktiv<Switch checked={field.enabled} onCheckedChange={enabled => patch({ fields: page.fields.map(item => item.key === field.key ? { ...item, enabled } : item) } as Partial<FunnelPage>)} /></label><label className="flex items-center gap-2 text-xs">Pflicht<Switch checked={field.required} disabled={!field.enabled} onCheckedChange={required => patch({ fields: page.fields.map(item => item.key === field.key ? { ...item, required } : item) } as Partial<FunnelPage>)} /></label></div></div><Input value={field.label} onChange={event => patch({ fields: page.fields.map(item => item.key === field.key ? { ...item, label: event.target.value } : item) } as Partial<FunnelPage>)} /><Input value={field.placeholder} onChange={event => patch({ fields: page.fields.map(item => item.key === field.key ? { ...item, placeholder: event.target.value } : item) } as Partial<FunnelPage>)} /></div>)}<FormRow label="Datenschutz-Einwilligung"><FormattedTextField rows={3} value={page.consentLabel} onChange={value => patch({ consentLabel: value } as Partial<FunnelPage>)} /></FormRow><label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Lebenslauf-Upload</strong><small className="text-muted-foreground">PDF, DOC und DOCX</small></span><Switch checked={page.resumeEnabled} onCheckedChange={resumeEnabled => patch({ resumeEnabled } as Partial<FunnelPage>)} /></label>{page.resumeEnabled && <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm font-semibold">Upload als Pflichtfeld</span><Switch checked={page.resumeRequired} onCheckedChange={resumeRequired => patch({ resumeRequired } as Partial<FunnelPage>)} /></label>}<FormRow label="Erfolgsüberschrift"><FormattedTextField rows={1} value={page.successTitle} onChange={value => patch({ successTitle: value } as Partial<FunnelPage>)} /></FormRow><FormRow label="Erfolgstext"><FormattedTextField rows={3} value={page.successText} onChange={value => patch({ successText: value } as Partial<FunnelPage>)} /></FormRow></div>;
 }

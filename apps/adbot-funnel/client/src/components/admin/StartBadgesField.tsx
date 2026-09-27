@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { ArrowLeftRight, GripVertical, Trash2 } from "lucide-react";
 import type { StartBadge } from "@shared/funnel";
-import { badgeFromTemplate, emptyStartBadge, MAX_START_BADGES, moveStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, START_BADGE_TEMPLATES } from "@shared/startLayout";
+import { badgeFromTemplate, emptyStartBadge, MAX_START_BADGES, moveStartBadge, patchStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, START_BADGE_TEMPLATES } from "@shared/startLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,7 @@ export function StartBadgesField({
   badges: StartBadge[];
   brandColor: string;
   fallbackTextColor: string;
-  onChange: (badges: StartBadge[]) => void;
+  onChange: (update: (current: StartBadge[]) => StartBadge[]) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -30,12 +30,12 @@ export function StartBadgesField({
 
   const add = (badge: StartBadge, edit = false) => {
     if (atLimit) return;
-    onChange([...badges, badge]);
+    onChange(current => [...current, badge]);
     if (edit) setEditingId(badge.id);
   };
 
   const patch = (id: string, next: Partial<StartBadge>) => {
-    onChange(badges.map(item => item.id === id ? { ...item, ...next } : item));
+    onChange(current => patchStartBadge(current, id, next));
   };
 
   return (
@@ -88,7 +88,7 @@ export function StartBadgesField({
                 onDrop={event => {
                   event.preventDefault();
                   const fromId = event.dataTransfer.getData(BADGE_DRAG_TYPE) || event.dataTransfer.getData("text/plain");
-                  onChange(moveStartBadge(badges, fromId, badge.id));
+                  onChange(current => moveStartBadge(current, fromId, badge.id));
                   setDraggingId(null);
                   setDropTargetId(null);
                 }}
@@ -131,7 +131,7 @@ export function StartBadgesField({
                   aria-label={`${badge.label} löschen`}
                   onClick={() => {
                     if (editingId === badge.id) setEditingId(null);
-                    onChange(badges.filter(item => item.id !== badge.id));
+                    onChange(current => current.filter(item => item.id !== badge.id));
                   }}
                 >
                   <Trash2 className="size-3.5" />
