@@ -347,7 +347,10 @@ export async function createFunnel(config: FunnelConfig, owner?: Partial<FunnelO
   return normalizeConfig(data);
 }
 
-export async function saveFunnel(config: FunnelConfig): Promise<FunnelConfig> {
+export async function saveFunnel(
+  config: FunnelConfig,
+  options: { notificationEmailWrite?: "set" | "preserve" } = {},
+): Promise<FunnelConfig> {
   const normalized = normalizeFunnelConfig(config);
   const supabase = getSupabase();
   if (!supabase) {
@@ -356,7 +359,12 @@ export async function saveFunnel(config: FunnelConfig): Promise<FunnelConfig> {
     const existing = memoryFunnels.find(item => item.config.id === normalized.id);
     const now = new Date().toISOString();
     if (existing) {
-      existing.config = structuredClone(normalized);
+      existing.config = structuredClone({
+        ...normalized,
+        notificationEmail: options.notificationEmailWrite === "preserve"
+          ? existing.config.notificationEmail
+          : normalized.notificationEmail,
+      });
       existing.updatedAt = now;
     } else {
       memoryFunnels.unshift({
@@ -372,9 +380,21 @@ export async function saveFunnel(config: FunnelConfig): Promise<FunnelConfig> {
   const { data: existingRow, error: readError } = await supabase.from("funnels").select("config").eq("id", normalized.id).maybeSingle();
   if (readError) throw readError;
   const serverPrivate = readServerPrivate(existingRow?.config);
+  const payload = funnelPayload(normalized, serverPrivate);
+  if (options.notificationEmailWrite === "preserve") {
+    const { notification_email: _notificationEmail, ...payloadWithoutNotificationEmail } = payload;
+    const { data, error } = await supabase
+      .from("funnels")
+      .update(payloadWithoutNotificationEmail)
+      .eq("id", normalized.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return normalizeConfig(data);
+  }
   const { data, error } = await supabase
     .from("funnels")
-    .upsert(funnelPayload(normalized, serverPrivate), { onConflict: "id" })
+    .upsert(payload, { onConflict: "id" })
     .select("*")
     .single();
   if (error) throw error;

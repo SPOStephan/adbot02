@@ -555,11 +555,17 @@ export const funnelRouter = router({
     });
   }),
 
-  saveConfig: adminProcedure.input(funnelConfigSchema).mutation(async ({ input, ctx }) => {
+  saveConfig: adminProcedure.input(funnelConfigSchema.safeExtend({
+    notificationEmailWrite: z.enum(["set", "preserve"]).default("set"),
+  })).mutation(async ({ input, ctx }) => {
     await requireOwnedFunnel(input.id, ctx.user);
     const slug = slugifyFunnel(input.slug);
     await assertSlugAvailable(slug, input.id);
-    return saveFunnel({ ...input, slug, isPublished: input.status === "published" });
+    const { notificationEmailWrite, ...config } = input;
+    return saveFunnel(
+      { ...config, slug, isPublished: input.status === "published" },
+      { notificationEmailWrite },
+    );
   }),
 
   saveMetaServerSettings: adminProcedure.input(metaServerSettingsSchema).mutation(async ({ input, ctx }) => {

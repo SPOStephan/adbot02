@@ -86,6 +86,22 @@ describe("Funnel-Router", () => {
     expect(result.leadValue).toBe(150);
   });
 
+  it("bewahrt eine erstmals gesetzte Empfänger-E-Mail vor einem nachlaufenden Editor-Save", async () => {
+    const admin = appRouter.createCaller(adminContext);
+    const { config } = await admin.funnel.adminConfig();
+    const staleEditorConfig = structuredClone(config);
+
+    await admin.funnel.saveConfig({ ...config, notificationEmail: "bewerbung@example.org", notificationEmailWrite: "set" });
+    await admin.funnel.saveConfig({ ...staleEditorConfig, title: "Editor-Änderung", notificationEmailWrite: "preserve" });
+
+    const afterEditorSave = (await admin.funnel.adminConfig({ id: config.id })).config;
+    expect(afterEditorSave.notificationEmail).toBe("bewerbung@example.org");
+
+    await admin.funnel.saveConfig({ ...afterEditorSave, notificationEmail: "jobs@example.org", notificationEmailWrite: "set" });
+
+    expect((await admin.funnel.adminConfig({ id: config.id })).config.notificationEmail).toBe("jobs@example.org");
+  });
+
   it("liefert den Shared-Funnel nicht auf unbekannten Custom-Hosts", async () => {
     const caller = appRouter.createCaller(publicContext);
     await expect(
