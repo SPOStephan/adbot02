@@ -9,9 +9,9 @@ export type LiveSetupStep = {
 };
 
 export const LIVE_SETUP_GUIDE = {
-  title: "Erster Live-Test: Funnel, Pixel und Leads",
+  title: "Funnel mit Meta bewerben",
   intro:
-    "Diese Schritte reichen, damit eine echte Bewerbung als Conversion bei Meta ankommt — und du später gute von schlechten Leads unterscheiden kannst.",
+    "Diese Schritte reichen, damit Adbot eine Meta-Kampagne startet, Funnel-Abschlüsse zuverlässig als Leads meldet und spätere Qualitätsbewertungen an Meta zurückgibt.",
 } as const;
 
 export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
@@ -19,13 +19,13 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
     id: "pixel",
     title: "Meta Pixel in Adbot verbinden",
     summary:
-      "Unter Tracking die Pixel aus dem verbundenen Werbekonto laden, CAPI prüfen und bestätigen. Funnel und Freebie übernehmen sie automatisch, wenn dort noch keine andere steht.",
-    href: "/dashboard/tracking",
-    actionLabel: "Zu Tracking",
+      "Beim Kampagnenstart die Pixel aus dem verbundenen Werbekonto laden, Conversions API prüfen und bestätigen. Funnel und Freebie übernehmen sie automatisch, wenn dort noch keine andere steht.",
+    href: "/dashboard/traffic-launch",
+    actionLabel: "Kampagne einrichten",
     details: [
       "Meta muss bereits verbunden sein. Adbot listet Pixel am verbundenen Werbekonto — nicht aus dem Events Manager kopieren.",
       "Pixel wählen und „CAPI prüfen und Pixel bestätigen“ klicken. Adbot sendet eine Probe mit dem Connection-Token.",
-      "Nur wenn die Probe ankommt, ist das der Kundenweg. Conversion-Event bleibt im Regelfall LEAD.",
+      "Nur wenn die Probe ankommt, ist die serverseitige Lead-Meldung freigegeben. Conversion-Event bleibt im Regelfall LEAD.",
       "Wenn Liste oder Probe scheitert: Pixel/Dataset in der Login-for-Business-Konfiguration zuweisen, dann Meta neu verbinden. Ein Events-Manager-Token ist nicht der Kundenweg.",
     ],
   },
@@ -33,7 +33,7 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
     id: "funnel-tracking",
     title: "Meta-Tracking im Funnel einschalten",
     summary:
-      "Im Funnel unter Einstellungen den Schalter „Meta-Tracking aktiv“ setzen. Serverseitige CAPI kommt aus der Meta-Verbindung im Portal — kein Events-Manager-Token.",
+      "Adbot prüft beim Kampagnenstart, ob Pixel und Lead-Event im gewählten Funnel aktiv sind, und synchronisiert sie bei Bedarf.",
     href: "/api/funnel/sso",
     external: true,
     actionLabel: "Funnel öffnen",
@@ -59,28 +59,28 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
   },
   {
     id: "canary",
-    title: "Lead-Canary vorbereiten",
+    title: "Meta-Kampagne einrichten",
     summary:
-      "Unter Traffic-Launch den Lead-Canary mit Funnel-URL, Pixel und kleinem Tagesbudget starten.",
+      "Funnel, Zielgebiet, Pixel, Werbemittel, Texte und Tagesbudget direkt im Kampagnenstart festlegen.",
     href: "/dashboard/traffic-launch",
-    actionLabel: "Zum Traffic-Launch",
+    actionLabel: "Kampagne einrichten",
     details: [
       "Meta muss verbunden sein, Policy und Freigeben aktiv, Pixel bestätigt und eine READY-Domain gewählt.",
-      "Lead-Canary nutzt Lead-Generierung und optimiert auf Offsite-Conversions (Lead) — getrennt vom Traffic-Canary und vom Beitrag-Push.",
-      "Zuerst ein kleines Tagesbudget. Nach dem Start eine eindeutig als Test markierte Bewerbung über die Anzeige oder die Funnel-URL absenden.",
+      "Adbot nutzt Lead-Generierung und optimiert zunächst auf Funnel-Abschlüsse; mit genügend Qualitätsdaten kann eine neue Kampagne auf qualifizierte Leads optimieren.",
+      "Vor dem Start zeigt Adbot Werbemittel, Texte, Funnel, Pixel und Tagesbudget in einer Vorschau.",
     ],
   },
   {
     id: "test-lead",
-    title: "Testbewerbung und Events Manager",
+    title: "Eingehende Conversions kontrollieren",
     summary:
-      "Eine Testbewerbung absenden und im Meta Events Manager prüfen, dass Lead ankommt.",
+      "Nach dem Kampagnenstart im Meta Events Manager kontrollieren, dass Funnel-Abschlüsse als Lead ankommen.",
     href: "/dashboard/tracking",
     actionLabel: "Zu Tracking",
     details: [
-      "Optional: Im Funnel einen Test-Event-Code aus dem Events Manager eintragen, Testbewerbung senden, Code danach wieder leeren.",
-      "Im Events Manager unter Test Events sollte Lead erscheinen — Browser-Pixel plus Serversignal über die Meta-Verbindung zur selben Event-ID.",
-      "Testdatensatz in der Funnel-Bewerbungsübersicht nach der Kontrolle löschen oder als Test markieren.",
+      "Im Events Manager sollte Lead erscheinen — Browser-Pixel plus Serversignal über die Meta-Verbindung zur selben Event-ID.",
+      "Adbot speichert den Funnel-Abschluss parallel in der Eingangsübersicht.",
+      "Bei einer Fehlermeldung Pixel und Conversions API direkt im Kampagnenstart erneut prüfen.",
     ],
   },
   {
@@ -92,9 +92,9 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
     external: true,
     actionLabel: "Bewerbungen öffnen",
     details: [
-      "Im Funnel unter Bewerbungen eine Einsendung öffnen und Gut oder Schlecht wählen. Gut sendet an Meta das Ereignis Subscribe mit Wert, Schlecht sendet DisqualifiedLead mit niedrigem Wert.",
+      "Im Funnel unter Eingänge eine Einsendung öffnen und Gut oder Schlecht wählen. Gut sendet an Meta QualifiedLead mit Wert, Schlecht DisqualifiedLead mit niedrigem Wert.",
       "Im Funnel-Editor kannst du pro Antwortoption einen Euro-Wert setzen (zum Beispiel mehr Berufserfahrung = höherer Wert). Die Summe geht schon beim Absenden mit dem Lead an Meta.",
-      "Meta kann dadurch auf Wert und auf qualifizierte Leads optimieren. Die laufende Lead-Kampagne ändert sich nicht von selbst — wenn genug Gut-Bewertungen da sind, stellst du in Meta die Optimierung auf Subscribe oder Wert um.",
+      "Meta kann dadurch auf qualifizierte Leads lernen. Laufende Kampagnen werden nicht still verändert; das Performance-Ziel wird bei einer neuen Kampagne ausdrücklich gewählt.",
     ],
   },
 ];

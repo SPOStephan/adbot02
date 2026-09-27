@@ -1020,7 +1020,7 @@ const pixelBindingSource = await readFile(
 );
 assert.match(pixelBindingSource, /Funnel und Freebie übernehmen die ID/);
 assert.match(pixelBindingSource, /Funnel absendet oder/);
-assert.match(pixelBindingSource, /Meta Pixel global verbinden/);
+assert.match(pixelBindingSource, /Meta Pixel für Kampagnen verbinden/);
 assert.match(pixelBindingSource, /CAPI prüfen und Pixel bestätigen/);
 assert.match(pixelBindingSource, /Events-Manager-Token/);
 assert.match(pixelBindingSource, /action: "list"/);

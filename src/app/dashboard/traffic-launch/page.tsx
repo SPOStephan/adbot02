@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { CampaignGeoTargetCard } from "@/components/CampaignGeoTargetCard";
 import { LeadLaunchCanary } from "@/components/LeadLaunchCanary";
-import { LiveSetupChecklist } from "@/components/LiveSetupGuide";
+import { MetaPixelBinding } from "@/components/MetaPixelBinding";
 import {
   TrafficLaunchCanary,
 } from "@/components/TrafficLaunchCanary";
@@ -14,7 +14,10 @@ import {
 import { listReadyCustomerCustomDomains } from "@/lib/custom-domains/service";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
-import { listFunnelPurposeHints } from "@/lib/funnel-purpose-hints";
+import {
+  listFunnelPurposeHints,
+  resolvePublicFunnelPurposeHint,
+} from "@/lib/funnel-purpose-hints";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -43,6 +46,13 @@ async function TrafficLaunchBody({
   if (!user) {
     redirect("/login?next=/dashboard/traffic-launch");
   }
+
+  const initialFunnelUrl =
+    typeof query.funnelUrl === "string" &&
+    query.funnelUrl.length <= 2_000 &&
+    query.funnelUrl.startsWith("https://")
+      ? query.funnelUrl
+      : null;
 
   const ideaId =
     typeof query.ideaId === "string" && /^[0-9a-f-]{36}$/i.test(query.ideaId)
@@ -83,15 +93,22 @@ async function TrafficLaunchBody({
     marketingCurrency,
   } = await loadCustomerDashboard(user, query, { sideEffects: false });
 
-  let readyCustomDomains: Awaited<
-    ReturnType<typeof listReadyCustomerCustomDomains>
-  > = [];
-  try {
-    readyCustomDomains = await listReadyCustomerCustomDomains(user.id);
-  } catch {
-    readyCustomDomains = [];
-  }
-  const funnelPurposeHints = await listFunnelPurposeHints(user.id).catch(() => []);
+  const [readyCustomDomains, storedFunnelPurposeHints, initialFunnelPurposeHint] =
+    await Promise.all([
+      listReadyCustomerCustomDomains(user.id).catch(() => []),
+      listFunnelPurposeHints(user.id).catch(() => []),
+      initialFunnelUrl
+        ? resolvePublicFunnelPurposeHint(initialFunnelUrl).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+  const funnelPurposeHints = initialFunnelPurposeHint
+    ? [
+        initialFunnelPurposeHint,
+        ...storedFunnelPurposeHints.filter(
+          (hint) => hint.destinationUrl !== initialFunnelPurposeHint.destinationUrl,
+        ),
+      ]
+    : storedFunnelPurposeHints;
 
   const policyLaunchReady = Boolean(
     policyView?.status === "ACTIVE" &&
@@ -101,14 +118,21 @@ async function TrafficLaunchBody({
 
   if (!metaConnected || !metaAccount) {
     return (
-      <div className="mt-8 space-y-6">
-        <LiveSetupChecklist currentId="canary" />
-        <CampaignGeoTargetCard compact />
+      <div className="mt-8">
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
           <p className="font-bold">Meta ist noch nicht verbunden.</p>
           <p className="mt-1 text-sm leading-6">
-            Verbinde Meta auf der Übersicht, bevor du Launches vorbereitest.
+            Verbinde jetzt das Werbekonto. Danach werden Facebook-Seite, Instagram-Konto,
+            Pixel und Kampagnenberechtigungen direkt hier geladen.
           </p>
+          <form action="/api/connectors/meta/start" className="mt-4" method="post">
+            <button
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800"
+              type="submit"
+            >
+              Meta jetzt verbinden
+            </button>
+          </form>
         </section>
       </div>
     );
@@ -116,62 +140,60 @@ async function TrafficLaunchBody({
 
   return (
     <div className="mt-8 space-y-8">
-      <LiveSetupChecklist currentId="canary" />
+      {onboardingData.pixels.length === 0 ? (
+        <MetaPixelBinding pixels={onboardingData.pixels} standalone />
+      ) : null}
       <CampaignGeoTargetCard compact />
-      <TrafficLaunchCanary
-        brandProfileId={brandProfileView?.id ?? null}
-        currency={marketingCurrency}
-        data={onboardingData}
-        facebookPages={launchFacebookPages}
-        instagramAccounts={launchInstagramAccounts}
-        initialAssetId={
-          typeof query.assetId === "string" &&
-          /^[0-9a-f-]{36}$/i.test(query.assetId) &&
-          query.assetId !== ideaRow?.screenshot_asset_id
-            ? query.assetId
-            : ideaAssetId
-        }
-        initialDestinationUrl={
-          typeof ideaRow?.destination_url === "string"
-            ? ideaRow.destination_url
-            : null
-        }
-        initialPrimaryText={
-          typeof realizedCopy?.primaryText === "string"
-            ? realizedCopy.primaryText
-            : typeof realizedCopy?.primary_text === "string"
-              ? realizedCopy.primary_text
+      {!initialFunnelUrl ? (
+        <TrafficLaunchCanary
+          brandProfileId={brandProfileView?.id ?? null}
+          currency={marketingCurrency}
+          data={onboardingData}
+          facebookPages={launchFacebookPages}
+          instagramAccounts={launchInstagramAccounts}
+          initialAssetId={
+            typeof query.assetId === "string" &&
+            /^[0-9a-f-]{36}$/i.test(query.assetId) &&
+            query.assetId !== ideaRow?.screenshot_asset_id
+              ? query.assetId
+              : ideaAssetId
+          }
+          initialDestinationUrl={
+            typeof ideaRow?.destination_url === "string"
+              ? ideaRow.destination_url
               : null
-        }
-        initialHeadline={
-          typeof realizedCopy?.headline === "string"
-            ? realizedCopy.headline
-            : null
-        }
-        initialDescription={
-          typeof realizedCopy?.description === "string"
-            ? realizedCopy.description
-            : null
-        }
-        initialFacebookPageId={brandProfileView?.facebookPageId}
-        initialInstagramActorId={brandProfileView?.instagramActorId}
-        killSwitchMode={killSwitchView?.mode ?? "FREEZE_WRITES"}
-        policyLaunchReady={policyLaunchReady}
-        writeScopeGranted={writeScopeGranted}
-      />
+          }
+          initialPrimaryText={
+            typeof realizedCopy?.primaryText === "string"
+              ? realizedCopy.primaryText
+              : typeof realizedCopy?.primary_text === "string"
+                ? realizedCopy.primary_text
+                : null
+          }
+          initialHeadline={
+            typeof realizedCopy?.headline === "string"
+              ? realizedCopy.headline
+              : null
+          }
+          initialDescription={
+            typeof realizedCopy?.description === "string"
+              ? realizedCopy.description
+              : null
+          }
+          initialFacebookPageId={brandProfileView?.facebookPageId}
+          initialInstagramActorId={brandProfileView?.instagramActorId}
+          killSwitchMode={killSwitchView?.mode ?? "FREEZE_WRITES"}
+          policyLaunchReady={policyLaunchReady}
+          writeScopeGranted={writeScopeGranted}
+        />
+      ) : null}
       <LeadLaunchCanary
         brandProfileId={brandProfileView?.id ?? null}
         currency={marketingCurrency}
         data={onboardingData}
         facebookPages={launchFacebookPages}
         instagramAccounts={launchInstagramAccounts}
-        initialDestinationUrl={
-          typeof query.funnelUrl === "string" &&
-          query.funnelUrl.length <= 2_000 &&
-          query.funnelUrl.startsWith("https://")
-            ? query.funnelUrl
-            : null
-        }
+        initialDestinationUrl={initialFunnelUrl}
         initialFacebookPageId={brandProfileView?.facebookPageId}
         initialInstagramActorId={brandProfileView?.instagramActorId}
         killSwitchMode={killSwitchView?.mode ?? "FREEZE_WRITES"}
@@ -187,12 +209,18 @@ async function TrafficLaunchBody({
 export default async function TrafficLaunchPage({ searchParams }: PageProps) {
   const query = await searchParams;
   const copy = DASHBOARD_PAGE_COPY.trafficLaunch;
+  const funnelCampaign =
+    typeof query.funnelUrl === "string" && query.funnelUrl.startsWith("https://");
   return (
     <>
       <DashboardPageHeader
-        description={copy.description}
+        description={
+          funnelCampaign
+            ? "Funnel, Zielgebiet, Pixel, Werbemittel und Anzeigentexte prüfen — anschließend die Meta-Kampagne starten."
+            : copy.description
+        }
         eyebrow={copy.eyebrow}
-        title={copy.title}
+        title={funnelCampaign ? "Funnel mit Meta bewerben" : copy.title}
       />
       <Suspense fallback={<DashboardContentSkeleton />}>
         <TrafficLaunchBody query={query} />

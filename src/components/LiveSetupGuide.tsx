@@ -42,7 +42,7 @@ export function LiveSetupChecklist({
             Anleitung
           </p>
           <h2 className="mt-1 text-lg font-extrabold tracking-tight text-slate-950">
-            Nächste Schritte für den Live-Test
+            Nächste Schritte für deine Meta-Kampagne
           </h2>
         </div>
         <Link

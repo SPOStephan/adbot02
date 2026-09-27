@@ -75,12 +75,23 @@ export async function resolvePublicFunnelPurposeHint(
   const config = await publicFunnelQuery<{
     purpose?: unknown;
     title?: string;
+    metaTracking?: {
+      enabled?: unknown;
+      pixelId?: unknown;
+      eventName?: unknown;
+    };
   }>("funnel.publicConfig", { slug: selected.slug, hostname });
   if (!config) return null;
+  const metaTracking = config.metaTracking;
   return {
     destinationUrl: destination.toString(),
     title: typeof config.title === "string" ? config.title : (selected.title || "Funnel"),
     category: publicCategoryFromPurpose(config.purpose),
+    metaTracking: {
+      enabled: metaTracking?.enabled === true,
+      pixelId: typeof metaTracking?.pixelId === "string" ? metaTracking.pixelId : "",
+      eventName: typeof metaTracking?.eventName === "string" ? metaTracking.eventName : "Lead",
+    },
   };
 }
 
