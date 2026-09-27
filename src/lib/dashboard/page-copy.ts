@@ -42,10 +42,10 @@ export const DASHBOARD_PAGE_COPY = {
       "Policy, Kill-Switch, Boost und Onboarding. Das Meta Pixel liegt global unter Tracking.",
   },
   trafficLaunch: {
-    eyebrow: "Launch",
-    title: "Traffic-Launch",
+    eyebrow: "Meta Ads",
+    title: "Meta-Kampagnen starten",
     description:
-      "Traffic- und Lead-Canaries starten. Das Meta Pixel verbindest du global unter Tracking.",
+      "Zielseite, Region, Pixel, Werbemittel, Texte und Budget an einem Ort festlegen und die Kampagne starten.",
   },
   tracking: {
     eyebrow: "Global",
@@ -57,7 +57,7 @@ export const DASHBOARD_PAGE_COPY = {
     eyebrow: "Hilfe",
     title: "Erste Schritte",
     description:
-      "Einfache Anleitung für Pixel, Funnel-Tracking, Domain, Lead-Canary und Lead-Bewertung.",
+      "Einfache Anleitung für Pixel, Funnel-Tracking, Domain, Kampagnenstart und Lead-Bewertung.",
   },
   domains: {
     eyebrow: "Global",

@@ -150,13 +150,14 @@ export function CampaignGeoTargetCard({ compact = false, onSaved }: Props) {
           <MapPin className="size-5" />
         </span>
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">Global</p>
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">Ausrichtung</p>
           <h2 className="mt-1 text-lg font-extrabold tracking-tight text-slate-950">
-            Zielgebiet für Kampagnen
+            1. Zielgebiet festlegen
           </h2>
           <p className="mt-1 text-sm leading-6 text-slate-600">
-            Ein Ort für alle Plattformen, die Geotargeting können. Radius ist optional.
-            Meta, Google und TikTok nutzen den Umkreis; ChatGPT Ads nur den Ort.
+            Wähle Land, Stadt oder PLZ und optional einen Umkreis. Die Auswahl gilt
+            für diesen Start und wird als Vorgabe für die nächsten Kampagnen gespeichert.
+            Bei Jobanzeigen erzwingt Adbot automatisch den Meta-Mindestradius von 17 km.
           </p>
         </div>
       </div>

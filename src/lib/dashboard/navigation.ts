@@ -124,7 +124,7 @@ export function getDashboardNavigation(isAdmin: boolean): DashboardNavItem[] {
       match: "/dashboard/autonomie",
     },
     {
-      label: "Traffic-Launch",
+      label: "Kampagne starten",
       icon: Rocket,
       href: "/dashboard/traffic-launch",
       match: "/dashboard/traffic-launch",

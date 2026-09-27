@@ -12,7 +12,7 @@ type AccountPixel = { pixelId: string; name: string };
 
 type Props = {
   pixels: ConfirmedPixelView[];
-  /** Standalone card (z. B. Traffic-Launch) statt Abschnitt in Autonomie. */
+  /** Standalone card (z. B. Kampagnenstart) statt Abschnitt in Autonomie. */
   standalone?: boolean;
 };
 
@@ -212,13 +212,12 @@ export function MetaPixelBinding({ pixels, standalone = false }: Props) {
             Meta Pixel
           </p>
           <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">
-            Meta Pixel global verbinden
+            Meta Pixel für Kampagnen verbinden
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Nur über die bestehende Meta-Verbindung — derselbe Weg wie später
-            für echte Kundinnen und Kunden. Adbot listet Pixel am verbundenen
-            Werbekonto, prüft CAPI mit dem Connection-Token und bestätigt nur
-            bei Erfolg. Funnel und Freebie übernehmen die ID automatisch
+            Adbot lädt die Pixel direkt aus dem verbundenen Werbekonto, prüft die
+            Conversions API und bestätigt die Verbindung nur bei Erfolg. Funnel
+            und Freebie übernehmen die ID automatisch
             (leere Felder werden befüllt; abweichende manuelle Einträge bleiben
             unangetastet). Wenn jemand den Funnel absendet oder ein Freebie
             bestätigt, meldet Adbot das als Lead an Meta — ohne Events-Manager-Token.
@@ -383,8 +382,8 @@ export function MetaPixelBinding({ pixels, standalone = false }: Props) {
         </ul>
       ) : (
         <p className="mt-6 text-sm text-slate-500">
-          Noch kein bestätigtes Pixel. Lead-Canary bleibt gesperrt, bis hier
-          eine Pixel-ID über die Meta-Verbindung bestätigt ist.
+          Noch kein bestätigtes Pixel. Kampagnen mit Conversion-Ziel bleiben
+          gesperrt, bis hier eine Pixel-ID über die Meta-Verbindung bestätigt ist.
         </p>
       )}
     </section>

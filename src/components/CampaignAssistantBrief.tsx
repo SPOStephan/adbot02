@@ -165,12 +165,12 @@ export function CampaignAssistantBrief({ briefs }: Props) {
               Ziel und Landingpage festlegen
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Speichere zuerst Werbeziel und HTTPS-Landingpage als Brief. Für den
-              ersten Live-Test: Creative hochladen und unter{" "}
+              Speichere zuerst Werbeziel und HTTPS-Landingpage als Brief. Lade danach
+              ein Werbemittel hoch und öffne unter{" "}
               <a className="font-bold text-sky-300 underline" href="#traffic-launch">
-                Traffic Canary
+                Traffic-Kampagne
               </a>{" "}
-              die Kampagne vorbereiten — ohne Meta-Writes in diesem Brief-Schritt.
+              den Kampagnenstart. Dieser Brief-Schritt verändert noch nichts bei Meta.
             </p>
           </div>
         </div>

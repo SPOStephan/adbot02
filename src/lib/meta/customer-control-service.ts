@@ -843,6 +843,46 @@ export async function applyCustomerPixelCommand(
       pixelId: command.pixelId,
       testEventCode: command.testEventCode || undefined,
     });
+    const probedAt = new Date().toISOString();
+    const { data: updatedPixel, error: capiUpdateError } = await admin
+      .from("meta_confirmed_pixels")
+      .update({
+        capi_via_connection: probed.status === "ok",
+        capi_probe_status: probed.status,
+        capi_probe_at: probedAt,
+        capi_probe_code: probed.code == null ? null : String(probed.code),
+        capi_probe_detail: probed.status === "ok" ? null : probed.message.slice(0, 1_000),
+        updated_at: probedAt,
+      })
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("pixel_id", probed.pixelId)
+      .eq("status", "CONFIRMED")
+      .is("revoked_at", null)
+      .select("custom_event_type")
+      .limit(1)
+      .maybeSingle();
+    if (capiUpdateError) {
+      serviceError(
+        "capi_probe_persist_failed",
+        500,
+        "CAPI wurde geprüft, aber das Ergebnis konnte nicht gespeichert werden. Bitte erneut versuchen.",
+      );
+    }
+    if (probed.status === "ok" && updatedPixel) {
+      await Promise.allSettled([
+        pushSoftMetaPixelToFunnel({
+          userId: customer.userId,
+          pixelId: probed.pixelId,
+          customEventType: updatedPixel.custom_event_type,
+        }),
+        pushSoftMetaPixelToFreebie({
+          userId: customer.userId,
+          pixelId: probed.pixelId,
+          customEventType: updatedPixel.custom_event_type,
+        }),
+      ]);
+    }
     return {
       action: "probe",
       pixelId: probed.pixelId,

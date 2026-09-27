@@ -509,7 +509,7 @@ export function TrafficLaunchCanary({
       {
         action: "save",
         objective: "OUTCOME_TRAFFIC",
-        name: "Traffic Canary",
+        name: "Traffic-Kampagne",
         payloadTemplate: template,
         requiredInputs: ["destination_url"],
       },
@@ -658,7 +658,7 @@ export function TrafficLaunchCanary({
         budgetOwnerType: "AD_SET",
         dailyBudget,
         destinationUrl: landing.href,
-        campaignName: `Traffic Canary ${stamp}`,
+        campaignName: `Adbot Traffic ${stamp}`,
         adSetName: `Traffic AdSet ${stamp}`,
         creativeName: `Traffic Creative ${stamp}`,
         adName: `Traffic Ad ${stamp}`,
@@ -857,7 +857,7 @@ export function TrafficLaunchCanary({
         message:
           error instanceof Error
             ? error.message
-            : "Traffic-Canary konnte nicht freigegeben werden.",
+            : "Die Traffic-Kampagne konnte nicht gestartet werden.",
       });
     } finally {
       setPending(false);
@@ -917,10 +917,10 @@ export function TrafficLaunchCanary({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-700">
-            Traffic Canary
+            Traffic-Kampagne
           </p>
           <h2 className="mt-1 text-xl font-extrabold text-slate-950">
-            Kampagne mit hochgeladenem Creative starten
+            Kampagne mit hochgeladenem Werbemittel starten
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             Erster Schritt: reine Traffic-Kampagne (Link-Klicks) aus deiner Media
@@ -1139,7 +1139,7 @@ export function TrafficLaunchCanary({
         ) : null}
         <fieldset className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 lg:col-span-2">
           <legend className="px-1 text-sm font-bold text-slate-800">
-            Struktur-Test
+            Anzeigenvarianten
           </legend>
           <p className="mt-1 text-xs font-medium text-slate-500">
             Opt-in für getrennte Anzeigen statt Dynamic Creative. Standard bleibt
@@ -1153,7 +1153,7 @@ export function TrafficLaunchCanary({
                 { value: "two_ad_sets" as const, label: "2 Ad Sets" },
                 {
                   value: "funnel_split" as const,
-                  label: "Funnel-Splittest",
+                  label: "Zwei Zielseiten vergleichen",
                 },
               ] as const
             ).map((option) => (
@@ -1200,7 +1200,7 @@ export function TrafficLaunchCanary({
           ) : null}
           {structuralMode === "funnel_split" ? (
             <p className="mt-2 text-xs font-medium text-slate-500">
-              Adbot-interner Splittest: eine Kampagne, zwei Ad Sets, je eine
+              Vergleich zweier Zielseiten: eine Kampagne, zwei Anzeigengruppen, je eine
               Anzeige mit eigener Funnel-URL. Budget wie beim 2-Ad-Set-Test
               hälftig, danach Erfolgsumschichtung. Deaktiviert Textvarianten
               (Dynamic Creative).
@@ -1542,7 +1542,7 @@ export function TrafficLaunchCanary({
                 <>
                   <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
                     {heldPlan.variantDestinationUrl
-                      ? "Funnel-Splittest: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige + eigene URL (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
+                      ? "Zielseiten-Vergleich: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige + eigene URL (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
                       : heldPlan.structuralAdSetCount === 2
                       ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
                       : "Struktur: 1 Kampagne → 1 Anzeigengruppe → 2 Anzeigen"}

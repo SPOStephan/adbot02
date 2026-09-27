@@ -7,6 +7,7 @@ import {
   ImagePlus,
   LoaderCircle,
   PlayCircle,
+  RefreshCw,
   Rocket,
   Target,
   ShieldCheck,
@@ -318,11 +319,19 @@ export function LeadLaunchCanary({
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [capiPending, setCapiPending] = useState(false);
   const [suggestPending, setSuggestPending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [prepareElapsedSec, setPrepareElapsedSec] = useState(0);
   const defaultFunnelHint = `${FUNNEL_SITE_URL}/f/`;
+  const initialFunnelIndex = initialDestinationUrl
+    ? funnelPurposeHints.findIndex(
+        (hint) =>
+          normalizedDestinationKey(hint.destinationUrl) ===
+          normalizedDestinationKey(initialDestinationUrl),
+      )
+    : -1;
   const [destinationUrl, setDestinationUrl] = useState(() => {
     if (initialDestinationUrl) return initialDestinationUrl;
     const firstFunnel = funnelPurposeHints[0];
@@ -336,7 +345,9 @@ export function LeadLaunchCanary({
       : defaultFunnelHint;
   });
   const [destinationMode, setDestinationMode] = useState<string>(() =>
-    initialDestinationUrl
+    initialFunnelIndex >= 0
+      ? `funnel:${initialFunnelIndex}`
+      : initialDestinationUrl
       ? "manual"
       : funnelPurposeHints[0]
       ? "funnel:0"
@@ -355,7 +366,7 @@ export function LeadLaunchCanary({
     hint: FunnelPurposeHint | null;
   } | null>(null);
   useEffect(() => {
-    if (preloadedPurposeHint || !destinationKey) return;
+    if (preloadedPurposeHint?.metaTracking || !destinationKey) return;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
       fetch(`/api/funnel-purpose?url=${encodeURIComponent(destinationUrl.trim())}`, {
@@ -378,7 +389,14 @@ export function LeadLaunchCanary({
   const resolvedPurposeHint = resolvedPurpose?.key === destinationKey
     ? resolvedPurpose.hint
     : null;
-  const detectedPurposeHint = preloadedPurposeHint ?? resolvedPurposeHint;
+  const purposeLookupPending = Boolean(
+    destinationKey &&
+      !preloadedPurposeHint?.metaTracking &&
+      resolvedPurpose?.key !== destinationKey,
+  );
+  const detectedPurposeHint = preloadedPurposeHint?.metaTracking
+    ? preloadedPurposeHint
+    : resolvedPurposeHint ?? preloadedPurposeHint;
   const effectiveAdCategory = detectedPurposeHint?.category ?? adCategory;
   const [dailyBudget, setDailyBudget] = useState("20.00");
   const [facebookPageId, setFacebookPageId] = useState(
@@ -446,6 +464,12 @@ export function LeadLaunchCanary({
   const [performanceGoal, setPerformanceGoal] =
     useState<LeadPerformanceGoal>("volume");
   const qualityCapiReady = canUseQualifiedLeadOptimization(selectedPixel);
+  const funnelTracking = detectedPurposeHint?.metaTracking;
+  const funnelTrackingReady =
+    Boolean(funnelTracking) &&
+    Boolean(funnelTracking?.enabled) &&
+      Boolean(selectedPixel) &&
+      funnelTracking?.pixelId === selectedPixel?.pixelId;
   const [heldPlan, setHeldPlan] = useState<HeldPlan | null>(() => {
     for (const plan of data.recentLaunchPlans) {
       const held = toHeldFromRecent(plan, data.pixels);
@@ -458,15 +482,17 @@ export function LeadLaunchCanary({
 
   const gates = useMemo(
     () => [
-      { label: "ads_management", ready: writeScopeGranted },
-      { label: "EUR", ready: currency === "EUR" },
-      { label: "Launch-Policy aktiv", ready: policyLaunchReady },
+      { label: "Meta-Berechtigung", ready: writeScopeGranted },
+      { label: "Währung EUR", ready: currency === "EUR" },
+      { label: "Kampagnenfreigabe", ready: policyLaunchReady },
       { label: "Pixel bestätigt", ready: Boolean(selectedPixel) },
-      ...(performanceGoal === "quality"
-        ? [{ label: "CAPI für qualifizierte Leads", ready: qualityCapiReady }]
+      { label: "Conversions API", ready: qualityCapiReady },
+      { label: "Ziel-URL geprüft", ready: !purposeLookupPending },
+      ...(detectedPurposeHint
+        ? [{ label: "Funnel-Tracking aktiv", ready: funnelTrackingReady }]
         : []),
       {
-        label: "Creative bereit",
+        label: "Werbemittel bereit",
         ready: pickerAssets.length > 0 || Boolean(assetId),
       },
     ],
@@ -478,6 +504,10 @@ export function LeadLaunchCanary({
       policyLaunchReady,
       qualityCapiReady,
       selectedPixel,
+      funnelTracking,
+      funnelTrackingReady,
+      detectedPurposeHint,
+      purposeLookupPending,
       writeScopeGranted,
     ],
   );
@@ -485,6 +515,44 @@ export function LeadLaunchCanary({
 
   function refresh() {
     router.refresh();
+  }
+
+  async function verifyCapiAndSyncFunnel() {
+    if (!selectedPixel) return;
+    setCapiPending(true);
+    setNotice(null);
+    try {
+      const result = await apiJson<{
+        capiViaConnection?: boolean;
+        capiProbeStatus?: "ok" | "denied" | "error";
+      }>("POST", "/api/meta/automation/pixel", {
+        action: "probe",
+        pixelId: selectedPixel.pixelId,
+      });
+      if (result.capiViaConnection !== true || result.capiProbeStatus !== "ok") {
+        throw new Error(
+          typeof result.message === "string"
+            ? result.message
+            : "Die Conversions API konnte nicht bestätigt werden.",
+        );
+      }
+      setNotice({
+        tone: "success",
+        message:
+          "Conversions API bestätigt. Der Pixel wurde erneut sicher mit den Adbot-Funnel synchronisiert.",
+      });
+      refresh();
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die Conversions API konnte nicht geprüft werden.",
+      });
+    } finally {
+      setCapiPending(false);
+    }
   }
 
   useEffect(() => {
@@ -609,7 +677,7 @@ export function LeadLaunchCanary({
       {
         action: "save",
         objective: "OUTCOME_LEADS",
-        name: "Lead Canary",
+        name: "Lead-Kampagne",
         payloadTemplate: template,
         requiredInputs: ["destination_url"],
       },
@@ -680,11 +748,11 @@ export function LeadLaunchCanary({
     try {
       if (!gatesReady || !selectedPixel) {
         throw new Error(
-          "Voraussetzungen fehlen (Scope, EUR, Launch-Policy, Pixel, Creative).",
+          "Bitte vervollständige zuerst Meta-Berechtigung, Kampagnenfreigabe, Pixel, Conversions API, Funnel-Tracking und Werbemittel.",
         );
       }
       if (!assetId) {
-        throw new Error("Bitte ein hochgeladenes Creative wählen.");
+        throw new Error("Bitte ein hochgeladenes Werbemittel wählen.");
       }
       if (facebookPages.length > 0 && !facebookPageId) {
         throw new Error("Bitte die Facebook-Seite für die Anzeige wählen.");
@@ -760,10 +828,10 @@ export function LeadLaunchCanary({
         budgetOwnerType: "AD_SET",
         dailyBudget,
         destinationUrl: landing.href,
-        campaignName: `Lead Canary ${stamp}`,
-        adSetName: `Lead AdSet ${stamp}`,
-        creativeName: `Lead Creative ${stamp}`,
-        adName: `Lead Ad ${stamp}`,
+        campaignName: `${detectedPurposeHint?.title || "Adbot Leads"} ${stamp}`,
+        adSetName: `Zielgruppe ${stamp}`,
+        creativeName: `Werbemittel ${stamp}`,
+        adName: `Anzeige ${stamp}`,
         pixelId: selectedPixel.pixelId,
         customEventType: selectedPixel.customEventType,
         reason: PROTOCOL_APPROVE_REASON,
@@ -878,7 +946,7 @@ export function LeadLaunchCanary({
         message:
           error instanceof Error
             ? error.message
-            : "Lead-Canary konnte nicht vorbereitet werden.",
+            : "Die Kampagne konnte nicht vorbereitet werden.",
       });
     } finally {
       setPending(false);
@@ -973,7 +1041,7 @@ export function LeadLaunchCanary({
         message:
           error instanceof Error
             ? error.message
-            : "Lead-Canary konnte nicht freigegeben werden.",
+            : "Die Kampagne konnte nicht gestartet werden.",
       });
     } finally {
       setPending(false);
@@ -1033,30 +1101,15 @@ export function LeadLaunchCanary({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">
-            Lead Canary
+            Meta-Kampagne
           </p>
           <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">
-            Website-Leads mit Funnel und Pixel
+            2. Anzeige gestalten und Kampagne starten
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Separater Pfad vom Traffic-Canary: Objective{" "}
-            <span className="font-semibold">OUTCOME_LEADS</span>. Du entscheidest,
-            ob Meta zunächst auf möglichst viele Leads oder – bei bestätigter CAPI –
-            auf qualifizierte Leads optimiert. Destination = veröffentlichter Funnel.
-            Pixel-ID und Lead-Event kommen aus der globalen Verbindung unter{" "}
-            <a
-              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              href="/dashboard/tracking"
-            >
-              Tracking
-            </a>
-            — Funnel meldet Absenden selbst als Lead an Meta.{" "}
-            <a
-              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-              href="/dashboard/hilfe"
-            >
-              Schritt-für-Schritt-Anleitung
-            </a>
+            Adbot hat den gewählten Funnel bereits übernommen. Ergänze Werbemittel,
+            Anzeigentexte und Budget. Pixel, Lead-Event und Anzeigenkategorie werden
+            geprüft, bevor du die Kampagne startest.
           </p>
         </div>
       </div>
@@ -1129,6 +1182,70 @@ export function LeadLaunchCanary({
         ))}
       </ul>
 
+      <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            qualityCapiReady
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+              : "border-amber-200 bg-amber-50 text-amber-950"
+          }`}
+        >
+          <p className="font-extrabold">Pixel und Conversions API</p>
+          {selectedPixel ? (
+            <p className="mt-1 text-xs leading-5">
+              {selectedPixel.label || "Meta Pixel"} · {selectedPixel.pixelId} ·{" "}
+              {qualityCapiReady
+                ? "Browser-Pixel und serverseitige Lead-Meldung sind bereit."
+                : "Die serverseitige Lead-Meldung muss einmal geprüft werden."}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs leading-5">
+              Wähle oder bestätige oben auf dieser Seite zuerst ein Meta Pixel.
+            </p>
+          )}
+          {selectedPixel &&
+          (!qualityCapiReady || Boolean(detectedPurposeHint && !funnelTrackingReady)) ? (
+            <button
+              className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+              disabled={capiPending || pending}
+              onClick={() => void verifyCapiAndSyncFunnel()}
+              type="button"
+            >
+              {capiPending ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              {capiPending
+                ? "Wird geprüft …"
+                : qualityCapiReady
+                  ? "Funnel-Tracking synchronisieren"
+                  : "Conversions API jetzt prüfen"}
+            </button>
+          ) : null}
+        </div>
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            !detectedPurposeHint || !funnelTracking
+              ? "border-slate-200 bg-slate-50 text-slate-800"
+              : funnelTrackingReady
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+              : "border-amber-200 bg-amber-50 text-amber-950"
+          }`}
+        >
+          <p className="font-extrabold">Funnel-Tracking</p>
+          <p className="mt-1 text-xs leading-5">
+            {!detectedPurposeHint
+              ? "Die Ziel-URL wird geprüft, sobald ein Adbot-Funnel erkannt wird."
+              : !funnelTracking
+                ? "Der Trackingstatus dieses Funnels wird gerade geladen."
+                : funnelTrackingReady
+                ? `Im Funnel „${detectedPurposeHint.title}“ sind Pixel und Lead-Event aktiv.`
+                : "Tracking ist im gewählten Funnel noch nicht mit diesem Pixel aktiv. Starte links die Prüfung beziehungsweise Synchronisierung; Adbot aktualisiert den Funnel dabei automatisch."}
+          </p>
+        </div>
+      </div>
+
       {notice && !heldPlan ? (
         <p
           className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
@@ -1190,7 +1307,7 @@ export function LeadLaunchCanary({
             value={selectedPixel?.id ?? ""}
           >
             {data.pixels.length === 0 ? (
-              <option value="">Zuerst unter Tracking verbinden</option>
+              <option value="">Zuerst oben auf dieser Seite bestätigen</option>
             ) : (
               data.pixels.map((pixel) => (
                 <option key={pixel.id} value={pixel.id}>
@@ -1233,11 +1350,23 @@ export function LeadLaunchCanary({
               ? "Meta optimiert dieses neue Ad Set auf Personen, die nach dem Absenden als guter Lead bewertet werden."
               : qualityCapiReady
                 ? "Für neue Kampagnen mit genügend Bewertungsdaten kannst du später „qualifizierte Leads“ wählen. Bestehende Ad Sets werden nicht automatisch verändert."
-                : "Für den Start ohne Historie korrekt. Prüfe CAPI unter Tracking, bevor du später auf qualifizierte Leads umstellst."}
+                : "Für den Start ohne Historie korrekt. Prüfe die Conversions API direkt oben, bevor du später auf qualifizierte Leads umstellst."}
           </span>
         </label>
+        <fieldset className="rounded-xl border border-slate-200 bg-white px-4 py-3 lg:col-span-2">
+          <legend className="px-1 text-sm font-bold text-slate-800">Zielgruppe</legend>
+          <p className="text-sm font-semibold text-slate-900">
+            Automatische Zielgruppenfindung durch Meta
+          </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            Standardmäßig schränkt Adbot Interessen, Alter oder Geschlecht nicht ein.
+            Meta optimiert innerhalb des oben gewählten Zielgebiets auf Personen, die
+            den Funnel voraussichtlich abschließen. Bei Jobanzeigen gelten automatisch
+            die Regeln der Kategorie EMPLOYMENT.
+          </p>
+        </fieldset>
         <div className="text-sm font-bold text-slate-800">
-          Creative
+          Werbemittel
           <button
             className="mt-2 flex w-full items-center gap-3 rounded-xl border border-slate-300 bg-white p-3 text-left transition hover:border-blue-400 hover:bg-slate-50 disabled:opacity-50"
             disabled={pending}
@@ -1262,7 +1391,7 @@ export function LeadLaunchCanary({
               <span className="block truncate font-extrabold text-slate-950">
                 {selectedAsset
                   ? selectedAsset.originalFilename
-                  : "Creative wählen oder hochladen"}
+                  : "Werbemittel wählen oder hochladen"}
               </span>
               {selectedAsset?.width && selectedAsset?.height ? (
                 <span className="mt-1 block text-xs font-medium text-slate-500">
@@ -1273,7 +1402,7 @@ export function LeadLaunchCanary({
           </button>
         </div>
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">
-          Funnel / Ziel-Domain
+          Ausgewählter Funnel
           <select
             className={inputClass}
             disabled={pending || suggestPending}
@@ -1402,10 +1531,10 @@ export function LeadLaunchCanary({
         </div>
         <fieldset className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 lg:col-span-2">
           <legend className="px-1 text-sm font-bold text-slate-800">
-            Struktur-Test
+            Anzeigenvarianten
           </legend>
           <p className="mt-1 text-xs font-medium text-slate-500">
-            Opt-in für getrennte Anzeigen statt Dynamic Creative. Standard bleibt
+            Optional getrennte Anzeigen statt Dynamic Creative. Standard bleibt
             eine Anzeige. Nicht kombinierbar mit mehreren Motiven.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-4">
@@ -1416,7 +1545,7 @@ export function LeadLaunchCanary({
                 { value: "two_ad_sets" as const, label: "2 Ad Sets" },
                 {
                   value: "funnel_split" as const,
-                  label: "Funnel-Splittest",
+                  label: "Zwei Funnel vergleichen",
                 },
               ] as const
             ).map((option) => (
@@ -1463,9 +1592,9 @@ export function LeadLaunchCanary({
           ) : null}
           {structuralMode === "funnel_split" ? (
             <p className="mt-2 text-xs font-medium text-slate-500">
-              Adbot-interner Splittest: eine Kampagne, zwei Ad Sets, je eine
-              Anzeige mit eigener Funnel-URL. Budget wie beim 2-Ad-Set-Test
-              hälftig, danach Erfolgsumschichtung. Deaktiviert Textvarianten
+              Vergleich zweier Funnel: eine Kampagne, zwei Anzeigengruppen, je eine
+              Anzeige mit eigener Funnel-URL. Das Startbudget wird zunächst hälftig
+              aufgeteilt; danach schichtet Adbot nach Erfolg um. Deaktiviert Textvarianten
               (Dynamic Creative).
             </p>
           ) : null}
@@ -1730,7 +1859,7 @@ export function LeadLaunchCanary({
             type="button"
           >
             <ImagePlus className="size-4" />
-            Creative wechseln
+            Werbemittel wechseln
           </button>
         </div>
       </form>
@@ -1772,7 +1901,7 @@ export function LeadLaunchCanary({
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  alt="Creative-Vorschau"
+                  alt="Werbemittel-Vorschau"
                   className="aspect-square w-full object-cover"
                   src={`/api/media-library/preview?assetId=${heldPlan.brandAssetIds[0]}`}
                 />
@@ -1806,7 +1935,7 @@ export function LeadLaunchCanary({
                 <>
                   <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
                     {heldPlan.variantDestinationUrl
-                      ? "Funnel-Splittest: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige + eigene URL (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
+                      ? "Funnel-Vergleich: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige + eigene URL (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
                       : heldPlan.structuralAdSetCount === 2
                       ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
                       : "Struktur: 1 Kampagne → 1 Anzeigengruppe → 2 Anzeigen"}
