@@ -46,15 +46,15 @@ export const LIVE_SETUP_STEPS: LiveSetupStep[] = [
   },
   {
     id: "domain",
-    title: "Domain anlegen und bestätigen",
+    title: "Bestehende Domain anbinden und bestätigen",
     summary:
-      "Die Lead-Kampagne braucht eine HTTPS-Zielseite, deren Domain in Adbot bestätigt ist.",
+      "Die Lead-Kampagne braucht eine HTTPS-Zielseite auf einer Domain, die du schon besitzt und in Adbot anbindest.",
     href: "/dashboard/domains",
     actionLabel: "Zu Domains",
     details: [
-      "Unter Domains eine eigene Domain anlegen oder im Funnel hinterlegen. Adbot setzt SSL und Hosting; du trägst nur den CNAME beim Domain-Anbieter ein.",
+      "Unter Domains oder im Funnel eine bestehende Subdomain anbinden — kein Domainkauf. Adbot setzt SSL und Hosting; du trägst nur den CNAME beim Domain-Anbieter ein.",
       "DNS prüfen, bis der Status READY ist. Root-URL zeigt den gebundenen Funnel. Bewerbungsübersicht und Verwaltung liegen danach auf derselben Domain.",
-      "Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden.",
+      "Dieselbe Domain nicht gleichzeitig an Funnel und Freebie binden. Jede Domain gehört genau einem Funnel.",
     ],
   },
   {
