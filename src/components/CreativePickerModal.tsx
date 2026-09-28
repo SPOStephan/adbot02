@@ -16,6 +16,7 @@ import {
   type MetaFormatKey,
 } from "@/lib/media-library/meta-formats";
 import { parseAssetUploadResponse } from "@/lib/media-library/parse-upload-response";
+import { countSelectedAssetsByMetaFormat } from "@/lib/media-library/selected-meta-format-counts";
 import {
   MAX_DYNAMIC_CREATIVE_IMAGES,
   normalizeLaunchAssetIds,
@@ -123,6 +124,9 @@ export function CreativePickerModal({
       ? [selectedAssetId]
       : [];
   const selectedSet = new Set(effectiveSelectedIds);
+  const selectedFormatCounts = countSelectedAssetsByMetaFormat(
+    assets.filter((asset) => selectedSet.has(asset.id)),
+  );
 
   const uploadingRef = useRef(false);
 
@@ -567,6 +571,8 @@ export function CreativePickerModal({
               <ul className="mt-4 grid gap-3 sm:grid-cols-3">
                 {META_FORMAT_SLOTS.map((item) => {
                   const state = slots[item.key];
+                  const selectedCount = selectedFormatCounts[item.key];
+                  const hasSelectedAssets = selectedCount > 0;
                   return (
                     <li
                       className="flex flex-col rounded-xl border border-slate-200 bg-white p-3"
@@ -595,7 +601,7 @@ export function CreativePickerModal({
                         ) : (
                           <Upload className="size-3.5" />
                         )}
-                        {state.status === "ok"
+                        {state.status === "ok" || hasSelectedAssets
                           ? multiSelect
                             ? "Weitere hochladen"
                             : "Ersetzen"
@@ -619,7 +625,7 @@ export function CreativePickerModal({
                         }}
                         type="file"
                       />
-                      {state.message ? (
+                      {state.message || hasSelectedAssets ? (
                         <p
                           className={`mt-2 text-[11px] font-semibold leading-4 ${
                             state.status === "ok"
@@ -629,7 +635,13 @@ export function CreativePickerModal({
                                 : "text-slate-600"
                           }`}
                         >
-                          {state.message}
+                          {state.status === "error" ||
+                          state.status === "uploading" ||
+                          state.status === "checking"
+                            ? state.message
+                            : hasSelectedAssets
+                              ? `${selectedCount} ausgewählt.`
+                              : state.message}
                         </p>
                       ) : null}
                     </li>
