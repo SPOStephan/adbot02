@@ -60,7 +60,7 @@ export function classifyLaunchBudgetCapFailure(
   if (accountMatch) {
     return {
       code: "launch_account_budget_cap_exceeded",
-      message: `Zusammen mit bereits aktiven oder vorbereiteten Kampagnen wären bis zu ${formatMinorEuro(accountMatch[1])} pro Tag reserviert; das Konto-Tageslimit beträgt ${formatMinorEuro(accountMatch[2])}. Das Tagesbudget dieser Kampagne ist nicht allein zu hoch.`,
+      message: `Mit diesem neuen Start wären für von Adbot gesteuerte Kampagnen insgesamt bis zu ${formatMinorEuro(accountMatch[1])} pro Tag reserviert; das Adbot-Konto-Tageslimit beträgt ${formatMinorEuro(accountMatch[2])}. Eigenständig in Meta verwaltete Kampagnen werden nicht eingerechnet.`,
     };
   }
 

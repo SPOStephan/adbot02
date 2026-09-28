@@ -74,7 +74,8 @@ const accountCapFailure = classifyLaunchBudgetCapFailure(
 assert.equal(accountCapFailure?.code, "launch_account_budget_cap_exceeded");
 assert.match(accountCapFailure?.message ?? "", /437,50\s*€/);
 assert.match(accountCapFailure?.message ?? "", /400,00\s*€/);
-assert.match(accountCapFailure?.message ?? "", /nicht allein zu hoch/);
+assert.match(accountCapFailure?.message ?? "", /von Adbot gesteuerte Kampagnen/);
+assert.match(accountCapFailure?.message ?? "", /Eigenständig in Meta verwaltete Kampagnen werden nicht eingerechnet/);
 assert.equal(classifyLaunchBudgetCapFailure("anderer Fehler"), null);
 assert.equal(isNonDeliveringMetaStatus("PAUSED", "CAMPAIGN_PAUSED"), true);
 assert.equal(isNonDeliveringMetaStatus("ARCHIVED", null), true);
@@ -121,8 +122,11 @@ assert.match(service, /sameDraft \|\| legacySameDestination \|\| staleAcrossAcco
 assert.match(service, /releaseNonDeliveringSnapshotExposures/);
 assert.match(service, /isNonDeliveringMetaStatus/);
 assert.match(service, /currentBudgetExposureBreakdown/);
-assert.match(service, /aktuell ausliefernde Meta-Budgets/);
-assert.match(service, /noch nicht gestartete Vorbereitungen/);
+assert.match(service, /aktive, von Adbot gestartete Kampagnen/);
+assert.match(service, /noch nicht gestartete Adbot-Vorbereitungen/);
+assert.match(service, /adbotCampaignScopes/);
+assert.match(service, /activePlanIds/);
+assert.match(service, /\.eq\("object_type", "CAMPAIGN"\)/);
 assert.match(service, /source_rule_key", "active-launch-chain"/);
 assert.match(service, /meta_launch_canary_approvals/);
 assert.match(service, /mutation_executions/);
@@ -141,5 +145,35 @@ assert.match(
   service,
   /function withLaunchFailureDetail\(message: string, _error: unknown\): string \{\s*return message;/,
 );
+
+const ownedOnlyMigration = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928103000_meta_budget_cap_adbot_owned_only.sql",
+  ),
+  "utf8",
+);
+assert.match(ownedOnlyMigration, /create or replace function public\.reserve_meta_daily_budget_exposure/);
+assert.match(ownedOnlyMigration, /dbe\.source = 'PLAN'/);
+assert.match(ownedOnlyMigration, /from public\.mutation_plans plan/);
+assert.match(ownedOnlyMigration, /plan\.status in \(/);
+assert.match(ownedOnlyMigration, /from public\.remote_object_bindings binding/);
+assert.match(ownedOnlyMigration, /binding\.object_type = 'CAMPAIGN'/);
+assert.match(
+  ownedOnlyMigration,
+  /dbe\.campaign_scope_key = 'campaign:' \|\| binding\.remote_object_id/,
+);
+assert.doesNotMatch(
+  ownedOnlyMigration,
+  /into v_account_total[\s\S]*?where dbe\.platform_account_id = p_platform_account_id\s+and dbe\.account_day = p_account_day\s*;/,
+);
+
+const externalMetaReservedMinor = 30_100;
+const staleAdbotPlanMinor = 8_750;
+const newAdbotPlanMinor = 8_750;
+const adbotControlledTotalMinor = staleAdbotPlanMinor + newAdbotPlanMinor;
+assert.equal(externalMetaReservedMinor + adbotControlledTotalMinor, 47_600);
+assert.equal(adbotControlledTotalMinor, 17_500);
+assert.ok(adbotControlledTotalMinor < 40_000);
 
 console.log("launch-budget-cap-ux: ok");
