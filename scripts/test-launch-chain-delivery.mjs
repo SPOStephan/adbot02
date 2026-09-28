@@ -50,6 +50,7 @@ const executor = await readFile(
 );
 assert.match(executor, /claim_meta_mutation_execution_for_plan/);
 assert.match(executor, /export async function processMetaMutationPlan/);
+assert.match(executor, /META_EXECUTOR_MAX_STEPS_PER_RUN = 64/);
 
 const targetedClaim = await readFile(
   join(
@@ -78,6 +79,28 @@ const route = await readFile(
   "utf8",
 );
 assert.match(route, /export const maxDuration = 300/);
+
+const recovery = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928150000_meta_launch_completion_recovery.sql",
+  ),
+  "utf8",
+);
+assert.match(recovery, /recover_interrupted_meta_customer_launches/);
+assert.match(recovery, /step\.status = 'CLAIMED'/);
+assert.match(recovery, /step\.dispatch_state = 'NOT_DISPATCHED'/);
+assert.match(recovery, /execution\.last_heartbeat_at > now\(\) - interval '30 seconds'/);
+assert.match(recovery, /status = 'ABANDONED'/);
+assert.match(recovery, /status = 'PENDING'/);
+assert.doesNotMatch(recovery, /delete from public\.remote_object_bindings/);
+
+const maintenance = await readFile(
+  join(root, "src/lib/meta/launch-maintenance.ts"),
+  "utf8",
+);
+assert.match(maintenance, /recover_interrupted_meta_customer_launches/);
+assert.match(maintenance, /recoveredPlans/);
 
 const writeClient = await readFile(
   join(root, "src/lib/meta/write-client.ts"),

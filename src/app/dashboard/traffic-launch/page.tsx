@@ -214,6 +214,9 @@ async function TrafficLaunchBody({
           brandProfileId={brandProfileView?.id ?? null}
           currency={marketingCurrency}
           data={onboardingData}
+          funnelPurposeHint={
+            funnelTrafficMode ? initialFunnelPurposeHint : null
+          }
           facebookPages={launchFacebookPages}
           instagramAccounts={launchInstagramAccounts}
           initialAssetId={
@@ -278,7 +281,7 @@ async function TrafficLaunchBody({
         funnelPurposeHints={funnelPurposeHints}
         writeScopeGranted={writeScopeGranted}
       />
-      ) : (
+      ) : !initialFunnelUrl ? (
       <LeadLaunchCanary
         adAccounts={adAccountPickerOptions}
         brandProfileId={brandProfileView?.id ?? null}
@@ -299,7 +302,7 @@ async function TrafficLaunchBody({
         funnelPurposeHints={funnelPurposeHints}
         writeScopeGranted={writeScopeGranted}
       />
-      )}
+      ) : null}
     </div>
   );
 }
