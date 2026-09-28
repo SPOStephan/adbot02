@@ -106,8 +106,6 @@ assert.equal(
   2,
 );
 assert.doesNotMatch(duplicateProtection, /select [^;]*\binto\b/i);
-assert.match(service, /duplicateLaunchFromApprovalError/);
-assert.match(service, /handleDuplicateLaunchApproval/);
 
 const targetedClaim = await readFile(
   join(
@@ -130,6 +128,8 @@ assert.match(service, /drainApprovedLaunchChainForAccount/);
 assert.match(service, /executionState: "ACTIVE" \| "QUEUED"/);
 assert.match(service, /terminalExecutionFailure/);
 assert.doesNotMatch(service, /launch_execution_incomplete/);
+assert.match(service, /duplicateLaunchFromApprovalError/);
+assert.match(service, /handleDuplicateLaunchApproval/);
 
 const route = await readFile(
   join(root, "src/app/api/meta/automation/launch/route.ts"),
