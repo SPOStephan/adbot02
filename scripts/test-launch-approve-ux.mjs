@@ -107,6 +107,12 @@ assert.match(traffic, /Weitere Traffic-Kampagne starten/);
 assert.match(traffic, /Kampagne erfolgreich an Meta übermittelt/);
 assert.match(traffic, /Kampagnen-Übersicht öffnen/);
 assert.match(traffic, /LANDING_PAGE_VIEWS/);
+assert.match(traffic, /if \(launchSucceeded\) \{\s*return \(\s*<section/);
+assert.ok(
+  traffic.indexOf("if (launchSucceeded)") <
+    traffic.indexOf("Traffic-Kampagne mit Optimierung"),
+  "Traffic-Abschluss muss vor sämtlichen Kampagnenfeldern gerendert werden",
+);
 const trafficSuccessFlow = traffic.slice(
   traffic.indexOf('if (result.executionState === "ACTIVE")'),
   traffic.indexOf("async function retryMetaExperiment"),
@@ -146,6 +152,12 @@ assert.match(lead, /primaryTexts/);
 assert.match(lead, /Weitere Lead-Kampagne starten/);
 assert.match(lead, /Kampagne erfolgreich an Meta übermittelt/);
 assert.match(lead, /Kampagnen-Übersicht öffnen/);
+assert.match(lead, /if \(launchSucceeded\) \{\s*return \(\s*<section/);
+assert.ok(
+  lead.indexOf("if (launchSucceeded)") <
+    lead.indexOf("2. Anzeige gestalten und Kampagne starten"),
+  "Lead-Abschluss muss vor sämtlichen Kampagnenfeldern gerendert werden",
+);
 const leadSuccessFlow = lead.slice(
   lead.indexOf("setLaunchState(result.executionState)"),
   lead.indexOf("async function approveHeldPlan"),
@@ -169,6 +181,22 @@ assert.match(
   lead,
   /Lead-Canary: kurze Freeze-Phase für Freigabe/,
 );
+
+const funnelWorkspace = await readFile(
+  join(root, "src/components/FunnelMetaCampaignWorkspace.tsx"),
+  "utf8",
+);
+assert.match(funnelWorkspace, /const launchCompleted = launchState !== "IDLE"/);
+assert.match(funnelWorkspace, /launchCompleted \? null : header/);
+assert.match(funnelWorkspace, /launchCompleted \? null : \(\s*<CampaignGeoTargetCard/);
+assert.match(funnelWorkspace, /onLaunchStateChange=\{setLaunchState\}/);
+
+const trafficLaunchPage = await readFile(
+  join(root, "src/app/dashboard/traffic-launch/page.tsx"),
+  "utf8",
+);
+assert.match(trafficLaunchPage, /funnelHeader=\{leadFunnelCampaign \? header : undefined\}/);
+assert.match(trafficLaunchPage, /\{leadFunnelCampaign \? null : header\}/);
 
 const onboarding = await readFile(
   join(root, "src/components/AutomationOnboardingControls.tsx"),
