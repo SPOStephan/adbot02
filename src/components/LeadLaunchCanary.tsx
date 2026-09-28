@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -57,6 +57,10 @@ import {
   type LeadPerformanceGoal,
 } from "@/lib/meta/lead-performance-goal";
 import {
+  LAUNCH_BUDGET_CAP_MESSAGE,
+  suggestLaunchPolicyLimits,
+} from "@/lib/meta/launch-policy-budget";
+import {
   campaignPathForBinding,
   destinationUrlForHostname,
   type CustomerCustomDomainView,
@@ -64,7 +68,11 @@ import {
 import { FUNNEL_SITE_URL } from "@/lib/site-urls";
 import type { FunnelAdCategory, FunnelPurposeHint } from "@/lib/funnel-purpose-hint-types";
 
-type Notice = { tone: "success" | "error"; message: string } | null;
+type Notice = {
+  tone: "success" | "error";
+  message: string;
+  action?: "adjust_budget_cap";
+} | null;
 
 type HeldPlan = {
   id: string;
@@ -350,9 +358,22 @@ export function LeadLaunchCanary({
   initialDraft = null,
 }: Props) {
   const router = useRouter();
+  const campaignFormRef = useRef<HTMLFormElement>(null);
   const [pending, setPending] = useState(false);
   const [capiPending, setCapiPending] = useState(false);
   const [policyEnsured, setPolicyEnsured] = useState(policyLaunchReady);
+  const [policyLimitPending, setPolicyLimitPending] = useState(false);
+  const [policyLimitInputs, setPolicyLimitInputs] = useState(() => ({
+    accountDailyHardCap: policyLimitInput(
+      launchPolicy.accountDailyHardCapMinor,
+      "100.00",
+    ),
+    campaignDailyHardCap: policyLimitInput(
+      launchPolicy.campaignDailyHardCapMinor,
+      "50.00",
+    ),
+    requiredCampaignDailyHardCap: null as string | null,
+  }));
   const [suggestPending, setSuggestPending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -737,6 +758,37 @@ export function LeadLaunchCanary({
       enableAutomation: true,
     });
     setPolicyEnsured(true);
+  }
+
+  async function saveLaunchPolicyLimitsAndRetry(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    setPolicyLimitPending(true);
+    setNotice(null);
+    try {
+      await apiJson("POST", "/api/meta/automation/launch-policy", {
+        accountDailyHardCap: policyLimitInputs.accountDailyHardCap,
+        campaignDailyHardCap: policyLimitInputs.campaignDailyHardCap,
+        allowBudgetChanges: launchPolicy.allowBudgetChanges,
+        allowStatusChanges: true,
+        allowNewLaunches: true,
+        enableAutomation: true,
+      });
+      setPolicyEnsured(true);
+      campaignFormRef.current?.requestSubmit();
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Das Tageslimit konnte nicht gespeichert werden.",
+        action: "adjust_budget_cap",
+      });
+    } finally {
+      setPolicyLimitPending(false);
+    }
   }
 
   useEffect(() => {
@@ -1129,12 +1181,29 @@ export function LeadLaunchCanary({
       });
       refresh();
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Die Kampagne konnte nicht vorbereitet werden.";
+      const budgetCapExceeded = message === LAUNCH_BUDGET_CAP_MESSAGE;
+      if (budgetCapExceeded) {
+        const suggestion = suggestLaunchPolicyLimits({
+          dailyBudget,
+          currentAccountDailyHardCapMinor:
+            launchPolicy.accountDailyHardCapMinor,
+          currentCampaignDailyHardCapMinor:
+            launchPolicy.campaignDailyHardCapMinor,
+        });
+        if (suggestion) {
+          setPolicyLimitInputs(suggestion);
+        }
+      }
       setNotice({
         tone: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Die Kampagne konnte nicht vorbereitet werden.",
+        message,
+        ...(budgetCapExceeded
+          ? { action: "adjust_budget_cap" as const }
+          : {}),
       });
     } finally {
       setPending(false);
@@ -1503,7 +1572,7 @@ export function LeadLaunchCanary({
       </div>
 
       {notice && !heldPlan ? (
-        <p
+        <div
           className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
             notice.tone === "success"
               ? "bg-emerald-50 text-emerald-800"
@@ -1511,11 +1580,85 @@ export function LeadLaunchCanary({
           }`}
           role="status"
         >
-          {notice.message}
-        </p>
+          <p>{notice.message}</p>
+          {notice.action === "adjust_budget_cap" ? (
+            <form
+              className="mt-3 rounded-xl border border-rose-200 bg-white p-4 text-slate-800"
+              onSubmit={saveLaunchPolicyLimitsAndRetry}
+            >
+              <p className="font-extrabold">Tageslimit direkt anpassen</p>
+              <p className="mt-1 text-xs font-medium leading-5 text-slate-600">
+                Meta kann ein Tagesbudget an einzelnen Tagen um bis zu 75&nbsp;%
+                überschreiten. Deshalb braucht ein Tagesbudget von {dailyBudget.replace(".", ",")}&nbsp;€
+                ein freigegebenes Kampagnenlimit von mindestens {policyLimitInputs.requiredCampaignDailyHardCap?.replace(".", ",") ?? "–"}&nbsp;€.
+                Das geplante Tagesbudget selbst bleibt unverändert.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-extrabold text-slate-700">
+                  Kampagnen-Tageslimit
+                  <span className="relative mt-1 block">
+                    <input
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-12 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        setPolicyLimitInputs((current) => ({
+                          ...current,
+                          campaignDailyHardCap: event.target.value,
+                        }))
+                      }
+                      required
+                      value={policyLimitInputs.campaignDailyHardCap}
+                    />
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400">
+                      EUR
+                    </span>
+                  </span>
+                </label>
+                <label className="text-xs font-extrabold text-slate-700">
+                  Konto-Tageslimit
+                  <span className="relative mt-1 block">
+                    <input
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-12 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        setPolicyLimitInputs((current) => ({
+                          ...current,
+                          accountDailyHardCap: event.target.value,
+                        }))
+                      }
+                      required
+                      value={policyLimitInputs.accountDailyHardCap}
+                    />
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400">
+                      EUR
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <button
+                className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-rose-800 px-4 py-2 text-xs font-extrabold text-white transition hover:bg-rose-900 disabled:opacity-50"
+                disabled={policyLimitPending || pending}
+                type="submit"
+              >
+                {policyLimitPending ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-4" />
+                )}
+                {policyLimitPending
+                  ? "Limit wird gespeichert …"
+                  : "Limit speichern und Vorschau erneut erstellen"}
+              </button>
+            </form>
+          ) : null}
+        </div>
       ) : null}
 
-      <form className="mt-6 grid gap-4 lg:grid-cols-2" onSubmit={prepare}>
+      <form
+        className="mt-6 grid gap-4 lg:grid-cols-2"
+        onSubmit={prepare}
+        ref={campaignFormRef}
+      >
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">
           Kampagnenname
           <input
