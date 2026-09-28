@@ -197,6 +197,11 @@ export type MetaMutationExecutorDependencies = {
     credentials: MetaExecutorCredentials;
     remoteAdId: string;
   }): Promise<boolean>;
+  /**
+   * Ends the execution at a clean step boundary and returns the plan to the
+   * claimable queue (step limit reached or remaining steps not yet due).
+   */
+  yieldExecution?(executionId: string, leaseToken: string): Promise<string>;
   bindings(
     executionId: string,
     leaseToken: string,
@@ -246,7 +251,6 @@ export class MetaMutationExecutorError extends Error {
     | "binding_missing"
     | "asset_invalid"
     | "database_failed"
-    | "step_limit_reached"
     | "creative_optimizer_fresh_preflight_required"
     | "organic_boost_auto_pause_forbidden";
 
@@ -950,7 +954,7 @@ export async function runMetaMutationExecutorOnce(input: {
     }
   }
 
-  while (step && stepsProcessed < maxSteps) {
+  while (step) {
     await input.dependencies.heartbeat(
       claim.executionId,
       claim.leaseToken,
@@ -1157,14 +1161,26 @@ export async function runMetaMutationExecutorOnce(input: {
       }
     }
 
+    // Stop before claiming another step: a claimed-but-unprocessed step used to
+    // strand the plan with an exhausted attempt budget.
+    if (stepsProcessed >= maxSteps) {
+      break;
+    }
     step = await input.dependencies.claimStep(
       claim.executionId,
       claim.leaseToken,
     );
   }
 
-  if (step) {
-    throw new MetaMutationExecutorError("step_limit_reached");
+  if (input.dependencies.yieldExecution) {
+    try {
+      await input.dependencies.yieldExecution(
+        claim.executionId,
+        claim.leaseToken,
+      );
+    } catch {
+      // The lease expires on its own; maintenance recovery requeues the plan.
+    }
   }
 
   return {
@@ -1426,6 +1442,12 @@ export function createMetaMutationExecutorDependencies(options: {
       return remoteAccount === expectedAccount
         && typeof remoteStatus === "string"
         && remoteStatus.toUpperCase() === "PAUSED";
+    },
+    async yieldExecution(executionId, leaseToken) {
+      return requiredString(await rpcData("yield_meta_mutation_execution", {
+        p_execution_id: executionId,
+        p_lease_token: leaseToken,
+      }));
     },
     async bindings(executionId, leaseToken) {
       return parseBindings(await rpcData("get_meta_mutation_remote_bindings", {

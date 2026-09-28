@@ -51,6 +51,22 @@ const executor = await readFile(
 assert.match(executor, /claim_meta_mutation_execution_for_plan/);
 assert.match(executor, /export async function processMetaMutationPlan/);
 assert.match(executor, /META_EXECUTOR_MAX_STEPS_PER_RUN = 64/);
+assert.doesNotMatch(executor, /step_limit_reached/);
+assert.match(executor, /yield_meta_mutation_execution/);
+
+const queueSafeFreeze = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928190000_meta_launch_yield_and_queue_safe_freeze.sql",
+  ),
+  "utf8",
+);
+assert.match(queueSafeFreeze, /create or replace function public\.yield_meta_mutation_execution\(/);
+assert.match(queueSafeFreeze, /max_attempts = greatest\(max_attempts, attempt_count \+ 1\)/);
+assert.match(queueSafeFreeze, /meta_account_has_open_approved_launch\(\s*new\.user_id/);
+assert.match(queueSafeFreeze, /meta_launch_refreeze_keeps_account_allow\(v_user,v_account,v_plan\)/);
+assert.match(queueSafeFreeze, /account_write_gate_waiting/);
+assert.match(queueSafeFreeze, /blocked_reason = 'writes_frozen'/);
 
 const targetedClaim = await readFile(
   join(

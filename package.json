@@ -27,6 +27,7 @@
     "test:meta-budget-planner": "node scripts/test-meta-budget-planner.mjs",
     "test:meta-creative-assets": "node scripts/test-meta-creative-assets.mjs",
     "test:meta-mutation-executor": "node scripts/test-meta-mutation-executor.mjs",
+    "test:meta-launch-queue-resume": "node scripts/test-meta-launch-queue-resume.mjs",
     "test:meta-customer-controls": "node scripts/test-meta-customer-controls.mjs",
     "test:campaign-assistant-brief": "node scripts/test-campaign-assistant-brief.mjs",
     "test:campaign-idea-pipeline": "node scripts/test-campaign-idea-pipeline.mjs",
