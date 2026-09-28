@@ -79,6 +79,18 @@ assert.match(resumeDispatchGate, /or public\.meta_launch_resume_dispatch_ok\(p_p
 assert.match(resumeDispatchGate, /binding\.object_type = 'CAMPAIGN'/);
 assert.match(resumeDispatchGate, /create or replace function public\.resume_failed_meta_customer_launch\(/);
 
+const preDispatchRetry = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928210000_meta_launch_retry_pre_dispatch_rejections.sql",
+  ),
+  "utf8",
+);
+assert.match(preDispatchRetry, /create or replace function public\.fail_meta_mutation_execution\(/);
+assert.match(preDispatchRetry, /v_resume_retry := p_remote_outcome = 'NOT_APPLIED'/);
+assert.match(preDispatchRetry, /then least\(20, attempt_count \+ 1\)/);
+assert.doesNotMatch(preDispatchRetry, /select [^;]*\binto\b/i);
+
 const targetedClaim = await readFile(
   join(
     root,

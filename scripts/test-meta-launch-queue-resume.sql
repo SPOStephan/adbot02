@@ -510,6 +510,87 @@ begin
 end;
 $$;
 
+-- 7) A write rejected before it reached Meta (e.g. the short freeze while
+--    another launch is prepared) is retried, never left FAILED.
+select public.append_meta_kill_switch_state(
+  'ACCOUNT', '13000000-0000-4000-8000-000000000001',
+  '23000000-0000-4000-8000-000000000001', null,
+  'ALLOW', 'Exakt bestätigter atomarer Aktiv-Launch',
+  'CUSTOMER', '13000000-0000-4000-8000-000000000001'
+);
+select pg_temp.seed_launch('93000000-0000-4000-8000-00000000000f', 6, true);
+select pg_temp.seed_launch('93000000-0000-4000-8000-000000000010', 7, true);
+
+do $$
+declare
+  v_claim record;
+  v_result text;
+  v_plan public.mutation_plans%rowtype;
+begin
+  for v_claim in
+    select * from public.claim_meta_mutation_execution_for_plan(
+      '93000000-0000-4000-8000-00000000000f', 'queue-worker-7', 600
+    )
+  loop exit; end loop;
+  if v_claim.execution_id is null then
+    raise exception 'Retry fixture was not claimable';
+  end if;
+
+  v_result := public.fail_meta_mutation_execution(
+    v_claim.execution_id, v_claim.first_step_id, v_claim.lease_token,
+    'TRANSPORT', 'database_failed', 'NOT_APPLIED', 30, null
+  );
+  if v_result <> 'RETRYABLE' then
+    raise exception 'Pre-dispatch rejection ended as % instead of RETRYABLE', v_result;
+  end if;
+
+  for v_plan in
+    select * from public.mutation_plans
+    where id = '93000000-0000-4000-8000-00000000000f'
+  loop exit; end loop;
+  if v_plan.attempt_count >= v_plan.max_attempts or v_plan.terminal_at is not null then
+    raise exception 'Retryable launch is not claimable again: %/%',
+      v_plan.attempt_count, v_plan.max_attempts;
+  end if;
+
+  update public.mutation_plans set not_before = now()
+  where id = '93000000-0000-4000-8000-00000000000f';
+  update public.mutation_plan_steps set not_before = now()
+  where plan_id = '93000000-0000-4000-8000-00000000000f';
+
+  for v_claim in
+    select * from public.claim_meta_mutation_execution_for_plan(
+      '93000000-0000-4000-8000-00000000000f', 'queue-worker-8', 600
+    )
+  loop exit; end loop;
+  if v_claim.execution_id is null or v_claim.first_step_operation <> 'UPDATE' then
+    raise exception 'Retried launch did not resume at the rejected write';
+  end if;
+  perform public.release_meta_account_operation(
+    '23000000-0000-4000-8000-000000000001',
+    '13000000-0000-4000-8000-000000000001',
+    v_claim.lease_token
+  );
+
+  -- A possibly sent (ambiguous) write is never retried blindly.
+  for v_claim in
+    select * from public.claim_meta_mutation_execution_for_plan(
+      '93000000-0000-4000-8000-000000000010', 'queue-worker-9', 600
+    )
+  loop exit; end loop;
+  perform public.begin_meta_mutation_step_dispatch(
+    v_claim.execution_id, v_claim.first_step_id, v_claim.lease_token
+  );
+  v_result := public.fail_meta_mutation_execution(
+    v_claim.execution_id, v_claim.first_step_id, v_claim.lease_token,
+    'TRANSPORT', 'meta_transport_timeout', 'UNKNOWN', 30, null
+  );
+  if v_result = 'RETRYABLE' then
+    raise exception 'Ambiguous write must not be retried';
+  end if;
+end;
+$$;
+
 select 'Meta launch queue resume checks passed' as result;
 
 rollback;
