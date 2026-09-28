@@ -43,8 +43,25 @@ assert.match(lead, /selectedAssetIds=\{pickerSelectedAssetIds\}/);
 assert.match(lead, /selectedFunnelCustomHostname/);
 assert.match(lead, /Custom Domain des ausgewählten Funnels/);
 assert.match(lead, /selectedHostname !== sharedHostname/);
+assert.match(lead, /<MetaAdPreviewGallery/);
+assert.match(lead, /buildMetaAdPreviewCombinations\(\{/);
+assert.doesNotMatch(lead, /alt="Werbemittel-Vorschau"/);
 assert.doesNotMatch(lead, />\s*Lead Canary\s*</);
 assert.doesNotMatch(lead, />\s*Struktur-Test\s*</);
+
+const adPreview = read("src/components/MetaAdPreviewGallery.tsx");
+assert.match(adPreview, /Meta-Anzeigenvorschau/);
+assert.match(adPreview, /Gesponsert/);
+assert.match(adPreview, /genau ein Motiv, einen Primary Text und eine Headline/);
+assert.match(adPreview, /repräsentative mögliche Kombinationen/);
+assert.match(adPreview, /\/api\/media-library\/preview\?assetId=/);
+assert.match(adPreview, /von \$\{total\} möglichen Kombinationen/);
+
+const dashboardLoader = read("src/lib/dashboard/load-customer-dashboard.ts");
+assert.match(dashboardLoader, /creative\?\.asset_feed_spec/);
+assert.match(dashboardLoader, /copyVariants\("bodies"\)/);
+assert.match(dashboardLoader, /copyVariants\("titles"\)/);
+assert.match(dashboardLoader, /copyVariants\("descriptions"\)/);
 
 const picker = read("src/components/CreativePickerModal.tsx");
 assert.match(picker, /multiple=\{multiSelect\}/);

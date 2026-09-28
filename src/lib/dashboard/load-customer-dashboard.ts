@@ -1724,6 +1724,29 @@ async function loadCustomerDashboardImpl(
       const value = linkData?.[key];
       return typeof value === "string" && value.trim() ? value : null;
     };
+    const assetFeedSpec =
+      creative?.asset_feed_spec &&
+      typeof creative.asset_feed_spec === "object" &&
+      !Array.isArray(creative.asset_feed_spec)
+        ? (creative.asset_feed_spec as Record<string, unknown>)
+        : null;
+    const copyVariants = (key: string): string[] => {
+      const values = assetFeedSpec?.[key];
+      if (!Array.isArray(values)) return [];
+      const unique = new Set<string>();
+      for (const value of values) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+        const text = (value as Record<string, unknown>).text;
+        if (typeof text === "string" && text.trim()) unique.add(text.trim());
+      }
+      return [...unique];
+    };
+    const primaryText = copyField("message");
+    const headline = copyField("name");
+    const description = copyField("description");
+    const primaryTexts = copyVariants("bodies");
+    const headlines = copyVariants("titles");
+    const descriptions = copyVariants("descriptions");
 
     return {
       id: String(plan.id),
@@ -1771,9 +1794,17 @@ async function loadCustomerDashboardImpl(
       creativeName: nestedName("creative"),
       adName: nestedName("ad"),
       brandAssetIds,
-      primaryText: copyField("message"),
-      headline: copyField("name"),
-      description: copyField("description"),
+      primaryText,
+      headline,
+      description,
+      primaryTexts: primaryTexts.length > 0 ? primaryTexts : primaryText ? [primaryText] : [],
+      headlines: headlines.length > 0 ? headlines : headline ? [headline] : [],
+      descriptions:
+        descriptions.length > 0
+          ? descriptions
+          : description
+            ? [description]
+            : [],
     };
   });
   const currentMarketingSyncAt = Date.parse(

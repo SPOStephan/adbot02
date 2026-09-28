@@ -86,6 +86,10 @@ export type RecentLaunchPlanView = {
   primaryText: string | null;
   headline: string | null;
   description: string | null;
+  /** Full variants from planned creative.asset_feed_spec, when present. */
+  primaryTexts?: string[];
+  headlines?: string[];
+  descriptions?: string[];
 };
 
 type HeldLaunchPlanCommon = {
