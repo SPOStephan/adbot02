@@ -13,7 +13,9 @@ const NO_STORE = {
 
 type FunnelCampaignStatus = {
   leadActive: boolean;
+  leadSubmitted: boolean;
   trafficActive: boolean;
+  trafficSubmitted: boolean;
   updatedAt: string | null;
 };
 
@@ -63,7 +65,6 @@ export async function POST(request: NextRequest) {
     .select("id,planned_payload,updated_at")
     .eq("user_id", payload.sub)
     .eq("source_rule_key", "active-launch-chain")
-    .eq("status", "SUCCEEDED")
     .order("updated_at", { ascending: false })
     .limit(500);
   if (planError) return json({ ok: false, message: "Kampagnenstatus konnte nicht geladen werden." }, 500);
@@ -81,17 +82,20 @@ export async function POST(request: NextRequest) {
   });
 
   const planIds = relevantPlans.map((plan) => plan.id);
+  const submittedPlanIds = new Set<string>();
   const activePlanIds = new Set<string>();
   if (planIds.length > 0) {
     const { data: bindings, error: bindingsError } = await admin
       .from("remote_object_bindings")
-      .select("plan_id,local_campaign_id")
+      .select("plan_id,local_campaign_id,remote_object_id")
       .eq("user_id", payload.sub)
       .eq("object_type", "CAMPAIGN")
       .in("plan_id", planIds)
-      .not("local_campaign_id", "is", null)
       .limit(500);
     if (bindingsError) return json({ ok: false, message: "Kampagnenstatus konnte nicht geladen werden." }, 500);
+    for (const binding of bindings ?? []) {
+      if (binding.remote_object_id) submittedPlanIds.add(String(binding.plan_id));
+    }
     const campaignIds = Array.from(
       new Set((bindings ?? []).map((row) => String(row.local_campaign_id ?? "")).filter(Boolean)),
     );
@@ -122,13 +126,21 @@ export async function POST(request: NextRequest) {
   for (const requested of requestedUrls) {
     const status: FunnelCampaignStatus = {
       leadActive: false,
+      leadSubmitted: false,
       trafficActive: false,
+      trafficSubmitted: false,
       updatedAt: null,
     };
     for (const plan of relevantPlans) {
-      if (plan.destinationUrl !== requested.normalized || !activePlanIds.has(plan.id)) continue;
-      if (plan.objective === "OUTCOME_LEADS") status.leadActive = true;
-      if (plan.objective === "OUTCOME_TRAFFIC") status.trafficActive = true;
+      if (plan.destinationUrl !== requested.normalized || !submittedPlanIds.has(plan.id)) continue;
+      if (plan.objective === "OUTCOME_LEADS") {
+        status.leadSubmitted = true;
+        if (activePlanIds.has(plan.id)) status.leadActive = true;
+      }
+      if (plan.objective === "OUTCOME_TRAFFIC") {
+        status.trafficSubmitted = true;
+        if (activePlanIds.has(plan.id)) status.trafficActive = true;
+      }
       if (!status.updatedAt || plan.updatedAt > status.updatedAt) status.updatedAt = plan.updatedAt;
     }
     statuses[requested.original] = status;

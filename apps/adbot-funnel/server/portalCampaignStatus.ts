@@ -7,7 +7,9 @@ const PURPOSE = "funnel_campaign_status" as const;
 
 export type PortalFunnelCampaignStatus = {
   leadActive: boolean;
+  leadSubmitted: boolean;
   trafficActive: boolean;
+  trafficSubmitted: boolean;
   updatedAt: string | null;
 };
 
