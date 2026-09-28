@@ -112,6 +112,29 @@ type HeldPlan = {
   useMetaExperiment?: boolean;
 };
 
+type AdPreviewPlan = Pick<
+  HeldPlan,
+  | "objective"
+  | "destinationUrl"
+  | "campaignName"
+  | "brandAssetIds"
+  | "dailyBudgetMinor"
+  | "pixelId"
+  | "customEventType"
+  | "primaryTexts"
+  | "headlines"
+  | "descriptions"
+  | "facebookPageId"
+  | "instagramActorId"
+  | "adCategory"
+  | "structuralAdCount"
+  | "structuralAdSetCount"
+  | "structuralAds"
+  | "dynamicCreativeImages"
+  | "variantDestinationUrl"
+  | "useMetaExperiment"
+>;
+
 function objectiveLabel(objective: string): string {
   if (objective === "OUTCOME_LEADS") return "Lead-Generierung";
   if (objective === "OUTCOME_TRAFFIC") return "Traffic (Link-Klicks)";
@@ -188,6 +211,16 @@ const COPY_LIMITS = {
   description: { recommended: 30, max: 255 },
 } as const;
 
+class ApiRequestError extends Error {
+  readonly code: string | null;
+
+  constructor(message: string, code: string | null) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.code = code;
+  }
+}
+
 function copyLengthHint(value: string, recommended: number, max: number): string {
   const length = value.length;
   const tone =
@@ -211,13 +244,15 @@ async function apiJson<T extends Record<string, unknown> = Record<string, unknow
   });
   const result = (await response.json().catch(() => ({}))) as T & {
     ok?: boolean;
+    error?: string;
     message?: string;
   };
   if (!response.ok || !result.ok) {
-    throw new Error(
+    throw new ApiRequestError(
       typeof result.message === "string"
         ? result.message
         : "Die Aktion konnte nicht sicher abgeschlossen werden.",
+      typeof result.error === "string" ? result.error : null,
     );
   }
   return result;
@@ -283,6 +318,54 @@ function displayMinor(value: string): string {
   if (!/^[0-9]+$/.test(value)) return "—";
   const padded = value.padStart(3, "0");
   return `${padded.slice(0, -2)},${padded.slice(-2)} €`;
+}
+
+function parseDailyBudgetMinor(value: string): string {
+  const normalized = value.trim().replace(",", ".");
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
+    throw new Error(
+      "Das Tagesbudget muss ein positiver EUR-Betrag mit höchstens zwei Nachkommastellen sein.",
+    );
+  }
+  const [major, fraction = ""] = normalized.split(".");
+  const minor = BigInt(major) * BigInt(100) + BigInt(fraction.padEnd(2, "0"));
+  if (minor <= BigInt(0)) {
+    throw new Error("Das Tagesbudget muss größer als 0,00 € sein.");
+  }
+  return minor.toString();
+}
+
+function buildStructuralAdCopies(input: {
+  employment: boolean;
+  primaryText: string;
+  headline: string;
+  description: string;
+  secondPrimaryText: string;
+  secondHeadline: string;
+  secondDescription: string;
+}): NonNullable<HeldPlan["structuralAds"]> {
+  return [
+    {
+      message:
+        input.primaryText.trim() ||
+        (input.employment ? "Jetzt bewerben." : "Jetzt mehr erfahren."),
+      name:
+        input.headline.trim() ||
+        (input.employment ? "Jetzt bewerben" : "Mehr erfahren"),
+      description: input.description.trim(),
+    },
+    {
+      message:
+        input.secondPrimaryText.trim() ||
+        (input.employment
+          ? "Jetzt bewerben — Variante B."
+          : "Jetzt mehr erfahren — Variante B."),
+      name:
+        input.secondHeadline.trim() ||
+        (input.employment ? "Stelle sichern" : "Mehr erfahren"),
+      description: input.secondDescription.trim(),
+    },
+  ];
 }
 
 function policyLimitInput(value: number | null, fallback: string): string {
@@ -381,9 +464,10 @@ export function LeadLaunchCanary({
   initialDraft = null,
 }: Props) {
   const router = useRouter();
-  const campaignFormRef = useRef<HTMLFormElement>(null);
   const budgetNoticeRef = useRef<HTMLDivElement>(null);
+  const adPreviewRef = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState(false);
+  const [previewRequested, setPreviewRequested] = useState(false);
   const [capiPending, setCapiPending] = useState(false);
   const [policyEnsured, setPolicyEnsured] = useState(policyLaunchReady);
   const [policyLimitPending, setPolicyLimitPending] = useState(false);
@@ -630,7 +714,7 @@ export function LeadLaunchCanary({
     }
     return null;
   });
-  const prepareInFlight = pending && !heldPlan;
+  const launchInFlight = pending && !heldPlan;
   const [launchSucceeded, setLaunchSucceeded] = useState(false);
 
   const campaignDraftPayload = useMemo<MetaCampaignDraftPayload>(
@@ -811,7 +895,7 @@ export function LeadLaunchCanary({
         enableAutomation: true,
       });
       setPolicyEnsured(true);
-      campaignFormRef.current?.requestSubmit();
+      await startCampaign();
     } catch (error) {
       setNotice({
         tone: "error",
@@ -827,7 +911,7 @@ export function LeadLaunchCanary({
   }
 
   useEffect(() => {
-    if (!prepareInFlight) {
+    if (!launchInFlight) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- a completed request must reset the displayed timer immediately
       setPrepareElapsedSec(0);
       return;
@@ -838,7 +922,7 @@ export function LeadLaunchCanary({
       setPrepareElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [prepareInFlight]);
+  }, [launchInFlight]);
 
   /**
    * No save required: reads the Funnel-URL from the form, fills the same
@@ -1012,8 +1096,66 @@ export function LeadLaunchCanary({
     return confirmed.domainId;
   }
 
-  async function prepare(event: FormEvent<HTMLFormElement>) {
+  function showAdPreview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setNotice(null);
+    try {
+      if (!gatesReady || !selectedPixel) {
+        throw new Error(
+          "Bitte vervollständige zuerst Meta-Berechtigung, Pixel, Conversions API, Funnel-Tracking und Werbemittel.",
+        );
+      }
+      if (!assetId) {
+        throw new Error("Bitte ein hochgeladenes Werbemittel wählen.");
+      }
+      if (facebookPages.length > 0 && !facebookPageId) {
+        throw new Error("Bitte die Facebook-Seite für die Anzeige wählen.");
+      }
+      if (!effectiveAdCategory) {
+        throw new Error("Bitte die Anzeigenkategorie wählen.");
+      }
+      if (!campaignName) {
+        throw new Error("Bitte einen Kampagnennamen eingeben.");
+      }
+      parseLandingUrl(destinationUrl);
+      parseDailyBudgetMinor(dailyBudget);
+      const variantLanding =
+        structuralMode === "funnel_split"
+          ? parseLandingUrl(variantDestinationUrl)
+          : null;
+      if (variantLanding?.href === parseLandingUrl(destinationUrl).href) {
+        throw new Error("Funnel B braucht eine andere URL als Funnel A.");
+      }
+      const variantPurposeHint = variantLanding
+        ? purposeHintForUrl(funnelPurposeHints, variantLanding.href)
+        : null;
+      if (
+        variantPurposeHint &&
+        variantPurposeHint.category !== effectiveAdCategory
+      ) {
+        throw new Error(
+          "Funnel A und Funnel B müssen dieselbe Anzeigenkategorie haben.",
+        );
+      }
+      setPreviewRequested(true);
+      window.requestAnimationFrame(() => {
+        adPreviewRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die Anzeigenvorschau konnte nicht erstellt werden.",
+      });
+    }
+  }
+
+  async function startCampaign() {
     setPending(true);
     setNotice(null);
     try {
@@ -1064,18 +1206,15 @@ export function LeadLaunchCanary({
         .replace(/[:.]/g, "-")
         .slice(0, 19);
       const structuralAds = structuralOn
-        ? [
-            {
-              message: (primaryTexts[0] ?? "").trim() || (effectiveAdCategory === "employment" ? "Jetzt bewerben." : "Jetzt mehr erfahren."),
-              name: (headlines[0] ?? "").trim() || (effectiveAdCategory === "employment" ? "Jetzt bewerben" : "Mehr erfahren"),
-              description: (descriptions[0] ?? "").trim(),
-            },
-            {
-              message: ad2Primary.trim() || (effectiveAdCategory === "employment" ? "Jetzt bewerben — Variante B." : "Jetzt mehr erfahren — Variante B."),
-              name: ad2Headline.trim() || (effectiveAdCategory === "employment" ? "Stelle sichern" : "Mehr erfahren"),
-              description: ad2Description.trim(),
-            },
-          ]
+        ? buildStructuralAdCopies({
+            employment: effectiveAdCategory === "employment",
+            primaryText: primaryTexts[0] ?? "",
+            headline: headlines[0] ?? "",
+            description: descriptions[0] ?? "",
+            secondPrimaryText: ad2Primary,
+            secondHeadline: ad2Headline,
+            secondDescription: ad2Description,
+          })
         : undefined;
       const result = await apiJson<{
         planId?: string;
@@ -1167,7 +1306,7 @@ export function LeadLaunchCanary({
         throw new Error("Server lieferte keine vollständige HELD-Vorschau.");
       }
 
-      setHeldPlan({
+      const preparedPlan: HeldPlan = {
         id: result.planId,
         payloadHash: result.payloadHash,
         objective: result.objective,
@@ -1211,20 +1350,23 @@ export function LeadLaunchCanary({
         (structuralMode === "two_ad_sets" || structuralMode === "funnel_split")
           ? { useMetaExperiment: true }
           : {}),
-      });
-      setNotice({
-        tone: "success",
-        message:
-          "Lead-Plan vorbereitet (noch nichts an Meta). Prüfe die Vorschau unten und starte mit Freigabe.",
-      });
-      refresh();
+      };
+      setHeldPlan(preparedPlan);
+      await approvePreparedPlan(preparedPlan);
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Die Kampagne konnte nicht vorbereitet werden.";
-      const budgetCapExceeded = message === LAUNCH_BUDGET_CAP_MESSAGE;
-      if (budgetCapExceeded) {
+          : "Die Kampagne konnte nicht gestartet werden.";
+      const budgetErrorCode =
+        error instanceof ApiRequestError ? error.code : null;
+      const campaignBudgetCapExceeded =
+        budgetErrorCode === "launch_campaign_budget_cap_exceeded" ||
+        message === LAUNCH_BUDGET_CAP_MESSAGE;
+      const budgetCapExceeded =
+        campaignBudgetCapExceeded ||
+        budgetErrorCode === "launch_account_budget_cap_exceeded";
+      if (campaignBudgetCapExceeded) {
         const suggestion = suggestLaunchPolicyLimits({
           dailyBudget,
           currentAccountDailyHardCapMinor:
@@ -1248,97 +1390,100 @@ export function LeadLaunchCanary({
     }
   }
 
-  async function approve(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!heldPlan) return;
-    setPending(true);
-    setNotice(null);
-    try {
-      await ensureCampaignLaunchPolicy();
-      await ensureFreeze();
-      const result = await apiJson<{
-        planStatus?: string;
-        approvalId?: string;
-        executionWarning?: string | null;
-        executorSucceeded?: number;
-      }>("PUT", "/api/meta/automation/launch", {
-        planId: heldPlan.id,
-        payloadHash: heldPlan.payloadHash,
-        objective: heldPlan.objective,
-        destinationUrl: heldPlan.destinationUrl,
-        targetStatus: "ACTIVE",
-        budgetType: "DAILY",
-        budgetOwnerType: heldPlan.budgetOwnerType,
-        dailyBudgetMinor: heldPlan.dailyBudgetMinor,
-        campaignName: heldPlan.campaignName,
-        adSetName: heldPlan.adSetName,
-        creativeName: heldPlan.creativeName,
-        adName: heldPlan.adName,
-        reason: PROTOCOL_APPROVE_REASON,
-        confirmation: "AKTIV-LAUNCH FREIGEBEN",
-      });
-      if (!result.approvalId || result.planStatus !== "PENDING") {
-        throw new Error("Freigabe wurde vom Server nicht bestätigt.");
-      }
-      const studyPlanId = heldPlan.useMetaExperiment ? heldPlan.id : null;
-      setHeldPlan(null);
-      let experimentNote = "";
-      if (studyPlanId) {
-        setPendingStudyPlanId(studyPlanId);
-        if (result.executorSucceeded === 1) {
-          try {
-            const study = await apiJson<{ studyId?: string }>(
-              "POST",
-              "/api/meta/automation/ad-study",
-              { planId: studyPlanId },
-            );
-            if (study.studyId) {
-              experimentNote = ` Meta-Experiment ${study.studyId} angelegt.`;
-              setPendingStudyPlanId(null);
-            }
-          } catch (error) {
-            experimentNote = ` Meta-Experiment noch nicht angelegt: ${
-              error instanceof Error ? error.message : "bitte später erneut versuchen"
-            }`;
-          }
-        } else {
-          experimentNote =
-            " Meta-Experiment folgt, sobald beide Ad Sets bei Meta stehen — Button unten.";
-        }
-      }
-      if (
-        typeof result.executionWarning === "string" &&
-        result.executionWarning.trim()
-      ) {
-        setLaunchSucceeded(false);
-        setNotice({
-          tone: "error",
-          message: `${result.executionWarning.trim()}${experimentNote}`,
-        });
-      } else {
-        let draftWarning = "";
+  async function approvePreparedPlan(plan: HeldPlan) {
+    await ensureCampaignLaunchPolicy();
+    await ensureFreeze();
+    const result = await apiJson<{
+      planStatus?: string;
+      approvalId?: string;
+      executionWarning?: string | null;
+      executorSucceeded?: number;
+    }>("PUT", "/api/meta/automation/launch", {
+      planId: plan.id,
+      payloadHash: plan.payloadHash,
+      objective: plan.objective,
+      destinationUrl: plan.destinationUrl,
+      targetStatus: "ACTIVE",
+      budgetType: "DAILY",
+      budgetOwnerType: plan.budgetOwnerType,
+      dailyBudgetMinor: plan.dailyBudgetMinor,
+      campaignName: plan.campaignName,
+      adSetName: plan.adSetName,
+      creativeName: plan.creativeName,
+      adName: plan.adName,
+      reason: PROTOCOL_APPROVE_REASON,
+      confirmation: "AKTIV-LAUNCH FREIGEBEN",
+    });
+    if (!result.approvalId || result.planStatus !== "PENDING") {
+      throw new Error("Freigabe wurde vom Server nicht bestätigt.");
+    }
+    const studyPlanId = plan.useMetaExperiment ? plan.id : null;
+    setHeldPlan(null);
+    let experimentNote = "";
+    if (studyPlanId) {
+      setPendingStudyPlanId(studyPlanId);
+      if (result.executorSucceeded === 1) {
         try {
-          await campaignDraft.markLaunched();
-        } catch {
-          draftWarning = " Der gestartete Entwurf konnte nicht aus der Entwurfsliste entfernt werden.";
+          const study = await apiJson<{ studyId?: string }>(
+            "POST",
+            "/api/meta/automation/ad-study",
+            { planId: studyPlanId },
+          );
+          if (study.studyId) {
+            experimentNote = ` Meta-Experiment ${study.studyId} angelegt.`;
+            setPendingStudyPlanId(null);
+          }
+        } catch (error) {
+          experimentNote = ` Meta-Experiment noch nicht angelegt: ${
+            error instanceof Error ? error.message : "bitte später erneut versuchen"
+          }`;
         }
-        if (result.executorSucceeded === 1) {
+      } else {
+        experimentNote =
+          " Meta-Experiment folgt, sobald beide Ad Sets bei Meta stehen — Button unten.";
+      }
+    }
+    if (
+      typeof result.executionWarning === "string" &&
+      result.executionWarning.trim()
+    ) {
+      setLaunchSucceeded(false);
+      setNotice({
+        tone: "error",
+        message: `${result.executionWarning.trim()}${experimentNote}`,
+      });
+    } else {
+      let draftWarning = "";
+      try {
+        await campaignDraft.markLaunched();
+      } catch {
+        draftWarning = " Der gestartete Entwurf konnte nicht aus der Entwurfsliste entfernt werden.";
+      }
+      if (result.executorSucceeded === 1) {
         setLaunchSucceeded(true);
         setNotice({
           tone: "success",
           message:
             `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}${draftWarning}`,
         });
-        } else {
-          setLaunchSucceeded(true);
-          setNotice({
-            tone: "success",
-            message:
-              `Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.${experimentNote}${draftWarning}`,
-          });
-        }
+      } else {
+        setLaunchSucceeded(true);
+        setNotice({
+          tone: "success",
+          message:
+            `Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.${experimentNote}${draftWarning}`,
+        });
       }
-      refresh();
+    }
+    refresh();
+  }
+
+  async function approveHeldPlan() {
+    if (!heldPlan) return;
+    setPending(true);
+    setNotice(null);
+    try {
+      await approvePreparedPlan(heldPlan);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -1386,6 +1531,7 @@ export function LeadLaunchCanary({
     campaignDraft.resetDraft();
     setLaunchSucceeded(false);
     setHeldPlan(null);
+    setPreviewRequested(false);
     setPendingStudyPlanId(null);
     setNotice(null);
     setCampaignNameOverride(null);
@@ -1403,12 +1549,75 @@ export function LeadLaunchCanary({
     });
   }
 
-  const previewFacebookPageId = heldPlan
-    ? heldPlan.facebookPageId
-    : facebookPageId;
-  const previewInstagramActorId = heldPlan
-    ? heldPlan.instagramActorId
-    : instagramActorId;
+  const currentStructuralAds = structuralOn
+    ? buildStructuralAdCopies({
+        employment: effectiveAdCategory === "employment",
+        primaryText: primaryTexts[0] ?? "",
+        headline: headlines[0] ?? "",
+        description: descriptions[0] ?? "",
+        secondPrimaryText: ad2Primary,
+        secondHeadline: ad2Headline,
+        secondDescription: ad2Description,
+      })
+    : undefined;
+  const currentPreviewPlan: AdPreviewPlan | null =
+    previewRequested && selectedPixel && assetId
+      ? {
+          objective: "OUTCOME_LEADS",
+          destinationUrl: destinationUrl.trim(),
+          campaignName,
+          brandAssetIds: structuralOn
+            ? [assetId]
+            : dynamicCreativeImages
+              ? resolvedDynamicAssets.assetIds
+              : [assetId],
+          dailyBudgetMinor: (() => {
+            try {
+              return parseDailyBudgetMinor(dailyBudget);
+            } catch {
+              return "";
+            }
+          })(),
+          pixelId: selectedPixel.pixelId,
+          customEventType: selectedPixel.customEventType,
+          primaryTexts: structuralOn
+            ? [currentStructuralAds![0].message]
+            : primaryTexts,
+          headlines: structuralOn
+            ? [currentStructuralAds![0].name]
+            : headlines,
+          descriptions: structuralOn
+            ? [currentStructuralAds![0].description]
+            : descriptions,
+          facebookPageId,
+          instagramActorId,
+          adCategory: effectiveAdCategory || undefined,
+          structuralAdCount: structuralOn ? 2 : 1,
+          ...(structuralMode === "two_ad_sets" ||
+          structuralMode === "funnel_split"
+            ? { structuralAdSetCount: 2 as const }
+            : structuralMode === "two_ads"
+              ? { structuralAdSetCount: 1 as const }
+              : {}),
+          ...(currentStructuralAds
+            ? { structuralAds: currentStructuralAds }
+            : {}),
+          dynamicCreativeImages:
+            !structuralOn &&
+            (dynamicCreativeImages || resolvedDynamicAssets.assetIds.length > 1),
+          ...(structuralMode === "funnel_split" && variantDestinationUrl.trim()
+            ? { variantDestinationUrl: variantDestinationUrl.trim() }
+            : {}),
+          ...(useMetaExperiment &&
+          (structuralMode === "two_ad_sets" ||
+            structuralMode === "funnel_split")
+            ? { useMetaExperiment: true }
+            : {}),
+        }
+      : null;
+  const previewPlan: AdPreviewPlan | null = heldPlan ?? currentPreviewPlan;
+  const previewFacebookPageId = previewPlan?.facebookPageId;
+  const previewInstagramActorId = previewPlan?.instagramActorId;
   const previewAdvertiserName =
     facebookPages.find((page) => page.id === previewFacebookPageId)?.label ??
     "Facebook-Seite der Kampagne";
@@ -1417,7 +1626,7 @@ export function LeadLaunchCanary({
       (account) => account.id === previewInstagramActorId,
     )?.label ?? null;
   const previewCallToAction =
-    (heldPlan?.adCategory ?? effectiveAdCategory) === "employment"
+    (previewPlan?.adCategory ?? effectiveAdCategory) === "employment"
       ? "Jetzt bewerben"
       : "Mehr erfahren";
   let adPreviewCards: MetaAdPreviewCard[] = [];
@@ -1425,20 +1634,20 @@ export function LeadLaunchCanary({
   let adPreviewIsTruncated = false;
   let adPreviewMode: "single" | "dynamic" | "structural" = "single";
 
-  if (heldPlan?.structuralAdCount === 2 && heldPlan.structuralAds) {
-    const structuralAssetId = heldPlan.brandAssetIds[0];
+  if (previewPlan?.structuralAdCount === 2 && previewPlan.structuralAds) {
+    const structuralAssetId = previewPlan.brandAssetIds[0];
     if (structuralAssetId) {
-      adPreviewCards = heldPlan.structuralAds.slice(0, 2).map((ad, index) => ({
+      adPreviewCards = previewPlan.structuralAds.slice(0, 2).map((ad, index) => ({
         assetId: structuralAssetId,
         primaryText: ad.message || "Anzeigentext",
         headline: ad.name || "Überschrift",
         description: ad.description,
         destinationUrl:
-          index === 1 && heldPlan.variantDestinationUrl
-            ? heldPlan.variantDestinationUrl
-            : heldPlan.destinationUrl,
+          index === 1 && previewPlan.variantDestinationUrl
+            ? previewPlan.variantDestinationUrl
+            : previewPlan.destinationUrl,
         previewLabel: `Anzeige ${index + 1}${
-          heldPlan.structuralAdSetCount === 2
+          previewPlan.structuralAdSetCount === 2
             ? ` · Anzeigengruppe ${index + 1}`
             : ""
         }`,
@@ -1446,12 +1655,12 @@ export function LeadLaunchCanary({
       adPreviewTotal = adPreviewCards.length;
       adPreviewMode = "structural";
     }
-  } else if (heldPlan) {
+  } else if (previewPlan) {
     const combinations = buildMetaAdPreviewCombinations({
-      assetIds: heldPlan.brandAssetIds,
-      primaryTexts: heldPlan.primaryTexts,
-      headlines: heldPlan.headlines,
-      descriptions: heldPlan.descriptions,
+      assetIds: previewPlan.brandAssetIds,
+      primaryTexts: previewPlan.primaryTexts,
+      headlines: previewPlan.headlines,
+      descriptions: previewPlan.descriptions,
       defaultPrimaryText:
         previewCallToAction === "Jetzt bewerben"
           ? "Jetzt bewerben."
@@ -1460,12 +1669,12 @@ export function LeadLaunchCanary({
     });
     adPreviewCards = combinations.combinations.map((combination) => ({
       ...combination,
-      destinationUrl: heldPlan.destinationUrl,
+      destinationUrl: previewPlan.destinationUrl,
     }));
     adPreviewTotal = combinations.totalCombinationCount;
     adPreviewIsTruncated = combinations.isTruncated;
     adPreviewMode =
-      heldPlan.dynamicCreativeImages || combinations.totalCombinationCount > 1
+      previewPlan.dynamicCreativeImages || combinations.totalCombinationCount > 1
         ? "dynamic"
         : "single";
   }
@@ -1755,7 +1964,7 @@ export function LeadLaunchCanary({
                 )}
                 {policyLimitPending
                   ? "Limit wird gespeichert …"
-                  : "Limit speichern und Vorschau erneut erstellen"}
+                  : "Limit speichern und Kampagne erneut starten"}
               </button>
             </form>
           ) : null}
@@ -1764,8 +1973,7 @@ export function LeadLaunchCanary({
 
       <form
         className="mt-6 grid gap-4 lg:grid-cols-2"
-        onSubmit={prepare}
-        ref={campaignFormRef}
+        onSubmit={showAdPreview}
       >
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">
           Kampagnenname
@@ -2363,7 +2571,7 @@ export function LeadLaunchCanary({
             />
           </>
         )}
-        {prepareInFlight ? (
+        {launchInFlight ? (
           <div
             className="flex gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-950 lg:col-span-2"
             role="status"
@@ -2371,10 +2579,10 @@ export function LeadLaunchCanary({
           >
             <LoaderCircle className="mt-0.5 size-5 shrink-0 animate-spin text-blue-700" />
             <div className="min-w-0 space-y-1">
-              <p className="font-extrabold">Kampagne wird vorbereitet…</p>
+              <p className="font-extrabold">Kampagne wird gestartet…</p>
               <p className="font-medium leading-6 text-blue-900/90">
-                Adbot legt die Launch-Vorschau an. Meist dauert das nur wenige
-                Sekunden — bitte diese Seite nicht schließen.
+                Adbot prüft jetzt Budget und Meta-Voraussetzungen, legt die
+                Kampagne an und aktiviert sie. Bitte diese Seite nicht schließen.
               </p>
               {prepareElapsedSec >= 20 ? (
                 <p className="text-xs font-bold text-blue-800">
@@ -2391,12 +2599,8 @@ export function LeadLaunchCanary({
             disabled={pending || !gatesReady || !assetId || Boolean(heldPlan)}
             type="submit"
           >
-            {prepareInFlight ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <PlayCircle className="size-4" />
-            )}
-            {prepareInFlight ? "Bitte warten…" : "Vorschau erstellen"}
+            <PlayCircle className="size-4" />
+            {previewRequested ? "Vorschau aktualisieren" : "Vorschau erstellen"}
           </button>
           <button
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
@@ -2453,24 +2657,26 @@ export function LeadLaunchCanary({
         selectedAssetIds={pickerSelectedAssetIds}
       />
 
-      {heldPlan ? (
-        <form
+      {previewPlan ? (
+        <div
           className="mt-6 rounded-2xl border border-blue-200 bg-blue-50/40 p-5"
-          onSubmit={approve}
+          ref={adPreviewRef}
         >
           <h3 className="text-sm font-extrabold text-slate-950">
             Vorschau prüfen
           </h3>
           <p className="mt-1 text-sm text-slate-600">
-            So geht die Anzeige live — noch nichts ist bei Meta angelegt.
+            {heldPlan
+              ? "Dieser Startplan wurde bereits technisch vorbereitet — noch nichts ist bei Meta angelegt."
+              : "Diese Vorschau entsteht nur aus deinen aktuellen Eingaben. Dabei wird kein Budget reserviert und nichts an Meta übertragen."}
           </p>
 
           <div className="mt-4 space-y-4">
-            {heldPlan.structuralAdCount === 2 ? (
+            {previewPlan.structuralAdCount === 2 ? (
               <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                {heldPlan.variantDestinationUrl
+                {previewPlan.variantDestinationUrl
                   ? "Funnel-Vergleich: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige + eigene URL (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
-                  : heldPlan.structuralAdSetCount === 2
+                  : previewPlan.structuralAdSetCount === 2
                     ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
                     : "Struktur: 1 Kampagne → 1 Anzeigengruppe → 2 Anzeigen"}
               </p>
@@ -2487,17 +2693,17 @@ export function LeadLaunchCanary({
               totalCombinationCount={adPreviewTotal}
             />
 
-            {heldPlan.structuralAdCount === 2 ? (
+            {previewPlan.structuralAdCount === 2 ? (
               <div className="space-y-1">
                 <p className="break-all text-xs font-medium text-blue-700">
-                  Funnel A: {heldPlan.destinationUrl}
+                  Funnel A: {previewPlan.destinationUrl}
                 </p>
-                {heldPlan.variantDestinationUrl ? (
+                {previewPlan.variantDestinationUrl ? (
                   <p className="break-all text-xs font-medium text-blue-700">
-                    Funnel B: {heldPlan.variantDestinationUrl}
+                    Funnel B: {previewPlan.variantDestinationUrl}
                   </p>
                 ) : null}
-                {heldPlan.useMetaExperiment ? (
+                {previewPlan.useMetaExperiment ? (
                   <p className="text-xs font-semibold text-slate-600">
                     Nach dem Start: Meta-Experiment (SPLIT_TEST) versuchen
                   </p>
@@ -2509,21 +2715,21 @@ export function LeadLaunchCanary({
           <dl className="mt-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
             <div>
               <dt className="font-bold text-slate-500">Ziel</dt>
-              <dd>{objectiveLabel(heldPlan.objective)}</dd>
+              <dd>{objectiveLabel(previewPlan.objective)}</dd>
             </div>
             <div>
               <dt className="font-bold text-slate-500">Budget / Tag</dt>
-              <dd>{displayMinor(heldPlan.dailyBudgetMinor)}</dd>
+              <dd>{displayMinor(previewPlan.dailyBudgetMinor)}</dd>
             </div>
             <div>
               <dt className="font-bold text-slate-500">Pixel</dt>
               <dd>
-                {heldPlan.pixelId} · {heldPlan.customEventType}
+                {previewPlan.pixelId} · {previewPlan.customEventType}
               </dd>
             </div>
             <div>
               <dt className="font-bold text-slate-500">Kampagne</dt>
-              <dd>{friendlyCampaignLabel(heldPlan.campaignName)}</dd>
+              <dd>{friendlyCampaignLabel(previewPlan.campaignName)}</dd>
             </div>
           </dl>
 
@@ -2540,15 +2746,26 @@ export function LeadLaunchCanary({
             </p>
           ) : null}
 
-          <button className={`${buttonClass} mt-4`} disabled={pending} type="submit">
+          <button
+            className={`${buttonClass} mt-4`}
+            disabled={pending}
+            onClick={() => {
+              if (heldPlan) {
+                void approveHeldPlan();
+              } else {
+                void startCampaign();
+              }
+            }}
+            type="button"
+          >
             {pending ? (
               <LoaderCircle className="size-4 animate-spin" />
             ) : (
               <Check className="size-4" />
             )}
-            Kampagne starten
+            {pending ? "Kampagne wird gestartet…" : "Kampagne jetzt starten"}
           </button>
-        </form>
+        </div>
       ) : null}
         </>
       )}

@@ -26,7 +26,10 @@ import {
   type OrganicBoostPrepareCommand,
   type PolicyCommand,
 } from "@/lib/meta/customer-control-input";
-import { LAUNCH_BUDGET_CAP_MESSAGE } from "@/lib/meta/launch-policy-budget";
+import {
+  classifyLaunchBudgetCapFailure,
+  LAUNCH_BUDGET_CAP_MESSAGE,
+} from "@/lib/meta/launch-policy-budget";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import {
   describeLaunchChainDrainFailure,
@@ -1959,6 +1962,12 @@ export async function materializeCustomerLaunch(
         hint: error.hint,
         code: (error as { code?: string }).code,
       });
+      const budgetFailure = classifyLaunchBudgetCapFailure(
+        launchRpcFailureRaw(error),
+      );
+      if (budgetFailure) {
+        serviceError(budgetFailure.code, 409, budgetFailure.message);
+      }
       serviceError(
         "launch_preparation_not_ready",
         409,

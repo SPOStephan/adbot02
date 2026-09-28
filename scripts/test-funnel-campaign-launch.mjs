@@ -45,6 +45,17 @@ assert.match(lead, /Custom Domain des ausgewählten Funnels/);
 assert.match(lead, /selectedHostname !== sharedHostname/);
 assert.match(lead, /<MetaAdPreviewGallery/);
 assert.match(lead, /buildMetaAdPreviewCombinations\(\{/);
+assert.match(lead, /onSubmit=\{showAdPreview\}/);
+assert.match(lead, /Kampagne jetzt starten/);
+assert.match(lead, /void startCampaign\(\)/);
+assert.match(lead, /kein Budget reserviert und nichts an Meta übertragen/);
+const localPreviewFlow = lead.slice(
+  lead.indexOf("function showAdPreview"),
+  lead.indexOf("async function startCampaign"),
+);
+assert.ok(localPreviewFlow.length > 0);
+assert.doesNotMatch(localPreviewFlow, /\/api\/meta\/automation\/launch/);
+assert.doesNotMatch(localPreviewFlow, /ensureCampaignLaunchPolicy/);
 assert.doesNotMatch(lead, /alt="Werbemittel-Vorschau"/);
 assert.doesNotMatch(lead, />\s*Lead Canary\s*</);
 assert.doesNotMatch(lead, />\s*Struktur-Test\s*</);
