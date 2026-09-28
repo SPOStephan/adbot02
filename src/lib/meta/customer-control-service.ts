@@ -28,6 +28,7 @@ import {
 } from "@/lib/meta/customer-control-input";
 import {
   classifyLaunchBudgetCapFailure,
+  isNonDeliveringMetaStatus,
   LAUNCH_BUDGET_CAP_MESSAGE,
 } from "@/lib/meta/launch-policy-budget";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
@@ -1846,6 +1847,13 @@ async function ensureLaunchExposureSnapshot(
 
 const SUPERSEDED_CUSTOMER_LAUNCH_REASON =
   "superseded_by_newer_customer_launch_for_same_draft";
+const STALE_UNAPPROVED_LAUNCH_AGE_MS = 60_000;
+
+type UnstartedLaunchCleanupInput = {
+  campaignDraftId: string;
+  destinationUrl: string;
+  releaseStaleAcrossAccount: boolean;
+};
 
 /**
  * The former preview flow materialized HELD plans and therefore reserved daily
@@ -1853,28 +1861,20 @@ const SUPERSEDED_CUSTOMER_LAUNCH_REASON =
  * same saved draft replaces only plans that never had an approval, execution,
  * lease or remote binding. Active/approved campaigns are never touched.
  */
-async function releaseSupersededCustomerLaunchReservations(
+export async function releaseUnstartedCustomerLaunchReservations(
   customer: MetaCustomer,
-  command: LaunchCommand,
+  input: UnstartedLaunchCleanupInput,
 ): Promise<void> {
-  const campaignDraftId = command.launchInputs.campaign_draft_id;
-  if (!campaignDraftId) return;
-
   const admin = createAdminClient();
   const { data: candidates, error: candidatesError } = await admin
     .from("mutation_plans")
     .select(
-      "id,policy_id,status,blocked_reason,planned_payload,attempt_count,lease_token",
+      "id,policy_id,status,blocked_reason,planned_payload,attempt_count,lease_token,created_at",
     )
     .eq("user_id", customer.userId)
     .eq("platform_account_id", customer.platformAccountId)
     .eq("source_rule_key", "active-launch-chain")
     .eq("action_type", "LAUNCH_CHAIN")
-    .filter(
-      "planned_payload->>destination_url",
-      "eq",
-      command.launchInputs.destination_url,
-    )
     .in("status", ["PENDING", "CANCELLED"])
     .limit(100);
   if (candidatesError) {
@@ -1896,6 +1896,17 @@ async function releaseSupersededCustomerLaunchReservations(
       typeof payload.campaign_draft_id === "string"
         ? payload.campaign_draft_id
         : null;
+    const destinationUrl =
+      typeof payload.destination_url === "string" ? payload.destination_url : null;
+    const sameDestination = destinationUrl === input.destinationUrl;
+    const createdAt =
+      typeof row.created_at === "string" ? Date.parse(row.created_at) : Number.NaN;
+    const staleAcrossAccount =
+      input.releaseStaleAcrossAccount &&
+      Number.isFinite(createdAt) &&
+      createdAt <= Date.now() - STALE_UNAPPROVED_LAUNCH_AGE_MS;
+    const sameDraft = previousDraftId === input.campaignDraftId;
+    const legacySameDestination = previousDraftId === null && sameDestination;
     const isRetryableCleanup =
       row.status === "CANCELLED" &&
       row.blocked_reason === SUPERSEDED_CUSTOMER_LAUNCH_REASON;
@@ -1905,7 +1916,7 @@ async function releaseSupersededCustomerLaunchReservations(
       row.lease_token === null;
     return (
       (isRetryableCleanup || isUntouchedPending) &&
-      (previousDraftId === campaignDraftId || previousDraftId === null)
+      (sameDraft || legacySameDestination || staleAcrossAccount)
     );
   });
   if (matching.length === 0) return;
@@ -2010,13 +2021,146 @@ async function releaseSupersededCustomerLaunchReservations(
         p_actor_id: customer.userId,
         p_event_type: "CUSTOMER_LAUNCH_PLAN_SUPERSEDED",
         p_before_state: { plan_status: "PENDING" },
-        p_request_payload: { campaign_draft_id: campaignDraftId },
+        p_request_payload: { campaign_draft_id: input.campaignDraftId },
         p_response_payload: { released_budget_reservation: true },
         p_after_state: { plan_status: "CANCELLED" },
-        p_metadata: { source: "releaseSupersededCustomerLaunchReservations" },
+        p_metadata: { source: "releaseUnstartedCustomerLaunchReservations" },
       }),
     ),
   );
+}
+
+async function releaseNonDeliveringSnapshotExposures(
+  customer: MetaCustomer,
+): Promise<void> {
+  const admin = createAdminClient();
+  const [campaigns, adGroups, retiredTargets] = await Promise.all([
+    admin
+      .from("campaigns")
+      .select("id,status,effective_status")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("is_current", true)
+      .limit(1000),
+    admin
+      .from("ad_groups")
+      .select("id,status,effective_status")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("is_current", true)
+      .limit(2000),
+    admin
+      .from("automation_targets")
+      .select("id")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("status", "RETIRED")
+      .not("budget_owner_key", "is", null)
+      .limit(2000),
+  ]);
+  if (campaigns.error || adGroups.error || retiredTargets.error) {
+    serviceError(
+      "launch_exposure_cleanup_failed",
+      500,
+      "Nicht ausliefernde Budgetpositionen konnten nicht sicher geprüft werden.",
+    );
+  }
+
+  const inactiveCampaignIds = (campaigns.data ?? [])
+    .filter((row) =>
+      isNonDeliveringMetaStatus(row.status, row.effective_status),
+    )
+    .map((row) => String(row.id));
+  const inactiveAdGroupIds = (adGroups.data ?? [])
+    .filter((row) =>
+      isNonDeliveringMetaStatus(row.status, row.effective_status),
+    )
+    .map((row) => String(row.id));
+  const targetIds = new Set(
+    (retiredTargets.data ?? []).map((row) => String(row.id)),
+  );
+
+  const targetLookups = await Promise.all([
+    inactiveCampaignIds.length > 0
+      ? admin
+          .from("automation_targets")
+          .select("id")
+          .eq("user_id", customer.userId)
+          .eq("platform_account_id", customer.platformAccountId)
+          .eq("target_type", "CAMPAIGN")
+          .in("campaign_id", inactiveCampaignIds)
+      : Promise.resolve({ data: [], error: null }),
+    inactiveAdGroupIds.length > 0
+      ? admin
+          .from("automation_targets")
+          .select("id")
+          .eq("user_id", customer.userId)
+          .eq("platform_account_id", customer.platformAccountId)
+          .eq("target_type", "AD_SET")
+          .in("ad_group_id", inactiveAdGroupIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (targetLookups.some((lookup) => lookup.error)) {
+    serviceError(
+      "launch_exposure_cleanup_failed",
+      500,
+      "Nicht ausliefernde Budgetpositionen konnten nicht sicher geprüft werden.",
+    );
+  }
+  for (const lookup of targetLookups) {
+    for (const row of lookup.data ?? []) targetIds.add(String(row.id));
+  }
+  if (targetIds.size === 0) return;
+
+  const released = await admin
+    .from("daily_budget_exposures")
+    .delete()
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .in("source", ["SNAPSHOT", "RECONCILIATION"])
+    .in("automation_target_id", [...targetIds]);
+  if (released.error) {
+    serviceError(
+      "launch_exposure_cleanup_failed",
+      500,
+      "Nicht ausliefernde Budgetpositionen konnten nicht sicher freigegeben werden.",
+    );
+  }
+}
+
+function formatExposureMinor(value: bigint): string {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+  }).format(Number(value) / 100);
+}
+
+async function currentBudgetExposureBreakdown(
+  customer: MetaCustomer,
+): Promise<string> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("daily_budget_exposures")
+    .select("account_day,source,reserved_exposure_minor")
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .order("account_day", { ascending: false })
+    .limit(2000);
+  if (error || !data?.length) return "";
+
+  const currentDay = data[0]?.account_day;
+  if (typeof currentDay !== "string") return "";
+  let prepared = BigInt(0);
+  let delivering = BigInt(0);
+  for (const row of data) {
+    if (row.account_day !== currentDay) continue;
+    const raw = String(row.reserved_exposure_minor ?? "0");
+    if (!/^\d+$/.test(raw)) continue;
+    const value = BigInt(raw);
+    if (row.source === "PLAN") prepared += value;
+    else delivering += value;
+  }
+  return ` Vor diesem neuen Start entfallen ${formatExposureMinor(delivering)} auf aktuell ausliefernde Meta-Budgets und ${formatExposureMinor(prepared)} auf noch nicht gestartete Vorbereitungen.`;
 }
 
 export async function materializeCustomerLaunch(
@@ -2096,7 +2240,14 @@ export async function materializeCustomerLaunch(
         );
       }
     }
-    await releaseSupersededCustomerLaunchReservations(readyCustomer, command);
+    if (command.launchInputs.campaign_draft_id) {
+      await releaseUnstartedCustomerLaunchReservations(readyCustomer, {
+        campaignDraftId: command.launchInputs.campaign_draft_id,
+        destinationUrl: command.launchInputs.destination_url,
+        releaseStaleAcrossAccount: true,
+      });
+    }
+    await releaseNonDeliveringSnapshotExposures(readyCustomer);
     // Omit p_planned_at so Postgres uses now() — Vercel clock skew against
     // marketing_last_success_at (DB now) was failing the 2h freshness gate.
     const commonRpcArguments = {
@@ -2142,7 +2293,12 @@ export async function materializeCustomerLaunch(
         launchRpcFailureRaw(error),
       );
       if (budgetFailure) {
-        serviceError(budgetFailure.code, 409, budgetFailure.message);
+        const breakdown = await currentBudgetExposureBreakdown(readyCustomer);
+        serviceError(
+          budgetFailure.code,
+          409,
+          `${budgetFailure.message}${breakdown}`,
+        );
       }
       serviceError(
         "launch_preparation_not_ready",
