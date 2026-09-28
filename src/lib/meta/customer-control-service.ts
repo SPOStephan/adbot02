@@ -26,6 +26,7 @@ import {
   type OrganicBoostPrepareCommand,
   type PolicyCommand,
 } from "@/lib/meta/customer-control-input";
+import { LAUNCH_BUDGET_CAP_MESSAGE } from "@/lib/meta/launch-policy-budget";
 import { drainOrganicBoostExecutionsForAccount } from "@/lib/meta/organic-boost-execute";
 import {
   describeLaunchChainDrainFailure,
@@ -1348,7 +1349,7 @@ function launchPreparationFailureMessage(error: unknown): string {
     ],
     [
       /hard cap|budget exceeds/i,
-      "Das Tagesbudget liegt über dem erlaubten Limit der Launch-Policy.",
+      LAUNCH_BUDGET_CAP_MESSAGE,
     ],
     [
       /launch- and status-enabled|Active launch|Current launch- and status-enabled/i,
@@ -1379,17 +1380,6 @@ function launchPreparationFailureMessage(error: unknown): string {
   for (const [pattern, message] of rules) {
     if (pattern.test(raw)) {
       return message;
-    }
-  }
-
-  if (raw) {
-    const short = raw
-      .replace(/^.*?:\s*/, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 160);
-    if (short) {
-      return `Die Kampagne konnte nicht vorbereitet werden (${short}).`;
     }
   }
 
@@ -1437,38 +1427,12 @@ function launchApprovalFailureMessage(error: unknown): string {
       return message;
     }
   }
-  if (raw) {
-    const short = raw
-      .replace(/^.*?:\s*/, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 160);
-    if (short) {
-      return `Die Kampagne konnte nicht gestartet werden (${short}).`;
-    }
-  }
   return "Die Kampagne konnte nicht gestartet werden. Bitte erneut versuchen.";
 }
 
-/** Keep a short SQL/detail suffix so opaque gates stop hiding the real failure. */
-function withLaunchFailureDetail(message: string, error: unknown): string {
-  const record =
-    error && typeof error === "object"
-      ? (error as { message?: unknown; details?: unknown; hint?: unknown })
-      : null;
-  const raw = [record?.message, record?.details, record?.hint]
-    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
-    .join(" | ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 180);
-  if (!raw) {
-    return message;
-  }
-  if (message.includes(raw) || message.includes(raw.slice(0, 40))) {
-    return message;
-  }
-  return `${message} (Technik: ${raw})`;
+/** Raw SQL/RPC details stay in server logs and must never leak into customer UI. */
+function withLaunchFailureDetail(message: string, _error: unknown): string {
+  return message;
 }
 
 type AccountKillSwitchMode = "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED";
