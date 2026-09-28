@@ -8,7 +8,7 @@ const read = (path) => readFileSync(join(root, path), "utf8");
 
 const page = read("src/app/dashboard/traffic-launch/page.tsx");
 assert.match(page, /resolvePublicFunnelPurposeHint\(initialFunnelUrl\)/);
-assert.match(page, /!initialFunnelUrl \? \(/);
+assert.match(page, /!initialFunnelUrl \|\| funnelTrafficMode \? \(/);
 assert.match(page, /MetaPixelBinding pixels=\{onboardingData\.pixels\}/);
 assert.match(page, /Meta jetzt verbinden/);
 assert.match(page, /adAccountPickerOptions/);
@@ -59,6 +59,25 @@ assert.doesNotMatch(localPreviewFlow, /ensureCampaignLaunchPolicy/);
 assert.doesNotMatch(lead, /alt="Werbemittel-Vorschau"/);
 assert.doesNotMatch(lead, />\s*Lead Canary\s*</);
 assert.doesNotMatch(lead, />\s*Struktur-Test\s*</);
+assert.match(lead, /Kampagne an Meta übermittelt und aktiviert/);
+
+const traffic = read("src/components/TrafficLaunchCanary.tsx");
+assert.match(traffic, /optimization_goal: "LANDING_PAGE_VIEWS"/);
+assert.match(traffic, /Traffic \(Landingpage-Aufrufe\)/);
+
+const launchPage = read("src/app/dashboard/traffic-launch/page.tsx");
+assert.match(launchPage, /query\.campaignGoal === "landing-page-views"/);
+assert.match(launchPage, /funnelTrafficMode\s*\?\s*initialFunnelUrl/);
+
+const funnelLibrary = read("apps/adbot-funnel/client/src/pages/admin/FunnelLibrary.tsx");
+assert.match(funnelLibrary, /Lead-Kampagne bei Meta aktiv/);
+assert.match(funnelLibrary, /Zusätzlich für Landingpage-Aufrufe bewerben/);
+assert.match(funnelLibrary, /campaignStatusesQuery/);
+
+const campaignStatusRoute = read("src/app/api/internal/funnel-campaign-status/route.ts");
+assert.match(campaignStatusRoute, /\.eq\("source_rule_key", "active-launch-chain"\)/);
+assert.match(campaignStatusRoute, /\.eq\("status", "SUCCEEDED"\)/);
+assert.match(campaignStatusRoute, /campaign\.status === "ACTIVE" && campaign\.effective_status === "ACTIVE"/);
 
 const adPreview = read("src/components/MetaAdPreviewGallery.tsx");
 assert.match(adPreview, /Meta-Anzeigenvorschau/);

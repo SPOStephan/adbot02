@@ -16,8 +16,14 @@ export function portalFunnelSsoUrl(nextPath = "/admin"): string {
   return url.toString();
 }
 
-export function portalCampaignLaunchUrl(funnelUrl: string): string {
+export function portalCampaignLaunchUrl(
+  funnelUrl: string,
+  campaignGoal: "leads" | "landing-page-views" = "leads",
+): string {
   const url = new URL("/dashboard/traffic-launch", `${portalBaseUrl()}/`);
   url.searchParams.set("funnelUrl", funnelUrl);
+  if (campaignGoal === "landing-page-views") {
+    url.searchParams.set("campaignGoal", campaignGoal);
+  }
   return url.toString();
 }

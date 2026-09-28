@@ -1464,10 +1464,9 @@ export function LeadLaunchCanary({
       tone: "success",
       message:
         result.executionState === "ACTIVE"
-          ? `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}${draftWarning}`
+          ? `Kampagne an Meta übermittelt und aktiviert. Sie ist ab jetzt jederzeit in der Kampagnen-Übersicht einsehbar.${experimentNote}${draftWarning}`
           : `Kampagnenstart angenommen. Adbot arbeitet den Auftrag automatisch in der internen Warteschlange ab und aktiviert ihn anschließend bei Meta. Kein weiterer Klick nötig.${experimentNote}${draftWarning}`,
     });
-    refresh();
   }
 
   async function approveHeldPlan() {
@@ -1743,14 +1742,14 @@ export function LeadLaunchCanary({
             <div className="min-w-0 flex-1">
               <h3 className="text-lg font-extrabold text-emerald-950">
                 {launchState === "ACTIVE"
-                  ? "Erledigt — Kampagne ist live"
+                  ? "Kampagne erfolgreich an Meta übermittelt"
                   : "Kampagnenstart angenommen — automatische Ausführung läuft"}
               </h3>
               <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
                 {notice?.tone === "success"
                   ? notice.message
                   : launchState === "ACTIVE"
-                    ? "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."
+                    ? "Kampagne an Meta übermittelt und aktiviert. Sie ist ab jetzt jederzeit in der Kampagnen-Übersicht einsehbar."
                     : "Adbot arbeitet den Auftrag automatisch ab. Kein weiterer Klick nötig."}
               </p>
               {pendingStudyPlanId ? (
@@ -1768,15 +1767,24 @@ export function LeadLaunchCanary({
                   Meta-Experiment erneut versuchen
                 </button>
               ) : null}
-              <button
-                className={`${buttonClass} mt-5`}
-                disabled={pending}
-                onClick={startAnotherLeadCampaign}
-                type="button"
-              >
-                <Rocket className="size-4" />
-                Weitere Lead-Kampagne starten
-              </button>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  className={buttonClass}
+                  onClick={() => router.push("/dashboard/kampagnen")}
+                  type="button"
+                >
+                  Kampagnen-Übersicht öffnen
+                </button>
+                <button
+                  className={buttonClass}
+                  disabled={pending}
+                  onClick={startAnotherLeadCampaign}
+                  type="button"
+                >
+                  <Rocket className="size-4" />
+                  Weitere Lead-Kampagne starten
+                </button>
+              </div>
             </div>
           </div>
         </div>

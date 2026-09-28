@@ -65,7 +65,7 @@ type HeldPlan = {
 
 function objectiveLabel(objective: string): string {
   if (objective === "OUTCOME_TRAFFIC") {
-    return "Traffic (Link-Klicks)";
+    return "Traffic (Landingpage-Aufrufe)";
   }
   if (objective === "OUTCOME_LEADS") {
     return "Lead-Generierung";
@@ -110,7 +110,7 @@ const DEFAULT_TRAFFIC_BLUEPRINT = {
   campaign: { special_ad_categories: [] },
   ad_set: {
     billing_event: "IMPRESSIONS",
-    optimization_goal: "LINK_CLICKS",
+    optimization_goal: "LANDING_PAGE_VIEWS",
     bid_strategy: "LOWEST_COST_WITHOUT_CAP",
     destination_type: "WEBSITE",
     targeting: { geo_locations: { countries: ["DE"] } } as MetaAdSetTargeting,
@@ -838,7 +838,7 @@ export function TrafficLaunchCanary({
         setNotice({
           tone: "success",
           message:
-            `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}`,
+            `Kampagne an Meta übermittelt und aktiviert. Sie ist ab jetzt jederzeit in der Kampagnen-Übersicht einsehbar.${experimentNote}`,
         });
       } else {
         setLaunchState("QUEUED");
@@ -848,7 +848,6 @@ export function TrafficLaunchCanary({
             `Kampagnenstart angenommen. Adbot arbeitet den Auftrag automatisch in der internen Warteschlange ab und aktiviert ihn anschließend bei Meta. Kein weiterer Klick nötig.${experimentNote}`,
         });
       }
-      refresh();
     } catch (error) {
       setNotice({
         tone: "error",
@@ -921,9 +920,9 @@ export function TrafficLaunchCanary({
             Kampagne mit hochgeladenem Werbemittel starten
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Erster Schritt: reine Traffic-Kampagne (Link-Klicks) aus deiner Media
-            Library. Domain und Traffic-Blueprint werden automatisch angelegt.
-            Pixel-Messung kommt als eigener Folgeschritt.
+            Traffic-Kampagne mit Optimierung auf tatsächliche Landingpage-Aufrufe
+            aus deiner Media Library. Domain und Traffic-Blueprint werden automatisch
+            angelegt.
           </p>
         </div>
       </div>
@@ -940,14 +939,14 @@ export function TrafficLaunchCanary({
             <div className="min-w-0 flex-1">
               <h3 className="text-lg font-extrabold text-emerald-950">
                 {launchState === "ACTIVE"
-                  ? "Erledigt — Kampagne ist live"
+                  ? "Kampagne erfolgreich an Meta übermittelt"
                   : "Kampagnenstart angenommen — automatische Ausführung läuft"}
               </h3>
               <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
                 {notice?.tone === "success"
                   ? notice.message
                   : launchState === "ACTIVE"
-                    ? "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."
+                    ? "Kampagne an Meta übermittelt und aktiviert. Sie ist ab jetzt jederzeit in der Kampagnen-Übersicht einsehbar."
                     : "Adbot arbeitet den Auftrag automatisch ab. Kein weiterer Klick nötig."}
               </p>
               {pendingStudyPlanId ? (
@@ -965,15 +964,24 @@ export function TrafficLaunchCanary({
                   Meta-Experiment erneut versuchen
                 </button>
               ) : null}
-              <button
-                className={`${buttonClass} mt-5`}
-                disabled={pending}
-                onClick={startAnotherTrafficCampaign}
-                type="button"
-              >
-                <Rocket className="size-4" />
-                Weitere Traffic-Kampagne starten
-              </button>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  className={buttonClass}
+                  onClick={() => router.push("/dashboard/kampagnen")}
+                  type="button"
+                >
+                  Kampagnen-Übersicht öffnen
+                </button>
+                <button
+                  className={buttonClass}
+                  disabled={pending}
+                  onClick={startAnotherTrafficCampaign}
+                  type="button"
+                >
+                  <Rocket className="size-4" />
+                  Weitere Traffic-Kampagne starten
+                </button>
+              </div>
             </div>
           </div>
         </div>

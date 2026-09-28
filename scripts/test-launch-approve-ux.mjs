@@ -104,7 +104,14 @@ assert.match(traffic, /friendlyCampaignLabel/);
 assert.match(traffic, /\/api\/media-library\/preview\?assetId=/);
 assert.match(traffic, /notice && !heldPlan/);
 assert.match(traffic, /Weitere Traffic-Kampagne starten/);
-assert.match(traffic, /Erledigt — Kampagne ist live/);
+assert.match(traffic, /Kampagne erfolgreich an Meta übermittelt/);
+assert.match(traffic, /Kampagnen-Übersicht öffnen/);
+assert.match(traffic, /LANDING_PAGE_VIEWS/);
+const trafficSuccessFlow = traffic.slice(
+  traffic.indexOf('if (result.executionState === "ACTIVE")'),
+  traffic.indexOf("async function retryMetaExperiment"),
+);
+assert.doesNotMatch(trafficSuccessFlow, /refresh\(\)/);
 assert.match(
   traffic,
   /executionState !== "ACTIVE" && result\.executionState !== "QUEUED"/,
@@ -137,6 +144,13 @@ assert.match(lead, /Vorschau prüfen/);
 assert.match(lead, /CreativeTextVariantFields/);
 assert.match(lead, /primaryTexts/);
 assert.match(lead, /Weitere Lead-Kampagne starten/);
+assert.match(lead, /Kampagne erfolgreich an Meta übermittelt/);
+assert.match(lead, /Kampagnen-Übersicht öffnen/);
+const leadSuccessFlow = lead.slice(
+  lead.indexOf("setLaunchState(result.executionState)"),
+  lead.indexOf("async function approveHeldPlan"),
+);
+assert.doesNotMatch(leadSuccessFlow, /refresh\(\)/);
 assert.match(lead, /PROTOCOL_APPROVE_REASON/);
 assert.match(
   lead,
