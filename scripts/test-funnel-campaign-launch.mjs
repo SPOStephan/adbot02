@@ -71,12 +71,18 @@ assert.match(launchPage, /funnelTrafficMode\s*\?\s*initialFunnelUrl/);
 
 const funnelLibrary = read("apps/adbot-funnel/client/src/pages/admin/FunnelLibrary.tsx");
 assert.match(funnelLibrary, /Lead-Kampagne bei Meta aktiv/);
+assert.match(funnelLibrary, /Lead-Kampagne an Meta übermittelt/);
 assert.match(funnelLibrary, /Zusätzlich für Landingpage-Aufrufe bewerben/);
+assert.match(funnelLibrary, /campaignStatus\?\.leadSubmitted \|\| campaignStatus\?\.leadActive/);
 assert.match(funnelLibrary, /campaignStatusesQuery/);
 
 const campaignStatusRoute = read("src/app/api/internal/funnel-campaign-status/route.ts");
 assert.match(campaignStatusRoute, /\.eq\("source_rule_key", "active-launch-chain"\)/);
-assert.match(campaignStatusRoute, /\.eq\("status", "SUCCEEDED"\)/);
+assert.doesNotMatch(campaignStatusRoute, /\.eq\("status", "SUCCEEDED"\)/);
+assert.match(campaignStatusRoute, /submittedPlanIds\.add\(String\(binding\.plan_id\)\)/);
+assert.match(campaignStatusRoute, /leadSubmitted = true/);
+assert.match(campaignStatusRoute, /trafficSubmitted = true/);
+assert.doesNotMatch(campaignStatusRoute, /\.not\("local_campaign_id", "is", null\)/);
 assert.match(campaignStatusRoute, /campaign\.status === "ACTIVE" && campaign\.effective_status === "ACTIVE"/);
 
 const adPreview = read("src/components/MetaAdPreviewGallery.tsx");

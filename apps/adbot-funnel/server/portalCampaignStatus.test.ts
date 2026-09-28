@@ -38,7 +38,9 @@ describe("portal campaign status", () => {
           statuses: {
             [FUNNEL_URL]: {
               leadActive: true,
+              leadSubmitted: true,
               trafficActive: false,
+              trafficSubmitted: false,
               updatedAt: "2026-09-28T12:00:00.000Z",
             },
           },
@@ -56,7 +58,9 @@ describe("portal campaign status", () => {
     ).resolves.toEqual({
       [FUNNEL_URL]: {
         leadActive: true,
+        leadSubmitted: true,
         trafficActive: false,
+        trafficSubmitted: false,
         updatedAt: "2026-09-28T12:00:00.000Z",
       },
     });
