@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { FilePenLine } from "lucide-react";
 
 import { MetaAdAccountPicker } from "@/components/MetaAdAccountPicker";
 import {
@@ -12,6 +14,7 @@ import {
 } from "@/components/DashboardPageHeader";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
+import { toMetaCampaignDraftView } from "@/lib/meta/campaign-draft";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -100,6 +103,21 @@ async function KampagnenBody() {
           }];
         });
 
+  const { data: draftRows } = await supabase
+    .from("meta_campaign_drafts")
+    .select("id,campaign_name,destination_url,payload,revision,updated_at")
+    .eq("user_id", user.id)
+    .eq("platform_account_id", metaAccount.id)
+    .eq("status", "DRAFT")
+    .order("updated_at", { ascending: false })
+    .limit(50);
+  const campaignDrafts = Array.isArray(draftRows)
+    ? draftRows.flatMap((row) => {
+        const draft = toMetaCampaignDraftView(row as Record<string, unknown>);
+        return draft ? [draft] : [];
+      })
+    : [];
+
   return (
     <>
       {adAccountPickerOptions.length > 0 ? (
@@ -107,6 +125,58 @@ async function KampagnenBody() {
           <MetaAdAccountPicker accounts={adAccountPickerOptions} />
         </div>
       ) : null}
+
+      <section
+        aria-labelledby="campaign-drafts-title"
+        className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+        id="entwuerfe"
+      >
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+          Gespeicherte Kampagnen
+        </p>
+        <h2 className="mt-2 text-xl font-extrabold tracking-tight" id="campaign-drafts-title">
+          Entwürfe
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+          Noch nicht gestartete Funnel-Kampagnen werden automatisch gespeichert. Du
+          kannst die Bearbeitung hier ohne Datenverlust fortsetzen.
+        </p>
+        {campaignDrafts.length ? (
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {campaignDrafts.map((draft) => (
+              <article className="rounded-xl border border-slate-200 bg-slate-50 p-4" key={draft.id}>
+                <div className="flex items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-100 text-blue-700">
+                    <FilePenLine className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-extrabold text-slate-950">
+                      {draft.campaignName}
+                    </h3>
+                    <p className="mt-1 truncate text-xs font-medium text-slate-500">
+                      {draft.destinationUrl}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Zuletzt gespeichert: {new Date(draft.updatedAt).toLocaleString("de-DE")}
+                    </p>
+                    <Link
+                      className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-blue-800"
+                      href={`/dashboard/traffic-launch?draftId=${encodeURIComponent(draft.id)}`}
+                    >
+                      Bearbeitung fortsetzen
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+            Noch keine Kampagnenentwürfe. Sobald du einen Funnel mit Meta bewirbst,
+            speichert Adbot deine Eingaben automatisch hier.
+          </div>
+        )}
+      </section>
 
       <MetaCampaignOverview
         adAccounts={adAccountPickerOptions}
