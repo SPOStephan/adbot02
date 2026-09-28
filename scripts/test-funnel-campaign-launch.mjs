@@ -64,10 +64,16 @@ assert.match(lead, /Kampagne an Meta übermittelt und aktiviert/);
 const traffic = read("src/components/TrafficLaunchCanary.tsx");
 assert.match(traffic, /optimization_goal: "LANDING_PAGE_VIEWS"/);
 assert.match(traffic, /Traffic \(Landingpage-Aufrufe\)/);
+assert.match(traffic, /Festes Meta-Optimierungsziel: Landingpage-Aufrufe/);
+assert.match(traffic, /funnelPurposeHint\?\.category === "employment"/);
+assert.match(traffic, /special_ad_categories = \["EMPLOYMENT"\]/);
+assert.match(traffic, /toMetaEmploymentAdSetTargeting\(geo\)/);
 
 const launchPage = read("src/app/dashboard/traffic-launch/page.tsx");
 assert.match(launchPage, /query\.campaignGoal === "landing-page-views"/);
 assert.match(launchPage, /funnelTrafficMode\s*\?\s*initialFunnelUrl/);
+assert.match(launchPage, /funnelTrafficMode \? initialFunnelPurposeHint : null/);
+assert.match(launchPage, /\) : !initialFunnelUrl \? \(/);
 
 const funnelLibrary = read("apps/adbot-funnel/client/src/pages/admin/FunnelLibrary.tsx");
 assert.match(funnelLibrary, /Lead-Kampagne bei Meta aktiv/);

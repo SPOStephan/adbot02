@@ -23,10 +23,13 @@ import {
 import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
 import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
 import {
+  fallbackCountryCode,
+  toMetaEmploymentAdSetTargeting,
   toMetaAdSetTargeting,
   type MetaAdSetTargeting,
 } from "@/lib/campaign-geo/adapters";
 import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
+import type { FunnelPurposeHint } from "@/lib/funnel-purpose-hint-types";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 import {
   resolveDynamicCreativeAssetIds,
@@ -104,10 +107,11 @@ type Props = {
   initialPrimaryText?: string | null;
   initialHeadline?: string | null;
   initialDescription?: string | null;
+  funnelPurposeHint?: FunnelPurposeHint | null;
 };
 
 const DEFAULT_TRAFFIC_BLUEPRINT = {
-  campaign: { special_ad_categories: [] },
+  campaign: { special_ad_categories: [] as string[] },
   ad_set: {
     billing_event: "IMPRESSIONS",
     optimization_goal: "LANDING_PAGE_VIEWS",
@@ -280,6 +284,7 @@ export function TrafficLaunchCanary({
   initialPrimaryText = null,
   initialHeadline = null,
   initialDescription = null,
+  funnelPurposeHint = null,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -479,6 +484,7 @@ export function TrafficLaunchCanary({
    */
   async function ensureTrafficBlueprint(): Promise<string> {
     const template = structuredClone(DEFAULT_TRAFFIC_BLUEPRINT);
+    const employment = funnelPurposeHint?.category === "employment";
     // Structural modes: classic link_data only (Ad-1 texts). DCA forbidden.
     const parts = buildLinkCreativeBlueprintParts({
       primaryTexts: structuralOn
@@ -504,7 +510,19 @@ export function TrafficLaunchCanary({
         parts.assetFeedSpec;
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
     }
-    template.ad_set.targeting = toMetaAdSetTargeting(await fetchCampaignGeoTarget());
+    const geo = await fetchCampaignGeoTarget();
+    if (employment) {
+      template.campaign.special_ad_categories = ["EMPLOYMENT"];
+      (template.campaign as Record<string, unknown>).special_ad_category_country = [
+        fallbackCountryCode(geo),
+      ];
+      template.ad_set.targeting = toMetaEmploymentAdSetTargeting(geo);
+    } else {
+      template.campaign.special_ad_categories = [];
+      delete (template.campaign as Record<string, unknown>)
+        .special_ad_category_country;
+      template.ad_set.targeting = toMetaAdSetTargeting(geo);
+    }
 
     const saved = await apiJson<{ blueprintId?: string }>(
       "POST",
@@ -990,6 +1008,9 @@ export function TrafficLaunchCanary({
             Traffic-Kampagne mit Optimierung auf tatsächliche Landingpage-Aufrufe
             aus deiner Media Library. Domain und Traffic-Blueprint werden automatisch
             angelegt.
+          </p>
+          <p className="mt-3 inline-flex rounded-full bg-blue-50 px-3 py-1.5 text-xs font-extrabold text-blue-800 ring-1 ring-inset ring-blue-200">
+            Festes Meta-Optimierungsziel: Landingpage-Aufrufe
           </p>
         </div>
       </div>

@@ -50,7 +50,10 @@ const IMAGE_HASH_PATTERN = /^[A-Fa-f0-9]{16,128}$/;
 const WORKER_ID_PATTERN = /^[A-Za-z0-9._:@/-]{1,255}$/;
 
 export const META_EXECUTOR_LEASE_SECONDS = 12 * 60;
-export const META_EXECUTOR_MAX_STEPS_PER_RUN = 24;
+// A customer launch with ten images and two structural ads currently needs up
+// to 43 steps through final ACTIVE read-back and reconciliation. Keep enough
+// headroom so a single executor run cannot strand the plan before activation.
+export const META_EXECUTOR_MAX_STEPS_PER_RUN = 64;
 
 const PLAN_ACTIONS = new Set([
   "UPDATE_BUDGET",
