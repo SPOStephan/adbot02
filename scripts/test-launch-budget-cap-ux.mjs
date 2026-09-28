@@ -87,6 +87,8 @@ assert.match(lead, /await startCampaign\(\)/);
 assert.match(lead, /Das geplante Tagesbudget selbst bleibt unverändert/);
 assert.match(lead, /Dabei wird kein Budget reserviert und nichts an Meta übertragen/);
 assert.match(lead, /onSubmit=\{showAdPreview\}/);
+assert.match(lead, /await campaignDraft\.saveNow\(\)/);
+assert.match(lead, /campaignDraftId/);
 const localPreviewFlow = lead.slice(
   lead.indexOf("function showAdPreview"),
   lead.indexOf("async function startCampaign"),
@@ -107,6 +109,17 @@ const service = await readFile(
 assert.doesNotMatch(service, /Technik:/);
 assert.match(service, /classifyLaunchBudgetCapFailure\(/);
 assert.match(service, /serviceError\(budgetFailure\.code, 409, budgetFailure\.message\)/);
+assert.match(service, /releaseSupersededCustomerLaunchReservations/);
+assert.match(service, /source_rule_key", "active-launch-chain"/);
+assert.match(service, /meta_launch_canary_approvals/);
+assert.match(service, /mutation_executions/);
+assert.match(service, /remote_object_bindings/);
+assert.match(service, /\.eq\("source", "PLAN"\)/);
+assert.match(service, /CUSTOMER_LAUNCH_PLAN_SUPERSEDED/);
+assert.ok(
+  service.indexOf("await releaseSupersededCustomerLaunchReservations") <
+    service.indexOf('admin.rpc("materialize_meta_customer_launch_plan"'),
+);
 assert.match(
   service,
   /function withLaunchFailureDetail\(message: string, _error: unknown\): string \{\s*return message;/,
