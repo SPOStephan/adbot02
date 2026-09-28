@@ -209,6 +209,7 @@ export async function GET(request: Request) {
       getGranularTargetIds(tokenDebug, "instagram_basic"),
     );
     const allowedAdAccountIds = getMetaAdAccountGranularTargetIds(tokenDebug);
+    const isExtend = oauthState.intent === "extend";
     const systemUserDirectAssetCandidate =
       shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug, {
         authorizationReset: true,
@@ -216,18 +217,13 @@ export async function GET(request: Request) {
     const useSystemUserDirectAssetDiscovery =
       shouldUseMetaSystemUserDirectAssetDiscovery(tokenDebug, {
         authorizationReset: oauthState.authorizationReset,
+        additiveExtension: isExtend,
       });
 
     if (
       systemUserDirectAssetCandidate
       && !useSystemUserDirectAssetDiscovery
     ) {
-      if (oauthState.intent === "extend") {
-        // Additive extend must not revoke existing grants. Ask for a normal
-        // reconnect if Meta only offers a stale system-user token shape.
-        return dashboardRedirect("error", "extend_stale_system_user");
-      }
-
       stage = "authorization_reset";
       await revokeMetaAuthorization({
         userId: identity.id,
@@ -269,13 +265,12 @@ export async function GET(request: Request) {
       })),
     });
 
-    const isExtend = oauthState.intent === "extend";
-
     // When Meta provides target_ids, they remain the sole authority. Business
     // Integration System User tokens can instead return every granular scope
     // with an empty target list; those tokens are already asset-restricted by
-    // the customer's dialog selection and are resolved directly below.
-    // Extend may only grant *new* asset types — do not require all three.
+    // the customer's dialog selection and are resolved directly below. During
+    // extension, the additive database RPC merges these visible assets and
+    // intentionally never deletes an existing asset.
     if (
       !useSystemUserDirectAssetDiscovery
       && !isExtend
