@@ -32,7 +32,7 @@ assert.match(lead, /Funnel-Tracking synchronisieren/);
 assert.doesNotMatch(lead, /Kampagnenstart jetzt freigeben/);
 assert.match(lead, /\/api\/meta\/automation\/launch-policy/);
 assert.match(lead, /await ensureCampaignLaunchPolicy\(\)/);
-assert.match(lead, /Entwurf speichern/);
+assert.equal((lead.match(/Entwurf sichern/g) ?? []).length, 2);
 assert.match(lead, /Automatische Zielgruppenfindung durch Meta/);
 assert.match(lead, /Werbemittel wählen oder hochladen/);
 assert.match(lead, />\s*Kampagnenname\s*</);

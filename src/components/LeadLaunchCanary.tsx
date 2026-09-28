@@ -1274,6 +1274,18 @@ export function LeadLaunchCanary({
     setCampaignNameOverride(null);
   }
 
+  function saveCampaignDraftManually() {
+    void campaignDraft.saveNow().catch((error) => {
+      setNotice({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Der Entwurf konnte nicht gespeichert werden.",
+      });
+    });
+  }
+
   const inputClass =
     "mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100";
   const buttonClass =
@@ -1284,11 +1296,11 @@ export function LeadLaunchCanary({
       className="border-t border-slate-200 bg-slate-50/40 px-5 py-7 sm:px-7"
       id="lead-launch"
     >
-      <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
           <Target className="size-5" />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[min(100%,20rem)] flex-1">
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">
             Meta-Kampagne
           </p>
@@ -1310,13 +1322,28 @@ export function LeadLaunchCanary({
               {campaignDraft.state === "saving"
                 ? "Entwurf wird gespeichert …"
                 : campaignDraft.state === "error"
-                  ? "Automatisches Speichern fehlgeschlagen — bitte unten erneut speichern."
+                  ? "Automatisches Speichern fehlgeschlagen — bitte über einen Speichern-Button erneut sichern."
                   : campaignDraft.state === "saved"
                     ? "Entwurf gespeichert · Fortsetzung unter Kampagnen > Entwürfe"
                     : "Änderungen werden automatisch als Entwurf gespeichert."}
             </p>
           ) : null}
         </div>
+        {campaignDraftEnabled && !launchSucceeded ? (
+          <button
+            className="ml-auto inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-800 shadow-sm transition hover:bg-blue-50 disabled:opacity-50"
+            disabled={pending || campaignDraft.state === "saving"}
+            onClick={saveCampaignDraftManually}
+            type="button"
+          >
+            {campaignDraft.state === "saving" ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
+            Entwurf sichern
+          </button>
+        ) : null}
       </div>
 
       {launchSucceeded ? (
@@ -2115,17 +2142,7 @@ export function LeadLaunchCanary({
             <button
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
               disabled={pending || campaignDraft.state === "saving"}
-              onClick={() => {
-                void campaignDraft.saveNow().catch((error) => {
-                  setNotice({
-                    tone: "error",
-                    message:
-                      error instanceof Error
-                        ? error.message
-                        : "Der Entwurf konnte nicht gespeichert werden.",
-                  });
-                });
-              }}
+              onClick={saveCampaignDraftManually}
               type="button"
             >
               {campaignDraft.state === "saving" ? (
@@ -2133,7 +2150,7 @@ export function LeadLaunchCanary({
               ) : (
                 <Save className="size-4" />
               )}
-              Entwurf speichern
+              Entwurf sichern
             </button>
           ) : null}
         </div>

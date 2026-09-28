@@ -91,7 +91,8 @@ assert.match(hook, /const markLaunched/);
 
 const launch = await read("src/components/LeadLaunchCanary.tsx");
 assert.match(launch, /useCampaignDraftAutosave/);
-assert.match(launch, /Entwurf speichern/);
+assert.equal((launch.match(/Entwurf sichern/g) ?? []).length, 2);
+assert.equal((launch.match(/onClick=\{saveCampaignDraftManually\}/g) ?? []).length, 2);
 assert.match(launch, /await ensureCampaignLaunchPolicy\(\)/);
 assert.doesNotMatch(launch, />Kampagnenstart freigeben</);
 
