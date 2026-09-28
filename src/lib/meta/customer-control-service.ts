@@ -2139,28 +2139,74 @@ async function currentBudgetExposureBreakdown(
   customer: MetaCustomer,
 ): Promise<string> {
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("daily_budget_exposures")
-    .select("account_day,source,reserved_exposure_minor")
-    .eq("user_id", customer.userId)
-    .eq("platform_account_id", customer.platformAccountId)
-    .order("account_day", { ascending: false })
-    .limit(2000);
-  if (error || !data?.length) return "";
+  const activePlanStatuses = [
+    "PENDING",
+    "CLAIMED",
+    "EXECUTING",
+    "RECONCILING",
+    "RETRYABLE",
+    "COMPENSATION_REQUIRED",
+  ];
+  const [exposures, campaignBindings, activePlans] = await Promise.all([
+    admin
+      .from("daily_budget_exposures")
+      .select(
+        "account_day,campaign_scope_key,plan_id,source,reserved_exposure_minor",
+      )
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .order("account_day", { ascending: false })
+      .limit(2000),
+    admin
+      .from("remote_object_bindings")
+      .select("remote_object_id")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("object_type", "CAMPAIGN")
+      .limit(2000),
+    admin
+      .from("mutation_plans")
+      .select("id")
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .in("status", activePlanStatuses)
+      .limit(2000),
+  ]);
+  if (
+    exposures.error ||
+    campaignBindings.error ||
+    activePlans.error ||
+    !exposures.data?.length
+  ) {
+    return "";
+  }
 
-  const currentDay = data[0]?.account_day;
+  const adbotCampaignScopes = new Set(
+    (campaignBindings.data ?? []).map(
+      (binding) => `campaign:${String(binding.remote_object_id)}`,
+    ),
+  );
+  const activePlanIds = new Set(
+    (activePlans.data ?? []).map((plan) => String(plan.id)),
+  );
+
+  const currentDay = exposures.data[0]?.account_day;
   if (typeof currentDay !== "string") return "";
   let prepared = BigInt(0);
   let delivering = BigInt(0);
-  for (const row of data) {
+  for (const row of exposures.data) {
     if (row.account_day !== currentDay) continue;
     const raw = String(row.reserved_exposure_minor ?? "0");
     if (!/^\d+$/.test(raw)) continue;
     const value = BigInt(raw);
-    if (row.source === "PLAN") prepared += value;
-    else delivering += value;
+    if (row.source === "PLAN" && activePlanIds.has(String(row.plan_id))) {
+      prepared += value;
+    }
+    else if (adbotCampaignScopes.has(String(row.campaign_scope_key))) {
+      delivering += value;
+    }
   }
-  return ` Vor diesem neuen Start entfallen ${formatExposureMinor(delivering)} auf aktuell ausliefernde Meta-Budgets und ${formatExposureMinor(prepared)} auf noch nicht gestartete Vorbereitungen.`;
+  return ` Vor diesem neuen Start entfallen ${formatExposureMinor(delivering)} auf aktive, von Adbot gestartete Kampagnen und ${formatExposureMinor(prepared)} auf noch nicht gestartete Adbot-Vorbereitungen.`;
 }
 
 export async function materializeCustomerLaunch(
