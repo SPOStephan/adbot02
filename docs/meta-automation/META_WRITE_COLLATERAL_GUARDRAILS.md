@@ -13,6 +13,10 @@ Wenn Beitrag-Push = **AUTO** und Account-Schreiben = **ALLOW**:
 3. Traffic/Lead-Prepare darf ACCOUNT nur **transient** freezen und muss Freigeben danach wiederherstellen, wenn AUTO aktiv war.
 4. Canary-Sperren gehören auf **PLAN** des Canarys — nicht als Dauerzustand auf ACCOUNT.
 5. Aktuelle AUTO-Settings schlagen veraltete Plan-Flags (`require_manual_approval` im Payload).
+6. Ein freigegebener Kundenstart (`active-launch-chain` mit Approval) wird nie durch den Refreeze eines *anderen* Launches terminal `BLOCKED`: Solange ein freigegebener Launch offen ist, bleibt ACCOUNT ALLOW; ein ACCOUNT-FREEZE lässt ihn warten (`account_write_gate_waiting`), statt ihn abzubrechen. Reine Read-back/Reconcile-Reste sind keine Writes.
+7. Ein Executor-Lauf endet am Schrittlimit an einer sauberen Schrittgrenze (`yield_meta_mutation_execution`) und bleibt ohne Recovery-Sonderfall claimbar.
+
+Vorfall 2026-09-28 (Vertrieb02): Lauf endete nach 24 Schritten direkt vor `activate-ad` (Plan mit 1/1 Attempts nicht mehr claimbar); nach Recovery fror der FAILED-Terminal eines Geschwister-Launches das ACCOUNT ein, 0,18 s später wurde Vertrieb02 `BLOCKED writes_frozen`. Anzeige blieb PAUSED.
 
 ## Soft-Baseline (Content)
 

@@ -91,6 +91,7 @@ function dependenciesFor({
   claimOverrides = {},
   withFreshPreflight = false,
   emergencyPauseResult = null,
+  withYield = false,
 } = {}) {
   const events = [];
   const failures = [];
@@ -167,6 +168,12 @@ function dependenciesFor({
   if (withFreshPreflight) {
     dependencies.freshPreflight = async () => {
       events.push("fresh-preflight");
+    };
+  }
+  if (withYield) {
+    dependencies.yieldExecution = async () => {
+      events.push("yield");
+      return "YIELDED";
     };
   }
   if (typeof emergencyPauseResult === "boolean") {
@@ -768,6 +775,70 @@ export function needsMetaCreativeFreshPreflight(input){
     assert.match(postedUrl, /222222222/);
     assert.equal(harness.failures.length, 0);
     assert.equal(harness.events.some((value) => value.startsWith("begin:")), true);
+  }
+
+  {
+    // Step limit: stop at a clean boundary instead of claiming a step that can
+    // never run (Vertrieb02: `activate-ad` claimed as step 25 of a 24-step run).
+    let fetchCalls = 0;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      return jsonResponse({ success: true });
+    };
+    const activation = (id, index) => step({
+      id,
+      index,
+      operation: "UPDATE",
+      objectType: "AD_SET",
+      request: {
+        operation: "UPDATE_STATUS",
+        mode: "execute",
+        object_id: "222222222",
+        status: "ACTIVE",
+      },
+    });
+    const harness = dependenciesFor({
+      firstStep: activation(IDS.step1, 0),
+      nextSteps: [activation(IDS.step2, 1), activation(IDS.step3, 2)],
+      withYield: true,
+    });
+    const result = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-step-limit-yield",
+      dependencies: harness.dependencies,
+      maxSteps: 2,
+    });
+    assert.equal(result.outcome, "deferred");
+    assert.equal(result.stepsProcessed, 2);
+    assert.equal(fetchCalls, 2);
+    assert.equal(harness.claimStepCalls, 1);
+    assert.equal(harness.failures.length, 0);
+    assert.equal(harness.events.at(-1), "yield");
+    assert.equal(harness.events.filter((value) => value === "yield").length, 1);
+
+    // Nothing due right now: the run also yields so the plan stays claimable.
+    const idle = dependenciesFor({
+      firstStep: activation(IDS.step1, 0),
+      withYield: true,
+    });
+    const idleResult = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-no-due-step-yield",
+      dependencies: idle.dependencies,
+    });
+    assert.equal(idleResult.outcome, "deferred");
+    assert.equal(idle.events.at(-1), "yield");
+
+    // A failed yield never turns into a thrown executor error.
+    const broken = dependenciesFor({
+      firstStep: activation(IDS.step1, 0),
+    });
+    broken.dependencies.yieldExecution = async () => {
+      throw new Error("rpc down");
+    };
+    const brokenResult = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-yield-rpc-failure",
+      dependencies: broken.dependencies,
+    });
+    assert.equal(brokenResult.outcome, "deferred");
   }
 
   console.log("Meta mutation executor regression: OK");
