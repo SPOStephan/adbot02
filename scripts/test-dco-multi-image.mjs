@@ -72,6 +72,8 @@ const picker = await readFile(
 );
 assert.match(picker, /multiple=\{multiSelect\}/);
 assert.match(picker, /onSelectionChange/);
+assert.match(picker, /selectedFormatCounts\[item\.key\]/);
+assert.match(picker, /`\$\{selectedCount\} ausgewählt\.`/);
 
 const service = await readFile(
   join(root, "src/lib/meta/customer-control-service.ts"),
@@ -104,6 +106,38 @@ try {
     join(temporaryDirectory, "meta-formats.mjs"),
     transpile(formatsSource),
     "utf8",
+  );
+  const formatCountsSource = await readFile(
+    join(root, "src/lib/media-library/selected-meta-format-counts.ts"),
+    "utf8",
+  );
+  const formatCountsPath = join(
+    temporaryDirectory,
+    "selected-meta-format-counts.mjs",
+  );
+  await writeFile(
+    formatCountsPath,
+    transpile(
+      formatCountsSource.replace(
+        "@/lib/media-library/meta-formats",
+        "./meta-formats.mjs",
+      ),
+    ),
+    "utf8",
+  );
+  const formatCounts = await import(pathToFileURL(formatCountsPath).href);
+  assert.deepEqual(
+    formatCounts.countSelectedAssetsByMetaFormat([
+      ...Array.from({ length: 4 }, () => ({ width: 1080, height: 1080 })),
+      ...Array.from({ length: 2 }, () => ({ width: 1080, height: 1350 })),
+      ...Array.from({ length: 4 }, () => ({ width: 1080, height: 1920 })),
+      { width: null, height: null },
+    ]),
+    {
+      meta_feed_1x1: 4,
+      meta_feed_4x5: 2,
+      meta_story_9x16: 4,
+    },
   );
   const rewrittenVariants = variantsSource.replace(
     "@/lib/media-library/meta-formats",
