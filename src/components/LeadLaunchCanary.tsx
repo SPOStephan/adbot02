@@ -435,6 +435,16 @@ export function LeadLaunchCanary({
   const detectedPurposeHint = preloadedPurposeHint?.metaTracking
     ? preloadedPurposeHint
     : resolvedPurposeHint ?? preloadedPurposeHint;
+  const selectedFunnelCustomHostname = useMemo(() => {
+    if (!detectedPurposeHint) return null;
+    try {
+      const selectedHostname = parseLandingUrl(destinationUrl).hostname;
+      const sharedHostname = parseLandingUrl(FUNNEL_SITE_URL).hostname;
+      return selectedHostname !== sharedHostname ? selectedHostname : null;
+    } catch {
+      return null;
+    }
+  }, [destinationUrl, detectedPurposeHint]);
   const effectiveAdCategory = detectedPurposeHint?.category ?? adCategory;
   const suggestedCampaignName = `${detectedPurposeHint?.title || "Adbot Lead-Kampagne"} – ${effectiveAdCategory === "employment" ? "Recruiting" : "Meta Leads"}`;
   const [campaignNameOverride, setCampaignNameOverride] = useState<string | null>(
@@ -1722,7 +1732,15 @@ export function LeadLaunchCanary({
                 : `Shared Funnel (${FUNNEL_SITE_URL.replace(/^https?:\/\//, "")}/f/…)`}
             </option>
           </select>
-          {readyCustomDomains.length === 0 ? (
+          {selectedFunnelCustomHostname ? (
+            <span className="mt-1 block text-xs font-medium text-slate-500">
+              Custom Domain des ausgewählten Funnels: {" "}
+              <strong className="text-slate-700">
+                {selectedFunnelCustomHostname}
+              </strong>
+              .
+            </span>
+          ) : readyCustomDomains.length === 0 ? (
             <span className="mt-1 block text-xs font-medium text-slate-500">
               Noch keine verbundene Custom Domain —{" "}
               <a

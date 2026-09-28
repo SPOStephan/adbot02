@@ -40,6 +40,9 @@ assert.match(lead, /campaignNameOverride \?\? suggestedCampaignName/);
 assert.match(lead, /campaignName,\s*\n\s*adSetName:/);
 assert.match(lead, /multiSelect/);
 assert.match(lead, /selectedAssetIds=\{pickerSelectedAssetIds\}/);
+assert.match(lead, /selectedFunnelCustomHostname/);
+assert.match(lead, /Custom Domain des ausgewählten Funnels/);
+assert.match(lead, /selectedHostname !== sharedHostname/);
 assert.doesNotMatch(lead, />\s*Lead Canary\s*</);
 assert.doesNotMatch(lead, />\s*Struktur-Test\s*</);
 
