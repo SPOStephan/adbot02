@@ -84,7 +84,7 @@ begin
     'LAUNCH_CHAIN', 'CHAIN', 'chain:queue-' || p_seed,
     md5('idem' || p_seed) || md5('key' || p_seed), '{}'::jsonb,
     '{"status":"ACTIVE"}'::jsonb, '{}'::jsonb,
-    md5('payload' || p_seed) || md5('hash' || p_seed), 'PENDING', 60
+    public.meta_sha256('{}'::jsonb::text), 'PENDING', 60
   );
 
   insert into public.meta_launch_canary_approvals (
@@ -93,7 +93,7 @@ begin
     ad_set_name, creative_name, ad_name, target_status, reason, approved_by
   ) values (
     v_user, v_account, p_plan_id,
-    md5('payload' || p_seed) || md5('hash' || p_seed), 'OUTCOME_LEADS',
+    public.meta_sha256('{}'::jsonb::text), 'OUTCOME_LEADS',
     'https://jobs.example.test/f/queue', 'CAMPAIGN', 5000, 'Queue campaign',
     'Queue ad set', 'Queue creative', 'Queue ad', 'ACTIVE',
     'Launch queue regression approval', v_user
@@ -114,7 +114,7 @@ begin
   ) values (
     v_create, p_plan_id, v_user, v_account, 0, 'create-campaign-paused',
     'CREATE', 'CAMPAIGN', '{"operation":"CREATE_CAMPAIGN"}'::jsonb,
-    repeat('d', 64), 'REMOTE_APPLIED', 1, 'REMOTE_APPLIED', now(), now(),
+    public.meta_sha256('{"operation":"CREATE_CAMPAIGN"}'::jsonb::text), 'REMOTE_APPLIED', 1, 'REMOTE_APPLIED', now(), now(),
     now(), now()
   );
 
@@ -137,7 +137,9 @@ begin
       jsonb_build_object('operation', 'UPDATE_STATUS', 'mode', 'execute',
         'status', 'ACTIVE', 'object_id',
         jsonb_build_object('$binding_step_id', v_create)),
-      repeat('f', 64)
+      public.meta_sha256(jsonb_build_object('operation', 'UPDATE_STATUS',
+        'mode', 'execute', 'status', 'ACTIVE', 'object_id',
+        jsonb_build_object('$binding_step_id', v_create))::text)
     );
     v_previous := v_activate;
   end if;
@@ -147,10 +149,11 @@ begin
     operation, object_type, depends_on_step_id, planned_request, request_hash
   ) values
     (v_read, p_plan_id, v_user, v_account, 2, 'read-ad-active', 'READ', 'AD',
-     v_previous, '{"operation":"READ"}'::jsonb, repeat('1', 64)),
+     v_previous, '{"operation":"READ"}'::jsonb,
+     public.meta_sha256('{"operation":"READ"}'::jsonb::text)),
     (v_reconcile, p_plan_id, v_user, v_account, 3, 'reconcile-launch-chain',
      'RECONCILE', 'AD', v_read, '{"operation":"RECONCILE"}'::jsonb,
-     repeat('2', 64));
+     public.meta_sha256('{"operation":"RECONCILE"}'::jsonb::text));
 end;
 $$;
 
@@ -355,12 +358,18 @@ begin
   if v_claim.execution_id is null or v_claim.first_step_operation <> 'UPDATE' then
     raise exception 'Waiting launch did not continue after the gate opened';
   end if;
+  -- The continued run must be allowed to send its remaining write to Meta
+  -- (fe83a89a failed here: the initial launch gate rejected the dispatch).
+  perform public.begin_meta_mutation_step_dispatch(
+    v_claim.execution_id, v_claim.first_step_id, v_claim.lease_token
+  );
   update public.mutation_plans
   set status = 'PENDING', lease_token = null, lease_owner = null,
       lease_expires_at = null
   where id = '93000000-0000-4000-8000-00000000000b';
   update public.mutation_plan_steps
-  set status = 'PENDING', started_at = null
+  set status = 'PENDING', started_at = null,
+      dispatch_state = 'NOT_DISPATCHED', dispatch_started_at = null
   where id = v_claim.first_step_id;
   update public.mutation_executions
   set status = 'ABANDONED', finished_at = now()
@@ -446,6 +455,57 @@ begin
   limit 1;
   if v_mode <> 'FREEZE_WRITES' or v_actor <> '13000000-0000-4000-8000-000000000001' then
     raise exception 'Recovery overrode a customer freeze: % by %', v_mode, v_actor;
+  end if;
+end;
+$$;
+
+-- 6) Operator requeue of a launch that failed only on a pre-dispatch rejection.
+select pg_temp.seed_launch('93000000-0000-4000-8000-00000000000d', 4, true);
+select pg_temp.seed_launch('93000000-0000-4000-8000-00000000000e', 5, true);
+
+update public.mutation_plan_steps
+set status = 'FAILED', error_class = 'TRANSPORT', error_code = 'database_failed',
+    completed_at = now()
+where plan_id in ('93000000-0000-4000-8000-00000000000d',
+                  '93000000-0000-4000-8000-00000000000e')
+  and step_key = 'activate-ad';
+update public.mutation_plan_steps
+set dispatch_state = 'REMOTE_UNKNOWN', dispatch_started_at = now()
+where plan_id = '93000000-0000-4000-8000-00000000000e'
+  and step_key = 'activate-ad';
+update public.mutation_plans
+set status = 'FAILED', error_class = 'TRANSPORT',
+    blocked_reason = 'database_failed', terminal_at = now()
+where id in ('93000000-0000-4000-8000-00000000000d',
+             '93000000-0000-4000-8000-00000000000e');
+
+do $$
+declare
+  v_plan public.mutation_plans%rowtype;
+begin
+  if public.resume_failed_meta_customer_launch(
+    '93000000-0000-4000-8000-00000000000e'
+  ) <> 'NOT_ELIGIBLE' then
+    raise exception 'An ambiguous (possibly sent) step must never be requeued';
+  end if;
+  if public.resume_failed_meta_customer_launch(
+    '93000000-0000-4000-8000-00000000000d'
+  ) <> 'RESUMED' then
+    raise exception 'Pre-dispatch rejection was not requeued';
+  end if;
+  for v_plan in
+    select * from public.mutation_plans
+    where id = '93000000-0000-4000-8000-00000000000d'
+  loop exit; end loop;
+  if v_plan.status <> 'PENDING' or v_plan.attempt_count >= v_plan.max_attempts then
+    raise exception 'Requeued launch is not claimable';
+  end if;
+  if exists (
+    select 1 from public.mutation_plan_steps
+    where plan_id = '93000000-0000-4000-8000-00000000000d'
+      and status = 'FAILED'
+  ) then
+    raise exception 'Failed pre-dispatch step was not reset';
   end if;
 end;
 $$;

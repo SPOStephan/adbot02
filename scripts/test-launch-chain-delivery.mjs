@@ -68,6 +68,17 @@ assert.match(queueSafeFreeze, /meta_launch_refreeze_keeps_account_allow\(v_user,
 assert.match(queueSafeFreeze, /account_write_gate_waiting/);
 assert.match(queueSafeFreeze, /blocked_reason = 'writes_frozen'/);
 
+const resumeDispatchGate = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928200000_meta_launch_resume_dispatch_gate.sql",
+  ),
+  "utf8",
+);
+assert.match(resumeDispatchGate, /or public\.meta_launch_resume_dispatch_ok\(p_plan_id\);/);
+assert.match(resumeDispatchGate, /binding\.object_type = 'CAMPAIGN'/);
+assert.match(resumeDispatchGate, /create or replace function public\.resume_failed_meta_customer_launch\(/);
+
 const targetedClaim = await readFile(
   join(
     root,
