@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  MAX_DYNAMIC_CREATIVE_IMAGES,
+  normalizeLaunchAssetIds,
   resolveDynamicCreativeAssetIds,
   type LaunchLibraryAsset,
 } from "@/lib/meta/creative-image-variants";
@@ -41,12 +43,11 @@ export function DynamicCreativeImagesField({
   return (
     <fieldset className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 lg:col-span-2">
       <legend className="px-1 text-sm font-bold text-slate-800">
-        Mehrere Motive (optional)
+        Mehrere Werbemittel für Meta-Optimierung
       </legend>
       <p className="mt-1 text-xs font-medium text-slate-500">
-        Standard bleibt ein Bild. Auf Wunsch legt Adbot mehrere Library-Motive
-        in eine Dynamic-/Advantage+-Creative — Meta wählt dann das Bild, nicht
-        nur den Text.
+        Bis zu {MAX_DYNAMIC_CREATIVE_IMAGES} Bilder in einer Dynamic Creative.
+        Meta kombiniert und priorisiert die Varianten anhand ihrer Leistung.
       </p>
       <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm font-semibold text-slate-800">
         <input
@@ -56,7 +57,7 @@ export function DynamicCreativeImagesField({
           onChange={(event) => onEnabledChange(event.target.checked)}
           type="checkbox"
         />
-        <span>Mehrere Motive in einer Dynamic Creative</span>
+        <span>Mehrere ausgewählte Motive an Meta übermitteln</span>
       </label>
       {enabled ? (
         <div className="mt-3 space-y-3">
@@ -82,6 +83,8 @@ export function DynamicCreativeImagesField({
             <div className="grid gap-2 sm:grid-cols-2">
               {competingChoices.map((asset) => {
                 const checked = extraAssetIds.includes(asset.id);
+                const atLimit =
+                  !checked && resolved.assetIds.length >= MAX_DYNAMIC_CREATIVE_IMAGES;
                 return (
                   <label
                     className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
@@ -90,12 +93,15 @@ export function DynamicCreativeImagesField({
                     <input
                       checked={checked}
                       className="size-4 border-slate-300 text-blue-700 focus:ring-blue-500"
-                      disabled={disabled}
+                      disabled={disabled || atLimit}
                       onChange={() => {
                         onExtraAssetIdsChange(
                           checked
                             ? extraAssetIds.filter((id) => id !== asset.id)
-                            : [...extraAssetIds, asset.id],
+                            : normalizeLaunchAssetIds(
+                                [...extraAssetIds, asset.id],
+                                { max: MAX_DYNAMIC_CREATIVE_IMAGES - 1 },
+                              ),
                         );
                       }}
                       type="checkbox"

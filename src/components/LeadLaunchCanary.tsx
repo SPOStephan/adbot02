@@ -35,6 +35,8 @@ import {
 import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 import {
+  MAX_DYNAMIC_CREATIVE_IMAGES,
+  normalizeLaunchAssetIds,
   resolveDynamicCreativeAssetIds,
   type LaunchLibraryAsset,
 } from "@/lib/meta/creative-image-variants";
@@ -410,6 +412,14 @@ export function LeadLaunchCanary({
     ? preloadedPurposeHint
     : resolvedPurposeHint ?? preloadedPurposeHint;
   const effectiveAdCategory = detectedPurposeHint?.category ?? adCategory;
+  const suggestedCampaignName = `${detectedPurposeHint?.title || "Adbot Lead-Kampagne"} – ${effectiveAdCategory === "employment" ? "Recruiting" : "Meta Leads"}`;
+  const [campaignNameOverride, setCampaignNameOverride] = useState<string | null>(
+    null,
+  );
+  const campaignName =
+    campaignNameOverride === null
+      ? suggestedCampaignName
+      : campaignNameOverride.trim();
   const [dailyBudget, setDailyBudget] = useState("20.00");
   const [facebookPageId, setFacebookPageId] = useState(
     initialFacebookPageId &&
@@ -469,6 +479,10 @@ export function LeadLaunchCanary({
     library: libraryAssets,
     includeFormatSiblings: dynamicCreativeImages && includeFormatSiblings,
   });
+  const pickerSelectedAssetIds = normalizeLaunchAssetIds(
+    [assetId, ...extraAssetIds],
+    { max: MAX_DYNAMIC_CREATIVE_IMAGES },
+  );
   const selectedAsset =
     pickerAssets.find((asset) => asset.id === assetId) ?? null;
   const selectedPixel =
@@ -809,6 +823,9 @@ export function LeadLaunchCanary({
       if (!effectiveAdCategory) {
         throw new Error("Bitte die Anzeigenkategorie wählen.");
       }
+      if (!campaignName) {
+        throw new Error("Bitte einen Kampagnennamen eingeben.");
+      }
 
       const landing = parseLandingUrl(destinationUrl);
       const variantLanding =
@@ -877,7 +894,7 @@ export function LeadLaunchCanary({
         budgetOwnerType: "AD_SET",
         dailyBudget,
         destinationUrl: landing.href,
-        campaignName: `${detectedPurposeHint?.title || "Adbot Leads"} ${stamp}`,
+        campaignName,
         adSetName: `Zielgruppe ${stamp}`,
         creativeName: `Werbemittel ${stamp}`,
         adName: `Anzeige ${stamp}`,
@@ -1132,6 +1149,7 @@ export function LeadLaunchCanary({
     setHeldPlan(null);
     setPendingStudyPlanId(null);
     setNotice(null);
+    setCampaignNameOverride(null);
   }
 
   const inputClass =
@@ -1333,6 +1351,27 @@ export function LeadLaunchCanary({
       ) : null}
 
       <form className="mt-6 grid gap-4 lg:grid-cols-2" onSubmit={prepare}>
+        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Kampagnenname
+          <input
+            className={inputClass}
+            disabled={pending || Boolean(heldPlan)}
+            maxLength={240}
+            onBlur={() => {
+              if (campaignNameOverride !== null && !campaignNameOverride.trim()) {
+                setCampaignNameOverride(null);
+              }
+            }}
+            onChange={(event) => setCampaignNameOverride(event.target.value)}
+            required
+            value={campaignNameOverride ?? suggestedCampaignName}
+          />
+          <span className="mt-1 block text-xs font-medium text-slate-500">
+            Dieser Name wird für die Kampagne im Meta Werbeanzeigenmanager verwendet.
+            Ohne Änderung schlägt Adbot einen Namen aus dem gewählten Funnel vor;
+            zur sicheren technischen Zuordnung ergänzt Adbot nur eine kurze Kennung.
+          </span>
+        </label>
         {facebookPages.length > 0 ? (
           <label className="text-sm font-bold text-slate-800">
             Facebook-Seite (Werbetreibender)
@@ -1462,11 +1501,17 @@ export function LeadLaunchCanary({
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-extrabold text-slate-950">
-                {selectedAsset
-                  ? selectedAsset.originalFilename
-                  : "Werbemittel wählen oder hochladen"}
+                {pickerSelectedAssetIds.length > 1
+                  ? `${pickerSelectedAssetIds.length} Werbemittel ausgewählt`
+                  : selectedAsset
+                    ? selectedAsset.originalFilename
+                    : "Werbemittel wählen oder hochladen"}
               </span>
-              {selectedAsset?.width && selectedAsset?.height ? (
+              {pickerSelectedAssetIds.length > 1 ? (
+                <span className="mt-1 block text-xs font-medium text-slate-500">
+                  Gemeinsame Dynamic Creative · Meta optimiert die Motivausspielung
+                </span>
+              ) : selectedAsset?.width && selectedAsset?.height ? (
                 <span className="mt-1 block text-xs font-medium text-slate-500">
                   {selectedAsset.width}×{selectedAsset.height}
                 </span>
@@ -1639,6 +1684,7 @@ export function LeadLaunchCanary({
                     setStructuralMode(option.value);
                     if (option.value !== "off") {
                       setDynamicCreativeImages(false);
+                      setExtraAssetIds([]);
                     }
                   }}
                   type="radio"
@@ -1714,7 +1760,10 @@ export function LeadLaunchCanary({
             enabled={dynamicCreativeImages}
             extraAssetIds={extraAssetIds}
             includeFormatSiblings={includeFormatSiblings}
-            onEnabledChange={setDynamicCreativeImages}
+            onEnabledChange={(enabled) => {
+              setDynamicCreativeImages(enabled);
+              if (!enabled) setExtraAssetIds([]);
+            }}
             onExtraAssetIdsChange={setExtraAssetIds}
             onIncludeFormatSiblingsChange={setIncludeFormatSiblings}
             primaryAssetId={assetId}
@@ -1940,9 +1989,17 @@ export function LeadLaunchCanary({
       <CreativePickerModal
         assets={pickerAssets}
         brandProfileId={brandProfileId}
+        maxSelected={MAX_DYNAMIC_CREATIVE_IMAGES}
+        multiSelect
         onClose={() => setPickerOpen(false)}
         onSelect={(id) => setAssetId(id)}
-        onUploaded={({ preferredLaunchAssetId, assets }) => {
+        onSelectionChange={(ids) => {
+          setAssetId(ids[0] ?? "");
+          setExtraAssetIds(ids.slice(1));
+          setDynamicCreativeImages(ids.length > 1);
+          if (ids.length > 1) setStructuralMode("off");
+        }}
+        onUploaded={({ assets }) => {
           setPickerAssets((previous) => {
             const map = new Map(previous.map((asset) => [asset.id, asset]));
             for (const asset of assets) {
@@ -1950,11 +2007,11 @@ export function LeadLaunchCanary({
             }
             return [...map.values()];
           });
-          setAssetId(preferredLaunchAssetId);
           refresh();
         }}
         open={pickerOpen}
         selectedAssetId={assetId || null}
+        selectedAssetIds={pickerSelectedAssetIds}
       />
 
       {heldPlan ? (

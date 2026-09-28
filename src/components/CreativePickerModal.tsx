@@ -16,6 +16,10 @@ import {
   type MetaFormatKey,
 } from "@/lib/media-library/meta-formats";
 import { parseAssetUploadResponse } from "@/lib/media-library/parse-upload-response";
+import {
+  MAX_DYNAMIC_CREATIVE_IMAGES,
+  normalizeLaunchAssetIds,
+} from "@/lib/meta/creative-image-variants";
 
 export type PickerAsset = {
   id: string;
@@ -29,9 +33,13 @@ type Props = {
   open: boolean;
   assets: PickerAsset[];
   selectedAssetId: string | null;
+  selectedAssetIds?: string[];
+  multiSelect?: boolean;
+  maxSelected?: number;
   brandProfileId?: string | null;
   onClose: () => void;
   onSelect: (assetId: string) => void;
+  onSelectionChange?: (assetIds: string[]) => void;
   /** Called after a successful upload; assets include original + optional crops. */
   onUploaded: (payload: {
     preferredLaunchAssetId: string;
@@ -83,9 +91,13 @@ export function CreativePickerModal({
   open,
   assets,
   selectedAssetId,
+  selectedAssetIds = [],
+  multiSelect = false,
+  maxSelected = MAX_DYNAMIC_CREATIVE_IMAGES,
   brandProfileId = null,
   onClose,
   onSelect,
+  onSelectionChange,
   onUploaded,
 }: Props) {
   const titleId = useId();
@@ -98,6 +110,19 @@ export function CreativePickerModal({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [slots, setSlots] = useState(emptySlots);
+  const effectiveSelectedIds = multiSelect
+    ? normalizeLaunchAssetIds(
+        selectedAssetIds.length > 0
+          ? selectedAssetIds
+          : selectedAssetId
+            ? [selectedAssetId]
+            : [],
+        { max: maxSelected },
+      )
+    : selectedAssetId
+      ? [selectedAssetId]
+      : [];
+  const selectedSet = new Set(effectiveSelectedIds);
 
   const uploadingRef = useRef(false);
 
@@ -125,93 +150,110 @@ export function CreativePickerModal({
     return null;
   }
 
-  function mergeUploadedAssets(
-    uploaded: PickerAsset[],
-    preferred: string,
-  ) {
-    onUploaded({ preferredLaunchAssetId: preferred, assets: uploaded });
-    onSelect(preferred);
+  function commitSelection(assetIds: string[]) {
+    const normalized = normalizeLaunchAssetIds(assetIds, { max: maxSelected });
+    onSelectionChange?.(normalized);
+    if (normalized[0]) {
+      onSelect(normalized[0]);
+    }
   }
 
-  async function uploadAutoCrop(file: File | undefined) {
-    if (!file) return;
+  function mergeUploadedAssets(
+    uploaded: PickerAsset[],
+    preferredIds: string[],
+  ) {
+    const firstPreferred = preferredIds[0];
+    if (!firstPreferred) return;
+    const nextSelection = multiSelect
+      ? normalizeLaunchAssetIds(
+          [...effectiveSelectedIds, ...preferredIds],
+          { max: maxSelected },
+        )
+      : [firstPreferred];
+    const primary = nextSelection[0] ?? firstPreferred;
+    onUploaded({ preferredLaunchAssetId: primary, assets: uploaded });
+    commitSelection(nextSelection);
+  }
+
+  async function uploadAutoCrop(files: File[]) {
+    if (files.length < 1) return;
+    const remaining = Math.max(0, maxSelected - effectiveSelectedIds.length);
+    if (multiSelect && files.length > remaining) {
+      setError(
+        `Du kannst noch ${remaining} Bild${remaining === 1 ? "" : "er"} auswählen (maximal ${maxSelected} insgesamt).`,
+      );
+      return;
+    }
     setUploading(true);
     setError(null);
     setMessage(null);
     try {
-      const body = new FormData();
-      body.set("file", file);
-      body.set("generateMetaCrops", "1");
-      if (brandProfileId) {
-        body.set("brandProfileId", brandProfileId);
-      }
-      const response = await fetch("/api/meta/automation/asset-upload", {
-        method: "POST",
-        credentials: "same-origin",
-        body,
-      });
-      const json = await parseAssetUploadResponse(response);
-      if (!response.ok || !json.ok) {
-        throw new Error(json.error || "Upload fehlgeschlagen.");
-      }
-
       const uploadedAssets: PickerAsset[] = [];
-      for (const asset of json.assets ?? []) {
-        if (typeof asset.brandAssetId !== "string") continue;
-        uploadedAssets.push({
-          id: asset.brandAssetId,
-          originalFilename:
-            typeof asset.originalFilename === "string"
-              ? asset.originalFilename
-              : "Creative",
-          width: typeof asset.width === "number" ? asset.width : null,
-          height: typeof asset.height === "number" ? asset.height : null,
-          label: typeof asset.label === "string" ? asset.label : null,
+      const preferredIds: string[] = [];
+      let generatedTotal = 0;
+      for (const file of files) {
+        const body = new FormData();
+        body.set("file", file);
+        body.set("generateMetaCrops", "1");
+        if (brandProfileId) {
+          body.set("brandProfileId", brandProfileId);
+        }
+        const response = await fetch("/api/meta/automation/asset-upload", {
+          method: "POST",
+          credentials: "same-origin",
+          body,
         });
-      }
+        const json = await parseAssetUploadResponse(response);
+        if (!response.ok || !json.ok) {
+          throw new Error(
+            `${file.name || "Datei"}: ${json.error || "Upload fehlgeschlagen."}`,
+          );
+        }
 
-      if (uploadedAssets.length < 1 && typeof json.brandAssetId === "string") {
-        uploadedAssets.push({
-          id: json.brandAssetId,
-          originalFilename: file.name || "Creative",
-          width: null,
-          height: null,
-          label: "Original",
-        });
+        const fileAssets: PickerAsset[] = [];
+        for (const asset of json.assets ?? []) {
+          if (typeof asset.brandAssetId !== "string") continue;
+          fileAssets.push({
+            id: asset.brandAssetId,
+            originalFilename:
+              typeof asset.originalFilename === "string"
+                ? asset.originalFilename
+                : file.name || "Creative",
+            width: typeof asset.width === "number" ? asset.width : null,
+            height: typeof asset.height === "number" ? asset.height : null,
+            label: typeof asset.label === "string" ? asset.label : null,
+          });
+        }
+        if (fileAssets.length < 1 && typeof json.brandAssetId === "string") {
+          fileAssets.push({
+            id: json.brandAssetId,
+            originalFilename: file.name || "Creative",
+            width: null,
+            height: null,
+            label: "Original",
+          });
+        }
+        const preferred =
+          typeof json.preferredLaunchAssetId === "string"
+            ? json.preferredLaunchAssetId
+            : (json.brandAssetId ?? fileAssets[0]?.id);
+        if (!preferred) {
+          throw new Error(`${file.name || "Datei"}: Upload ohne Asset-ID.`);
+        }
+        uploadedAssets.push(...fileAssets);
+        preferredIds.push(preferred);
+        generatedTotal +=
+          typeof json.cropsGenerated === "number"
+            ? json.cropsGenerated
+            : Math.max(0, fileAssets.length - 1);
       }
-
-      const preferred =
-        typeof json.preferredLaunchAssetId === "string"
-          ? json.preferredLaunchAssetId
-          : (json.brandAssetId ?? uploadedAssets[0]?.id);
-      if (!preferred) {
-        throw new Error("Upload ohne Asset-ID.");
-      }
-
-      const generated =
-        typeof json.cropsGenerated === "number" ? json.cropsGenerated : null;
-      const skipped =
-        typeof json.cropsSkipped === "number" ? json.cropsSkipped : null;
-      if (generated !== null && skipped !== null) {
-        setMessage(
-          generated > 0
-            ? `Gespeichert. ${generated} Format${generated === 1 ? "" : "e"} zugeschnitten` +
-                (skipped > 0
-                  ? `, ${skipped} bereits passend — ohne Zuschnitt.`
-                  : ".")
-            : skipped > 0
-              ? "Gespeichert. Alle gängigen Formate passten bereits — kein Zuschnitt nötig."
-              : "Original in der Library gespeichert.",
-        );
-      } else {
-        const cropCount = Math.max(0, uploadedAssets.length - 1);
-        setMessage(
-          cropCount > 0
-            ? `Gespeichert: Original plus ${cropCount} Meta-Zuschnitt${cropCount === 1 ? "" : "e"}.`
-            : "Original in der Library gespeichert.",
-        );
-      }
-      mergeUploadedAssets(uploadedAssets, preferred);
+      setMessage(
+        `${files.length} Motiv${files.length === 1 ? "" : "e"} gespeichert und ausgewählt` +
+          (generatedTotal > 0
+            ? ` · ${generatedTotal} passende Meta-Format${generatedTotal === 1 ? "" : "e"} erzeugt.`
+            : "."),
+      );
+      mergeUploadedAssets(uploadedAssets, preferredIds);
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -226,10 +268,17 @@ export function CreativePickerModal({
     }
   }
 
-  async function uploadFormatSlot(key: MetaFormatKey, file: File | undefined) {
-    if (!file) return;
+  async function uploadFormatSlot(key: MetaFormatKey, files: File[]) {
+    if (files.length < 1) return;
     const slot = META_FORMAT_SLOTS.find((entry) => entry.key === key);
     if (!slot) return;
+    const remaining = Math.max(0, maxSelected - effectiveSelectedIds.length);
+    if (multiSelect && files.length > remaining) {
+      setError(
+        `Du kannst noch ${remaining} Bild${remaining === 1 ? "" : "er"} auswählen (maximal ${maxSelected} insgesamt).`,
+      );
+      return;
+    }
 
     setSlots((previous) => ({
       ...previous,
@@ -243,21 +292,25 @@ export function CreativePickerModal({
     setMessage(null);
 
     try {
-      const size = await readImageDimensions(file);
-      const check = describeMetaFormatCheck(size.width, size.height, slot);
-      if (!check.ok) {
-        setSlots((previous) => ({
-          ...previous,
-          [key]: {
-            status: "error",
-            message: check.message,
-            assetId: null,
-            width: size.width,
-            height: size.height,
-            filename: file.name,
-          },
-        }));
-        return;
+      const checkedFiles: Array<{ file: File; width: number; height: number }> = [];
+      for (const file of files) {
+        const size = await readImageDimensions(file);
+        const check = describeMetaFormatCheck(size.width, size.height, slot);
+        if (!check.ok) {
+          setSlots((previous) => ({
+            ...previous,
+            [key]: {
+              status: "error",
+              message: `${file.name}: ${check.message}`,
+              assetId: null,
+              width: size.width,
+              height: size.height,
+              filename: file.name,
+            },
+          }));
+          return;
+        }
+        checkedFiles.push({ file, width: size.width, height: size.height });
       }
 
       setSlots((previous) => ({
@@ -265,72 +318,84 @@ export function CreativePickerModal({
         [key]: {
           ...previous[key],
           status: "uploading",
-          message: "Wird hochgeladen …",
-          width: size.width,
-          height: size.height,
-          filename: file.name,
+          message: `${checkedFiles.length} Datei${checkedFiles.length === 1 ? "" : "en"} werden hochgeladen …`,
+          width: checkedFiles[0]?.width ?? null,
+          height: checkedFiles[0]?.height ?? null,
+          filename: checkedFiles[0]?.file.name ?? null,
         },
       }));
       setUploading(true);
 
-      const body = new FormData();
-      body.set("file", file);
-      body.set("metaFormatKey", key);
-      if (brandProfileId) {
-        body.set("brandProfileId", brandProfileId);
+      const uploadedAssets: PickerAsset[] = [];
+      const preferredIds: string[] = [];
+      for (const checked of checkedFiles) {
+        const body = new FormData();
+        body.set("file", checked.file);
+        body.set("metaFormatKey", key);
+        if (brandProfileId) {
+          body.set("brandProfileId", brandProfileId);
+        }
+        const response = await fetch("/api/meta/automation/asset-upload", {
+          method: "POST",
+          credentials: "same-origin",
+          body,
+        });
+        const json = await parseAssetUploadResponse(response);
+        if (!response.ok || !json.ok) {
+          throw new Error(
+            `${checked.file.name}: ${json.error || "Upload fehlgeschlagen."}`,
+          );
+        }
+        const uploadedId =
+          typeof json.brandAssetId === "string"
+            ? json.brandAssetId
+            : json.assets?.[0]?.brandAssetId;
+        if (typeof uploadedId !== "string") {
+          throw new Error(`${checked.file.name}: Upload ohne Asset-ID.`);
+        }
+        uploadedAssets.push({
+          id: uploadedId,
+          originalFilename: checked.file.name || slot.label,
+          width: checked.width,
+          height: checked.height,
+          label: slot.label,
+        });
+        preferredIds.push(
+          typeof json.preferredLaunchAssetId === "string"
+            ? json.preferredLaunchAssetId
+            : uploadedId,
+        );
       }
-      const response = await fetch("/api/meta/automation/asset-upload", {
-        method: "POST",
-        credentials: "same-origin",
-        body,
-      });
-      const json = await parseAssetUploadResponse(response);
-      if (!response.ok || !json.ok) {
-        throw new Error(json.error || "Upload fehlgeschlagen.");
-      }
-
-      const assetId =
-        typeof json.brandAssetId === "string"
-          ? json.brandAssetId
-          : json.assets?.[0]?.brandAssetId;
-      if (typeof assetId !== "string") {
-        throw new Error("Upload ohne Asset-ID.");
-      }
-
-      const uploadedAsset: PickerAsset = {
-        id: assetId,
-        originalFilename: file.name || slot.label,
-        width: size.width,
-        height: size.height,
-        label: slot.label,
-      };
 
       setSlots((previous) => ({
         ...previous,
         [key]: {
           status: "ok",
-          message: `Passt (${size.width}×${size.height}).`,
-          assetId,
-          width: size.width,
-          height: size.height,
-          filename: file.name,
+          message: `${uploadedAssets.length} passend hochgeladen.`,
+          assetId: uploadedAssets[0]?.id ?? null,
+          width: uploadedAssets[0]?.width ?? null,
+          height: uploadedAssets[0]?.height ?? null,
+          filename: uploadedAssets[0]?.originalFilename ?? null,
         },
       }));
 
-      const preferred =
-        typeof json.preferredLaunchAssetId === "string"
-          ? json.preferredLaunchAssetId
-          : assetId;
-      onUploaded({
-        preferredLaunchAssetId: slot.preferredForLaunch
-          ? preferred
-          : (selectedAssetId ?? preferred),
-        assets: [uploadedAsset],
-      });
-      if (slot.preferredForLaunch || !selectedAssetId) {
-        onSelect(assetId);
+      if (multiSelect) {
+        mergeUploadedAssets(uploadedAssets, preferredIds);
+      } else {
+        const preferred = preferredIds[0]!;
+        onUploaded({
+          preferredLaunchAssetId: slot.preferredForLaunch
+            ? preferred
+            : (selectedAssetId ?? preferred),
+          assets: uploadedAssets,
+        });
+        if (slot.preferredForLaunch || !selectedAssetId) {
+          onSelect(preferred);
+        }
       }
-      setMessage(`${slot.label} gespeichert.`);
+      setMessage(
+        `${uploadedAssets.length} ${slot.label}-Motiv${uploadedAssets.length === 1 ? "" : "e"} gespeichert und ausgewählt.`,
+      );
     } catch (uploadError) {
       const text =
         uploadError instanceof Error
@@ -340,12 +405,12 @@ export function CreativePickerModal({
         ...previous,
         [key]: {
           status: "error",
-          message: text,
-          assetId: null,
-          width: previous[key].width,
-          height: previous[key].height,
-          filename: file.name,
-        },
+            message: text,
+            assetId: null,
+            width: previous[key].width,
+            height: previous[key].height,
+            filename: files[0]?.name ?? null,
+          },
       }));
       setError(text);
     } finally {
@@ -378,11 +443,14 @@ export function CreativePickerModal({
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
           <div>
             <h2 className="text-lg font-extrabold text-slate-950" id={titleId}>
-              Creative wählen oder hochladen
+              {multiSelect
+                ? `Werbemittel wählen oder hochladen (max. ${maxSelected})`
+                : "Creative wählen oder hochladen"}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Ein Bild mit Auto-Zuschnitt — oder deine drei Meta-Formate fertig
-              hochladen. Alles landet in der Media Library.
+              {multiSelect
+                ? "Wähle mehrere Motive gleichzeitig. Adbot übermittelt sie als eine Dynamic Creative; Meta optimiert die Ausspielung."
+                : "Ein Bild mit Auto-Zuschnitt — oder deine drei Meta-Formate fertig hochladen. Alles landet in der Media Library."}
             </p>
           </div>
           <button
@@ -411,7 +479,7 @@ export function CreativePickerModal({
               }}
               type="button"
             >
-              Ein Bild · Auto-Zuschnitt
+              {multiSelect ? "Motive · Auto-Zuschnitt" : "Ein Bild · Auto-Zuschnitt"}
             </button>
             <button
               className={`rounded-xl px-3 py-2 text-sm font-extrabold transition ${
@@ -433,12 +501,12 @@ export function CreativePickerModal({
           {mode === "auto_crop" ? (
             <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <h3 className="text-sm font-extrabold text-slate-900">
-                Ein Bild hochladen
+                {multiSelect ? "Bis zu zehn Motive hochladen" : "Ein Bild hochladen"}
               </h3>
               <p className="mt-2 text-xs leading-5 text-slate-600">
-                PNG/JPEG, Kantenlänge 256–4096 px. Adbot schneidet nur Formate zu,
-                die noch nicht passen (1:1, 4:5, 9:16). Das Original bleibt
-                unverändert erhalten.
+                {multiSelect
+                  ? "PNG/JPEG, Kantenlänge 256–4096 px. Du kannst im Dateidialog mehrere Dateien markieren. Adbot schneidet nur Formate zu, die noch nicht passen (1:1, 4:5, 9:16). Die Originale bleiben unverändert erhalten."
+                  : "PNG/JPEG, Kantenlänge 256–4096 px. Adbot schneidet nur Formate zu, die noch nicht passen (1:1, 4:5, 9:16). Das Original bleibt unverändert erhalten."}
               </p>
               <ul className="mt-3 grid gap-2 sm:grid-cols-3">
                 {META_FORMAT_SLOTS.map((item) => (
@@ -467,15 +535,20 @@ export function CreativePickerModal({
                   ) : (
                     <Upload className="size-4" />
                   )}
-                  {uploading ? "Wird verarbeitet …" : "Datei hochladen"}
+                  {uploading
+                    ? "Wird verarbeitet …"
+                    : multiSelect
+                      ? "Dateien auswählen"
+                      : "Datei hochladen"}
                 </button>
                 <input
                   accept="image/png,image/jpeg"
                   className="hidden"
                   disabled={busy}
                   onChange={(event) => {
-                    void uploadAutoCrop(event.target.files?.[0]);
+                    void uploadAutoCrop(Array.from(event.target.files ?? []));
                   }}
+                  multiple={multiSelect}
                   ref={autoFileRef}
                   type="file"
                 />
@@ -522,7 +595,13 @@ export function CreativePickerModal({
                         ) : (
                           <Upload className="size-3.5" />
                         )}
-                        {state.status === "ok" ? "Ersetzen" : "Hochladen"}
+                        {state.status === "ok"
+                          ? multiSelect
+                            ? "Weitere hochladen"
+                            : "Ersetzen"
+                          : multiSelect
+                            ? "Dateien auswählen"
+                            : "Hochladen"}
                       </button>
                       <input
                         accept="image/png,image/jpeg"
@@ -531,9 +610,10 @@ export function CreativePickerModal({
                         onChange={(event) => {
                           void uploadFormatSlot(
                             item.key,
-                            event.target.files?.[0],
+                            Array.from(event.target.files ?? []),
                           );
                         }}
+                        multiple={multiSelect}
                         ref={(node) => {
                           slotFileRefs.current[item.key] = node;
                         }}
@@ -577,7 +657,11 @@ export function CreativePickerModal({
             {assets.length ? (
               <ul className="mt-3 grid gap-3 sm:grid-cols-2">
                 {assets.map((asset) => {
-                  const selected = asset.id === selectedAssetId;
+                  const selected = selectedSet.has(asset.id);
+                  const atLimit =
+                    multiSelect &&
+                    !selected &&
+                    effectiveSelectedIds.length >= maxSelected;
                   return (
                     <li key={asset.id}>
                       <button
@@ -586,8 +670,18 @@ export function CreativePickerModal({
                             ? "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200"
                             : "border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50"
                         }`}
-                        disabled={busy}
-                        onClick={() => onSelect(asset.id)}
+                        disabled={busy || atLimit}
+                        onClick={() => {
+                          if (!multiSelect) {
+                            commitSelection([asset.id]);
+                            return;
+                          }
+                          commitSelection(
+                            selected
+                              ? effectiveSelectedIds.filter((id) => id !== asset.id)
+                              : [...effectiveSelectedIds, asset.id],
+                          );
+                        }}
                         type="button"
                       >
                         <span className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-slate-100">
@@ -641,11 +735,13 @@ export function CreativePickerModal({
           </button>
           <button
             className="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-700 px-4 text-sm font-extrabold text-white hover:bg-emerald-800 disabled:opacity-50"
-            disabled={busy || !selectedAssetId}
+            disabled={busy || effectiveSelectedIds.length < 1}
             onClick={onClose}
             type="button"
           >
-            Creative übernehmen
+            {multiSelect
+              ? `${effectiveSelectedIds.length} Werbemittel übernehmen`
+              : "Creative übernehmen"}
           </button>
         </div>
       </div>
