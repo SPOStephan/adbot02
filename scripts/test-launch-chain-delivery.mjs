@@ -116,6 +116,39 @@ assert.match(
 assert.match(partialResume, /step\.dispatch_state <> 'NOT_DISPATCHED'/);
 assert.doesNotMatch(partialResume, /delete from public\.remote_object_bindings/);
 
+const exhaustedPartialResume = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928160500_meta_resume_exhausted_partial_launches.sql",
+  ),
+  "utf8",
+);
+assert.match(exhaustedPartialResume, /mp\.status = 'PENDING'/);
+assert.match(
+  exhaustedPartialResume,
+  /mp\.attempt_count >= mp\.max_attempts/,
+);
+assert.match(
+  exhaustedPartialResume,
+  /max_attempts = greatest\(plan\.max_attempts, plan\.attempt_count \+ 1\)/,
+);
+assert.match(
+  exhaustedPartialResume,
+  /from public\.remote_object_bindings binding/,
+);
+assert.match(
+  exhaustedPartialResume,
+  /step\.dispatch_state <> 'NOT_DISPATCHED'/,
+);
+assert.match(
+  exhaustedPartialResume,
+  /step\.status in \('FAILED', 'COMPENSATION_REQUIRED'\)/,
+);
+assert.doesNotMatch(
+  exhaustedPartialResume,
+  /delete from public\.remote_object_bindings/,
+);
+
 const maintenance = await readFile(
   join(root, "src/lib/meta/launch-maintenance.ts"),
   "utf8",
