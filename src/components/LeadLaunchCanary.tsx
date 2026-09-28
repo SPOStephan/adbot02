@@ -20,6 +20,10 @@ import type {
   RecentLaunchPlanView,
 } from "@/components/AutomationOnboardingControls";
 import {
+  MetaAdAccountPicker,
+  type MetaAdAccountOption,
+} from "@/components/MetaAdAccountPicker";
+import {
   CreativePickerModal,
   type PickerAsset,
 } from "@/components/CreativePickerModal";
@@ -101,6 +105,7 @@ function friendlyCampaignLabel(name: string): string {
 }
 
 type Props = {
+  adAccounts?: MetaAdAccountOption[];
   brandProfileId: string | null;
   currency: string;
   killSwitchMode: "ALLOW" | "FREEZE_WRITES" | "PAUSE_MANAGED";
@@ -316,6 +321,7 @@ function toHeldFromRecent(
 }
 
 export function LeadLaunchCanary({
+  adAccounts = [],
   brandProfileId,
   currency,
   launchPolicy,
@@ -487,6 +493,8 @@ export function LeadLaunchCanary({
     pickerAssets.find((asset) => asset.id === assetId) ?? null;
   const selectedPixel =
     data.pixels.find((pixel) => pixel.id === pixelRowId) ?? data.pixels[0] ?? null;
+  const needsAdAccountSelection =
+    adAccounts.length > 1 && !adAccounts.some((account) => account.selectedForAds);
   const [performanceGoal, setPerformanceGoal] =
     useState<LeadPerformanceGoal>("volume");
   const qualityCapiReady = canUseQualifiedLeadOptimization(selectedPixel);
@@ -511,6 +519,9 @@ export function LeadLaunchCanary({
       { label: "Meta-Berechtigung", ready: writeScopeGranted },
       { label: "Währung EUR", ready: currency === "EUR" },
       { label: "Kampagnenfreigabe", ready: policyLaunchReady },
+      ...(adAccounts.length > 1
+        ? [{ label: "Werbekonto gewählt", ready: !needsAdAccountSelection }]
+        : []),
       { label: "Pixel bestätigt", ready: Boolean(selectedPixel) },
       { label: "Conversions API", ready: qualityCapiReady },
       { label: "Ziel-URL geprüft", ready: !purposeLookupPending },
@@ -524,7 +535,9 @@ export function LeadLaunchCanary({
     ],
     [
       assetId,
+      adAccounts.length,
       currency,
+      needsAdAccountSelection,
       performanceGoal,
       pickerAssets.length,
       policyLaunchReady,
@@ -545,6 +558,14 @@ export function LeadLaunchCanary({
 
   async function verifyCapiAndSyncFunnel() {
     if (!selectedPixel) return;
+    if (needsAdAccountSelection) {
+      setNotice({
+        tone: "error",
+        message:
+          "Bitte wähle direkt im Bereich „Pixel und Conversions API“ zuerst das aktive Werbekonto.",
+      });
+      return;
+    }
     setCapiPending(true);
     setNotice(null);
     try {
@@ -1294,11 +1315,23 @@ export function LeadLaunchCanary({
               Wähle oder bestätige oben auf dieser Seite zuerst ein Meta Pixel.
             </p>
           )}
+          {adAccounts.length > 1 ? (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 px-3 py-3">
+              <p className="text-xs font-extrabold text-slate-900">
+                Aktives Werbekonto für diese Prüfung
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                Wähle hier das Werbekonto aus. Danach kann Adbot die Conversions API
+                und die zugehörigen Kampagnendaten eindeutig prüfen.
+              </p>
+              <MetaAdAccountPicker accounts={adAccounts} compact />
+            </div>
+          ) : null}
           {selectedPixel &&
           (!qualityCapiReady || Boolean(detectedPurposeHint && !funnelTrackingReady)) ? (
             <button
               className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-              disabled={capiPending || pending}
+              disabled={capiPending || pending || needsAdAccountSelection}
               onClick={() => void verifyCapiAndSyncFunnel()}
               type="button"
             >
@@ -1309,6 +1342,8 @@ export function LeadLaunchCanary({
               )}
               {capiPending
                 ? "Wird geprüft …"
+                : needsAdAccountSelection
+                  ? "Zuerst Werbekonto wählen"
                 : qualityCapiReady
                   ? "Funnel-Tracking synchronisieren"
                   : "Conversions API jetzt prüfen"}
