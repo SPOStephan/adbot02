@@ -1369,7 +1369,7 @@ function launchPreparationFailureMessage(error: unknown): string {
     ],
     [
       /exclusive idle account/i,
-      "Ein anderer Meta-Schreibauftrag läuft oder ist fällig. Bitte 1–2 Minuten warten (Beitrag-Push fertig werden lassen) und erneut „Kampagne starten“ tippen.",
+      "Der Kampagnenstart konnte wegen einer veralteten Warteschlangen-Sperre nicht angenommen werden.",
     ],
     [
       /fingerprint mismatch|Launch canary plan is invalid|Invalid launch canary/i,
@@ -1399,7 +1399,7 @@ function launchApprovalFailureMessage(error: unknown): string {
     ],
     [
       /exclusive idle account/i,
-      "Ein anderer Meta-Schreibauftrag läuft oder ist fällig. Bitte 1–2 Minuten warten (Beitrag-Push fertig werden lassen) und erneut „Kampagne starten“ tippen.",
+      "Der Kampagnenstart konnte wegen einer veralteten Warteschlangen-Sperre nicht angenommen werden.",
     ],
     [
       /Fresh write-ready EUR Meta account|fresh Meta marketing sync|current successful Meta marketing sync/i,
@@ -1847,19 +1847,17 @@ async function ensureLaunchExposureSnapshot(
 
 const SUPERSEDED_CUSTOMER_LAUNCH_REASON =
   "superseded_by_newer_customer_launch_for_same_draft";
-const STALE_UNAPPROVED_LAUNCH_AGE_MS = 60_000;
 
 type UnstartedLaunchCleanupInput = {
   campaignDraftId: string;
   destinationUrl: string;
-  releaseStaleAcrossAccount: boolean;
 };
 
 /**
  * The former preview flow materialized HELD plans and therefore reserved daily
  * budget before the customer approved a launch. A new explicit start of the
- * same saved draft replaces only plans that never had an approval, execution,
- * lease or remote binding. Active/approved campaigns are never touched.
+ * same saved draft replaces only an older plan that was never claimed and has
+ * no execution or remote binding. Other queued customer launches are retained.
  */
 export async function releaseUnstartedCustomerLaunchReservations(
   customer: MetaCustomer,
@@ -1869,7 +1867,7 @@ export async function releaseUnstartedCustomerLaunchReservations(
   const { data: candidates, error: candidatesError } = await admin
     .from("mutation_plans")
     .select(
-      "id,policy_id,status,blocked_reason,planned_payload,attempt_count,lease_token,created_at",
+      "id,policy_id,status,blocked_reason,planned_payload,attempt_count,lease_token",
     )
     .eq("user_id", customer.userId)
     .eq("platform_account_id", customer.platformAccountId)
@@ -1899,12 +1897,6 @@ export async function releaseUnstartedCustomerLaunchReservations(
     const destinationUrl =
       typeof payload.destination_url === "string" ? payload.destination_url : null;
     const sameDestination = destinationUrl === input.destinationUrl;
-    const createdAt =
-      typeof row.created_at === "string" ? Date.parse(row.created_at) : Number.NaN;
-    const staleAcrossAccount =
-      input.releaseStaleAcrossAccount &&
-      Number.isFinite(createdAt) &&
-      createdAt <= Date.now() - STALE_UNAPPROVED_LAUNCH_AGE_MS;
     const sameDraft = previousDraftId === input.campaignDraftId;
     const legacySameDestination = previousDraftId === null && sameDestination;
     const isRetryableCleanup =
@@ -1916,21 +1908,17 @@ export async function releaseUnstartedCustomerLaunchReservations(
       row.lease_token === null;
     return (
       (isRetryableCleanup || isUntouchedPending) &&
-      (sameDraft || legacySameDestination || staleAcrossAccount)
+      (sameDraft || legacySameDestination)
     );
   });
   if (matching.length === 0) return;
 
   const matchingIds = matching.map((row) => String(row.id));
-  const [approvals, executions, bindings] = await Promise.all([
-    admin
-      .from("meta_launch_canary_approvals")
-      .select("plan_id")
-      .in("plan_id", matchingIds),
+  const [executions, bindings] = await Promise.all([
     admin.from("mutation_executions").select("plan_id").in("plan_id", matchingIds),
     admin.from("remote_object_bindings").select("plan_id").in("plan_id", matchingIds),
   ]);
-  if (approvals.error || executions.error || bindings.error) {
+  if (executions.error || bindings.error) {
     serviceError(
       "launch_reservation_cleanup_failed",
       500,
@@ -1939,7 +1927,7 @@ export async function releaseUnstartedCustomerLaunchReservations(
   }
 
   const protectedIds = new Set(
-    [approvals.data, executions.data, bindings.data]
+    [executions.data, bindings.data]
       .flat()
       .map((row) => row?.plan_id)
       .filter((value): value is string => typeof value === "string"),
@@ -2290,7 +2278,6 @@ export async function materializeCustomerLaunch(
       await releaseUnstartedCustomerLaunchReservations(readyCustomer, {
         campaignDraftId: command.launchInputs.campaign_draft_id,
         destinationUrl: command.launchInputs.destination_url,
-        releaseStaleAcrossAccount: true,
       });
     }
     await releaseNonDeliveringSnapshotExposures(readyCustomer);
@@ -2410,7 +2397,7 @@ export async function approveCustomerLaunch(
   executorSucceeded: number;
   executorLastOutcome: string | null;
   executionPlanStatus: string | null;
-  executionWarning: string | null;
+  executionState: "ACTIVE" | "QUEUED";
 }> {
   requireWriteReadyCustomer(customer, "einen Aktiv-Launch freigibst");
   if (!customer.marketingSyncId) {
@@ -2478,7 +2465,8 @@ export async function approveCustomerLaunch(
   let executorSucceeded = 0;
   let executorLastOutcome: string | null = null;
   let executionPlanStatus: string | null = null;
-  let executionWarning: string | null = null;
+  let executionState: "ACTIVE" | "QUEUED" = "QUEUED";
+  let terminalExecutionFailure: string | null = null;
   try {
     const drain = await drainApprovedLaunchChainForAccount({
       planId: command.planId,
@@ -2490,23 +2478,21 @@ export async function approveCustomerLaunch(
     executorSucceeded = drain.succeeded ? 1 : 0;
     executorLastOutcome = drain.lastOutcome;
     executionPlanStatus = drain.planStatus;
-    executionWarning = describeLaunchChainDrainFailure(drain);
+    executionState = drain.succeeded ? "ACTIVE" : "QUEUED";
+    if (drain.failed) {
+      terminalExecutionFailure = describeLaunchChainDrainFailure(drain);
+    }
   } catch (error) {
     console.error("customer_launch_targeted_execution_failed", {
       planId: command.planId,
       message: error instanceof Error ? error.message : "unknown",
     });
+  }
+  if (terminalExecutionFailure) {
     serviceError(
       "launch_execution_failed",
-      502,
-      "Der freigegebene Meta-Start konnte technisch nicht ausgeführt werden. Derselbe Startplan bleibt gespeichert; es wurde keine zweite Kampagne angelegt.",
-    );
-  }
-  if (executionWarning) {
-    serviceError(
-      "launch_execution_incomplete",
       409,
-      executionWarning,
+      terminalExecutionFailure,
     );
   }
 
@@ -2520,7 +2506,7 @@ export async function approveCustomerLaunch(
     executorSucceeded,
     executorLastOutcome,
     executionPlanStatus,
-    executionWarning,
+    executionState,
   };
 }
 

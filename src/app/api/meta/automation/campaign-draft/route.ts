@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
       await releaseUnstartedCustomerLaunchReservations(customer, {
         campaignDraftId: input.draftId,
         destinationUrl,
-        releaseStaleAcrossAccount: false,
       });
     }
     await setMetaCampaignDraftStatus(customer, input);

@@ -151,7 +151,7 @@ const draftRoute = await read(
 );
 assert.match(draftRoute, /getMetaCampaignDraftDestination/);
 assert.match(draftRoute, /releaseUnstartedCustomerLaunchReservations/);
-assert.match(draftRoute, /releaseStaleAcrossAccount: false/);
+assert.doesNotMatch(draftRoute, /releaseStaleAcrossAccount/);
 
 const dashboard = await read("src/lib/dashboard/load-customer-dashboard.ts");
 assert.match(

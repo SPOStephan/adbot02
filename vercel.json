@@ -18,6 +18,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/meta-launch-maintenance",
+      "schedule": "17 */4 * * *"
+    },
+    {
       "path": "/api/cron/organic-boost-delivery",
       "schedule": "*/15 * * * *"
     },
