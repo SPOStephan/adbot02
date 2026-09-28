@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApplicationRecord } from "@shared/funnel";
 import { defaultFunnel } from "@shared/defaultFunnel";
-import { buildApplicationNotificationHtml } from "./mail";
+import { buildApplicationNotificationHtml, resolveApplicationMailFrom } from "./mail";
 
 describe("Bewerbungs-E-Mail", () => {
   it("verwendet Seitennamen und sichtbare Antwort mit Umlauten statt technischer Werte", () => {
@@ -36,5 +36,40 @@ describe("Bewerbungs-E-Mail", () => {
     expect(html).toContain("Erika Müster");
     expect(html).not.toContain(technicalQuestionKey);
     expect(html).not.toContain(technicalAnswerValue);
+  });
+
+  it("verwendet einen verifizierten Absender nur für den exakt zugeordneten Funnel-Host", () => {
+    const application: ApplicationRecord = {
+      id: "20000000-0000-4000-8000-000000000002",
+      funnelId: defaultFunnel.id,
+      funnelSlug: "vertrieb-immo02",
+      status: "new",
+      answers: {},
+      contact: { name: "Erika Muster" },
+      consentAt: "2026-09-28T08:00:00.000Z",
+      sourceUrl: "https://jobs.boncred.info/f/vertrieb-immo02",
+      utm: {},
+      createdAt: "2026-09-28T08:00:00.000Z",
+    };
+    const fallback = "Adbot Funnel <funnel@send.adbot.one>";
+    const custom = "Boncred Funnel <funnel@mail.boncred.info>";
+
+    expect(resolveApplicationMailFrom(application, {
+      MAIL_FROM: fallback,
+      MAIL_FROM_BY_FUNNEL_HOST: JSON.stringify({ "jobs.boncred.info": custom }),
+    })).toBe(custom);
+
+    expect(resolveApplicationMailFrom({
+      ...application,
+      sourceUrl: "https://funnel.adbot.one/f/vertrieb-immo02",
+    }, {
+      MAIL_FROM: fallback,
+      MAIL_FROM_BY_FUNNEL_HOST: JSON.stringify({ "jobs.boncred.info": custom }),
+    })).toBe(fallback);
+
+    expect(resolveApplicationMailFrom(application, {
+      MAIL_FROM: fallback,
+      MAIL_FROM_BY_FUNNEL_HOST: "not-json",
+    })).toBe(fallback);
   });
 });

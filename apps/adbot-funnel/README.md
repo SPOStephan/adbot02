@@ -66,7 +66,7 @@ Die Anwendung benötigt folgende serverseitige Konfigurationsgruppen. Geheimwert
 |---|---|---|
 | Supabase | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Funnel- und Bewerbungsdaten |
 | Storage | `STORAGE_BUCKET` (Default `application-resumes`) | Private Lebensläufe/Favicons in Supabase Storage |
-| Resend | `RESEND_API_KEY`, `MAIL_FROM` | Gebündelte Benachrichtigung |
+| Resend | `RESEND_API_KEY`, `MAIL_FROM`, optional `MAIL_FROM_BY_FUNNEL_HOST` | Gebündelte Benachrichtigung; verifizierte Kundenabsender pro exaktem Funnel-Host mit sicherem Standardabsender als Fallback |
 | Admin-Authentifizierung | `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Geschützte Admin-Sitzung ohne Manus |
 
 Die produktive SQL-Migration liegt unter [`supabase/migrations/202607270001_initial_recruiting_schema.sql`](supabase/migrations/202607270001_initial_recruiting_schema.sql). Sie ist idempotent und enthält Tabellen, Indizes, Trigger, RLS-Aktivierung sowie explizite Rollenrechte.

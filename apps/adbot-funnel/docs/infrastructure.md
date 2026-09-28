@@ -37,4 +37,4 @@ Diese Konfiguration hält personenbezogene Bewerbungsdaten hinter dem geschützt
 
 ## Resend
 
-Der Resend-API-Zugang und ein Absender unter der verifizierten Domain `boncred.info` wurden mit einem nicht-destruktiven API-Test bestätigt. `RESEND_API_KEY` und `MAIL_FROM` werden ausschließlich als serverseitige Secrets hinterlegt. Die Empfängeradresse bleibt pro Funnel im geschützten Admin-Bereich konfigurierbar.
+`RESEND_API_KEY` und der verifizierte Standardabsender `MAIL_FROM` werden ausschließlich als serverseitige Secrets hinterlegt. Optional ordnet `MAIL_FROM_BY_FUNNEL_HOST` einem exakten öffentlichen Funnel-Host einen bereits bei Resend verifizierten Kundenabsender zu. Unbekannte Hosts, Vorschau-URLs und fehlerhafte Zuordnungen fallen immer auf `MAIL_FROM` zurück. Die Empfängeradresse bleibt pro Funnel im geschützten Admin-Bereich konfigurierbar.
