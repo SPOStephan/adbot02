@@ -11,6 +11,11 @@
 --    whole ACCOUNT. 0.18 s later the claim for Vertrieb02 saw FREEZE_WRITES and
 --    marked the approved, half-built launch terminally BLOCKED (writes_frozen).
 --
+-- Note: function bodies read single rows with FOR loops on purpose. The
+-- Supabase SQL editor misreads the INTO clause form as CREATE TABLE AS and
+-- injects RLS statements into the dollar-quoted body. The loop form keeps the
+-- same FOUND semantics.
+--
 -- Systemic fix:
 -- * yield_meta_mutation_execution: a run that reaches its step limit (or has no
 --   due step) ends at a clean step boundary and returns the plan to PENDING
@@ -133,9 +138,11 @@ declare
   v_plan public.mutation_plans%rowtype;
   v_latest public.kill_switch_state%rowtype;
 begin
-  select mp.* into v_plan
+  for v_plan in
+  select mp.*
   from public.mutation_plans mp
-  where mp.id = p_plan_id;
+  where mp.id = p_plan_id
+  loop exit; end loop;
 
   if not found
     or not public.meta_plan_is_approved_customer_launch(p_plan_id)
@@ -143,13 +150,15 @@ begin
     return;
   end if;
 
-  select kss.* into v_latest
+  for v_latest in
+  select kss.*
   from public.kill_switch_state kss
   where kss.scope_type = 'ACCOUNT'
     and kss.user_id = v_plan.user_id
     and kss.platform_account_id = v_plan.platform_account_id
   order by kss.sequence desc
-  limit 1;
+  limit 1
+  loop exit; end loop;
 
   if found
     and v_latest.mode = 'FREEZE_WRITES'
@@ -164,14 +173,16 @@ begin
     );
   end if;
 
-  select kss.* into v_latest
+  for v_latest in
+  select kss.*
   from public.kill_switch_state kss
   where kss.scope_type = 'PLAN'
     and kss.user_id = v_plan.user_id
     and kss.platform_account_id = v_plan.platform_account_id
     and kss.plan_id = v_plan.id
   order by kss.sequence desc
-  limit 1;
+  limit 1
+  loop exit; end loop;
 
   if found
     and v_latest.mode = 'FREEZE_WRITES'
@@ -202,23 +213,27 @@ declare
   v_plan public.mutation_plans%rowtype;
   v_next_not_before timestamptz;
 begin
-  select me.* into v_execution
+  for v_execution in
+  select me.*
   from public.mutation_executions me
   where me.id = p_execution_id
     and me.lease_token = p_lease_token
     and me.status in ('CLAIMED', 'RUNNING', 'RECONCILING')
-  for update;
+  for update
+  loop exit; end loop;
   if not found then
     raise exception 'Active Meta execution is required';
   end if;
 
-  select mp.* into v_plan
+  for v_plan in
+  select mp.*
   from public.mutation_plans mp
   where mp.id = v_execution.plan_id
     and mp.lease_token = p_lease_token
     and mp.lease_expires_at > now()
     and mp.status in ('CLAIMED', 'EXECUTING', 'RECONCILING')
-  for update;
+  for update
+  loop exit; end loop;
   if not found then
     raise exception 'Active Meta plan lease is required';
   end if;
@@ -236,10 +251,12 @@ begin
     raise exception 'Meta execution can only yield at a clean step boundary';
   end if;
 
-  select min(step.not_before) into v_next_not_before
-  from public.mutation_plan_steps step
-  where step.plan_id = v_plan.id
-    and step.status in ('PENDING', 'RETRYABLE');
+  v_next_not_before := (
+    select min(step.not_before)
+    from public.mutation_plan_steps step
+    where step.plan_id = v_plan.id
+      and step.status in ('PENDING', 'RETRYABLE')
+  );
 
   if v_next_not_before is null then
     return 'NOTHING_OPEN';
@@ -368,14 +385,16 @@ begin
       end case;
     end if;
 
-    select ap.* into v_policy
+    for v_policy in
+    select ap.*
     from public.automation_policies ap
     where ap.id = v_plan.policy_id
       and ap.user_id = v_plan.user_id
       and ap.platform_account_id = v_plan.platform_account_id
       and ap.is_current
       and ap.status = 'ACTIVE'
-    for share;
+    for share
+    loop exit; end loop;
 
     if not found then
       update public.mutation_plans
@@ -399,7 +418,8 @@ begin
       continue;
     end if;
 
-    select pa.marketing_meta_ad_account_id into v_ad_account_id
+    for v_ad_account_id in
+    select pa.marketing_meta_ad_account_id
     from public.platform_accounts pa
     where pa.id = v_plan.platform_account_id
       and pa.user_id = v_plan.user_id
@@ -418,7 +438,8 @@ begin
         from jsonb_array_elements_text(pa.ad_account_ids) allowed(value)
         where regexp_replace(allowed.value, '^act_', '')
               = regexp_replace(pa.marketing_meta_ad_account_id, '^act_', '')
-      );
+      )
+    loop exit; end loop;
 
     if not found or v_ad_account_id is null then
       update public.mutation_plans
@@ -430,10 +451,12 @@ begin
       continue;
     end if;
 
-    select ks.mode, ks.scope_type into v_kill_mode, v_kill_scope
+    for v_kill_mode, v_kill_scope in
+    select ks.mode, ks.scope_type
     from public.get_effective_meta_kill_switch(
       v_plan.user_id, v_plan.platform_account_id, v_plan.id
-    ) ks;
+    ) ks
+    loop exit; end loop;
 
     if v_kill_mode = 'FREEZE_WRITES'
       and v_plan.action_type = 'LAUNCH_CHAIN'
@@ -462,13 +485,15 @@ begin
     end if;
 
     if v_plan.automation_target_id is not null then
-      select at.* into v_target
+      for v_target in
+      select at.*
       from public.automation_targets at
       where at.id = v_plan.automation_target_id
         and at.user_id = v_plan.user_id
         and at.platform_account_id = v_plan.platform_account_id
         and at.status = 'MANAGED'
-      for update;
+      for update
+      loop exit; end loop;
 
       if not found
         or v_target.target_type <> v_plan.target_type
@@ -503,7 +528,8 @@ begin
       continue;
     end if;
 
-    select mps.* into v_step
+    for v_step in
+    select mps.*
     from public.mutation_plan_steps mps
     where mps.plan_id = v_plan.id
       and mps.status in ('PENDING', 'RETRYABLE')
@@ -519,7 +545,8 @@ begin
       )
     order by mps.step_index
     limit 1
-    for update;
+    for update
+    loop exit; end loop;
 
     if not found then
       perform public.release_meta_account_operation(
@@ -601,20 +628,24 @@ declare
  v_action_type text; v_rule text; v_contract text; v_user uuid; v_account uuid;
  v_plan uuid; v_result record; v_account_mode text; v_plan_mode text;
 begin
+ for v_action_type,v_rule,v_contract,v_user,v_account,v_plan in
  select mp.action_type,mp.source_rule_key,mp.planned_payload->>'contract',mp.user_id,
-   mp.platform_account_id,mp.id into v_action_type,v_rule,v_contract,v_user,v_account,v_plan
+   mp.platform_account_id,mp.id
  from public.mutation_executions me join public.mutation_plans mp on mp.id=me.plan_id
- where me.id=p_execution_id and me.lease_token=p_lease_token;
+ where me.id=p_execution_id and me.lease_token=p_lease_token
+ loop exit; end loop;
  if v_action_type='LAUNCH_AD' and v_rule='meta_creative_format_optimizer_v1'
     and v_contract='meta_existing_adset_creative_test_v1' then
    return query select * from public.reconcile_meta_creative_format_optimizer_plan(p_execution_id,p_step_id,p_lease_token); return;
  end if;
  if v_action_type='PAUSE' and v_rule='meta_creative_format_optimizer_v1'
     and v_contract='meta_creative_evidence_pause_v1' then
-   select result.* into v_result
+   for v_result in
+   select result.*
    from public.reconcile_meta_mutation_plan_base(
      p_execution_id, p_step_id, p_lease_token
-   ) result;
+   ) result
+   loop exit; end loop;
    if v_result.outcome = 'SUCCEEDED' then
      update public.meta_creative_optimization_cycles cycle
      set status = 'COMPLETED', completed_at = now(),
@@ -631,19 +662,25 @@ begin
    return;
  end if;
    if v_action_type in ('LAUNCH_CHAIN','LAUNCH_AD') then
-     select result.* into v_result from public.reconcile_meta_launch_mutation_plan(p_execution_id,p_step_id,p_lease_token) result;
+     for v_result in
+     select result.*  from public.reconcile_meta_launch_mutation_plan(p_execution_id,p_step_id,p_lease_token) result
+     loop exit; end loop;
      if v_action_type='LAUNCH_CHAIN' and v_rule <> 'organic-boost' then
-     select latest.mode into v_account_mode from public.kill_switch_state latest
+     for v_account_mode in
+     select latest.mode  from public.kill_switch_state latest
       where latest.scope_type='ACCOUNT' and latest.user_id=v_user and latest.platform_account_id=v_account
-      order by latest.sequence desc limit 1;
+      order by latest.sequence desc limit 1
+     loop exit; end loop;
      if coalesce(v_account_mode,'FREEZE_WRITES')<>'FREEZE_WRITES'
         and not public.meta_launch_refreeze_keeps_account_allow(v_user,v_account,v_plan) then
        perform public.append_meta_kill_switch_state('ACCOUNT',v_user,v_account,null,'FREEZE_WRITES',
          'Atomarer Aktiv-Launch wurde reconciliert: '||v_result.outcome,'SYSTEM','meta-launch-canary-reconciler');
      end if;
-     select latest.mode into v_plan_mode from public.kill_switch_state latest
+     for v_plan_mode in
+     select latest.mode  from public.kill_switch_state latest
       where latest.scope_type='PLAN' and latest.user_id=v_user and latest.platform_account_id=v_account
-        and latest.plan_id=v_plan order by latest.sequence desc limit 1;
+        and latest.plan_id=v_plan order by latest.sequence desc limit 1
+     loop exit; end loop;
      if coalesce(v_plan_mode,'FREEZE_WRITES')<>'FREEZE_WRITES' then
        perform public.append_meta_kill_switch_state('PLAN',v_user,v_account,v_plan,'FREEZE_WRITES',
          'Atomarer Aktiv-Launch wurde reconciliert: '||v_result.outcome,'SYSTEM','meta-launch-canary-reconciler');
@@ -697,7 +734,7 @@ begin
 
   -- Traffic/Lead terminals must not revoke Freigeben while Beitrag-Push AUTO
   -- is the customer's configured default workflow.
-  select exists (
+  v_keep_account_allow := exists (
     select 1
     from public.meta_boost_settings settings
     where settings.user_id = new.user_id
@@ -707,7 +744,7 @@ begin
       and settings.boost_mode = 'AUTO'
       and settings.auto_boost_new_candidates
       and settings.require_manual_approval is not true
-  ) into v_keep_account_allow;
+  );
 
   -- Another accepted customer launch on this account still needs the write
   -- gate. Refreezing the ACCOUNT here would terminally strand it.
@@ -716,13 +753,15 @@ begin
       new.user_id, new.platform_account_id, new.id
     );
 
-  select latest.mode into v_account_mode
+  for v_account_mode in
+  select latest.mode
   from public.kill_switch_state latest
   where latest.scope_type = 'ACCOUNT'
     and latest.user_id = new.user_id
     and latest.platform_account_id = new.platform_account_id
   order by latest.sequence desc
-  limit 1;
+  limit 1
+  loop exit; end loop;
 
   if not v_keep_account_allow
     and coalesce(v_account_mode, 'FREEZE_WRITES') <> 'FREEZE_WRITES' then
@@ -737,14 +776,16 @@ begin
     );
   end if;
 
-  select latest.mode into v_plan_mode
+  for v_plan_mode in
+  select latest.mode
   from public.kill_switch_state latest
   where latest.scope_type = 'PLAN'
     and latest.user_id = new.user_id
     and latest.platform_account_id = new.platform_account_id
     and latest.plan_id = new.id
   order by latest.sequence desc
-  limit 1;
+  limit 1
+  loop exit; end loop;
 
   if coalesce(v_plan_mode, 'FREEZE_WRITES') <> 'FREEZE_WRITES' then
     perform public.append_meta_kill_switch_state(
