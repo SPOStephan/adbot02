@@ -66,6 +66,10 @@ try {
     assignedAssetsSource,
     /instagram_business_account\{id,name,username\}/,
   );
+  assert.match(
+    assignedAssetsSource,
+    /connected_instagram_account\{id,name,username\}/,
+  );
   assert.doesNotMatch(clientSource, /candidateInstagramAccountIds/);
   assert.match(clientSource, /shouldUseMetaSystemUserDirectAssetDiscovery/);
   assert.match(clientSource, /isSystemUserTokenType/);
@@ -107,6 +111,8 @@ try {
   assert.match(callbackSource, /replace_meta_connection/);
   assert.match(callbackSource, /extend_meta_connection/);
   assert.match(callbackSource, /intent === "extend"/);
+  assert.match(callbackSource, /additiveExtension:\s*isExtend/);
+  assert.doesNotMatch(callbackSource, /extend_stale_system_user/);
   assert.match(callbackSource, /p_meta_user_id:\s*identity\.id/);
   assert.match(callbackSource, /p_assets:\s*assetRows/);
   assert.match(callbackSource, /p_scopes:\s*\[\.\.\.META_ALLOWED_SCOPES\]/);
@@ -601,6 +607,13 @@ try {
   assert.equal(
     clientModule.shouldUseMetaSystemUserDirectAssetDiscovery(
       allEmptySystemUserDebug,
+      { authorizationReset: false, additiveExtension: true },
+    ),
+    true,
+  );
+  assert.equal(
+    clientModule.shouldUseMetaSystemUserDirectAssetDiscovery(
+      allEmptySystemUserDebug,
       { authorizationReset: true },
     ),
     true,
@@ -633,7 +646,7 @@ try {
               id: "111111111111112",
               name: "Boncred Facebook-Seite",
               access_token: "ephemeral-page-token-boncred",
-              instagram_business_account: {
+              connected_instagram_account: {
                 id: "17841400000000002",
                 name: "Boncred",
                 username: "boncred.official",
@@ -703,6 +716,11 @@ try {
         && entry.url.searchParams.has("appsecret_proof"),
     ),
   );
+  const pageFields = requests.find(
+    (entry) => entry.url.pathname === "/v25.0/me/accounts",
+  )?.url.searchParams.get("fields");
+  assert.match(pageFields ?? "", /instagram_business_account/);
+  assert.match(pageFields ?? "", /connected_instagram_account/);
   assert.ok(
     requests.every(
       (entry) =>

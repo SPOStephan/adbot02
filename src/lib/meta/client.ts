@@ -923,13 +923,15 @@ export function getGranularTargetIds(
  * granular_scopes entry without target_ids for this token type. Only that
  * explicit all-empty system-user shape may use the token-visible asset lists;
  * any token with at least one granular target remains strictly ID-filtered.
+ * This is safe after a full authorization reset or for the strictly additive
+ * extension path, which never deletes previously connected assets.
  */
 export function shouldUseMetaSystemUserDirectAssetDiscovery(
   tokenDebug: MetaTokenDebug,
-  options: { authorizationReset: boolean },
+  options: { authorizationReset: boolean; additiveExtension?: boolean },
 ): boolean {
   return (
-    options.authorizationReset
+    (options.authorizationReset || options.additiveExtension === true)
     && isSystemUserTokenType(tokenDebug.type)
     && tokenDebug.granularScopes.length > 0
     && tokenDebug.granularScopes.every((item) => item.targetIds.length === 0)
@@ -1087,7 +1089,9 @@ function parsePageAsset(value: unknown): MetaPageAsset | null {
 
   const instagram = isRecord(value.instagram_business_account)
     ? value.instagram_business_account
-    : null;
+    : isRecord(value.connected_instagram_account)
+      ? value.connected_instagram_account
+      : null;
   const instagramId = instagram ? asMetaAssetId(instagram.id) : null;
 
   return {
@@ -1155,7 +1159,9 @@ function parseAssignedPageAsset(
 
   const instagram = isRecord(value.instagram_business_account)
     ? value.instagram_business_account
-    : null;
+    : isRecord(value.connected_instagram_account)
+      ? value.connected_instagram_account
+      : null;
   const instagramId = instagram ? asMetaAssetId(instagram.id) : null;
 
   const pageAccessToken = asNonEmptyString(value.access_token);
@@ -1210,7 +1216,7 @@ export async function getMetaPageAssets(input: {
   const pageUrl = new URL(`/${META_GRAPH_VERSION}/me/accounts`, META_GRAPH_ORIGIN);
   pageUrl.searchParams.set(
     "fields",
-    "id,name,access_token,instagram_business_account{id,name,username}",
+    "id,name,access_token,instagram_business_account{id,name,username},connected_instagram_account{id,name,username}",
   );
   pageUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
 
@@ -1303,7 +1309,7 @@ export async function getMetaInstagramAccountAssets(input: {
  * `DELETE /permissions` reset, Meta re-binds only the dialog-selected assets
  * to this token — so `/me/accounts` and `/me/adaccounts` are the live
  * selection. Instagram comes from the linked business account on those pages
- * (safe only because this mode requires authorizationReset).
+ * (safe after authorizationReset and for strictly additive extension).
  */
 async function getMetaSystemUserAssignedAssets(input: {
   systemUserId: string;
@@ -1322,7 +1328,7 @@ async function getMetaSystemUserAssignedAssets(input: {
   );
   pageUrl.searchParams.set(
     "fields",
-    "id,name,access_token,instagram_business_account{id,name,username}",
+    "id,name,access_token,instagram_business_account{id,name,username},connected_instagram_account{id,name,username}",
   );
   pageUrl.searchParams.set("limit", String(META_COLLECTION_PAGE_SIZE));
 
