@@ -64,6 +64,14 @@ const lead = await readFile(
 );
 assert.match(lead, /DynamicCreativeImagesField/);
 assert.match(lead, /useDynamicCreativeImages/);
+assert.match(lead, /maxSelected=\{MAX_DYNAMIC_CREATIVE_IMAGES\}/);
+
+const picker = await readFile(
+  join(root, "src/components/CreativePickerModal.tsx"),
+  "utf8",
+);
+assert.match(picker, /multiple=\{multiSelect\}/);
+assert.match(picker, /onSelectionChange/);
 
 const service = await readFile(
   join(root, "src/lib/meta/customer-control-service.ts"),
@@ -150,6 +158,13 @@ try {
     includeFormatSiblings: false,
   });
   assert.deepEqual(primaryOnly.assetIds, [parent, other]);
+
+  const capped = variants.normalizeLaunchAssetIds(
+    Array.from({ length: 12 }, (_, index) =>
+      `${String(index + 1).padStart(8, "0")}-1111-4111-8111-111111111111`,
+    ),
+  );
+  assert.equal(capped.length, 10);
 
   const inputSource = await readFile(
     join(root, "src/lib/meta/customer-control-input.ts"),

@@ -27,8 +27,19 @@ assert.match(lead, /Kampagnenstart jetzt freigeben/);
 assert.match(lead, /\/api\/meta\/automation\/launch-policy/);
 assert.match(lead, /Automatische Zielgruppenfindung durch Meta/);
 assert.match(lead, /Werbemittel wählen oder hochladen/);
+assert.match(lead, />\s*Kampagnenname\s*</);
+assert.match(lead, /campaignNameOverride \?\? suggestedCampaignName/);
+assert.match(lead, /campaignName,\s*\n\s*adSetName:/);
+assert.match(lead, /multiSelect/);
+assert.match(lead, /selectedAssetIds=\{pickerSelectedAssetIds\}/);
 assert.doesNotMatch(lead, />\s*Lead Canary\s*</);
 assert.doesNotMatch(lead, />\s*Struktur-Test\s*</);
+
+const picker = read("src/components/CreativePickerModal.tsx");
+assert.match(picker, /multiple=\{multiSelect\}/);
+assert.match(picker, /onSelectionChange/);
+assert.match(picker, /maxSelected = MAX_DYNAMIC_CREATIVE_IMAGES/);
+assert.match(picker, /Bis zu zehn Motive hochladen/);
 
 const service = read("src/lib/meta/customer-control-service.ts");
 assert.match(service, /capi_probe_status: probed\.status/);
