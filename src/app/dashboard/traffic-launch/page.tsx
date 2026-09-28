@@ -15,11 +15,17 @@ import {
 import { listReadyCustomerCustomDomains } from "@/lib/custom-domains/service";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
+import {
+  campaignDraftAssetIds,
+  mergeDraftAssetsIntoLibrary,
+  toReadyBrandAssetView,
+} from "@/lib/meta/campaign-draft-assets";
 import { toMetaCampaignDraftView } from "@/lib/meta/campaign-draft";
 import {
   listFunnelPurposeHints,
   resolvePublicFunnelPurposeHint,
 } from "@/lib/funnel-purpose-hints";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -115,6 +121,35 @@ async function TrafficLaunchBody({
     ? toMetaCampaignDraftView(draftRow as Record<string, unknown>)
     : null;
   const initialFunnelUrl = initialDraft?.destinationUrl ?? requestedFunnelUrl;
+  const draftAssetIds = initialDraft
+    ? campaignDraftAssetIds(initialDraft.payload)
+    : [];
+  const { data: recoveredDraftAssetRows } =
+    draftAssetIds.length > 0 && metaAccount
+      ? await createAdminClient()
+          .from("brand_assets")
+          .select(
+            "id,original_filename,source_meta_asset_id,width,height,meta_image_hash,metadata",
+          )
+          .eq("user_id", user.id)
+          .eq("platform_account_id", metaAccount.id)
+          .eq("library_scope", "CUSTOMER")
+          .eq("status", "READY")
+          .in("id", draftAssetIds)
+      : { data: [] };
+  const recoveredDraftAssets = (recoveredDraftAssetRows ?? [])
+    .map((row) => toReadyBrandAssetView(row as Record<string, unknown>))
+    .filter((asset): asset is NonNullable<typeof asset> => Boolean(asset));
+  const draftOnboardingData = initialDraft
+    ? {
+        ...onboardingData,
+        brandAssets: mergeDraftAssetsIntoLibrary(
+          onboardingData.brandAssets,
+          recoveredDraftAssets,
+          draftAssetIds,
+        ),
+      }
+    : onboardingData;
 
   const [readyCustomDomains, storedFunnelPurposeHints, initialFunnelPurposeHint] =
     await Promise.all([
@@ -215,7 +250,7 @@ async function TrafficLaunchBody({
         adAccounts={adAccountPickerOptions}
         brandProfileId={brandProfileView?.id ?? null}
         currency={marketingCurrency}
-        data={onboardingData}
+        data={draftOnboardingData}
         facebookPages={launchFacebookPages}
         instagramAccounts={launchInstagramAccounts}
         initialDestinationUrl={initialFunnelUrl}

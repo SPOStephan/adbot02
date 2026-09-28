@@ -905,7 +905,10 @@ async function loadCustomerDashboardImpl(
           .in("status", ["DRAFT", "ACTIVE"])
           .order("version", { ascending: false })
           .limit(20),
-        supabase
+        // `metadata` is intentionally not granted to the authenticated browser role.
+        // This loader is server-only and already scopes by user + platform account,
+        // so use the service client or the whole library query fails after a reload.
+        createAdminClient()
           .from("brand_assets")
           .select(
             "id,original_filename,source_meta_asset_id,width,height,meta_image_hash,metadata",
