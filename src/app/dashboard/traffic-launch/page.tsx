@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { redirect } from "next/navigation";
 
 import { CampaignGeoTargetCard } from "@/components/CampaignGeoTargetCard";
@@ -44,8 +44,10 @@ type PageProps = {
 };
 
 async function TrafficLaunchBody({
+  funnelHeader,
   query,
 }: {
+  funnelHeader?: ReactNode;
   query: { assetId?: string | string[]; draftId?: string | string[]; funnelUrl?: string | string[]; campaignGoal?: string | string[]; ideaId?: string | string[] };
 }) {
   const supabase = await createClient();
@@ -202,7 +204,7 @@ async function TrafficLaunchBody({
   }
 
   return (
-    <div className="mt-8 space-y-8">
+    <div className={funnelHeader ? "space-y-8" : "mt-8 space-y-8"}>
       {onboardingData.pixels.length === 0 ? (
         <MetaPixelBinding pixels={onboardingData.pixels} standalone />
       ) : null}
@@ -258,6 +260,7 @@ async function TrafficLaunchBody({
         brandProfileId={brandProfileView?.id ?? null}
         currency={marketingCurrency}
         data={draftOnboardingData}
+        header={funnelHeader}
         facebookPages={launchFacebookPages}
         instagramAccounts={launchInstagramAccounts}
         initialDestinationUrl={initialFunnelUrl}
@@ -307,19 +310,27 @@ export default async function TrafficLaunchPage({ searchParams }: PageProps) {
   const funnelCampaign =
     (typeof query.funnelUrl === "string" && query.funnelUrl.startsWith("https://")) ||
     (typeof query.draftId === "string" && /^[0-9a-f-]{36}$/i.test(query.draftId));
+  const leadFunnelCampaign =
+    funnelCampaign && query.campaignGoal !== "landing-page-views";
+  const header = (
+    <DashboardPageHeader
+      description={
+        funnelCampaign
+          ? "Funnel, Zielgebiet, Pixel, Werbemittel und Anzeigentexte prüfen — anschließend die Meta-Kampagne starten."
+          : copy.description
+      }
+      eyebrow={copy.eyebrow}
+      title={funnelCampaign ? "Funnel mit Meta bewerben" : copy.title}
+    />
+  );
   return (
     <>
-      <DashboardPageHeader
-        description={
-          funnelCampaign
-            ? "Funnel, Zielgebiet, Pixel, Werbemittel und Anzeigentexte prüfen — anschließend die Meta-Kampagne starten."
-            : copy.description
-        }
-        eyebrow={copy.eyebrow}
-        title={funnelCampaign ? "Funnel mit Meta bewerben" : copy.title}
-      />
+      {leadFunnelCampaign ? null : header}
       <Suspense fallback={<DashboardContentSkeleton />}>
-        <TrafficLaunchBody query={query} />
+        <TrafficLaunchBody
+          funnelHeader={leadFunnelCampaign ? header : undefined}
+          query={query}
+        />
       </Suspense>
     </>
   );

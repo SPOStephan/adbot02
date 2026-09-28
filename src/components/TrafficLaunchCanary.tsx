@@ -903,33 +903,14 @@ export function TrafficLaunchCanary({
   const buttonClass =
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50";
 
-  return (
-    <section
-      className="border-t border-slate-200 bg-white px-5 py-7 sm:px-7"
-      id="traffic-launch"
-    >
-      <div className="flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
-          <Rocket className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-700">
-            Traffic-Kampagne
-          </p>
-          <h2 className="mt-1 text-xl font-extrabold text-slate-950">
-            Kampagne mit hochgeladenem Werbemittel starten
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Traffic-Kampagne mit Optimierung auf tatsächliche Landingpage-Aufrufe
-            aus deiner Media Library. Domain und Traffic-Blueprint werden automatisch
-            angelegt.
-          </p>
-        </div>
-      </div>
-
-      {launchSucceeded ? (
+  if (launchSucceeded) {
+    return (
+      <section
+        className="border-t border-slate-200 bg-white px-5 py-7 sm:px-7"
+        id="traffic-launch"
+      >
         <div
-          className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6"
+          className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6"
           role="status"
         >
           <div className="flex items-start gap-3">
@@ -937,11 +918,11 @@ export function TrafficLaunchCanary({
               <Check className="size-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <h3 className="text-lg font-extrabold text-emerald-950">
+              <h2 className="text-lg font-extrabold text-emerald-950">
                 {launchState === "ACTIVE"
                   ? "Kampagne erfolgreich an Meta übermittelt"
                   : "Kampagnenstart angenommen — automatische Ausführung läuft"}
-              </h3>
+              </h2>
               <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
                 {notice?.tone === "success"
                   ? notice.message
@@ -985,8 +966,34 @@ export function TrafficLaunchCanary({
             </div>
           </div>
         </div>
-      ) : (
-        <>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className="border-t border-slate-200 bg-white px-5 py-7 sm:px-7"
+      id="traffic-launch"
+    >
+      <div className="flex items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+          <Rocket className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-700">
+            Traffic-Kampagne
+          </p>
+          <h2 className="mt-1 text-xl font-extrabold text-slate-950">
+            Kampagne mit hochgeladenem Werbemittel starten
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            Traffic-Kampagne mit Optimierung auf tatsächliche Landingpage-Aufrufe
+            aus deiner Media Library. Domain und Traffic-Blueprint werden automatisch
+            angelegt.
+          </p>
+        </div>
+      </div>
+
       <ul className="mt-5 flex flex-wrap gap-2">
         {gates.map((gate) => (
           <li
@@ -1688,8 +1695,6 @@ export function TrafficLaunchCanary({
           </button>
         </form>
       ) : null}
-        </>
-      )}
     </section>
   );
 }
