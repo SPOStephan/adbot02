@@ -38,6 +38,7 @@ type PageProps = {
     assetId?: string | string[];
     draftId?: string | string[];
     funnelUrl?: string | string[];
+    campaignGoal?: string | string[];
     ideaId?: string | string[];
   }>;
 };
@@ -45,7 +46,7 @@ type PageProps = {
 async function TrafficLaunchBody({
   query,
 }: {
-  query: { assetId?: string | string[]; draftId?: string | string[]; funnelUrl?: string | string[]; ideaId?: string | string[] };
+  query: { assetId?: string | string[]; draftId?: string | string[]; funnelUrl?: string | string[]; campaignGoal?: string | string[]; ideaId?: string | string[] };
 }) {
   const supabase = await createClient();
   const {
@@ -66,6 +67,10 @@ async function TrafficLaunchBody({
     typeof query.draftId === "string" && /^[0-9a-f-]{36}$/i.test(query.draftId)
       ? query.draftId
       : null;
+  const funnelTrafficMode =
+    Boolean(requestedFunnelUrl) &&
+    !requestedDraftId &&
+    query.campaignGoal === "landing-page-views";
 
   const ideaId =
     typeof query.ideaId === "string" && /^[0-9a-f-]{36}$/i.test(query.ideaId)
@@ -201,8 +206,8 @@ async function TrafficLaunchBody({
       {onboardingData.pixels.length === 0 ? (
         <MetaPixelBinding pixels={onboardingData.pixels} standalone />
       ) : null}
-      {!initialFunnelUrl ? <CampaignGeoTargetCard compact /> : null}
-      {!initialFunnelUrl ? (
+      {!initialFunnelUrl || funnelTrafficMode ? <CampaignGeoTargetCard compact /> : null}
+      {!initialFunnelUrl || funnelTrafficMode ? (
         <TrafficLaunchCanary
           brandProfileId={brandProfileView?.id ?? null}
           currency={marketingCurrency}
@@ -217,7 +222,9 @@ async function TrafficLaunchBody({
               : ideaAssetId
           }
           initialDestinationUrl={
-            typeof ideaRow?.destination_url === "string"
+            funnelTrafficMode
+              ? initialFunnelUrl
+              : typeof ideaRow?.destination_url === "string"
               ? ideaRow.destination_url
               : null
           }
@@ -245,7 +252,7 @@ async function TrafficLaunchBody({
           writeScopeGranted={writeScopeGranted}
         />
       ) : null}
-      {initialFunnelUrl ? (
+      {initialFunnelUrl && !funnelTrafficMode ? (
       <FunnelMetaCampaignWorkspace
         adAccounts={adAccountPickerOptions}
         brandProfileId={brandProfileView?.id ?? null}
