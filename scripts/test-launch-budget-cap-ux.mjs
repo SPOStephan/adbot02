@@ -66,6 +66,11 @@ assert.match(lead, /Tageslimit direkt anpassen/);
 assert.match(lead, /Limit speichern und Vorschau erneut erstellen/);
 assert.match(lead, /campaignFormRef\.current\?\.requestSubmit\(\)/);
 assert.match(lead, /Das geplante Tagesbudget selbst bleibt unverändert/);
+assert.match(lead, /budgetNoticeRef\.current\?\.scrollIntoView\(\{/);
+assert.match(lead, /behavior: "smooth"/);
+assert.match(lead, /block: "center"/);
+assert.match(lead, /budgetNoticeRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+assert.match(lead, /role=\{notice\.action === "adjust_budget_cap" \? "alert" : "status"\}/);
 
 const service = await readFile(
   join(root, "src/lib/meta/customer-control-service.ts"),

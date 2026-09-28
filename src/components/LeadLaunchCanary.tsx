@@ -359,6 +359,7 @@ export function LeadLaunchCanary({
 }: Props) {
   const router = useRouter();
   const campaignFormRef = useRef<HTMLFormElement>(null);
+  const budgetNoticeRef = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState(false);
   const [capiPending, setCapiPending] = useState(false);
   const [policyEnsured, setPolicyEnsured] = useState(policyLaunchReady);
@@ -378,6 +379,17 @@ export function LeadLaunchCanary({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [prepareElapsedSec, setPrepareElapsedSec] = useState(0);
+  useEffect(() => {
+    if (notice?.action !== "adjust_budget_cap") return;
+    const frame = window.requestAnimationFrame(() => {
+      budgetNoticeRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      budgetNoticeRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [notice?.action, notice?.message]);
   const initialDraftPayload = initialDraft?.payload ?? null;
   const startingDestinationUrl =
     initialDraftPayload?.destinationUrl || initialDestinationUrl;
@@ -1573,12 +1585,15 @@ export function LeadLaunchCanary({
 
       {notice && !heldPlan ? (
         <div
-          className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
+          aria-live={notice.action === "adjust_budget_cap" ? "assertive" : "polite"}
+          className={`mt-4 scroll-mt-24 rounded-xl px-4 py-3 text-sm font-semibold ${
             notice.tone === "success"
               ? "bg-emerald-50 text-emerald-800"
               : "bg-rose-50 text-rose-800"
           }`}
-          role="status"
+          ref={notice.action === "adjust_budget_cap" ? budgetNoticeRef : undefined}
+          role={notice.action === "adjust_budget_cap" ? "alert" : "status"}
+          tabIndex={notice.action === "adjust_budget_cap" ? -1 : undefined}
         >
           <p>{notice.message}</p>
           {notice.action === "adjust_budget_cap" ? (
