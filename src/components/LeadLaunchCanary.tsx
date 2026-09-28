@@ -9,6 +9,7 @@ import {
   PlayCircle,
   RefreshCw,
   Rocket,
+  Save,
   Target,
   ShieldCheck,
   Sparkles,
@@ -37,6 +38,12 @@ import {
   type MetaAdSetTargeting,
 } from "@/lib/campaign-geo/adapters";
 import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
+import type { CampaignGeoTarget } from "@/lib/campaign-geo/types";
+import type {
+  MetaCampaignDraftPayload,
+  MetaCampaignDraftView,
+} from "@/lib/meta/campaign-draft-types";
+import { useCampaignDraftAutosave } from "@/lib/meta/use-campaign-draft-autosave";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 import {
   MAX_DYNAMIC_CREATIVE_IMAGES,
@@ -125,6 +132,9 @@ type Props = {
   initialDestinationUrl?: string | null;
   initialFacebookPageId?: string | null;
   initialInstagramActorId?: string | null;
+  campaignDraftEnabled?: boolean;
+  campaignGeo?: CampaignGeoTarget | null;
+  initialDraft?: MetaCampaignDraftView | null;
 };
 
 /** Lead blueprint — separate from Traffic (`LINK_CLICKS`). */
@@ -335,25 +345,31 @@ export function LeadLaunchCanary({
   initialDestinationUrl = null,
   initialFacebookPageId = null,
   initialInstagramActorId = null,
+  campaignDraftEnabled = false,
+  campaignGeo = null,
+  initialDraft = null,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [capiPending, setCapiPending] = useState(false);
-  const [policyPending, setPolicyPending] = useState(false);
+  const [policyEnsured, setPolicyEnsured] = useState(policyLaunchReady);
   const [suggestPending, setSuggestPending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [prepareElapsedSec, setPrepareElapsedSec] = useState(0);
+  const initialDraftPayload = initialDraft?.payload ?? null;
+  const startingDestinationUrl =
+    initialDraftPayload?.destinationUrl || initialDestinationUrl;
   const defaultFunnelHint = `${FUNNEL_SITE_URL}/f/`;
-  const initialFunnelIndex = initialDestinationUrl
+  const initialFunnelIndex = startingDestinationUrl
     ? funnelPurposeHints.findIndex(
         (hint) =>
           normalizedDestinationKey(hint.destinationUrl) ===
-          normalizedDestinationKey(initialDestinationUrl),
+          normalizedDestinationKey(startingDestinationUrl),
       )
     : -1;
   const [destinationUrl, setDestinationUrl] = useState(() => {
-    if (initialDestinationUrl) return initialDestinationUrl;
+    if (startingDestinationUrl) return startingDestinationUrl;
     const firstFunnel = funnelPurposeHints[0];
     if (firstFunnel) return firstFunnel.destinationUrl;
     const firstReady = readyCustomDomains[0];
@@ -367,7 +383,7 @@ export function LeadLaunchCanary({
   const [destinationMode, setDestinationMode] = useState<string>(() =>
     initialFunnelIndex >= 0
       ? `funnel:${initialFunnelIndex}`
-      : initialDestinationUrl
+      : startingDestinationUrl
       ? "manual"
       : funnelPurposeHints[0]
       ? "funnel:0"
@@ -375,7 +391,9 @@ export function LeadLaunchCanary({
         ? readyCustomDomains[0].id
         : "manual",
   );
-  const [adCategory, setAdCategory] = useState<FunnelAdCategory | "">("");
+  const [adCategory, setAdCategory] = useState<FunnelAdCategory | "">(
+    initialDraftPayload?.adCategory ?? "",
+  );
   const preloadedPurposeHint = useMemo(
     () => purposeHintForUrl(funnelPurposeHints, destinationUrl),
     [destinationUrl, funnelPurposeHints],
@@ -420,44 +438,77 @@ export function LeadLaunchCanary({
   const effectiveAdCategory = detectedPurposeHint?.category ?? adCategory;
   const suggestedCampaignName = `${detectedPurposeHint?.title || "Adbot Lead-Kampagne"} – ${effectiveAdCategory === "employment" ? "Recruiting" : "Meta Leads"}`;
   const [campaignNameOverride, setCampaignNameOverride] = useState<string | null>(
-    null,
+    initialDraftPayload?.campaignName ?? null,
   );
   const campaignName =
     campaignNameOverride === null
       ? suggestedCampaignName
       : campaignNameOverride.trim();
-  const [dailyBudget, setDailyBudget] = useState("20.00");
+  const [dailyBudget, setDailyBudget] = useState(
+    initialDraftPayload?.dailyBudget ?? "20.00",
+  );
   const [facebookPageId, setFacebookPageId] = useState(
-    initialFacebookPageId &&
-      facebookPages.some((page) => page.id === initialFacebookPageId)
+    initialDraftPayload?.facebookPageId &&
+      facebookPages.some((page) => page.id === initialDraftPayload.facebookPageId)
+      ? initialDraftPayload.facebookPageId
+      : initialFacebookPageId && facebookPages.some((page) => page.id === initialFacebookPageId)
       ? initialFacebookPageId
       : (facebookPages[0]?.id ?? ""),
   );
   const [instagramActorId, setInstagramActorId] = useState(
-    initialInstagramActorId &&
-      instagramAccounts.some((account) => account.id === initialInstagramActorId)
+    initialDraftPayload?.instagramActorId &&
+      instagramAccounts.some((account) => account.id === initialDraftPayload.instagramActorId)
+      ? initialDraftPayload.instagramActorId
+      : initialInstagramActorId && instagramAccounts.some((account) => account.id === initialInstagramActorId)
       ? initialInstagramActorId
       : (instagramAccounts[0]?.id ?? ""),
   );
-  const [primaryTexts, setPrimaryTexts] = useState<string[]>(["Jetzt mehr erfahren."]);
-  const [headlines, setHeadlines] = useState<string[]>(["Mehr erfahren"]);
-  const [descriptions, setDescriptions] = useState<string[]>([""]);
+  const [primaryTexts, setPrimaryTexts] = useState<string[]>(
+    initialDraftPayload?.primaryTexts ?? ["Jetzt mehr erfahren."],
+  );
+  const [headlines, setHeadlines] = useState<string[]>(
+    initialDraftPayload?.headlines ?? ["Mehr erfahren"],
+  );
+  const [descriptions, setDescriptions] = useState<string[]>(
+    initialDraftPayload?.descriptions ?? [""],
+  );
   const [structuralMode, setStructuralMode] = useState<
     "off" | "two_ads" | "two_ad_sets" | "funnel_split"
-  >("off");
+  >(initialDraftPayload?.structuralMode ?? "off");
   const structuralOn = structuralMode !== "off";
-  const [variantDestinationUrl, setVariantDestinationUrl] = useState("");
-  const [useMetaExperiment, setUseMetaExperiment] = useState(false);
+  const [variantDestinationUrl, setVariantDestinationUrl] = useState(
+    initialDraftPayload?.variantDestinationUrl ?? "",
+  );
+  const [useMetaExperiment, setUseMetaExperiment] = useState(
+    initialDraftPayload?.useMetaExperiment ?? false,
+  );
   const [pendingStudyPlanId, setPendingStudyPlanId] = useState<string | null>(
     null,
   );
-  const [dynamicCreativeImages, setDynamicCreativeImages] = useState(false);
-  const [includeFormatSiblings, setIncludeFormatSiblings] = useState(true);
-  const [extraAssetIds, setExtraAssetIds] = useState<string[]>([]);
-  const [ad2Primary, setAd2Primary] = useState("Jetzt mehr erfahren — Variante B.");
-  const [ad2Headline, setAd2Headline] = useState("Mehr erfahren");
-  const [ad2Description, setAd2Description] = useState("");
-  const [pixelRowId, setPixelRowId] = useState(data.pixels[0]?.id ?? "");
+  const [dynamicCreativeImages, setDynamicCreativeImages] = useState(
+    initialDraftPayload?.dynamicCreativeImages ?? false,
+  );
+  const [includeFormatSiblings, setIncludeFormatSiblings] = useState(
+    initialDraftPayload?.includeFormatSiblings ?? true,
+  );
+  const [extraAssetIds, setExtraAssetIds] = useState<string[]>(
+    initialDraftPayload?.extraAssetIds ?? [],
+  );
+  const [ad2Primary, setAd2Primary] = useState(
+    initialDraftPayload?.ad2Primary ?? "Jetzt mehr erfahren — Variante B.",
+  );
+  const [ad2Headline, setAd2Headline] = useState(
+    initialDraftPayload?.ad2Headline ?? "Mehr erfahren",
+  );
+  const [ad2Description, setAd2Description] = useState(
+    initialDraftPayload?.ad2Description ?? "",
+  );
+  const [pixelRowId, setPixelRowId] = useState(
+    initialDraftPayload?.pixelRowId &&
+      data.pixels.some((pixel) => pixel.id === initialDraftPayload.pixelRowId)
+      ? initialDraftPayload.pixelRowId
+      : (data.pixels[0]?.id ?? ""),
+  );
   const [pickerAssets, setPickerAssets] = useState<PickerAsset[]>(() =>
     data.brandAssets.map((asset) => ({
       id: asset.id,
@@ -467,7 +518,9 @@ export function LeadLaunchCanary({
       label: null,
     })),
   );
-  const [assetId, setAssetId] = useState(data.brandAssets[0]?.id ?? "");
+  const [assetId, setAssetId] = useState(
+    initialDraftPayload?.assetId ?? data.brandAssets[0]?.id ?? "",
+  );
   const libraryAssets: LaunchLibraryAsset[] = pickerAssets.map((asset) => {
     const fromDashboard = data.brandAssets.find((row) => row.id === asset.id);
     return {
@@ -496,7 +549,7 @@ export function LeadLaunchCanary({
   const needsAdAccountSelection =
     adAccounts.length > 1 && !adAccounts.some((account) => account.selectedForAds);
   const [performanceGoal, setPerformanceGoal] =
-    useState<LeadPerformanceGoal>("volume");
+    useState<LeadPerformanceGoal>(initialDraftPayload?.performanceGoal ?? "volume");
   const qualityCapiReady = canUseQualifiedLeadOptimization(selectedPixel);
   const funnelTracking = detectedPurposeHint?.metaTracking;
   const funnelTrackingReady =
@@ -514,11 +567,67 @@ export function LeadLaunchCanary({
   const prepareInFlight = pending && !heldPlan;
   const [launchSucceeded, setLaunchSucceeded] = useState(false);
 
+  const campaignDraftPayload = useMemo<MetaCampaignDraftPayload>(
+    () => ({
+      campaignName: campaignName || suggestedCampaignName,
+      destinationUrl,
+      adCategory: effectiveAdCategory,
+      dailyBudget,
+      facebookPageId,
+      instagramActorId,
+      primaryTexts,
+      headlines,
+      descriptions,
+      structuralMode,
+      variantDestinationUrl,
+      useMetaExperiment,
+      dynamicCreativeImages,
+      includeFormatSiblings,
+      assetId,
+      extraAssetIds,
+      ad2Primary,
+      ad2Headline,
+      ad2Description,
+      pixelRowId,
+      performanceGoal,
+      geo: campaignGeo,
+    }),
+    [
+      ad2Description,
+      ad2Headline,
+      ad2Primary,
+      assetId,
+      campaignGeo,
+      campaignName,
+      dailyBudget,
+      descriptions,
+      destinationUrl,
+      dynamicCreativeImages,
+      effectiveAdCategory,
+      extraAssetIds,
+      facebookPageId,
+      headlines,
+      includeFormatSiblings,
+      instagramActorId,
+      performanceGoal,
+      pixelRowId,
+      primaryTexts,
+      structuralMode,
+      suggestedCampaignName,
+      useMetaExperiment,
+      variantDestinationUrl,
+    ],
+  );
+  const campaignDraft = useCampaignDraftAutosave({
+    enabled: campaignDraftEnabled && !launchSucceeded,
+    initialDraft,
+    payload: campaignDraftPayload,
+  });
+
   const gates = useMemo(
     () => [
       { label: "Meta-Berechtigung", ready: writeScopeGranted },
       { label: "Währung EUR", ready: currency === "EUR" },
-      { label: "Kampagnenfreigabe", ready: policyLaunchReady },
       ...(adAccounts.length > 1
         ? [{ label: "Werbekonto gewählt", ready: !needsAdAccountSelection }]
         : []),
@@ -540,7 +649,6 @@ export function LeadLaunchCanary({
       needsAdAccountSelection,
       performanceGoal,
       pickerAssets.length,
-      policyLaunchReady,
       qualityCapiReady,
       selectedPixel,
       funnelTracking,
@@ -602,41 +710,23 @@ export function LeadLaunchCanary({
     }
   }
 
-  async function enableCampaignLaunch() {
-    setPolicyPending(true);
-    setNotice(null);
-    try {
-      await apiJson("POST", "/api/meta/automation/launch-policy", {
-        accountDailyHardCap: policyLimitInput(
-          launchPolicy.accountDailyHardCapMinor,
-          "100.00",
-        ),
-        campaignDailyHardCap: policyLimitInput(
-          launchPolicy.campaignDailyHardCapMinor,
-          "50.00",
-        ),
-        allowBudgetChanges: launchPolicy.allowBudgetChanges,
-        allowStatusChanges: true,
-        allowNewLaunches: true,
-        enableAutomation: true,
-      });
-      setNotice({
-        tone: "success",
-        message:
-          "Kampagnenstart freigegeben. Bestehende Budgetgrenzen und die bisherige Budget-Automatik bleiben unverändert.",
-      });
-      refresh();
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Der Kampagnenstart konnte nicht freigegeben werden.",
-      });
-    } finally {
-      setPolicyPending(false);
-    }
+  async function ensureCampaignLaunchPolicy() {
+    if (policyLaunchReady || policyEnsured) return;
+    await apiJson("POST", "/api/meta/automation/launch-policy", {
+      accountDailyHardCap: policyLimitInput(
+        launchPolicy.accountDailyHardCapMinor,
+        "100.00",
+      ),
+      campaignDailyHardCap: policyLimitInput(
+        launchPolicy.campaignDailyHardCapMinor,
+        "50.00",
+      ),
+      allowBudgetChanges: launchPolicy.allowBudgetChanges,
+      allowStatusChanges: true,
+      allowNewLaunches: true,
+      enableAutomation: true,
+    });
+    setPolicyEnsured(true);
   }
 
   useEffect(() => {
@@ -744,7 +834,7 @@ export function LeadLaunchCanary({
         parts.assetFeedSpec;
       (template.ad_set as Record<string, unknown>).is_dynamic_creative = true;
     }
-    const geo = await fetchCampaignGeoTarget();
+    const geo = campaignGeo ?? await fetchCampaignGeoTarget();
     if (employment) {
       template.campaign.special_ad_categories = ["EMPLOYMENT"];
       template.campaign.special_ad_category_country = [fallbackCountryCode(geo)];
@@ -832,7 +922,7 @@ export function LeadLaunchCanary({
     try {
       if (!gatesReady || !selectedPixel) {
         throw new Error(
-          "Bitte vervollständige zuerst Meta-Berechtigung, Kampagnenfreigabe, Pixel, Conversions API, Funnel-Tracking und Werbemittel.",
+          "Bitte vervollständige zuerst Meta-Berechtigung, Pixel, Conversions API, Funnel-Tracking und Werbemittel.",
         );
       }
       if (!assetId) {
@@ -864,6 +954,7 @@ export function LeadLaunchCanary({
       }
       // Do NOT freeze here: server prepare uses a transient FREEZE window and
       // restores Freigeben so Beitrag-Push AUTO is not stranded.
+      await ensureCampaignLaunchPolicy();
       const blueprintId = await ensureLeadBlueprint();
       const allowedDomainId = await ensureDomain(landing.hostname);
       const variantAllowedDomainId =
@@ -1046,6 +1137,7 @@ export function LeadLaunchCanary({
     setPending(true);
     setNotice(null);
     try {
+      await ensureCampaignLaunchPolicy();
       await ensureFreeze();
       const result = await apiJson<{
         planStatus?: string;
@@ -1106,20 +1198,28 @@ export function LeadLaunchCanary({
           tone: "error",
           message: `${result.executionWarning.trim()}${experimentNote}`,
         });
-      } else if (result.executorSucceeded === 1) {
-        setLaunchSucceeded(true);
-        setNotice({
-          tone: "success",
-          message:
-            `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}`,
-        });
       } else {
+        let draftWarning = "";
+        try {
+          await campaignDraft.markLaunched();
+        } catch {
+          draftWarning = " Der gestartete Entwurf konnte nicht aus der Entwurfsliste entfernt werden.";
+        }
+        if (result.executorSucceeded === 1) {
         setLaunchSucceeded(true);
         setNotice({
           tone: "success",
           message:
-            `Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.${experimentNote}`,
+            `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}${draftWarning}`,
         });
+        } else {
+          setLaunchSucceeded(true);
+          setNotice({
+            tone: "success",
+            message:
+              `Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.${experimentNote}${draftWarning}`,
+          });
+        }
       }
       refresh();
     } catch (error) {
@@ -1166,6 +1266,7 @@ export function LeadLaunchCanary({
   }
 
   function startAnotherLeadCampaign() {
+    campaignDraft.resetDraft();
     setLaunchSucceeded(false);
     setHeldPlan(null);
     setPendingStudyPlanId(null);
@@ -1199,6 +1300,22 @@ export function LeadLaunchCanary({
             Anzeigentexte und Budget. Pixel, Lead-Event und Anzeigenkategorie werden
             geprüft, bevor du die Kampagne startest.
           </p>
+          {campaignDraftEnabled ? (
+            <p
+              className={`mt-2 text-xs font-semibold ${
+                campaignDraft.state === "error" ? "text-rose-700" : "text-slate-500"
+              }`}
+              role="status"
+            >
+              {campaignDraft.state === "saving"
+                ? "Entwurf wird gespeichert …"
+                : campaignDraft.state === "error"
+                  ? "Automatisches Speichern fehlgeschlagen — bitte unten erneut speichern."
+                  : campaignDraft.state === "saved"
+                    ? "Entwurf gespeichert · Fortsetzung unter Kampagnen > Entwürfe"
+                    : "Änderungen werden automatisch als Entwurf gespeichert."}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -1269,30 +1386,6 @@ export function LeadLaunchCanary({
           </li>
         ))}
       </ul>
-
-      {!policyLaunchReady ? (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
-          <p className="font-extrabold">Kampagnenstart freigeben</p>
-          <p className="mt-1 max-w-3xl text-xs leading-5">
-            Erlaubt Adbot, diese von dir vorbereitete Kampagne nach der finalen
-            Bestätigung bei Meta anzulegen und zu aktivieren. Bestehende Konto- und
-            Kampagnenlimits sowie deine Budget-Automatik werden nicht verändert.
-          </p>
-          <button
-            className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-            disabled={policyPending || pending || !writeScopeGranted || currency !== "EUR"}
-            onClick={() => void enableCampaignLaunch()}
-            type="button"
-          >
-            {policyPending ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <ShieldCheck className="size-4" />
-            )}
-            {policyPending ? "Wird freigegeben …" : "Kampagnenstart jetzt freigeben"}
-          </button>
-        </div>
-      ) : null}
 
       <div className="mt-5 grid gap-3 lg:grid-cols-2">
         <div
@@ -2007,7 +2100,7 @@ export function LeadLaunchCanary({
             ) : (
               <PlayCircle className="size-4" />
             )}
-            {prepareInFlight ? "Bitte warten…" : "Kampagne vorbereiten"}
+            {prepareInFlight ? "Bitte warten…" : "Vorschau erstellen"}
           </button>
           <button
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
@@ -2018,6 +2111,31 @@ export function LeadLaunchCanary({
             <ImagePlus className="size-4" />
             Werbemittel wechseln
           </button>
+          {campaignDraftEnabled ? (
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+              disabled={pending || campaignDraft.state === "saving"}
+              onClick={() => {
+                void campaignDraft.saveNow().catch((error) => {
+                  setNotice({
+                    tone: "error",
+                    message:
+                      error instanceof Error
+                        ? error.message
+                        : "Der Entwurf konnte nicht gespeichert werden.",
+                  });
+                });
+              }}
+              type="button"
+            >
+              {campaignDraft.state === "saving" ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              Entwurf speichern
+            </button>
+          ) : null}
         </div>
       </form>
 

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { CampaignGeoTargetCard } from "@/components/CampaignGeoTargetCard";
+import { FunnelMetaCampaignWorkspace } from "@/components/FunnelMetaCampaignWorkspace";
 import { LeadLaunchCanary } from "@/components/LeadLaunchCanary";
 import { MetaPixelBinding } from "@/components/MetaPixelBinding";
 import {
@@ -14,6 +15,7 @@ import {
 import { listReadyCustomerCustomDomains } from "@/lib/custom-domains/service";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
+import { toMetaCampaignDraftView } from "@/lib/meta/campaign-draft";
 import {
   listFunnelPurposeHints,
   resolvePublicFunnelPurposeHint,
@@ -28,6 +30,7 @@ export const maxDuration = 300;
 type PageProps = {
   searchParams: Promise<{
     assetId?: string | string[];
+    draftId?: string | string[];
     funnelUrl?: string | string[];
     ideaId?: string | string[];
   }>;
@@ -36,7 +39,7 @@ type PageProps = {
 async function TrafficLaunchBody({
   query,
 }: {
-  query: { assetId?: string | string[]; funnelUrl?: string | string[]; ideaId?: string | string[] };
+  query: { assetId?: string | string[]; draftId?: string | string[]; funnelUrl?: string | string[]; ideaId?: string | string[] };
 }) {
   const supabase = await createClient();
   const {
@@ -47,11 +50,15 @@ async function TrafficLaunchBody({
     redirect("/login?next=/dashboard/traffic-launch");
   }
 
-  const initialFunnelUrl =
+  const requestedFunnelUrl =
     typeof query.funnelUrl === "string" &&
     query.funnelUrl.length <= 2_000 &&
     query.funnelUrl.startsWith("https://")
       ? query.funnelUrl
+      : null;
+  const requestedDraftId =
+    typeof query.draftId === "string" && /^[0-9a-f-]{36}$/i.test(query.draftId)
+      ? query.draftId
       : null;
 
   const ideaId =
@@ -93,6 +100,21 @@ async function TrafficLaunchBody({
     onboardingData,
     marketingCurrency,
   } = await loadCustomerDashboard(user, query, { sideEffects: false });
+
+  const { data: draftRow } = requestedDraftId && metaAccount
+    ? await supabase
+        .from("meta_campaign_drafts")
+        .select("id,campaign_name,destination_url,payload,revision,updated_at")
+        .eq("id", requestedDraftId)
+        .eq("user_id", user.id)
+        .eq("platform_account_id", metaAccount.id)
+        .eq("status", "DRAFT")
+        .maybeSingle()
+    : { data: null };
+  const initialDraft = draftRow
+    ? toMetaCampaignDraftView(draftRow as Record<string, unknown>)
+    : null;
+  const initialFunnelUrl = initialDraft?.destinationUrl ?? requestedFunnelUrl;
 
   const [readyCustomDomains, storedFunnelPurposeHints, initialFunnelPurposeHint] =
     await Promise.all([
@@ -144,7 +166,7 @@ async function TrafficLaunchBody({
       {onboardingData.pixels.length === 0 ? (
         <MetaPixelBinding pixels={onboardingData.pixels} standalone />
       ) : null}
-      <CampaignGeoTargetCard compact />
+      {!initialFunnelUrl ? <CampaignGeoTargetCard compact /> : null}
       {!initialFunnelUrl ? (
         <TrafficLaunchCanary
           brandProfileId={brandProfileView?.id ?? null}
@@ -188,7 +210,8 @@ async function TrafficLaunchBody({
           writeScopeGranted={writeScopeGranted}
         />
       ) : null}
-      <LeadLaunchCanary
+      {initialFunnelUrl ? (
+      <FunnelMetaCampaignWorkspace
         adAccounts={adAccountPickerOptions}
         brandProfileId={brandProfileView?.id ?? null}
         currency={marketingCurrency}
@@ -196,6 +219,7 @@ async function TrafficLaunchBody({
         facebookPages={launchFacebookPages}
         instagramAccounts={launchInstagramAccounts}
         initialDestinationUrl={initialFunnelUrl}
+        initialDraft={initialDraft}
         initialFacebookPageId={brandProfileView?.facebookPageId}
         initialInstagramActorId={brandProfileView?.instagramActorId}
         killSwitchMode={killSwitchView?.mode ?? "FREEZE_WRITES"}
@@ -209,6 +233,28 @@ async function TrafficLaunchBody({
         funnelPurposeHints={funnelPurposeHints}
         writeScopeGranted={writeScopeGranted}
       />
+      ) : (
+      <LeadLaunchCanary
+        adAccounts={adAccountPickerOptions}
+        brandProfileId={brandProfileView?.id ?? null}
+        currency={marketingCurrency}
+        data={onboardingData}
+        facebookPages={launchFacebookPages}
+        instagramAccounts={launchInstagramAccounts}
+        initialFacebookPageId={brandProfileView?.facebookPageId}
+        initialInstagramActorId={brandProfileView?.instagramActorId}
+        killSwitchMode={killSwitchView?.mode ?? "FREEZE_WRITES"}
+        launchPolicy={{
+          accountDailyHardCapMinor: policyView?.accountDailyHardCapMinor ?? null,
+          campaignDailyHardCapMinor: policyView?.campaignDailyHardCapMinor ?? null,
+          allowBudgetChanges: policyView?.allowBudgetChanges ?? false,
+        }}
+        policyLaunchReady={policyLaunchReady}
+        readyCustomDomains={readyCustomDomains}
+        funnelPurposeHints={funnelPurposeHints}
+        writeScopeGranted={writeScopeGranted}
+      />
+      )}
     </div>
   );
 }
@@ -217,7 +263,8 @@ export default async function TrafficLaunchPage({ searchParams }: PageProps) {
   const query = await searchParams;
   const copy = DASHBOARD_PAGE_COPY.trafficLaunch;
   const funnelCampaign =
-    typeof query.funnelUrl === "string" && query.funnelUrl.startsWith("https://");
+    (typeof query.funnelUrl === "string" && query.funnelUrl.startsWith("https://")) ||
+    (typeof query.draftId === "string" && /^[0-9a-f-]{36}$/i.test(query.draftId));
   return (
     <>
       <DashboardPageHeader

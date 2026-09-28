@@ -60,7 +60,7 @@ import type { ConnectionPixel } from "@/lib/meta/conversions-api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-type MetaCustomer = {
+export type MetaCustomer = {
   userId: string;
   platformAccountId: string;
   accountName: string | null;

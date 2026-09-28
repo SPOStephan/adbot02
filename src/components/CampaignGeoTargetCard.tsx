@@ -15,19 +15,23 @@ import { effectiveRadiusKm } from "@/lib/campaign-geo/adapters";
 
 type Props = {
   compact?: boolean;
+  initialGeo?: CampaignGeoTarget | null;
   onSaved?: (geo: CampaignGeoTarget | null) => void;
 };
 
-export function CampaignGeoTargetCard({ compact = false, onSaved }: Props) {
-  const [geo, setGeo] = useState<CampaignGeoTarget | null>(null);
+export function CampaignGeoTargetCard({ compact = false, initialGeo, onSaved }: Props) {
+  const [geo, setGeo] = useState<CampaignGeoTarget | null>(initialGeo ?? null);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<CampaignGeoSearchHit[]>([]);
-  const [radiusDraft, setRadiusDraft] = useState("");
+  const [radiusDraft, setRadiusDraft] = useState(
+    initialGeo?.radiusKm != null ? String(initialGeo.radiusKm) : "",
+  );
   const [pending, setPending] = useState(false);
   const [searching, setSearching] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    if (initialGeo !== undefined) return;
     let cancelled = false;
     void (async () => {
       const response = await fetch("/api/campaign-geo", { cache: "no-store" });
@@ -44,7 +48,7 @@ export function CampaignGeoTargetCard({ compact = false, onSaved }: Props) {
     };
     // Initial load only; parent callbacks must not retrigger the fetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialGeo]);
 
   async function searchPlaces() {
     if (query.trim().length < 2) return;
