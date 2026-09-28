@@ -68,6 +68,16 @@ assert.match(traffic, /Festes Meta-Optimierungsziel: Landingpage-Aufrufe/);
 assert.match(traffic, /funnelPurposeHint\?\.category === "employment"/);
 assert.match(traffic, /special_ad_categories = \["EMPLOYMENT"\]/);
 assert.match(traffic, /toMetaEmploymentAdSetTargeting\(geo\)/);
+// Same multi-format creative picker as the lead campaign (up to 10 motifs).
+assert.match(traffic, /<CreativePickerModal[\s\S]*?multiSelect[\s\S]*?selectedAssetIds=\{pickerSelectedAssetIds\}/);
+assert.match(traffic, /onSelectionChange=\{applyCreativeSelection\}/);
+assert.match(traffic, /<SelectedCreativesByFormat/);
+const byFormat = read("src/components/SelectedCreativesByFormat.tsx");
+assert.match(byFormat, /META_FORMAT_SLOTS\.map/);
+assert.match(byFormat, /\/api\/media-library\/preview\?assetId=/);
+const dynamicField = read("src/components/DynamicCreativeImagesField.tsx");
+assert.match(dynamicField, /\/api\/media-library\/preview\?assetId=/);
+assert.match(dynamicField, /formatLabelForDimensions/);
 
 const launchPage = read("src/app/dashboard/traffic-launch/page.tsx");
 assert.match(launchPage, /query\.campaignGoal === "landing-page-views"/);

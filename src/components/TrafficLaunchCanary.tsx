@@ -22,6 +22,7 @@ import {
 } from "@/components/CreativePickerModal";
 import { CreativeTextVariantFields } from "@/components/CreativeTextVariantFields";
 import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
+import { SelectedCreativesByFormat } from "@/components/SelectedCreativesByFormat";
 import {
   fallbackCountryCode,
   toMetaEmploymentAdSetTargeting,
@@ -32,6 +33,8 @@ import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
 import type { FunnelPurposeHint } from "@/lib/funnel-purpose-hint-types";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 import {
+  MAX_DYNAMIC_CREATIVE_IMAGES,
+  normalizeLaunchAssetIds,
   resolveDynamicCreativeAssetIds,
   type LaunchLibraryAsset,
 } from "@/lib/meta/creative-image-variants";
@@ -364,6 +367,16 @@ export function TrafficLaunchCanary({
     library: libraryAssets,
     includeFormatSiblings: dynamicCreativeImages && includeFormatSiblings,
   });
+  const pickerSelectedAssetIds = normalizeLaunchAssetIds(
+    [assetId, ...extraAssetIds],
+    { max: MAX_DYNAMIC_CREATIVE_IMAGES },
+  );
+  function applyCreativeSelection(ids: string[]) {
+    setAssetId(ids[0] ?? "");
+    setExtraAssetIds(ids.slice(1));
+    setDynamicCreativeImages(ids.length > 1);
+    if (ids.length > 1) setStructuralMode("off");
+  }
   const selectedAsset =
     pickerAssets.find((asset) => asset.id === assetId) ?? null;
   const [heldPlan, setHeldPlan] = useState<HeldPlan | null>(() => {
@@ -1083,8 +1096,8 @@ export function TrafficLaunchCanary({
             </select>
           </label>
         ) : null}
-        <div className="text-sm font-bold text-slate-800">
-          Creative
+        <div className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Werbemittel
           <button
             className="mt-2 flex w-full items-center gap-3 rounded-xl border border-slate-300 bg-white p-3 text-left transition hover:border-blue-400 hover:bg-slate-50 disabled:opacity-50"
             disabled={pending}
@@ -1107,17 +1120,30 @@ export function TrafficLaunchCanary({
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-extrabold text-slate-950">
-                {selectedAsset
-                  ? selectedAsset.originalFilename
-                  : "Creative wählen oder hochladen"}
+                {pickerSelectedAssetIds.length > 1
+                  ? `${pickerSelectedAssetIds.length} Werbemittel ausgewählt`
+                  : selectedAsset
+                    ? selectedAsset.originalFilename
+                    : "Werbemittel wählen oder hochladen"}
               </span>
-              {selectedAsset?.width && selectedAsset?.height ? (
-                <span className="mt-1 block text-xs font-medium text-slate-500">
-                  {selectedAsset.width}×{selectedAsset.height}
-                </span>
-              ) : null}
+              <span className="mt-1 block text-xs font-medium text-slate-500">
+                {`Bis zu ${MAX_DYNAMIC_CREATIVE_IMAGES} Motive in den Formaten 1:1, 4:5 und 9:16 · Meta optimiert die Ausspielung`}
+              </span>
             </span>
           </button>
+          {pickerSelectedAssetIds.length > 0 ? (
+            <SelectedCreativesByFormat
+              assets={libraryAssets}
+              disabled={pending || Boolean(heldPlan)}
+              onOpenPicker={() => setPickerOpen(true)}
+              onRemove={(id) =>
+                applyCreativeSelection(
+                  pickerSelectedAssetIds.filter((selectedId) => selectedId !== id),
+                )
+              }
+              selectedIds={pickerSelectedAssetIds}
+            />
+          ) : null}
         </div>
         <label className="text-sm font-bold text-slate-800">
           Tagesbudget (EUR)
@@ -1513,9 +1539,12 @@ export function TrafficLaunchCanary({
       <CreativePickerModal
         assets={pickerAssets}
         brandProfileId={brandProfileId}
+        maxSelected={MAX_DYNAMIC_CREATIVE_IMAGES}
+        multiSelect
         onClose={() => setPickerOpen(false)}
         onSelect={(id) => setAssetId(id)}
-        onUploaded={({ preferredLaunchAssetId, assets }) => {
+        onSelectionChange={applyCreativeSelection}
+        onUploaded={({ assets }) => {
           setPickerAssets((previous) => {
             const map = new Map(previous.map((asset) => [asset.id, asset]));
             for (const asset of assets) {
@@ -1523,12 +1552,12 @@ export function TrafficLaunchCanary({
             }
             return [...map.values()];
           });
-          setAssetId(preferredLaunchAssetId);
           // Soft refresh so Control Center / Media Library stay in sync.
           refresh();
         }}
         open={pickerOpen}
         selectedAssetId={assetId || null}
+        selectedAssetIds={pickerSelectedAssetIds}
       />
 
       {heldPlan ? (

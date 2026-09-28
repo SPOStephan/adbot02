@@ -1,5 +1,6 @@
 "use client";
 
+import { formatLabelForDimensions } from "@/lib/media-library/meta-formats";
 import {
   MAX_DYNAMIC_CREATIVE_IMAGES,
   normalizeLaunchAssetIds,
@@ -106,8 +107,23 @@ export function DynamicCreativeImagesField({
                       }}
                       type="checkbox"
                     />
-                    <span className="min-w-0 truncate">
-                      {asset.originalFilename?.trim() || "Motiv"}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      alt=""
+                      className="size-12 shrink-0 rounded-md bg-slate-100 object-cover ring-1 ring-slate-200"
+                      loading="lazy"
+                      src={`/api/media-library/preview?assetId=${asset.id}`}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate">
+                        {asset.originalFilename?.trim() || "Motiv"}
+                      </span>
+                      <span className="block text-xs font-medium text-slate-500">
+                        {formatLabelForDimensions(asset.width, asset.height) ??
+                          (asset.width && asset.height
+                            ? `${asset.width}×${asset.height}`
+                            : "Format unbekannt")}
+                      </span>
                     </span>
                   </label>
                 );
