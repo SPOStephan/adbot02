@@ -3,6 +3,48 @@ const META_STANDARD_DAILY_RESERVE_MULTIPLIER = 1.75;
 export const LAUNCH_BUDGET_CAP_MESSAGE =
   "Das Tagesbudget liegt über dem aktuell freigegebenen Tageslimit.";
 
+export type LaunchBudgetCapFailure = {
+  code:
+    | "launch_campaign_budget_cap_exceeded"
+    | "launch_account_budget_cap_exceeded";
+  message: string;
+};
+
+function formatMinorEuro(value: string): string {
+  const minor = Number(value);
+  if (!Number.isSafeInteger(minor) || minor < 0) return "–";
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+  }).format(minor / 100);
+}
+
+export function classifyLaunchBudgetCapFailure(
+  raw: string,
+): LaunchBudgetCapFailure | null {
+  const campaignMatch = raw.match(
+    /Campaign daily hard cap would be exceeded \(reserved (\d+) \/ cap (\d+) minor units\)/i,
+  );
+  if (campaignMatch) {
+    return {
+      code: "launch_campaign_budget_cap_exceeded",
+      message: `Für diesen Kampagnenstart sind einschließlich Metas Tagesflex ${formatMinorEuro(campaignMatch[1])} freizugeben; das aktuelle Kampagnen-Tageslimit beträgt ${formatMinorEuro(campaignMatch[2])}. Das eingegebene Tagesbudget selbst bleibt unverändert.`,
+    };
+  }
+
+  const accountMatch = raw.match(
+    /Account daily hard cap would be exceeded \(reserved (\d+) \/ cap (\d+) minor units\)/i,
+  );
+  if (accountMatch) {
+    return {
+      code: "launch_account_budget_cap_exceeded",
+      message: `Zusammen mit bereits aktiven oder vorbereiteten Kampagnen wären bis zu ${formatMinorEuro(accountMatch[1])} pro Tag reserviert; das Konto-Tageslimit beträgt ${formatMinorEuro(accountMatch[2])}. Das Tagesbudget dieser Kampagne ist nicht allein zu hoch.`,
+    };
+  }
+
+  return null;
+}
+
 function parseEuroInputToMinor(value: string): number | null {
   const normalized = value.trim().replace(",", ".");
   if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;

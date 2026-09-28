@@ -16,9 +16,11 @@ const helperUrl = `data:text/javascript;base64,${Buffer.from(
     },
   }).outputText,
 ).toString("base64")}`;
-const { LAUNCH_BUDGET_CAP_MESSAGE, suggestLaunchPolicyLimits } = await import(
-  helperUrl
-);
+const {
+  classifyLaunchBudgetCapFailure,
+  LAUNCH_BUDGET_CAP_MESSAGE,
+  suggestLaunchPolicyLimits,
+} = await import(helperUrl);
 
 assert.equal(
   LAUNCH_BUDGET_CAP_MESSAGE,
@@ -57,15 +59,41 @@ assert.equal(
   null,
 );
 
+const campaignCapFailure = classifyLaunchBudgetCapFailure(
+  "Campaign daily hard cap would be exceeded (reserved 8750 / cap 5000 minor units)",
+);
+assert.equal(campaignCapFailure?.code, "launch_campaign_budget_cap_exceeded");
+assert.match(campaignCapFailure?.message ?? "", /87,50\s*€/);
+assert.match(campaignCapFailure?.message ?? "", /50,00\s*€/);
+assert.doesNotMatch(campaignCapFailure?.message ?? "", /hard cap|minor units/i);
+
+const accountCapFailure = classifyLaunchBudgetCapFailure(
+  "Account daily hard cap would be exceeded (reserved 43750 / cap 40000 minor units)",
+);
+assert.equal(accountCapFailure?.code, "launch_account_budget_cap_exceeded");
+assert.match(accountCapFailure?.message ?? "", /437,50\s*€/);
+assert.match(accountCapFailure?.message ?? "", /400,00\s*€/);
+assert.match(accountCapFailure?.message ?? "", /nicht allein zu hoch/);
+assert.equal(classifyLaunchBudgetCapFailure("anderer Fehler"), null);
+
 const lead = await readFile(
   join(root, "src/components/LeadLaunchCanary.tsx"),
   "utf8",
 );
 assert.match(lead, /action: "adjust_budget_cap"/);
 assert.match(lead, /Tageslimit direkt anpassen/);
-assert.match(lead, /Limit speichern und Vorschau erneut erstellen/);
-assert.match(lead, /campaignFormRef\.current\?\.requestSubmit\(\)/);
+assert.match(lead, /Limit speichern und Kampagne erneut starten/);
+assert.match(lead, /await startCampaign\(\)/);
 assert.match(lead, /Das geplante Tagesbudget selbst bleibt unverändert/);
+assert.match(lead, /Dabei wird kein Budget reserviert und nichts an Meta übertragen/);
+assert.match(lead, /onSubmit=\{showAdPreview\}/);
+const localPreviewFlow = lead.slice(
+  lead.indexOf("function showAdPreview"),
+  lead.indexOf("async function startCampaign"),
+);
+assert.ok(localPreviewFlow.length > 0);
+assert.doesNotMatch(localPreviewFlow, /apiJson\(|ensureCampaignLaunchPolicy/);
+assert.match(localPreviewFlow, /setPreviewRequested\(true\)/);
 assert.match(lead, /budgetNoticeRef\.current\?\.scrollIntoView\(\{/);
 assert.match(lead, /behavior: "smooth"/);
 assert.match(lead, /block: "center"/);
@@ -77,6 +105,8 @@ const service = await readFile(
   "utf8",
 );
 assert.doesNotMatch(service, /Technik:/);
+assert.match(service, /classifyLaunchBudgetCapFailure\(/);
+assert.match(service, /serviceError\(budgetFailure\.code, 409, budgetFailure\.message\)/);
 assert.match(
   service,
   /function withLaunchFailureDetail\(message: string, _error: unknown\): string \{\s*return message;/,
