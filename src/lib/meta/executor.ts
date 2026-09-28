@@ -1315,13 +1315,24 @@ async function loadVerifiedBrandAsset(input: {
   };
 }
 
-export function createMetaMutationExecutorDependencies(): MetaMutationExecutorDependencies {
+export function createMetaMutationExecutorDependencies(options: {
+  planId?: string;
+} = {}): MetaMutationExecutorDependencies {
+  const planId = options.planId ? requiredUuid(options.planId) : null;
   return {
     async claim(workerId, leaseSeconds) {
-      return parseClaim(await rpcData("claim_next_meta_mutation_execution", {
-        p_worker_id: workerId,
-        p_lease_seconds: leaseSeconds,
-      }));
+      return parseClaim(
+        planId
+          ? await rpcData("claim_meta_mutation_execution_for_plan", {
+              p_plan_id: planId,
+              p_worker_id: workerId,
+              p_lease_seconds: leaseSeconds,
+            })
+          : await rpcData("claim_next_meta_mutation_execution", {
+              p_worker_id: workerId,
+              p_lease_seconds: leaseSeconds,
+            }),
+      );
     },
     async heartbeat(executionId, leaseToken, leaseSeconds) {
       const data = await rpcData("heartbeat_meta_mutation_execution", {
@@ -1487,5 +1498,15 @@ export async function processNextMetaMutation(
   return runMetaMutationExecutorOnce({
     workerId,
     dependencies: createMetaMutationExecutorDependencies(),
+  });
+}
+
+export async function processMetaMutationPlan(
+  planId: string,
+  workerId: string,
+): Promise<MetaExecutorRunResult> {
+  return runMetaMutationExecutorOnce({
+    workerId,
+    dependencies: createMetaMutationExecutorDependencies({ planId }),
   });
 }

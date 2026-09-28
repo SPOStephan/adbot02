@@ -17,8 +17,8 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-/** May auto-run Meta marketing Abruf + snapshot ensure during prepare. */
-export const maxDuration = 180;
+/** Prepare plus targeted Meta campaign/ad-set/creative/ad execution. */
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {

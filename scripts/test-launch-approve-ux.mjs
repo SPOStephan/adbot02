@@ -13,6 +13,7 @@ assert.match(serviceSource, /function launchApprovalFailureMessage/);
 assert.match(serviceSource, /exclusive idle account/);
 assert.match(serviceSource, /ensureFreezeWritesForLaunch\(customer\)/);
 assert.match(serviceSource, /drainApprovedLaunchChainForAccount/);
+assert.match(serviceSource, /launch_execution_incomplete/);
 assert.match(
   serviceSource,
   /withLaunchFailureDetail\(launchApprovalFailureMessage\(error\), error\)/,
@@ -79,6 +80,9 @@ assert.match(lead, /CreativeTextVariantFields/);
 assert.match(lead, /primaryTexts/);
 assert.match(lead, /Weitere Lead-Kampagne starten/);
 assert.match(lead, /PROTOCOL_APPROVE_REASON/);
+assert.match(lead, /result\.executorSucceeded !== 1/);
+assert.doesNotMatch(lead, /Kampagne freigegeben\. Adbot legt sie bei Meta an/);
+assert.doesNotMatch(lead, /result\.executionWarning/);
 assert.doesNotMatch(lead, /Freigabe-Begründung/);
 assert.doesNotMatch(lead, /approveReason/);
 assert.match(
