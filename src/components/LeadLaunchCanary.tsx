@@ -715,7 +715,10 @@ export function LeadLaunchCanary({
     return null;
   });
   const launchInFlight = pending && !heldPlan;
-  const [launchSucceeded, setLaunchSucceeded] = useState(false);
+  const [launchState, setLaunchState] = useState<"IDLE" | "QUEUED" | "ACTIVE">(
+    "IDLE",
+  );
+  const launchSucceeded = launchState !== "IDLE";
 
   const campaignDraftPayload = useMemo<MetaCampaignDraftPayload>(
     () => ({
@@ -1403,7 +1406,7 @@ export function LeadLaunchCanary({
     const result = await apiJson<{
       planStatus?: string;
       approvalId?: string;
-      executorSucceeded?: number;
+      executionState?: "ACTIVE" | "QUEUED";
     }>("PUT", "/api/meta/automation/launch", {
       planId: plan.id,
       payloadHash: plan.payloadHash,
@@ -1423,7 +1426,7 @@ export function LeadLaunchCanary({
     if (
       !result.approvalId ||
       result.planStatus !== "PENDING" ||
-      result.executorSucceeded !== 1
+      (result.executionState !== "ACTIVE" && result.executionState !== "QUEUED")
     ) {
       throw new Error(
         "Der vollständige Meta-Start wurde vom Server nicht bestätigt. Derselbe Startplan bleibt gespeichert.",
@@ -1456,11 +1459,13 @@ export function LeadLaunchCanary({
     } catch {
       draftWarning = " Der gestartete Entwurf konnte nicht aus der Entwurfsliste entfernt werden.";
     }
-    setLaunchSucceeded(true);
+    setLaunchState(result.executionState);
     setNotice({
       tone: "success",
       message:
-        `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}${draftWarning}`,
+        result.executionState === "ACTIVE"
+          ? `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}${draftWarning}`
+          : `Kampagnenstart angenommen. Adbot arbeitet den Auftrag automatisch in der internen Warteschlange ab und aktiviert ihn anschließend bei Meta. Kein weiterer Klick nötig.${experimentNote}${draftWarning}`,
     });
     refresh();
   }
@@ -1516,7 +1521,7 @@ export function LeadLaunchCanary({
 
   function startAnotherLeadCampaign() {
     campaignDraft.resetDraft();
-    setLaunchSucceeded(false);
+    setLaunchState("IDLE");
     setHeldPlan(null);
     setPreviewRequested(false);
     setPendingStudyPlanId(null);
@@ -1737,12 +1742,16 @@ export function LeadLaunchCanary({
             </span>
             <div className="min-w-0 flex-1">
               <h3 className="text-lg font-extrabold text-emerald-950">
-                Erledigt — Kampagne ist live
+                {launchState === "ACTIVE"
+                  ? "Erledigt — Kampagne ist live"
+                  : "Kampagnenstart angenommen — automatische Ausführung läuft"}
               </h3>
               <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
                 {notice?.tone === "success"
                   ? notice.message
-                  : "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."}
+                  : launchState === "ACTIVE"
+                    ? "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."
+                    : "Adbot arbeitet den Auftrag automatisch ab. Kein weiterer Klick nötig."}
               </p>
               {pendingStudyPlanId ? (
                 <button

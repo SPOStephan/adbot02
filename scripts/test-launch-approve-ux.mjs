@@ -13,7 +13,13 @@ assert.match(serviceSource, /function launchApprovalFailureMessage/);
 assert.match(serviceSource, /exclusive idle account/);
 assert.match(serviceSource, /ensureFreezeWritesForLaunch\(customer\)/);
 assert.match(serviceSource, /drainApprovedLaunchChainForAccount/);
-assert.match(serviceSource, /launch_execution_incomplete/);
+assert.match(serviceSource, /executionState: "ACTIVE" \| "QUEUED"/);
+assert.match(
+  serviceSource,
+  /executionState = drain\.succeeded \? "ACTIVE" : "QUEUED"/,
+);
+assert.doesNotMatch(serviceSource, /launch_execution_incomplete/);
+assert.doesNotMatch(serviceSource, /Beitrag-Push fertig werden lassen/);
 assert.match(
   serviceSource,
   /withLaunchFailureDetail\(launchApprovalFailureMessage\(error\), error\)/,
@@ -23,26 +29,69 @@ assert.doesNotMatch(
   /Der Aktiv-Launch ist nicht mehr exakt ausführbar\. Bitte Plan, Fingerprint, FREEZE_WRITES/,
 );
 
-const migration = await readFile(
+const formerExclusiveMigration = await readFile(
   join(
     root,
     "supabase/migrations/20260817190000_launch_approve_exclusive_idle_held.sql",
   ),
   "utf8",
 );
-assert.match(migration, /meta_launch_account_blocks_exclusive_approve/);
-assert.match(migration, /not_before, '-infinity'::timestamptz\) <= p_as_of/);
 assert.match(
-  migration,
+  formerExclusiveMigration,
+  /meta_launch_account_blocks_exclusive_approve/,
+);
+assert.match(
+  formerExclusiveMigration,
+  /not_before, '-infinity'::timestamptz\) <= p_as_of/,
+);
+assert.match(
+  formerExclusiveMigration,
   /if public\.meta_launch_account_blocks_exclusive_approve/,
 );
-assert.equal(
-  (
-    migration.match(
-      /other\.status in \(\s*'PENDING', 'RETRYABLE', 'CLAIMED'/g,
-    ) ?? []
-  ).length,
-  0,
+
+const queueMigration = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928112000_meta_launch_approval_accepts_queue.sql",
+  ),
+  "utf8",
+);
+assert.match(queueMigration, /meta_launch_account_blocks_exclusive_approve/);
+assert.match(queueMigration, /select false/);
+assert.match(queueMigration, /cleanup_stale_meta_customer_launches/);
+assert.match(queueMigration, /meta_launch_canary_approvals approval/);
+assert.match(queueMigration, /mutation_executions execution/);
+assert.match(queueMigration, /remote_object_bindings binding/);
+assert.match(queueMigration, /step\.dispatch_state <> 'NOT_DISPATCHED'/);
+assert.match(queueMigration, /'infinity'::timestamptz/);
+assert.match(queueMigration, /customer_requested_clean_restart/);
+
+const maintenance = await readFile(
+  join(root, "src/lib/meta/launch-maintenance.ts"),
+  "utf8",
+);
+assert.match(maintenance, /cleanup_stale_meta_customer_launches/);
+assert.match(maintenance, /p_min_age_seconds: 7200/);
+
+const maintenanceRoute = await readFile(
+  join(root, "src/app/api/cron/meta-launch-maintenance/route.ts"),
+  "utf8",
+);
+assert.match(maintenanceRoute, /getCronAuthEnv/);
+assert.match(maintenanceRoute, /constantTimeEqual/);
+assert.match(maintenanceRoute, /runMetaLaunchMaintenance/);
+
+const vercelConfig = JSON.parse(
+  await readFile(join(root, "vercel.json"), "utf8"),
+);
+assert.deepEqual(
+  vercelConfig.crons.find(
+    (cron) => cron.path === "/api/cron/meta-launch-maintenance",
+  ),
+  {
+    path: "/api/cron/meta-launch-maintenance",
+    schedule: "17 */4 * * *",
+  },
 );
 
 const traffic = await readFile(
@@ -56,6 +105,15 @@ assert.match(traffic, /\/api\/media-library\/preview\?assetId=/);
 assert.match(traffic, /notice && !heldPlan/);
 assert.match(traffic, /Weitere Traffic-Kampagne starten/);
 assert.match(traffic, /Erledigt — Kampagne ist live/);
+assert.match(
+  traffic,
+  /executionState !== "ACTIVE" && result\.executionState !== "QUEUED"/,
+);
+assert.match(
+  traffic,
+  /Kampagnenstart angenommen — automatische Ausführung läuft/,
+);
+assert.match(traffic, /Kein weiterer Klick nötig/);
 assert.match(traffic, /PROTOCOL_APPROVE_REASON/);
 assert.match(traffic, /launchSucceeded/);
 assert.match(traffic, /CreativeTextVariantFields/);
@@ -80,7 +138,15 @@ assert.match(lead, /CreativeTextVariantFields/);
 assert.match(lead, /primaryTexts/);
 assert.match(lead, /Weitere Lead-Kampagne starten/);
 assert.match(lead, /PROTOCOL_APPROVE_REASON/);
-assert.match(lead, /result\.executorSucceeded !== 1/);
+assert.match(
+  lead,
+  /executionState !== "ACTIVE" && result\.executionState !== "QUEUED"/,
+);
+assert.match(
+  lead,
+  /Kampagnenstart angenommen — automatische Ausführung läuft/,
+);
+assert.match(lead, /Kein weiterer Klick nötig/);
 assert.doesNotMatch(lead, /Kampagne freigegeben\. Adbot legt sie bei Meta an/);
 assert.doesNotMatch(lead, /result\.executionWarning/);
 assert.doesNotMatch(lead, /Freigabe-Begründung/);
@@ -104,4 +170,4 @@ const dashboard = await readFile(
 assert.match(dashboard, /copyField\("message"\)/);
 assert.match(dashboard, /intended_after/);
 
-console.log("Launch approve UX contract tests passed.");
+console.log("Launch approve queue UX contract tests passed.");

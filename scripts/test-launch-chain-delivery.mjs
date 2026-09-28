@@ -31,7 +31,7 @@ const traffic = await readFile(
   "utf8",
 );
 assert.match(traffic, /destination_type: "WEBSITE"/);
-assert.match(traffic, /executionWarning/);
+assert.match(traffic, /executionState/);
 assert.match(traffic, /executorSucceeded === 1/);
 
 const execute = await readFile(
@@ -69,8 +69,9 @@ const service = await readFile(
   "utf8",
 );
 assert.match(service, /drainApprovedLaunchChainForAccount/);
-assert.match(service, /executionWarning/);
-assert.match(service, /launch_execution_incomplete/);
+assert.match(service, /executionState: "ACTIVE" \| "QUEUED"/);
+assert.match(service, /terminalExecutionFailure/);
+assert.doesNotMatch(service, /launch_execution_incomplete/);
 
 const route = await readFile(
   join(root, "src/app/api/meta/automation/launch/route.ts"),

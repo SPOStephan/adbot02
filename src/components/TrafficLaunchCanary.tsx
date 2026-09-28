@@ -369,7 +369,10 @@ export function TrafficLaunchCanary({
     return null;
   });
   const prepareInFlight = pending && !heldPlan;
-  const [launchSucceeded, setLaunchSucceeded] = useState(false);
+  const [launchState, setLaunchState] = useState<"IDLE" | "QUEUED" | "ACTIVE">(
+    "IDLE",
+  );
+  const launchSucceeded = launchState !== "IDLE";
 
   const gates = useMemo(
     () => [
@@ -778,9 +781,9 @@ export function TrafficLaunchCanary({
       const result = await apiJson<{
         planStatus?: string;
         approvalId?: string;
-        executionWarning?: string | null;
         executionPlanStatus?: string | null;
         executorSucceeded?: number;
+        executionState?: "ACTIVE" | "QUEUED";
       }>("PUT", "/api/meta/automation/launch", {
         planId: heldPlan.id,
         payloadHash: heldPlan.payloadHash,
@@ -797,7 +800,11 @@ export function TrafficLaunchCanary({
         reason: PROTOCOL_APPROVE_REASON,
         confirmation: "AKTIV-LAUNCH FREIGEBEN",
       });
-      if (!result.approvalId || result.planStatus !== "PENDING") {
+      if (
+        !result.approvalId ||
+        result.planStatus !== "PENDING" ||
+        (result.executionState !== "ACTIVE" && result.executionState !== "QUEUED")
+      ) {
         throw new Error("Freigabe wurde vom Server nicht bestätigt.");
       }
       const studyPlanId = heldPlan.useMetaExperiment ? heldPlan.id : null;
@@ -826,28 +833,19 @@ export function TrafficLaunchCanary({
             " Meta-Experiment folgt, sobald beide Ad Sets bei Meta stehen — Button unten.";
         }
       }
-      if (
-        typeof result.executionWarning === "string" &&
-        result.executionWarning.trim()
-      ) {
-        setLaunchSucceeded(false);
-        setNotice({
-          tone: "error",
-          message: `${result.executionWarning.trim()}${experimentNote}`,
-        });
-      } else if (result.executorSucceeded === 1) {
-        setLaunchSucceeded(true);
+      if (result.executionState === "ACTIVE") {
+        setLaunchState("ACTIVE");
         setNotice({
           tone: "success",
           message:
             `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}`,
         });
       } else {
-        setLaunchSucceeded(true);
+        setLaunchState("QUEUED");
         setNotice({
           tone: "success",
           message:
-            `Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.${experimentNote}`,
+            `Kampagnenstart angenommen. Adbot arbeitet den Auftrag automatisch in der internen Warteschlange ab und aktiviert ihn anschließend bei Meta. Kein weiterer Klick nötig.${experimentNote}`,
         });
       }
       refresh();
@@ -895,7 +893,7 @@ export function TrafficLaunchCanary({
   }
 
   function startAnotherTrafficCampaign() {
-    setLaunchSucceeded(false);
+    setLaunchState("IDLE");
     setHeldPlan(null);
     setPendingStudyPlanId(null);
     setNotice(null);
@@ -941,12 +939,16 @@ export function TrafficLaunchCanary({
             </span>
             <div className="min-w-0 flex-1">
               <h3 className="text-lg font-extrabold text-emerald-950">
-                Erledigt — Kampagne ist live
+                {launchState === "ACTIVE"
+                  ? "Erledigt — Kampagne ist live"
+                  : "Kampagnenstart angenommen — automatische Ausführung läuft"}
               </h3>
               <p className="mt-2 text-sm font-semibold leading-6 text-emerald-900">
                 {notice?.tone === "success"
                   ? notice.message
-                  : "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."}
+                  : launchState === "ACTIVE"
+                    ? "Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige."
+                    : "Adbot arbeitet den Auftrag automatisch ab. Kein weiterer Klick nötig."}
               </p>
               {pendingStudyPlanId ? (
                 <button
