@@ -81,6 +81,7 @@ async function TrafficLaunchBody({
       : null;
 
   const {
+    adAccountPickerOptions,
     metaAccount,
     metaConnected,
     writeScopeGranted,
@@ -188,6 +189,7 @@ async function TrafficLaunchBody({
         />
       ) : null}
       <LeadLaunchCanary
+        adAccounts={adAccountPickerOptions}
         brandProfileId={brandProfileView?.id ?? null}
         currency={marketingCurrency}
         data={onboardingData}
