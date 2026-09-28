@@ -18,6 +18,7 @@ const helperUrl = `data:text/javascript;base64,${Buffer.from(
 ).toString("base64")}`;
 const {
   classifyLaunchBudgetCapFailure,
+  isNonDeliveringMetaStatus,
   LAUNCH_BUDGET_CAP_MESSAGE,
   suggestLaunchPolicyLimits,
 } = await import(helperUrl);
@@ -75,6 +76,9 @@ assert.match(accountCapFailure?.message ?? "", /437,50\s*€/);
 assert.match(accountCapFailure?.message ?? "", /400,00\s*€/);
 assert.match(accountCapFailure?.message ?? "", /nicht allein zu hoch/);
 assert.equal(classifyLaunchBudgetCapFailure("anderer Fehler"), null);
+assert.equal(isNonDeliveringMetaStatus("PAUSED", "CAMPAIGN_PAUSED"), true);
+assert.equal(isNonDeliveringMetaStatus("ARCHIVED", null), true);
+assert.equal(isNonDeliveringMetaStatus("ACTIVE", "ACTIVE"), false);
 
 const lead = await readFile(
   join(root, "src/components/LeadLaunchCanary.tsx"),
@@ -108,8 +112,17 @@ const service = await readFile(
 );
 assert.doesNotMatch(service, /Technik:/);
 assert.match(service, /classifyLaunchBudgetCapFailure\(/);
-assert.match(service, /serviceError\(budgetFailure\.code, 409, budgetFailure\.message\)/);
-assert.match(service, /releaseSupersededCustomerLaunchReservations/);
+assert.match(service, /`\$\{budgetFailure\.message\}\$\{breakdown\}`/);
+assert.match(service, /releaseUnstartedCustomerLaunchReservations/);
+assert.match(service, /releaseStaleAcrossAccount: true/);
+assert.match(service, /STALE_UNAPPROVED_LAUNCH_AGE_MS = 60_000/);
+assert.match(service, /createdAt <= Date\.now\(\) - STALE_UNAPPROVED_LAUNCH_AGE_MS/);
+assert.match(service, /sameDraft \|\| legacySameDestination \|\| staleAcrossAccount/);
+assert.match(service, /releaseNonDeliveringSnapshotExposures/);
+assert.match(service, /isNonDeliveringMetaStatus/);
+assert.match(service, /currentBudgetExposureBreakdown/);
+assert.match(service, /aktuell ausliefernde Meta-Budgets/);
+assert.match(service, /noch nicht gestartete Vorbereitungen/);
 assert.match(service, /source_rule_key", "active-launch-chain"/);
 assert.match(service, /meta_launch_canary_approvals/);
 assert.match(service, /mutation_executions/);
@@ -117,7 +130,11 @@ assert.match(service, /remote_object_bindings/);
 assert.match(service, /\.eq\("source", "PLAN"\)/);
 assert.match(service, /CUSTOMER_LAUNCH_PLAN_SUPERSEDED/);
 assert.ok(
-  service.indexOf("await releaseSupersededCustomerLaunchReservations") <
+  service.indexOf("await releaseUnstartedCustomerLaunchReservations") <
+    service.indexOf('admin.rpc("materialize_meta_customer_launch_plan"'),
+);
+assert.ok(
+  service.indexOf("await releaseNonDeliveringSnapshotExposures") <
     service.indexOf('admin.rpc("materialize_meta_customer_launch_plan"'),
 );
 assert.match(

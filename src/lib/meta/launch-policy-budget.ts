@@ -10,6 +10,28 @@ export type LaunchBudgetCapFailure = {
   message: string;
 };
 
+const NON_DELIVERING_META_STATUSES = new Set([
+  "PAUSED",
+  "CAMPAIGN_PAUSED",
+  "ADSET_PAUSED",
+  "ARCHIVED",
+  "DELETED",
+  "COMPLETED",
+  "CAMPAIGN_COMPLETED",
+]);
+
+export function isNonDeliveringMetaStatus(
+  status: string | null | undefined,
+  effectiveStatus: string | null | undefined,
+): boolean {
+  return (
+    NON_DELIVERING_META_STATUSES.has(String(status ?? "").toUpperCase()) ||
+    NON_DELIVERING_META_STATUSES.has(
+      String(effectiveStatus ?? "").toUpperCase(),
+    )
+  );
+}
+
 function formatMinorEuro(value: string): string {
   const minor = Number(value);
   if (!Number.isSafeInteger(minor) || minor < 0) return "–";

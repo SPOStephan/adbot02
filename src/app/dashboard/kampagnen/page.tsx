@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { FilePenLine } from "lucide-react";
 
 import { MetaAdAccountPicker } from "@/components/MetaAdAccountPicker";
+import { MetaCampaignDraftActions } from "@/components/MetaCampaignDraftActions";
 import {
   MetaCampaignOverview,
   type MetaCreativeOptimizationCycleView,
@@ -159,12 +159,7 @@ async function KampagnenBody() {
                     <p className="mt-2 text-xs text-slate-500">
                       Zuletzt gespeichert: {new Date(draft.updatedAt).toLocaleString("de-DE")}
                     </p>
-                    <Link
-                      className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-blue-800"
-                      href={`/dashboard/traffic-launch?draftId=${encodeURIComponent(draft.id)}`}
-                    >
-                      Bearbeitung fortsetzen
-                    </Link>
+                    <MetaCampaignDraftActions draftId={draft.id} />
                   </div>
                 </div>
               </article>

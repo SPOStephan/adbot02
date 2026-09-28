@@ -4,6 +4,25 @@ import {
 } from "@/lib/meta/campaign-draft-types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export async function getMetaCampaignDraftDestination(
+  customer: MetaCustomer,
+  draftId: string,
+): Promise<string> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("meta_campaign_drafts")
+    .select("destination_url")
+    .eq("id", draftId)
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("status", "DRAFT")
+    .maybeSingle();
+  if (error || typeof data?.destination_url !== "string") {
+    throw new Error("Der Kampagnenentwurf wurde nicht gefunden.");
+  }
+  return data.destination_url;
+}
+
 export async function saveMetaCampaignDraft(
   customer: MetaCustomer,
   input: {

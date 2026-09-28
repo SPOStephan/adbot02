@@ -136,8 +136,22 @@ assert.doesNotMatch(launch, />Kampagnenstart freigeben</);
 
 const campaigns = await read("src/app/dashboard/kampagnen/page.tsx");
 assert.match(campaigns, /id="entwuerfe"/);
-assert.match(campaigns, /Bearbeitung fortsetzen/);
-assert.match(campaigns, /draftId=/);
+assert.match(campaigns, /MetaCampaignDraftActions/);
+assert.match(campaigns, /draftId=\{draft\.id\}/);
+
+const draftActions = await read("src/components/MetaCampaignDraftActions.tsx");
+assert.match(draftActions, /Bearbeitung fortsetzen/);
+assert.match(draftActions, /Entwurf löschen/);
+assert.match(draftActions, /window\.confirm/);
+assert.match(draftActions, /status: "ARCHIVED"/);
+assert.match(draftActions, /router\.refresh\(\)/);
+
+const draftRoute = await read(
+  "src/app/api/meta/automation/campaign-draft/route.ts",
+);
+assert.match(draftRoute, /getMetaCampaignDraftDestination/);
+assert.match(draftRoute, /releaseUnstartedCustomerLaunchReservations/);
+assert.match(draftRoute, /releaseStaleAcrossAccount: false/);
 
 const dashboard = await read("src/lib/dashboard/load-customer-dashboard.ts");
 assert.match(
