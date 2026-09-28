@@ -161,8 +161,8 @@ describe("Funnel-Router", () => {
     const detail = await admin.funnel.application({ id: result.id });
 
     expect(detail.displayAnswers).toEqual([
-      { label: "Sachkunde", values: ["vertrieb"] },
-      { label: "Berufserfahrung", values: ["3-plus"] },
+      { label: "Sachkunde", values: ["Vertrieb"] },
+      { label: "Berufserfahrung", values: ["Mehr als 3 Jahre"] },
     ]);
     expect(JSON.stringify(detail.displayAnswers)).not.toContain(technicalQuestionKey);
   });
