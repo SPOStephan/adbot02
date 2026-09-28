@@ -1064,7 +1064,14 @@ export const funnelRouter = router({
     if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
     await requireOwnedFunnel(application.funnelId, ctx.user);
     const config = await getFunnelById(application.funnelId) ?? await getFunnel(application.funnelSlug) ?? undefined;
-    return { ...application, displayAnswers: resolveApplicationAnswers(config, application.answers) };
+    return {
+      ...application,
+      displayAnswers: resolveApplicationAnswers(
+        config,
+        application.answers,
+        application.answerLabels,
+      ),
+    };
   }),
 
   updateStatus: adminProcedure
@@ -1103,7 +1110,11 @@ export const funnelRouter = router({
       if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
       return {
         ...application,
-        displayAnswers: resolveApplicationAnswers(config, application.answers),
+        displayAnswers: resolveApplicationAnswers(
+          config,
+          application.answers,
+          application.answerLabels,
+        ),
         metaQuality: metaQuality.status,
         metaQualityReason: "reason" in metaQuality ? metaQuality.reason : undefined,
       };

@@ -26,6 +26,7 @@ import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { normalizeFunnelLegal } from "@shared/legalPages";
 import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
+import { snapshotApplicationAnswerLabels } from "@shared/applicationAnswers";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
 
@@ -669,6 +670,7 @@ export async function createApplication(submission: ApplicationSubmission): Prom
     funnelSlug: funnel.slug,
     status: "new",
     answers: submission.answers,
+    answerLabels: snapshotApplicationAnswerLabels(funnel, submission.answers),
     contact: submission.contact,
     consentAt: now,
     metaEventId: submission.metaEventId,
@@ -718,6 +720,7 @@ const APPLICATION_SIDECAR_KEYS = [
   "__leadQualityAt",
   "__leadQualityEventId",
   "__leadQualityMetaStatus",
+  "__answerLabels",
 ] as const;
 
 type ApplicationSidecar = Partial<Record<(typeof APPLICATION_SIDECAR_KEYS)[number], string>>;
@@ -736,7 +739,32 @@ function encodeApplicationSidecar(record: ApplicationRecord): Record<string, str
     ...(record.leadQualityMetaStatus
       ? { __leadQualityMetaStatus: record.leadQualityMetaStatus }
       : {}),
+    ...(record.answerLabels
+      ? { __answerLabels: JSON.stringify(record.answerLabels) }
+      : {}),
   };
+}
+
+function parseApplicationAnswerLabels(
+  value: string | undefined,
+): ApplicationRecord["answerLabels"] {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const result: NonNullable<ApplicationRecord["answerLabels"]> = {};
+    for (const [key, labels] of Object.entries(parsed)) {
+      if (!labels || typeof labels !== "object" || Array.isArray(labels)) continue;
+      const validLabels: Record<string, string> = {};
+      for (const [optionValue, label] of Object.entries(labels)) {
+        if (typeof label === "string" && label.trim()) validLabels[optionValue] = label;
+      }
+      if (Object.keys(validLabels).length > 0) result[key] = validLabels;
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function decodeApplicationSidecar(stored: Record<string, string>): {
@@ -768,6 +796,7 @@ function mapApplication(row: Record<string, unknown>): ApplicationRecord {
     funnelSlug: String(row.funnel_slug),
     status: row.status as ApplicationStatus,
     answers: row.answers as ApplicationRecord["answers"],
+    answerLabels: parseApplicationAnswerLabels(sidecar.__answerLabels),
     contact: row.contact as ApplicationRecord["contact"],
     consentAt: String(row.consent_at),
     trackingConsentAt: sidecar.__trackingConsentAt || undefined,
