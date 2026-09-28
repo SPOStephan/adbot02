@@ -59,7 +59,9 @@ select public.append_meta_kill_switch_state(
 create function pg_temp.seed_launch(
   p_plan_id uuid,
   p_seed integer,
-  p_with_write_step boolean
+  p_with_write_step boolean,
+  p_content text default null,
+  p_created_at timestamptz default now()
 )
 returns void
 language plpgsql
@@ -72,19 +74,25 @@ declare
   v_read uuid := gen_random_uuid();
   v_reconcile uuid := gen_random_uuid();
   v_previous uuid;
+  v_payload jsonb := jsonb_build_object(
+    'campaign', jsonb_build_object(
+      'name', coalesce(p_content, 'Queue campaign ' || p_seed)
+        || ' [' || substr(md5('suffix' || p_seed), 1, 12) || '-c]'
+    )
+  );
 begin
   insert into public.mutation_plans (
     id, user_id, platform_account_id, policy_id, source_marketing_sync_id,
     source_rule_key, source_rule_version, action_type, target_type, target_key,
     idempotency_key, expected_before, intended_after, planned_payload,
-    payload_hash, status, priority
+    payload_hash, status, priority, created_at
   ) values (
     p_plan_id, v_user, v_account, '83000000-0000-4000-8000-000000000001',
     '33000000-0000-4000-8000-000000000001', 'active-launch-chain', 1,
     'LAUNCH_CHAIN', 'CHAIN', 'chain:queue-' || p_seed,
     md5('idem' || p_seed) || md5('key' || p_seed), '{}'::jsonb,
-    '{"status":"ACTIVE"}'::jsonb, '{}'::jsonb,
-    public.meta_sha256('{}'::jsonb::text), 'PENDING', 60
+    '{"status":"ACTIVE"}'::jsonb, v_payload,
+    public.meta_sha256(v_payload::text), 'PENDING', 60, p_created_at
   );
 
   insert into public.meta_launch_canary_approvals (
@@ -93,7 +101,7 @@ begin
     ad_set_name, creative_name, ad_name, target_status, reason, approved_by
   ) values (
     v_user, v_account, p_plan_id,
-    public.meta_sha256('{}'::jsonb::text), 'OUTCOME_LEADS',
+    public.meta_sha256(v_payload::text), 'OUTCOME_LEADS',
     'https://jobs.example.test/f/queue', 'CAMPAIGN', 5000, 'Queue campaign',
     'Queue ad set', 'Queue creative', 'Queue ad', 'ACTIVE',
     'Launch queue regression approval', v_user
@@ -587,6 +595,90 @@ begin
   );
   if v_result = 'RETRYABLE' then
     raise exception 'Ambiguous write must not be retried';
+  end if;
+end;
+$$;
+
+-- 8) Duplicate protection: an identical launch is never approved twice.
+select pg_temp.seed_launch(
+  '93000000-0000-4000-8000-000000000011', 11, true, 'Immo01_01 AB',
+  now() - interval '2 hours'
+);
+
+do $$
+begin
+  begin
+    perform pg_temp.seed_launch(
+      '93000000-0000-4000-8000-000000000012', 12, true, 'Immo01_01 AB'
+    );
+    raise exception 'Identical open launch was approved twice';
+  exception when others then
+    if sqlerrm not like 'duplicate_customer_launch_open:93000000-0000-4000-8000-000000000011%' then
+      raise;
+    end if;
+  end;
+
+  update public.mutation_plans
+  set status = 'SUCCEEDED', terminal_at = now()
+  where id = '93000000-0000-4000-8000-000000000011';
+
+  begin
+    perform pg_temp.seed_launch(
+      '93000000-0000-4000-8000-000000000013', 13, true, 'Immo01_01 AB'
+    );
+    raise exception 'Identical launch was approved again within 24 hours';
+  exception when others then
+    if sqlerrm not like 'duplicate_customer_launch_succeeded:%' then
+      raise;
+    end if;
+  end;
+
+  -- A different campaign name stays possible.
+  perform pg_temp.seed_launch(
+    '93000000-0000-4000-8000-000000000014', 14, true, 'Immo01_02 AB'
+  );
+end;
+$$;
+
+-- 9) A stuck older launch replaced by a newer identical one is never resumed
+--    (a69ff483 vs 68ec42fc on 2026-09-28). The pair predates the approval
+--    guard, so the guard is bypassed only to build that history.
+alter table public.meta_launch_canary_approvals
+  disable trigger guard_meta_launch_duplicate_approval;
+select pg_temp.seed_launch(
+  '93000000-0000-4000-8000-000000000015', 15, true, 'Immo02 Recruiting',
+  now() - interval '3 hours'
+);
+select pg_temp.seed_launch(
+  '93000000-0000-4000-8000-000000000016', 16, true, 'Immo02 Recruiting',
+  now() - interval '1 hour'
+);
+alter table public.meta_launch_canary_approvals
+  enable trigger guard_meta_launch_duplicate_approval;
+
+update public.mutation_plans
+set status = 'SUCCEEDED', terminal_at = now()
+where id = '93000000-0000-4000-8000-000000000016';
+update public.mutation_plan_steps
+set status = 'FAILED', error_class = 'TRANSPORT', error_code = 'database_failed',
+    completed_at = now()
+where plan_id = '93000000-0000-4000-8000-000000000015'
+  and step_key = 'activate-ad';
+update public.mutation_plans
+set status = 'FAILED', error_class = 'TRANSPORT',
+    blocked_reason = 'database_failed', terminal_at = now()
+where id = '93000000-0000-4000-8000-000000000015';
+
+do $$
+begin
+  if public.resume_failed_meta_customer_launch(
+    '93000000-0000-4000-8000-000000000015'
+  ) <> 'SUPERSEDED' then
+    raise exception 'A replaced launch must not be resumed';
+  end if;
+  if (select status from public.mutation_plans
+      where id = '93000000-0000-4000-8000-000000000015') <> 'FAILED' then
+    raise exception 'Replaced launch was changed';
   end if;
 end;
 $$;

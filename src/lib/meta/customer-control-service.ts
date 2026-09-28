@@ -1390,9 +1390,61 @@ function launchPreparationFailureMessage(error: unknown): string {
   return "Die Kampagne konnte nicht vorbereitet werden. Bitte erneut versuchen.";
 }
 
+type DuplicateLaunch = {
+  kind: "open" | "succeeded";
+  planId: string;
+};
+
+function duplicateLaunchFromApprovalError(error: unknown): DuplicateLaunch | null {
+  const match = /duplicate_customer_launch_(open|succeeded):([0-9a-f-]{36})/i.exec(
+    launchRpcFailureRaw(error),
+  );
+  if (!match) return null;
+  return {
+    kind: match[1].toLowerCase() === "open" ? "open" : "succeeded",
+    planId: match[2].toLowerCase(),
+  };
+}
+
+/**
+ * An identical accepted launch already exists. Never create a second campaign:
+ * continue the existing one (open) or leave it alone (recently succeeded), and
+ * undo the approval freeze so the existing launch and Beitrag-Push can write.
+ */
+async function handleDuplicateLaunchApproval(
+  customer: MetaCustomer,
+  duplicate: DuplicateLaunch,
+): Promise<void> {
+  const admin = createAdminClient();
+  try {
+    await restoreKillSwitchAfterLaunchPrepare(
+      customer,
+      duplicate.kind === "open" ? "ALLOW" : null,
+    );
+    if (duplicate.kind === "open") {
+      await admin.rpc("recover_interrupted_meta_customer_launches", {
+        p_user_id: customer.userId,
+      });
+      await admin.rpc("resume_failed_meta_customer_launch", {
+        p_plan_id: duplicate.planId,
+      });
+    }
+  } catch (error) {
+    console.error("[meta] duplicate launch follow-up failed", error);
+  }
+}
+
 function launchApprovalFailureMessage(error: unknown): string {
   const raw = launchRpcFailureRaw(error);
   const rules: Array<[RegExp, string]> = [
+    [
+      /duplicate_customer_launch_open/i,
+      "Diese Kampagne wurde bereits gestartet und wird gerade zu Ende geführt. Adbot setzt den bestehenden Start automatisch fort; es wird keine zweite Kampagne angelegt.",
+    ],
+    [
+      /duplicate_customer_launch_succeeded/i,
+      "Eine identische Kampagne wurde in den letzten 24 Stunden bereits gestartet. Für eine zweite Kampagne bitte den Kampagnennamen ändern.",
+    ],
     [
       /must remain frozen|FREEZE_WRITES/i,
       "Die kurze Schreibpause vor dem Start fehlt. Bitte „Kampagne starten“ erneut tippen.",
@@ -2443,6 +2495,10 @@ export async function approveCustomerLaunch(
   const row = Array.isArray(data) ? data[0] : null;
 
   if (error) {
+    const duplicate = duplicateLaunchFromApprovalError(error);
+    if (duplicate) {
+      await handleDuplicateLaunchApproval(customer, duplicate);
+    }
     serviceError(
       "launch_approval_not_ready",
       409,
