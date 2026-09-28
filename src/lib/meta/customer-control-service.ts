@@ -1844,6 +1844,181 @@ async function ensureLaunchExposureSnapshot(
   }
 }
 
+const SUPERSEDED_CUSTOMER_LAUNCH_REASON =
+  "superseded_by_newer_customer_launch_for_same_draft";
+
+/**
+ * The former preview flow materialized HELD plans and therefore reserved daily
+ * budget before the customer approved a launch. A new explicit start of the
+ * same saved draft replaces only plans that never had an approval, execution,
+ * lease or remote binding. Active/approved campaigns are never touched.
+ */
+async function releaseSupersededCustomerLaunchReservations(
+  customer: MetaCustomer,
+  command: LaunchCommand,
+): Promise<void> {
+  const campaignDraftId = command.launchInputs.campaign_draft_id;
+  if (!campaignDraftId) return;
+
+  const admin = createAdminClient();
+  const { data: candidates, error: candidatesError } = await admin
+    .from("mutation_plans")
+    .select(
+      "id,policy_id,status,blocked_reason,planned_payload,attempt_count,lease_token",
+    )
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("source_rule_key", "active-launch-chain")
+    .eq("action_type", "LAUNCH_CHAIN")
+    .filter(
+      "planned_payload->>destination_url",
+      "eq",
+      command.launchInputs.destination_url,
+    )
+    .in("status", ["PENDING", "CANCELLED"])
+    .limit(100);
+  if (candidatesError) {
+    serviceError(
+      "launch_reservation_cleanup_failed",
+      500,
+      "Frühere unbestätigte Budgetreservierungen konnten nicht sicher geprüft werden.",
+    );
+  }
+
+  const matching = (candidates ?? []).filter((row) => {
+    const payload =
+      row.planned_payload &&
+      typeof row.planned_payload === "object" &&
+      !Array.isArray(row.planned_payload)
+        ? (row.planned_payload as Record<string, unknown>)
+        : {};
+    const previousDraftId =
+      typeof payload.campaign_draft_id === "string"
+        ? payload.campaign_draft_id
+        : null;
+    const isRetryableCleanup =
+      row.status === "CANCELLED" &&
+      row.blocked_reason === SUPERSEDED_CUSTOMER_LAUNCH_REASON;
+    const isUntouchedPending =
+      row.status === "PENDING" &&
+      Number(row.attempt_count) === 0 &&
+      row.lease_token === null;
+    return (
+      (isRetryableCleanup || isUntouchedPending) &&
+      (previousDraftId === campaignDraftId || previousDraftId === null)
+    );
+  });
+  if (matching.length === 0) return;
+
+  const matchingIds = matching.map((row) => String(row.id));
+  const [approvals, executions, bindings] = await Promise.all([
+    admin
+      .from("meta_launch_canary_approvals")
+      .select("plan_id")
+      .in("plan_id", matchingIds),
+    admin.from("mutation_executions").select("plan_id").in("plan_id", matchingIds),
+    admin.from("remote_object_bindings").select("plan_id").in("plan_id", matchingIds),
+  ]);
+  if (approvals.error || executions.error || bindings.error) {
+    serviceError(
+      "launch_reservation_cleanup_failed",
+      500,
+      "Frühere unbestätigte Budgetreservierungen konnten nicht sicher geprüft werden.",
+    );
+  }
+
+  const protectedIds = new Set(
+    [approvals.data, executions.data, bindings.data]
+      .flat()
+      .map((row) => row?.plan_id)
+      .filter((value): value is string => typeof value === "string"),
+  );
+  const cleanupRows = matching.filter((row) => !protectedIds.has(String(row.id)));
+  if (cleanupRows.length === 0) return;
+
+  const pendingIds = cleanupRows
+    .filter((row) => row.status === "PENDING")
+    .map((row) => String(row.id));
+  const cancelledAt = new Date().toISOString();
+  let newlyCancelled: Array<{ id: string; policy_id: string | null }> = [];
+  if (pendingIds.length > 0) {
+    const cancelled = await admin
+      .from("mutation_plans")
+      .update({
+        status: "CANCELLED",
+        blocked_reason: SUPERSEDED_CUSTOMER_LAUNCH_REASON,
+        terminal_at: cancelledAt,
+        updated_at: cancelledAt,
+      })
+      .eq("user_id", customer.userId)
+      .eq("platform_account_id", customer.platformAccountId)
+      .eq("status", "PENDING")
+      .eq("attempt_count", 0)
+      .is("lease_token", null)
+      .in("id", pendingIds)
+      .select("id,policy_id");
+    if (cancelled.error) {
+      serviceError(
+        "launch_reservation_cleanup_failed",
+        500,
+        "Frühere unbestätigte Budgetreservierungen konnten nicht sicher freigegeben werden.",
+      );
+    }
+    newlyCancelled = (cancelled.data ?? []).map((row) => ({
+      id: String(row.id),
+      policy_id: typeof row.policy_id === "string" ? row.policy_id : null,
+    }));
+  }
+
+  const releasableIds = [
+    ...cleanupRows
+      .filter(
+        (row) =>
+          row.status === "CANCELLED" &&
+          row.blocked_reason === SUPERSEDED_CUSTOMER_LAUNCH_REASON,
+      )
+      .map((row) => String(row.id)),
+    ...newlyCancelled.map((row) => row.id),
+  ];
+  if (releasableIds.length === 0) return;
+
+  const released = await admin
+    .from("daily_budget_exposures")
+    .delete()
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("source", "PLAN")
+    .in("plan_id", releasableIds);
+  if (released.error) {
+    serviceError(
+      "launch_reservation_cleanup_failed",
+      500,
+      "Frühere unbestätigte Budgetreservierungen konnten nicht sicher freigegeben werden.",
+    );
+  }
+
+  await Promise.allSettled(
+    newlyCancelled.map((plan) =>
+      admin.rpc("append_meta_mutation_audit_event", {
+        p_user_id: customer.userId,
+        p_platform_account_id: customer.platformAccountId,
+        p_policy_id: plan.policy_id,
+        p_plan_id: plan.id,
+        p_step_id: null,
+        p_execution_id: null,
+        p_actor_type: "CUSTOMER",
+        p_actor_id: customer.userId,
+        p_event_type: "CUSTOMER_LAUNCH_PLAN_SUPERSEDED",
+        p_before_state: { plan_status: "PENDING" },
+        p_request_payload: { campaign_draft_id: campaignDraftId },
+        p_response_payload: { released_budget_reservation: true },
+        p_after_state: { plan_status: "CANCELLED" },
+        p_metadata: { source: "releaseSupersededCustomerLaunchReservations" },
+      }),
+    ),
+  );
+}
+
 export async function materializeCustomerLaunch(
   customer: MetaCustomer,
   command: LaunchCommand,
@@ -1921,6 +2096,7 @@ export async function materializeCustomerLaunch(
         );
       }
     }
+    await releaseSupersededCustomerLaunchReservations(readyCustomer, command);
     // Omit p_planned_at so Postgres uses now() — Vercel clock skew against
     // marketing_last_success_at (DB now) was failing the 2h freshness gate.
     const commonRpcArguments = {

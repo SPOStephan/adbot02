@@ -995,6 +995,7 @@ type LaunchCommon = {
   reason: string;
   launchInputs: {
     destination_url: string;
+    campaign_draft_id?: string;
     campaign_name?: string;
     ad_set_name?: string;
     creative_name?: string;
@@ -1247,6 +1248,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
       : requiredEnum(body.budgetType, "Die Budgetart", LAUNCH_BUDGET_TYPES);
   const commonKeys = [
     "blueprintId",
+    "campaignDraftId",
     "brandProfileId",
     "brandAssetId",
     "allowedDomainId",
@@ -1386,6 +1388,10 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
           }
         : {};
 
+  const campaignDraftId = optionalUuid(
+    body.campaignDraftId,
+    "Die Kampagnenentwurfs-ID",
+  );
   const common: LaunchCommon = {
     blueprintId: requiredUuid(body.blueprintId, "Die Blueprint-ID"),
     brandProfileId: optionalUuid(body.brandProfileId, "Die Brand-Profil-ID"),
@@ -1402,6 +1408,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
     reason: requiredText(body.reason, "Die Begründung", 12, 500),
     launchInputs: {
       destination_url: destinationUrl,
+      ...(campaignDraftId ? { campaign_draft_id: campaignDraftId } : {}),
       campaign_name: optionalLaunchName(body.campaignName, "Der Kampagnenname"),
       ad_set_name: optionalLaunchName(body.adSetName, "Der Ad-Set-Name"),
       creative_name: optionalLaunchName(body.creativeName, "Der Creative-Name"),

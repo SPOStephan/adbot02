@@ -1177,6 +1177,7 @@ export function LeadLaunchCanary({
         throw new Error("Bitte einen Kampagnennamen eingeben.");
       }
 
+
       const landing = parseLandingUrl(destinationUrl);
       const variantLanding =
         structuralMode === "funnel_split"
@@ -1191,6 +1192,11 @@ export function LeadLaunchCanary({
       if (variantPurposeHint && variantPurposeHint.category !== effectiveAdCategory) {
         throw new Error("Funnel A und Funnel B müssen dieselbe Anzeigenkategorie haben.");
       }
+      const savedDraft = campaignDraftEnabled
+        ? await campaignDraft.saveNow()
+        : null;
+      const campaignDraftId =
+        savedDraft?.draftId ?? campaignDraft.draftId ?? undefined;
       // Do NOT freeze here: server prepare uses a transient FREEZE window and
       // restores Freigeben so Beitrag-Push AUTO is not stranded.
       await ensureCampaignLaunchPolicy();
@@ -1233,6 +1239,7 @@ export function LeadLaunchCanary({
         brandAssetIds?: string[];
       }>("POST", "/api/meta/automation/launch", {
         blueprintId,
+        ...(campaignDraftId ? { campaignDraftId } : {}),
         ...(brandProfileId ? { brandProfileId } : {}),
         ...(facebookPageId ? { facebookPageId } : {}),
         ...(instagramActorId ? { instagramActorId } : {}),

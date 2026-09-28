@@ -403,6 +403,7 @@ assert.deepEqual(
     brandProfileId: "33333333-3333-4333-8333-333333333333",
     brandAssetId: "44444444-4444-4444-8444-444444444444",
     allowedDomainId: "11111111-1111-4111-8111-111111111111",
+    campaignDraftId: "55555555-5555-4555-8555-555555555555",
     budgetOwnerType: "AD_SET",
     dailyBudget: "20,50",
     destinationUrl: "https://www.example.de/angebot",
@@ -423,6 +424,7 @@ assert.deepEqual(
     reason: "Kontrollierter Staging-Aktiv-Launch.",
     launchInputs: {
       destination_url: "https://www.example.de/angebot",
+      campaign_draft_id: "55555555-5555-4555-8555-555555555555",
       campaign_name: "Sommer",
       ad_set_name: undefined,
       creative_name: undefined,
