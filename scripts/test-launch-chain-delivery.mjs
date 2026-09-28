@@ -95,6 +95,27 @@ assert.match(recovery, /status = 'ABANDONED'/);
 assert.match(recovery, /status = 'PENDING'/);
 assert.doesNotMatch(recovery, /delete from public\.remote_object_bindings/);
 
+const partialResume = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928155500_meta_resume_partial_customer_launches.sql",
+  ),
+  "utf8",
+);
+assert.match(partialResume, /meta_launch_execution_preflight_action/);
+assert.match(partialResume, /meta_launch_chain_preflight_action\(p_plan_id\)/);
+assert.match(partialResume, /v_plan\.source_rule_key = 'active-launch-chain'/);
+assert.match(partialResume, /from public\.remote_object_bindings binding/);
+assert.match(partialResume, /step\.status in \('PENDING', 'RETRYABLE'\)/);
+assert.match(partialResume, /step\.status in \('FAILED', 'COMPENSATION_REQUIRED'\)/);
+assert.match(partialResume, /mp\.blocked_reason = 'launch_canary_preflight_drift'/);
+assert.match(
+  partialResume,
+  /max_attempts = greatest\(plan\.max_attempts, plan\.attempt_count \+ 1\)/,
+);
+assert.match(partialResume, /step\.dispatch_state <> 'NOT_DISPATCHED'/);
+assert.doesNotMatch(partialResume, /delete from public\.remote_object_bindings/);
+
 const maintenance = await readFile(
   join(root, "src/lib/meta/launch-maintenance.ts"),
   "utf8",
