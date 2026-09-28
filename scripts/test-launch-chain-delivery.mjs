@@ -91,6 +91,22 @@ assert.match(preDispatchRetry, /v_resume_retry := p_remote_outcome = 'NOT_APPLIE
 assert.match(preDispatchRetry, /then least\(20, attempt_count \+ 1\)/);
 assert.doesNotMatch(preDispatchRetry, /select [^;]*\binto\b/i);
 
+const duplicateProtection = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928220000_meta_launch_duplicate_protection.sql",
+  ),
+  "utf8",
+);
+assert.match(duplicateProtection, /create trigger guard_meta_launch_duplicate_approval/);
+assert.match(duplicateProtection, /duplicate_customer_launch_open/);
+assert.match(duplicateProtection, /return 'SUPERSEDED'/);
+assert.equal(
+  (duplicateProtection.match(/not public\.meta_launch_superseded_by_newer\(mp\.id\)/g) || []).length,
+  2,
+);
+assert.doesNotMatch(duplicateProtection, /select [^;]*\binto\b/i);
+
 const targetedClaim = await readFile(
   join(
     root,
@@ -112,6 +128,8 @@ assert.match(service, /drainApprovedLaunchChainForAccount/);
 assert.match(service, /executionState: "ACTIVE" \| "QUEUED"/);
 assert.match(service, /terminalExecutionFailure/);
 assert.doesNotMatch(service, /launch_execution_incomplete/);
+assert.match(service, /duplicateLaunchFromApprovalError/);
+assert.match(service, /handleDuplicateLaunchApproval/);
 
 const route = await readFile(
   join(root, "src/app/api/meta/automation/launch/route.ts"),
