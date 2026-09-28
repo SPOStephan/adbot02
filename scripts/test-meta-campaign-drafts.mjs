@@ -72,6 +72,44 @@ try {
     }),
     /weiteren Motive/,
   );
+
+  const assetSource = await read("src/lib/meta/campaign-draft-assets.ts");
+  const assetCompiled = ts.transpileModule(assetSource, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const assetModulePath = join(temp, "campaign-draft-assets.mjs");
+  await writeFile(assetModulePath, assetCompiled);
+  const draftAssets = await import(
+    `${pathToFileURL(assetModulePath).href}?v=${Date.now()}`
+  );
+  const preferredIds = draftAssets.campaignDraftAssetIds(validPayload);
+  assert.deepEqual(preferredIds, [validPayload.assetId, ...validPayload.extraAssetIds]);
+  const recovered = [
+    {
+      id: validPayload.extraAssetIds[0],
+      original_filename: "story.png",
+      width: 1080,
+      height: 1920,
+      metadata: { meta_format_key: "story_9_16" },
+    },
+    {
+      id: validPayload.assetId,
+      original_filename: "feed.png",
+      width: 1080,
+      height: 1080,
+      metadata: { meta_format_key: "feed_1_1" },
+    },
+  ].map(draftAssets.toReadyBrandAssetView);
+  const rehydrated = draftAssets.mergeDraftAssetsIntoLibrary(
+    [],
+    recovered,
+    preferredIds,
+  );
+  assert.deepEqual(
+    rehydrated.map((asset) => asset.id),
+    preferredIds,
+    "all selected draft assets must reappear in their saved order after reload",
+  );
 } finally {
   await rm(temp, { recursive: true, force: true });
 }
@@ -100,5 +138,17 @@ const campaigns = await read("src/app/dashboard/kampagnen/page.tsx");
 assert.match(campaigns, /id="entwuerfe"/);
 assert.match(campaigns, /Bearbeitung fortsetzen/);
 assert.match(campaigns, /draftId=/);
+
+const dashboard = await read("src/lib/dashboard/load-customer-dashboard.ts");
+assert.match(
+  dashboard,
+  /createAdminClient\(\)\s*\.from\("brand_assets"\)\s*\.select\([\s\S]*?metadata/,
+  "server-side library load must not use the browser role for the restricted metadata column",
+);
+
+const launchPage = await read("src/app/dashboard/traffic-launch/page.tsx");
+assert.match(launchPage, /campaignDraftAssetIds\(initialDraft\.payload\)/);
+assert.match(launchPage, /\.in\("id", draftAssetIds\)/);
+assert.match(launchPage, /data=\{draftOnboardingData\}/);
 
 console.log("meta-campaign-drafts: ok");
