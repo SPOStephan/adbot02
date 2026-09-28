@@ -2472,8 +2472,8 @@ export async function approveCustomerLaunch(
     rpcFailure("Die Aktiv-Launch-Freigabe");
   }
 
-  // Kick the account-scoped launch drain so campaign→ad→ACTIVE finishes in this
-  // request when possible. Freigabe itself already succeeded.
+  // Execute exactly this approved plan through campaign→ad→ACTIVE in the same
+  // request. Never let a customer click drain an unrelated global queue item.
   let executorRuns = 0;
   let executorSucceeded = 0;
   let executorLastOutcome: string | null = null;
@@ -2492,10 +2492,22 @@ export async function approveCustomerLaunch(
     executionPlanStatus = drain.planStatus;
     executionWarning = describeLaunchChainDrainFailure(drain);
   } catch (error) {
-    executionWarning =
-      error instanceof Error
-        ? `Meta-Ausführung nach Freigabe unterbrochen (${error.message.slice(0, 120)}). Bitte Werbeanzeigenmanager prüfen.`
-        : "Meta-Ausführung nach Freigabe unterbrochen. Bitte Werbeanzeigenmanager prüfen.";
+    console.error("customer_launch_targeted_execution_failed", {
+      planId: command.planId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    serviceError(
+      "launch_execution_failed",
+      502,
+      "Der freigegebene Meta-Start konnte technisch nicht ausgeführt werden. Derselbe Startplan bleibt gespeichert; es wurde keine zweite Kampagne angelegt.",
+    );
+  }
+  if (executionWarning) {
+    serviceError(
+      "launch_execution_incomplete",
+      409,
+      executionWarning,
+    );
   }
 
   return {

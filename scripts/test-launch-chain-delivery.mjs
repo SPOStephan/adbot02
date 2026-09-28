@@ -40,6 +40,29 @@ const execute = await readFile(
 );
 assert.match(execute, /drainApprovedLaunchChainForAccount/);
 assert.match(execute, /describeLaunchChainDrainFailure/);
+assert.match(execute, /processMetaMutationPlan\(\s*input\.planId/);
+assert.doesNotMatch(execute, /processNextMetaMutation/);
+assert.doesNotMatch(execute, /Der Meta-Start läuft noch oder wurde unterbrochen/);
+
+const executor = await readFile(
+  join(root, "src/lib/meta/executor.ts"),
+  "utf8",
+);
+assert.match(executor, /claim_meta_mutation_execution_for_plan/);
+assert.match(executor, /export async function processMetaMutationPlan/);
+
+const targetedClaim = await readFile(
+  join(
+    root,
+    "supabase/migrations/20260928110500_meta_targeted_launch_execution.sql",
+  ),
+  "utf8",
+);
+assert.match(targetedClaim, /where \(p_plan_id is null or mp\.id = p_plan_id\)/);
+assert.match(targetedClaim, /claim_meta_mutation_execution_for_plan/);
+assert.match(targetedClaim, /meta_launch_canary_preflight_ok/);
+assert.match(targetedClaim, /get_effective_meta_kill_switch/);
+assert.match(targetedClaim, /claim_meta_account_operation/);
 
 const service = await readFile(
   join(root, "src/lib/meta/customer-control-service.ts"),
@@ -47,6 +70,13 @@ const service = await readFile(
 );
 assert.match(service, /drainApprovedLaunchChainForAccount/);
 assert.match(service, /executionWarning/);
+assert.match(service, /launch_execution_incomplete/);
+
+const route = await readFile(
+  join(root, "src/app/api/meta/automation/launch/route.ts"),
+  "utf8",
+);
+assert.match(route, /export const maxDuration = 300/);
 
 const writeClient = await readFile(
   join(root, "src/lib/meta/write-client.ts"),

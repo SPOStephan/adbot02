@@ -1403,7 +1403,6 @@ export function LeadLaunchCanary({
     const result = await apiJson<{
       planStatus?: string;
       approvalId?: string;
-      executionWarning?: string | null;
       executorSucceeded?: number;
     }>("PUT", "/api/meta/automation/launch", {
       planId: plan.id,
@@ -1421,67 +1420,48 @@ export function LeadLaunchCanary({
       reason: PROTOCOL_APPROVE_REASON,
       confirmation: "AKTIV-LAUNCH FREIGEBEN",
     });
-    if (!result.approvalId || result.planStatus !== "PENDING") {
-      throw new Error("Freigabe wurde vom Server nicht bestätigt.");
+    if (
+      !result.approvalId ||
+      result.planStatus !== "PENDING" ||
+      result.executorSucceeded !== 1
+    ) {
+      throw new Error(
+        "Der vollständige Meta-Start wurde vom Server nicht bestätigt. Derselbe Startplan bleibt gespeichert.",
+      );
     }
     const studyPlanId = plan.useMetaExperiment ? plan.id : null;
     setHeldPlan(null);
     let experimentNote = "";
     if (studyPlanId) {
       setPendingStudyPlanId(studyPlanId);
-      if (result.executorSucceeded === 1) {
-        try {
-          const study = await apiJson<{ studyId?: string }>(
-            "POST",
-            "/api/meta/automation/ad-study",
-            { planId: studyPlanId },
-          );
-          if (study.studyId) {
-            experimentNote = ` Meta-Experiment ${study.studyId} angelegt.`;
-            setPendingStudyPlanId(null);
-          }
-        } catch (error) {
-          experimentNote = ` Meta-Experiment noch nicht angelegt: ${
-            error instanceof Error ? error.message : "bitte später erneut versuchen"
-          }`;
-        }
-      } else {
-        experimentNote =
-          " Meta-Experiment folgt, sobald beide Ad Sets bei Meta stehen — Button unten.";
-      }
-    }
-    if (
-      typeof result.executionWarning === "string" &&
-      result.executionWarning.trim()
-    ) {
-      setLaunchSucceeded(false);
-      setNotice({
-        tone: "error",
-        message: `${result.executionWarning.trim()}${experimentNote}`,
-      });
-    } else {
-      let draftWarning = "";
       try {
-        await campaignDraft.markLaunched();
-      } catch {
-        draftWarning = " Der gestartete Entwurf konnte nicht aus der Entwurfsliste entfernt werden.";
-      }
-      if (result.executorSucceeded === 1) {
-        setLaunchSucceeded(true);
-        setNotice({
-          tone: "success",
-          message:
-            `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}${draftWarning}`,
-        });
-      } else {
-        setLaunchSucceeded(true);
-        setNotice({
-          tone: "success",
-          message:
-            `Kampagne freigegeben. Adbot legt sie bei Meta an und schaltet sie aktiv — das kann kurz dauern. Schau im Werbeanzeigenmanager nach Kampagne und Anzeige.${experimentNote}${draftWarning}`,
-        });
+        const study = await apiJson<{ studyId?: string }>(
+          "POST",
+          "/api/meta/automation/ad-study",
+          { planId: studyPlanId },
+        );
+        if (study.studyId) {
+          experimentNote = ` Meta-Experiment ${study.studyId} angelegt.`;
+          setPendingStudyPlanId(null);
+        }
+      } catch (error) {
+        experimentNote = ` Meta-Experiment noch nicht angelegt: ${
+          error instanceof Error ? error.message : "bitte später erneut versuchen"
+        }`;
       }
     }
+    let draftWarning = "";
+    try {
+      await campaignDraft.markLaunched();
+    } catch {
+      draftWarning = " Der gestartete Entwurf konnte nicht aus der Entwurfsliste entfernt werden.";
+    }
+    setLaunchSucceeded(true);
+    setNotice({
+      tone: "success",
+      message:
+        `Kampagne bei Meta angelegt und aktiviert. Prüfe im Werbeanzeigenmanager Kampagne, Anzeigengruppe und Anzeige.${experimentNote}${draftWarning}`,
+    });
     refresh();
   }
 
