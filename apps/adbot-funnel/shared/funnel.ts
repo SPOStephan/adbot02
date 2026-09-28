@@ -475,6 +475,9 @@ export type FunnelOwner = {
 
 export type FunnelAnswers = Record<string, string[]>;
 
+/** questionKey → stable option value → label visible at submission time */
+export type ApplicationAnswerLabels = Record<string, Record<string, string>>;
+
 export type ApplicationContact = Partial<Record<ContactFieldKey, string>>;
 
 export type ResumeMetadata = {
@@ -508,6 +511,7 @@ export type ApplicationRecord = {
   funnelSlug: string;
   status: ApplicationStatus;
   answers: FunnelAnswers;
+  answerLabels?: ApplicationAnswerLabels;
   contact: ApplicationContact;
   consentAt: string;
   trackingConsentAt?: string;

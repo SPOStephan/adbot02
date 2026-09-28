@@ -12,7 +12,11 @@ function configForApplication(configs: FunnelConfig[], application: ApplicationR
 export function buildApplicationsCsv(applications: ApplicationRecord[], configs: FunnelConfig[] = []) {
   const resolvedAnswers = new Map(applications.map(application => [
     application.id,
-    resolveApplicationAnswers(configForApplication(configs, application), application.answers),
+    resolveApplicationAnswers(
+      configForApplication(configs, application),
+      application.answers,
+      application.answerLabels,
+    ),
   ]));
   const answerLabels = Array.from(new Set(Array.from(resolvedAnswers.values()).flatMap(answers => answers.map(answer => answer.label))));
   const headers = ["ID", "Eingang", "Status", "Bewertung", "Lead-Wert", "Name", "Firma", "E-Mail", "Telefon", "Nachricht", ...answerLabels, "Lebenslauf"];
@@ -75,7 +79,11 @@ export async function buildApplicationsPdf(applications: ApplicationRecord[], co
     for (const [key, value] of Object.entries(application.contact)) drawLine(`${key}: ${value}`);
     y -= 8;
     drawLine("Antworten", { bold: true, size: 13 });
-    for (const answer of resolveApplicationAnswers(configForApplication(configs, application), application.answers)) drawLine(`${answer.label}: ${answer.values.join(", ")}`);
+    for (const answer of resolveApplicationAnswers(
+      configForApplication(configs, application),
+      application.answers,
+      application.answerLabels,
+    )) drawLine(`${answer.label}: ${answer.values.join(", ")}`);
     if (application.resume) {
       y -= 8;
       drawLine(`Lebenslauf: ${application.resume.fileName}`);

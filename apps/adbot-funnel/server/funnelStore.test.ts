@@ -57,6 +57,7 @@ describe("Mehr-Funnel-Speicher", () => {
     expect(created.metaFbp).toBe("fb.1.123.456");
     expect(created.metaFbc).toBe("fb.1.123.click");
     expect(created.resume?.fileName).toBe("cv.pdf");
+    expect(created.answerLabels?.arbeitsbereich?.vertrieb).toBe("Vertrieb");
     expect((await getApplication(created.id))?.contact.email).toBe("erika@example.org");
     expect((await listApplications()).some(item => item.id === created.id)).toBe(true);
     expect((await updateApplicationStatus(created.id, "contacted"))?.status).toBe("contacted");

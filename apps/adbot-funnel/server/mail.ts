@@ -15,7 +15,11 @@ export function buildApplicationNotificationHtml(config: FunnelConfig, applicati
   const contactRows = Object.entries(application.contact)
     .map(([key, value]) => `<tr><td style="padding:6px 12px 6px 0;color:#5c6b7a">${escapeHtml(key)}</td><td style="padding:6px 0"><strong>${escapeHtml(value)}</strong></td></tr>`)
     .join("");
-  const answerRows = resolveApplicationAnswers(config, application.answers)
+  const answerRows = resolveApplicationAnswers(
+    config,
+    application.answers,
+    application.answerLabels,
+  )
     .map(answer => `<tr><td style="padding:6px 12px 6px 0;color:#5c6b7a">${escapeHtml(answer.label)}</td><td style="padding:6px 0">${escapeHtml(answer.values.join(", "))}</td></tr>`)
     .join("");
 
