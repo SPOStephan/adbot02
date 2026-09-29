@@ -14,6 +14,7 @@ import { touchMemberLogin } from "./funnelMembers";
 import { publicProcedure, router } from "./_core/trpc";
 import { funnelRouter } from "./routers/funnel";
 import { membersRouter } from "./routers/members";
+import { mailLogRouter } from "./routers/mailLog";
 
 export const appRouter = router({
   system: systemRouter,
@@ -61,6 +62,7 @@ export const appRouter = router({
   }),
   funnel: funnelRouter,
   members: membersRouter,
+  mailLog: mailLogRouter,
 });
 
 export type AppRouter = typeof appRouter;
