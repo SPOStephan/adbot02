@@ -3,6 +3,7 @@ import { defaultFunnel } from "@shared/defaultFunnel";
 import {
   resolveApplicationAnswers,
   snapshotApplicationAnswerLabels,
+  snapshotApplicationQuestionLabels,
 } from "@shared/applicationAnswers";
 
 describe("lesbare Bewerbungsantworten", () => {
@@ -10,7 +11,8 @@ describe("lesbare Bewerbungsantworten", () => {
     const config = structuredClone(defaultFunnel);
     const choicePage = config.pages.find(page => page.type === "choice-grid");
     if (!choicePage || choicePage.type !== "choice-grid") throw new Error("Auswahlseite fehlt");
-    choicePage.name = "Vertriebserfahrung";
+    choicePage.name = "vertriebs-erfahrung";
+    choicePage.title = "Welche <em>Vertriebs\u00ADerfahrung</em> bringst du mit?";
     choicePage.questionKey = "question-32395331-216c-4e1c-99cc-73256a3bdcb3";
     choicePage.options[0] = {
       ...choicePage.options[0]!,
@@ -21,7 +23,7 @@ describe("lesbare Bewerbungsantworten", () => {
     expect(resolveApplicationAnswers(config, {
       [choicePage.questionKey]: ["anderer-vertrieb-telefonvertrieb-au-endienst"],
     })).toEqual([{
-      label: "Vertriebserfahrung",
+      label: "Welche Vertriebserfahrung bringst du mit?",
       values: ["Anderer Vertrieb / Telefonvertrieb / Außendienst"],
     }]);
   });
@@ -40,6 +42,29 @@ describe("lesbare Bewerbungsantworten", () => {
     expect(resolveApplicationAnswers(config, answers, snapshots)[0]?.values).toEqual([
       "Immobilienkaufmann/-frau",
     ]);
+  });
+
+  it("bewahrt die Frage im Wortlaut vom Zeitpunkt der Bewerbung", () => {
+    const config = structuredClone(defaultFunnel);
+    const choicePage = config.pages.find(page => page.type === "choice-grid");
+    if (!choicePage || choicePage.type !== "choice-grid") throw new Error("Auswahlseite fehlt");
+    const answers = { [choicePage.questionKey]: [choicePage.options[0]!.value] };
+    const questions = snapshotApplicationQuestionLabels(config, answers);
+
+    choicePage.title = "Später umformulierte Frage";
+
+    expect(resolveApplicationAnswers(config, answers, undefined, questions)[0]?.label)
+      .toBe("Welcher Bereich passt am besten zu dir?");
+  });
+
+  it("nutzt den Untertitel, wenn die Überschrift leer ist", () => {
+    const config = structuredClone(defaultFunnel);
+    const choicePage = config.pages.find(page => page.type === "choice-grid");
+    if (!choicePage || choicePage.type !== "choice-grid") throw new Error("Auswahlseite fehlt");
+    choicePage.title = "";
+    choicePage.subtitle = "Wähle deinen Bereich";
+    expect(resolveApplicationAnswers(config, { [choicePage.questionKey]: [] })[0]?.label)
+      .toBe("Wähle deinen Bereich");
   });
 
   it("erhält lesbare Legacy-Schlüssel und verbirgt veraltete technische Referenzen", () => {

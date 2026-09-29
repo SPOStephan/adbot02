@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge, statusLabels } from "./Applications";
+import { DeleteApplicationButton, formatPurgeDate, RestoreApplicationButton } from "@/components/admin/ApplicationTrashControls";
 
 function qualityLabel(quality?: LeadQuality) {
   return quality ? LEAD_QUALITY_LABELS[quality] : "Noch nicht bewertet";
@@ -100,6 +101,7 @@ export default function ApplicationDetail() {
             Eingegangen am {new Date(application.createdAt).toLocaleString("de-DE")}
           </p>
         </div>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
         <Select
           value={application.status}
           onValueChange={status => update.mutate({ id: application.id, status: status as ApplicationStatus })}
@@ -114,7 +116,25 @@ export default function ApplicationDetail() {
             ))}
           </SelectContent>
         </Select>
+        {!application.deletedAt && (
+          <DeleteApplicationButton
+            variant="button"
+            applicationId={application.id}
+            personLabel={application.contact.name || "unbekannt"}
+            onDeleted={() => setLocation(backPath)}
+          />
+        )}
+        </div>
       </header>
+
+      {application.deletedAt && application.purgeAt && (
+        <section className="flex flex-col justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 sm:flex-row sm:items-center" role="status">
+          <p>
+            Dieser Eintrag liegt im Papierkorb und wird am {formatPurgeDate(application.purgeAt)} endgültig gelöscht.
+          </p>
+          <RestoreApplicationButton applicationId={application.id} />
+        </section>
+      )}
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -181,7 +201,7 @@ export default function ApplicationDetail() {
           <div className="mt-5 grid gap-3">
             {application.displayAnswers.map((answer, index) => (
               <div key={`${answer.label}-${index}`} className="rounded-xl bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{answer.label}</p>
+                <p className="text-sm text-muted-foreground">{answer.label}</p>
                 <p className="mt-2 font-semibold">{answer.values.join(", ")}</p>
               </div>
             ))}

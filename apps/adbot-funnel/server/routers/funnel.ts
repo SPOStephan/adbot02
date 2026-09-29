@@ -17,7 +17,7 @@ import { stripFormattedText } from "@shared/formattedText";
 import type { User } from "../../drizzle/schema";
 import { createFunnelMediaAsset, listFunnelMediaAssets } from "../funnelMediaStore";
 import { storePublicFunnelImage } from "../publicFunnelImageStore";
-import { storagePut } from "../storage";
+import { storagePut, storageRemove } from "../storage";
 import { adminProcedure, publicProcedure, router } from "../_core/trpc";
 import { getTenantOwnerUserId, isPlatformAdmin } from "../_core/session";
 import {
@@ -33,11 +33,14 @@ import {
   isPersistentStoreConfigured,
   listApplications,
   listFunnels,
+  purgeExpiredApplications,
+  restoreApplication,
   saveFunnel,
   saveMetaServerSettings,
   getFunnelOwner,
   setFunnelOwner,
   slugifyFunnel,
+  trashApplication,
   updateApplicationLeadQuality,
   updateApplicationStatus,
 } from "../funnelStore";
@@ -45,6 +48,7 @@ import { sendApplicationNotification } from "../mail";
 import { buildApplicationsCsv, buildApplicationsPdf } from "../exports";
 import { sendMetaApplicationConversion, sendMetaLeadQualityEvent } from "../metaConversions";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
+import { applicationPurgeAt } from "@shared/applicationTrash";
 import {
   listCustomDomainsForFunnel,
   markCustomDomainReady,
@@ -127,18 +131,46 @@ async function assertSlugAvailable(slug: string, currentId?: string) {
   }
 }
 
-async function applicationsWithConfigs(funnelId: string | undefined, user: User) {
-  let applications;
+async function listVisibleApplications(funnelId: string | undefined, user: User, options: { trash?: boolean } = {}) {
   if (funnelId) {
     await requireOwnedFunnel(funnelId, user);
-    applications = await listApplications(funnelId);
-  } else if (isPlatformAdmin(user)) {
-    applications = await listApplications();
-  } else {
-    const owned = await listFunnels({ ownerUserId: user.openId });
-    const batches = await Promise.all(owned.map(item => listApplications(item.id)));
-    applications = batches.flat();
+    return listApplications(funnelId, options);
   }
+  if (isPlatformAdmin(user)) return listApplications(undefined, options);
+  const owned = await listFunnels({ ownerUserId: user.openId });
+  const batches = await Promise.all(owned.map(item => listApplications(item.id, options)));
+  return batches.flat();
+}
+
+const PURGE_INTERVAL_MS = 10 * 60 * 1000;
+let lastPurgeAt = 0;
+
+/**
+ * Removes entries whose trash retention has expired, together with their
+ * uploaded CV. Runs opportunistically when the admin inbox is loaded and at
+ * most every few minutes per server instance; failures never block the inbox.
+ */
+async function purgeExpiredApplicationsInBackground() {
+  if (Date.now() - lastPurgeAt < PURGE_INTERVAL_MS) return;
+  lastPurgeAt = Date.now();
+  try {
+    const purged = await purgeExpiredApplications();
+    const resumeKeys = purged.flatMap(application => (application.resume?.key ? [application.resume.key] : []));
+    if (resumeKeys.length > 0) await storageRemove(resumeKeys);
+  } catch (error) {
+    console.error("[Funnel] Papierkorb konnte nicht bereinigt werden", error);
+  }
+}
+
+async function requireOwnedApplication(id: string, user: User) {
+  const application = await getApplication(id);
+  if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
+  await requireOwnedFunnel(application.funnelId, user);
+  return application;
+}
+
+async function applicationsWithConfigs(funnelId: string | undefined, user: User) {
+  const applications = await listVisibleApplications(funnelId, user);
 
   const funnelIds = Array.from(new Set(applications.map(application => application.funnelId)));
   const configs = (await Promise.all(funnelIds.map(id => getFunnelById(id))))
@@ -1070,15 +1102,42 @@ export const funnelRouter = router({
     }),
 
   applications: adminProcedure.input(optionalFunnelFilter).query(async ({ input, ctx }) => {
-    if (input?.funnelId) {
-      await requireOwnedFunnel(input.funnelId, ctx.user);
-      return listApplications(input.funnelId);
-    }
-    if (isPlatformAdmin(ctx.user)) return listApplications();
-    const owned = await listFunnels({ ownerUserId: ctx.user.openId });
-    const batches = await Promise.all(owned.map(item => listApplications(item.id)));
-    return batches.flat();
+    await purgeExpiredApplicationsInBackground();
+    return listVisibleApplications(input?.funnelId, ctx.user);
   }),
+
+  trashedApplications: adminProcedure.input(optionalFunnelFilter).query(async ({ input, ctx }) => {
+    await purgeExpiredApplicationsInBackground();
+    const applications = await listVisibleApplications(input?.funnelId, ctx.user, { trash: true });
+    return applications
+      .map(application => ({
+        ...application,
+        purgeAt: applicationPurgeAt(application.deletedAt!).toISOString(),
+      }))
+      .sort((left, right) => right.deletedAt!.localeCompare(left.deletedAt!));
+  }),
+
+  deleteApplication: adminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await requireOwnedApplication(input.id, ctx.user);
+      const application = existing.deletedAt ? existing : await trashApplication(input.id);
+      if (!application?.deletedAt) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
+      return {
+        id: application.id,
+        deletedAt: application.deletedAt,
+        purgeAt: applicationPurgeAt(application.deletedAt).toISOString(),
+      };
+    }),
+
+  restoreApplication: adminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      await requireOwnedApplication(input.id, ctx.user);
+      const application = await restoreApplication(input.id);
+      if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Eintrag nicht gefunden." });
+      return application;
+    }),
 
   application: adminProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ input, ctx }) => {
     const application = await getApplication(input.id);
@@ -1087,10 +1146,12 @@ export const funnelRouter = router({
     const config = await getFunnelById(application.funnelId) ?? await getFunnel(application.funnelSlug) ?? undefined;
     return {
       ...application,
+      purgeAt: application.deletedAt ? applicationPurgeAt(application.deletedAt).toISOString() : undefined,
       displayAnswers: resolveApplicationAnswers(
         config,
         application.answers,
         application.answerLabels,
+        application.questionLabels,
       ),
     };
   }),
@@ -1135,6 +1196,7 @@ export const funnelRouter = router({
           config,
           application.answers,
           application.answerLabels,
+          application.questionLabels,
         ),
         metaQuality: metaQuality.status,
         metaQualityReason: "reason" in metaQuality ? metaQuality.reason : undefined,

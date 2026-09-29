@@ -26,7 +26,8 @@ import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { normalizeFunnelLegal } from "@shared/legalPages";
 import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
-import { snapshotApplicationAnswerLabels } from "@shared/applicationAnswers";
+import { snapshotApplicationAnswerLabels, snapshotApplicationQuestionLabels } from "@shared/applicationAnswers";
+import { applicationPurgeCutoff } from "@shared/applicationTrash";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
 
@@ -483,18 +484,25 @@ async function readAllFunnelRows(supabase: SupabaseClient) {
   return rows;
 }
 
+type ApplicationCountRow = { funnel_id: string; status: ApplicationStatus; deleted_at: string | null };
+
+/** Status per entry for the funnel counters; entries in the trash are not counted. */
 async function readAllApplicationCountRows(supabase: SupabaseClient) {
-  const rows: Array<{ funnel_id: string; status: ApplicationStatus }> = [];
+  const rows: ApplicationCountRow[] = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("applications")
-      .select("funnel_id,status")
+      .select("funnel_id,status,deleted_at:utm->>__deletedAt")
       .range(offset, offset + PAGE_SIZE - 1);
     if (error) throw error;
-    rows.push(...((data ?? []) as Array<{ funnel_id: string; status: ApplicationStatus }>));
+    rows.push(...((data ?? []) as unknown as ApplicationCountRow[]));
     if ((data?.length ?? 0) < PAGE_SIZE) break;
   }
-  return rows;
+  return rows.filter(row => !row.deleted_at);
+}
+
+function liveMemoryApplications() {
+  return memoryApplications.filter(application => !application.deletedAt);
 }
 
 function toFunnelSummary(
@@ -534,7 +542,7 @@ export async function listFunnels(filter?: { ownerUserId?: string }): Promise<Fu
     return memoryFunnels
       .filter(item => !ownerFilter || item.owner.userId === ownerFilter)
       .map(item => {
-        const applications = memoryApplications.filter(application => application.funnelId === item.config.id);
+        const applications = liveMemoryApplications().filter(application => application.funnelId === item.config.id);
         return toFunnelSummary(
           item.config,
           item.owner,
@@ -592,7 +600,7 @@ export async function setFunnelOwner(funnelId: string, owner: Partial<FunnelOwne
     if (!existing) return null;
     existing.owner = nextOwner;
     existing.updatedAt = new Date().toISOString();
-    const applications = memoryApplications.filter(application => application.funnelId === funnelId);
+    const applications = liveMemoryApplications().filter(application => application.funnelId === funnelId);
     return toFunnelSummary(
       existing.config,
       existing.owner,
@@ -671,6 +679,7 @@ export async function createApplication(submission: ApplicationSubmission): Prom
     status: "new",
     answers: submission.answers,
     answerLabels: snapshotApplicationAnswerLabels(funnel, submission.answers),
+    questionLabels: snapshotApplicationQuestionLabels(funnel, submission.answers),
     contact: submission.contact,
     consentAt: now,
     metaEventId: submission.metaEventId,
@@ -721,6 +730,8 @@ const APPLICATION_SIDECAR_KEYS = [
   "__leadQualityEventId",
   "__leadQualityMetaStatus",
   "__answerLabels",
+  "__questionLabels",
+  "__deletedAt",
 ] as const;
 
 type ApplicationSidecar = Partial<Record<(typeof APPLICATION_SIDECAR_KEYS)[number], string>>;
@@ -742,6 +753,10 @@ function encodeApplicationSidecar(record: ApplicationRecord): Record<string, str
     ...(record.answerLabels
       ? { __answerLabels: JSON.stringify(record.answerLabels) }
       : {}),
+    ...(record.questionLabels && Object.keys(record.questionLabels).length > 0
+      ? { __questionLabels: JSON.stringify(record.questionLabels) }
+      : {}),
+    ...(record.deletedAt ? { __deletedAt: record.deletedAt } : {}),
   };
 }
 
@@ -760,6 +775,23 @@ function parseApplicationAnswerLabels(
         if (typeof label === "string" && label.trim()) validLabels[optionValue] = label;
       }
       if (Object.keys(validLabels).length > 0) result[key] = validLabels;
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseApplicationQuestionLabels(
+  value: string | undefined,
+): ApplicationRecord["questionLabels"] {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const result: NonNullable<ApplicationRecord["questionLabels"]> = {};
+    for (const [key, label] of Object.entries(parsed)) {
+      if (typeof label === "string" && label.trim()) result[key] = label;
     }
     return Object.keys(result).length > 0 ? result : undefined;
   } catch {
@@ -797,6 +829,7 @@ function mapApplication(row: Record<string, unknown>): ApplicationRecord {
     status: row.status as ApplicationStatus,
     answers: row.answers as ApplicationRecord["answers"],
     answerLabels: parseApplicationAnswerLabels(sidecar.__answerLabels),
+    questionLabels: parseApplicationQuestionLabels(sidecar.__questionLabels),
     contact: row.contact as ApplicationRecord["contact"],
     consentAt: String(row.consent_at),
     trackingConsentAt: sidecar.__trackingConsentAt || undefined,
@@ -812,13 +845,24 @@ function mapApplication(row: Record<string, unknown>): ApplicationRecord {
     sourceUrl: row.source_url ? String(row.source_url) : undefined,
     utm,
     createdAt: String(row.created_at),
+    deletedAt: sidecar.__deletedAt || undefined,
   };
 }
 
-export async function listApplications(funnelId?: string): Promise<ApplicationRecord[]> {
+/**
+ * Lists a funnel's entries (or all entries). By default entries in the trash
+ * are hidden; `{ trash: true }` lists only the trashed ones instead.
+ */
+export async function listApplications(
+  funnelId?: string,
+  options: { trash?: boolean } = {},
+): Promise<ApplicationRecord[]> {
+  const inView = (application: ApplicationRecord) => Boolean(application.deletedAt) === Boolean(options.trash);
   const supabase = getSupabase();
   if (!supabase) {
-    return structuredClone(funnelId ? memoryApplications.filter(item => item.funnelId === funnelId) : memoryApplications);
+    return structuredClone(
+      memoryApplications.filter(item => (!funnelId || item.funnelId === funnelId) && inView(item)),
+    );
   }
   const rows: Record<string, unknown>[] = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
@@ -832,7 +876,7 @@ export async function listApplications(funnelId?: string): Promise<ApplicationRe
     rows.push(...((data ?? []) as Record<string, unknown>[]));
     if ((data?.length ?? 0) < PAGE_SIZE) break;
   }
-  return rows.map(mapApplication);
+  return rows.map(mapApplication).filter(inView);
 }
 
 export async function getApplication(id: string): Promise<ApplicationRecord | null> {
@@ -891,6 +935,66 @@ export async function updateApplicationLeadQuality(
     .maybeSingle();
   if (error) throw error;
   return data ? mapApplication(data) : null;
+}
+
+async function writeApplicationSidecar(id: string, patch: Partial<ApplicationRecord>) {
+  const supabase = getSupabase();
+  if (!supabase) {
+    const item = memoryApplications.find(application => application.id === id);
+    if (!item) return null;
+    Object.assign(item, patch);
+    return structuredClone(item);
+  }
+  const existing = await getApplication(id);
+  if (!existing) return null;
+  const { data, error } = await supabase
+    .from("applications")
+    .update({ utm: encodeApplicationSidecar({ ...existing, ...patch }) })
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapApplication(data) : null;
+}
+
+/** Moves an entry to the trash. It stays restorable until it is purged. */
+export async function trashApplication(id: string, deletedAt = new Date().toISOString()) {
+  return writeApplicationSidecar(id, { deletedAt });
+}
+
+/** Takes an entry back out of the trash. */
+export async function restoreApplication(id: string) {
+  return writeApplicationSidecar(id, { deletedAt: undefined });
+}
+
+/**
+ * Permanently removes entries that have been in the trash for longer than the
+ * retention period and returns them, so their uploaded files can be removed too.
+ */
+export async function purgeExpiredApplications(now: Date = new Date()): Promise<ApplicationRecord[]> {
+  const cutoff = applicationPurgeCutoff(now);
+  const isExpired = (application: ApplicationRecord) =>
+    Boolean(application.deletedAt) && application.deletedAt! < cutoff;
+  const supabase = getSupabase();
+  if (!supabase) {
+    const expired = memoryApplications.filter(isExpired);
+    for (const item of expired) memoryApplications.splice(memoryApplications.indexOf(item), 1);
+    return structuredClone(expired);
+  }
+  const { data, error } = await supabase
+    .from("applications")
+    .select("*")
+    .lt("utm->>__deletedAt", cutoff)
+    .limit(PAGE_SIZE);
+  if (error) throw error;
+  const expired = ((data ?? []) as Record<string, unknown>[]).map(mapApplication).filter(isExpired);
+  if (expired.length === 0) return [];
+  const { error: deleteError } = await supabase
+    .from("applications")
+    .delete()
+    .in("id", expired.map(application => application.id));
+  if (deleteError) throw deleteError;
+  return expired;
 }
 
 export function resetMemoryStoreForTests() {

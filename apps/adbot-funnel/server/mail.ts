@@ -24,8 +24,9 @@ export function buildApplicationNotificationHtml(config: FunnelConfig, applicati
     config,
     application.answers,
     application.answerLabels,
+    application.questionLabels,
   )
-    .map(answer => `<tr><td style="padding:6px 12px 6px 0;color:#5c6b7a">${escapeHtml(answer.label)}</td><td style="padding:6px 0">${escapeHtml(answer.values.join(", "))}</td></tr>`)
+    .map(answer => `<tr><td style="padding:10px 0;border-top:1px solid #e3e8ee"><div style="color:#5c6b7a">${escapeHtml(answer.label)}</div><div style="margin-top:4px"><strong>${escapeHtml(answer.values.join(", "))}</strong></div></td></tr>`)
     .join("");
 
   return `
@@ -34,7 +35,7 @@ export function buildApplicationNotificationHtml(config: FunnelConfig, applicati
       <h1 style="font-size:24px;margin:28px 0 8px">Neue ${escapeHtml(submissionLabel)} eingegangen</h1>
       <p style="color:#5c6b7a">Funnel: ${escapeHtml(config.title)} · ${escapeHtml(new Date(application.createdAt).toLocaleString("de-DE"))}</p>
       <h2 style="font-size:17px;margin-top:28px">Kontaktdaten</h2><table>${contactRows}</table>
-      <h2 style="font-size:17px;margin-top:28px">Antworten</h2><table>${answerRows}</table>
+      <h2 style="font-size:17px;margin-top:28px">Antworten</h2><table style="width:100%;border-collapse:collapse">${answerRows}</table>
       ${application.resume ? `<p style="margin-top:24px"><strong>Lebenslauf:</strong> ${escapeHtml(application.resume.fileName)}</p>` : ""}
       <p style="margin-top:32px;color:#5c6b7a;font-size:13px">Der vollständige Eintrag ist im geschützten Admin-Bereich verfügbar.</p>
     </div>`;

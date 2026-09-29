@@ -12,10 +12,13 @@ import {
   listApplications,
   listFunnels,
   normalizeFunnelConfig,
+  purgeExpiredApplications,
   resetMemoryStoreForTests,
+  restoreApplication,
   saveFunnel,
   setFunnelOwner,
   slugifyFunnel,
+  trashApplication,
   updateApplicationLeadQuality,
   updateApplicationStatus,
 } from "./funnelStore";
@@ -174,5 +177,34 @@ describe("Mehr-Funnel-Speicher", () => {
     const reassigned = await setFunnelOwner(owned.id, { userId: otherOwnerId, email: "neu@example.org" });
     expect(reassigned).toMatchObject({ ownerUserId: otherOwnerId, ownerEmail: "neu@example.org" });
     expect(await listFunnels({ ownerUserId: ownerId })).toEqual([]);
+  });
+  it("hält gelöschte Einträge 14 Tage im Papierkorb und entfernt sie danach endgültig", async () => {
+    const funnel = { ...structuredClone(defaultFunnel), id: "30000000-0000-4000-8000-000000000002", slug: "papierkorb-test" };
+    await saveFunnel(funnel);
+    const application = await createApplication({
+      funnelSlug: funnel.slug,
+      answers: { arbeitsbereich: ["vertrieb"] },
+      contact: { name: "Testeintrag", email: "test@example.org", phone: "+49 123" },
+      consent: true,
+    });
+    const countFor = async () => (await listFunnels()).find(item => item.id === funnel.id)?.applicationCount;
+    expect(await countFor()).toBe(1);
+
+    await trashApplication(application.id, "2026-09-01T10:00:00.000Z");
+    expect(await listApplications()).toEqual([]);
+    expect((await listApplications(undefined, { trash: true })).map(item => item.id)).toEqual([application.id]);
+    expect(await countFor()).toBe(0);
+
+    expect(await purgeExpiredApplications(new Date("2026-09-15T09:59:00.000Z"))).toEqual([]);
+    expect(await getApplication(application.id)).not.toBeNull();
+
+    await restoreApplication(application.id);
+    expect((await listApplications()).map(item => item.id)).toEqual([application.id]);
+    expect((await getApplication(application.id))?.deletedAt).toBeUndefined();
+
+    await trashApplication(application.id, "2026-09-01T10:00:00.000Z");
+    const purged = await purgeExpiredApplications(new Date("2026-09-15T10:01:00.000Z"));
+    expect(purged.map(item => item.id)).toEqual([application.id]);
+    expect(await getApplication(application.id)).toBeNull();
   });
 });

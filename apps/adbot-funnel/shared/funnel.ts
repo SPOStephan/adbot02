@@ -478,6 +478,9 @@ export type FunnelAnswers = Record<string, string[]>;
 /** questionKey → stable option value → label visible at submission time */
 export type ApplicationAnswerLabels = Record<string, Record<string, string>>;
 
+/** questionKey → question wording visible at submission time */
+export type ApplicationQuestionLabels = Record<string, string>;
+
 export type ApplicationContact = Partial<Record<ContactFieldKey, string>>;
 
 export type ResumeMetadata = {
@@ -512,6 +515,7 @@ export type ApplicationRecord = {
   status: ApplicationStatus;
   answers: FunnelAnswers;
   answerLabels?: ApplicationAnswerLabels;
+  questionLabels?: ApplicationQuestionLabels;
   contact: ApplicationContact;
   consentAt: string;
   trackingConsentAt?: string;
@@ -527,4 +531,6 @@ export type ApplicationRecord = {
   sourceUrl?: string;
   utm: Record<string, string>;
   createdAt: string;
+  /** Set when an admin moved the entry to the trash; purged after the retention period. */
+  deletedAt?: string;
 };

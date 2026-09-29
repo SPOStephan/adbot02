@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Download, FileDown, Inbox, Loader2, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Download, FileDown, Inbox, Loader2, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 import type { ApplicationRecord, ApplicationStatus, LeadQuality } from "@shared/funnel";
@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DeleteApplicationButton, formatPurgeDate, RestoreApplicationButton } from "@/components/admin/ApplicationTrashControls";
+import { APPLICATION_TRASH_RETENTION_DAYS } from "@shared/applicationTrash";
 
 export const statusLabels: Record<ApplicationStatus, string> = {
   new: "Neu",
@@ -61,12 +63,14 @@ export default function Applications() {
   const [selectedFunnel, setSelectedFunnel] = useState(routedFunnelId ?? "all");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ApplicationFilter>("all");
+  const [showTrash, setShowTrash] = useState(false);
 
   useEffect(() => { if (routedFunnelId) setSelectedFunnel(routedFunnelId); }, [routedFunnelId]);
 
   const funnelId = routedFunnelId ?? (selectedFunnel === "all" ? undefined : selectedFunnel);
   const queryInput = useMemo(() => funnelId ? { funnelId } : undefined, [funnelId]);
   const query = trpc.funnel.applications.useQuery(queryInput);
+  const trashQuery = trpc.funnel.trashedApplications.useQuery(queryInput);
   const csv = trpc.funnel.exportCsv.useMutation({ onSuccess: download => downloadBase64File(download.fileName, download.mimeType, download.dataBase64), onError: error => toast.error(error.message) });
   const pdf = trpc.funnel.exportPdf.useMutation({ onSuccess: download => downloadBase64File(download.fileName, download.mimeType, download.dataBase64), onError: error => toast.error(error.message) });
 
@@ -80,9 +84,10 @@ export default function Applications() {
     <div className="mx-auto w-full max-w-7xl space-y-6 p-2 sm:p-4">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>{routedFunnelId && <Button variant="ghost" className="-ml-3 mb-2" onClick={() => setLocation("/admin")}><ArrowLeft className="size-4" />Funnel-Bibliothek</Button>}<p className="text-xs font-bold uppercase tracking-[.15em] text-[#0165c3]">Funnel Inbox</p><h1 className="mt-1 text-3xl font-bold tracking-tight">{selectedSummary ? `Eingänge · ${selectedSummary.title}` : "Eingänge"}</h1><p className="mt-2 text-sm text-muted-foreground">{selectedSummary ? `Alle Einsendungen dieses Funnels — öffentlich unter der gebundenen Domain bzw. /f/${selectedSummary.slug}.` : "Alle eingegangenen Funnel-Einträge prüfen, nach Funnel filtern und exportieren."}</p></div>
-        <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={csv.isPending || query.isLoading} aria-busy={csv.isPending} onClick={() => csv.mutate(queryInput)}>{csv.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}CSV exportieren</Button><Button variant="outline" disabled={pdf.isPending || query.isLoading} aria-busy={pdf.isPending} onClick={() => pdf.mutate(queryInput)}>{pdf.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FileDown className="size-4" aria-hidden="true" />}PDF exportieren</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={csv.isPending || query.isLoading} aria-busy={csv.isPending} onClick={() => csv.mutate(queryInput)}>{csv.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}CSV exportieren</Button><Button variant={showTrash ? "default" : "outline"} aria-pressed={showTrash} onClick={() => setShowTrash(value => !value)}><Trash2 className="size-4" aria-hidden="true" />Papierkorb{trashQuery.data?.length ? ` (${trashQuery.data.length})` : ""}</Button><Button variant="outline" disabled={pdf.isPending || query.isLoading} aria-busy={pdf.isPending} onClick={() => pdf.mutate(queryInput)}>{pdf.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FileDown className="size-4" aria-hidden="true" />}PDF exportieren</Button></div>
       </header>
 
+      {showTrash ? <TrashSection query={trashQuery} funnelTitles={funnelTitles} showFunnel={!routedFunnelId} /> : <>
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat label="Gesamt" value={totals.all} active={status === "all"} onClick={() => setStatus("all")} />
         <Stat label="Neu" value={totals.new} active={status === "new"} onClick={() => setStatus("new")} />
@@ -97,10 +102,11 @@ export default function Applications() {
         </div>
 
         {query.isLoading ? <div className="grid min-h-72 place-items-center" role="status" aria-live="polite"><span className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin text-[#0165c3]" aria-hidden="true" />Eingänge werden geladen …</span></div> : query.error ? <div className="p-8 text-center text-destructive" role="alert">{query.error.message}</div> : applications.length === 0 ? <EmptyState hasAny={(query.data?.length ?? 0) > 0} /> : <>
-          <div className="hidden md:block"><Table><TableHeader><TableRow><TableHead>Person / Kontakt</TableHead>{!routedFunnelId && <TableHead>Funnel</TableHead>}<TableHead>Kontaktdaten</TableHead><TableHead>Eingang</TableHead><TableHead>Status</TableHead><TableHead>Bewertung</TableHead><TableHead className="text-right">Antworten</TableHead></TableRow></TableHeader><TableBody>{applications.map(application => <ApplicationRow key={application.id} application={application} funnelTitle={funnelTitles.get(application.funnelSlug)} showFunnel={!routedFunnelId} onOpen={() => openApplication(application)} />)}</TableBody></Table></div>
-          <div className="divide-y md:hidden">{applications.map(application => <button key={application.id} className="block w-full p-4 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0165c3]" onClick={() => openApplication(application)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="block truncate">{application.contact.name || "Ohne Namen"}</strong><span className="mt-1 block truncate text-xs text-muted-foreground">{application.contact.email || application.contact.phone || "Keine Kontaktdaten"}</span>{!routedFunnelId && <span className="mt-1 block truncate text-xs font-semibold text-[#0165c3]">{funnelTitles.get(application.funnelSlug) ?? application.funnelSlug}</span>}</div><div className="flex flex-col items-end gap-2"><StatusBadge status={application.status} /><QualityBadge quality={application.leadQuality} value={application.leadValue} /></div></div><div className="mt-3 flex items-center justify-between text-xs text-muted-foreground"><span>{new Date(application.createdAt).toLocaleDateString("de-DE")}</span><span>{Object.keys(application.answers).length} Antworten</span></div></button>)}</div>
+          <div className="hidden md:block"><Table><TableHeader><TableRow><TableHead>Person / Kontakt</TableHead>{!routedFunnelId && <TableHead>Funnel</TableHead>}<TableHead>Kontaktdaten</TableHead><TableHead>Eingang</TableHead><TableHead>Status</TableHead><TableHead>Bewertung</TableHead><TableHead className="text-right">Antworten</TableHead><TableHead className="w-12"><span className="sr-only">Löschen</span></TableHead></TableRow></TableHeader><TableBody>{applications.map(application => <ApplicationRow key={application.id} application={application} funnelTitle={funnelTitles.get(application.funnelSlug)} showFunnel={!routedFunnelId} onOpen={() => openApplication(application)} />)}</TableBody></Table></div>
+          <div className="divide-y md:hidden">{applications.map(application => <div key={application.id} className="flex items-start"><button className="block min-w-0 flex-1 p-4 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0165c3]" onClick={() => openApplication(application)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="block truncate">{application.contact.name || "Ohne Namen"}</strong><span className="mt-1 block truncate text-xs text-muted-foreground">{application.contact.email || application.contact.phone || "Keine Kontaktdaten"}</span>{!routedFunnelId && <span className="mt-1 block truncate text-xs font-semibold text-[#0165c3]">{funnelTitles.get(application.funnelSlug) ?? application.funnelSlug}</span>}</div><div className="flex flex-col items-end gap-2"><StatusBadge status={application.status} /><QualityBadge quality={application.leadQuality} value={application.leadValue} /></div></div><div className="mt-3 flex items-center justify-between text-xs text-muted-foreground"><span>{new Date(application.createdAt).toLocaleDateString("de-DE")}</span><span>{Object.keys(application.answers).length} Antworten</span></div></button><div className="py-3 pr-2"><DeleteApplicationButton applicationId={application.id} personLabel={application.contact.name || "unbekannt"} /></div></div>)}</div>
         </>}
       </section>
+      </>}
     </div>
   );
 }
@@ -110,9 +116,36 @@ function Stat({ label, value, active, onClick }: { label: string; value: number;
 }
 
 function ApplicationRow({ application, funnelTitle, showFunnel, onOpen }: { application: ApplicationRecord; funnelTitle?: string; showFunnel: boolean; onOpen: () => void }) {
-  return <TableRow className="cursor-pointer" onClick={onOpen}><TableCell><button type="button" className="rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3]" aria-label={`Eintrag von ${application.contact.name || "unbekannt"} öffnen`} onClick={event => { event.stopPropagation(); onOpen(); }}><strong className="block">{application.contact.name || "Ohne Namen"}</strong><span className="text-xs text-muted-foreground">{application.contact.company || "–"}</span></button></TableCell>{showFunnel && <TableCell><span className="block max-w-44 truncate text-sm font-semibold">{funnelTitle ?? application.funnelSlug}</span><span className="font-mono text-[10px] text-muted-foreground">/f/{application.funnelSlug}</span></TableCell>}<TableCell><span className="block text-sm">{application.contact.email || "–"}</span><span className="text-xs text-muted-foreground">{application.contact.phone || ""}</span></TableCell><TableCell><span className="block text-sm">{new Date(application.createdAt).toLocaleDateString("de-DE")}</span><span className="text-xs text-muted-foreground">{new Date(application.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span></TableCell><TableCell><StatusBadge status={application.status} /></TableCell><TableCell><QualityBadge quality={application.leadQuality} value={application.leadValue} /></TableCell><TableCell className="text-right font-semibold">{Object.keys(application.answers).length}</TableCell></TableRow>;
+  return <TableRow className="cursor-pointer" onClick={onOpen}><TableCell><button type="button" className="rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3]" aria-label={`Eintrag von ${application.contact.name || "unbekannt"} öffnen`} onClick={event => { event.stopPropagation(); onOpen(); }}><strong className="block">{application.contact.name || "Ohne Namen"}</strong><span className="text-xs text-muted-foreground">{application.contact.company || "–"}</span></button></TableCell>{showFunnel && <TableCell><span className="block max-w-44 truncate text-sm font-semibold">{funnelTitle ?? application.funnelSlug}</span><span className="font-mono text-[10px] text-muted-foreground">/f/{application.funnelSlug}</span></TableCell>}<TableCell><span className="block text-sm">{application.contact.email || "–"}</span><span className="text-xs text-muted-foreground">{application.contact.phone || ""}</span></TableCell><TableCell><span className="block text-sm">{new Date(application.createdAt).toLocaleDateString("de-DE")}</span><span className="text-xs text-muted-foreground">{new Date(application.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span></TableCell><TableCell><StatusBadge status={application.status} /></TableCell><TableCell><QualityBadge quality={application.leadQuality} value={application.leadValue} /></TableCell><TableCell className="text-right font-semibold">{Object.keys(application.answers).length}</TableCell><TableCell className="text-right"><DeleteApplicationButton applicationId={application.id} personLabel={application.contact.name || "unbekannt"} /></TableCell></TableRow>;
 }
 
 function EmptyState({ hasAny }: { hasAny: boolean }) {
   return <div className="grid min-h-72 place-items-center p-8 text-center" role="status"><div><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-blue-50 text-[#0165c3]" aria-hidden="true"><Inbox /></span><h2 className="mt-4 font-bold">{hasAny ? "Keine Treffer" : "Noch keine Eingänge"}</h2><p className="mt-2 max-w-sm text-sm text-muted-foreground">{hasAny ? "Passe Suche oder Filter an." : "Neue Einsendungen erscheinen automatisch in dieser Übersicht."}</p></div></div>;
+}
+
+type TrashedApplication = ApplicationRecord & { purgeAt: string };
+
+function TrashSection({ query, funnelTitles, showFunnel }: { query: { data?: TrashedApplication[]; isLoading: boolean; error: { message: string } | null }; funnelTitles: ReadonlyMap<string, string>; showFunnel: boolean }) {
+  const items = query.data ?? [];
+  return (
+    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+      <div className="border-b p-4">
+        <h2 className="font-bold">Papierkorb</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Gelöschte Einträge bleiben {APPLICATION_TRASH_RETENTION_DAYS} Tage hier und können wiederhergestellt werden. Danach werden sie samt Lebenslauf endgültig entfernt.</p>
+      </div>
+      {query.isLoading ? <div className="grid min-h-40 place-items-center" role="status" aria-live="polite"><Loader2 className="size-5 animate-spin text-[#0165c3]" aria-hidden="true" /></div>
+        : query.error ? <div className="p-8 text-center text-destructive" role="alert">{query.error.message}</div>
+        : items.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground" role="status">Der Papierkorb ist leer.</div>
+        : <ul className="divide-y">{items.map(application => (
+          <li key={application.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <strong className="block truncate">{application.contact.name || "Ohne Namen"}</strong>
+              <span className="block truncate text-xs text-muted-foreground">{application.contact.email || application.contact.phone || "Keine Kontaktdaten"}{showFunnel ? ` · ${funnelTitles.get(application.funnelSlug) ?? application.funnelSlug}` : ""}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">Eingegangen {new Date(application.createdAt).toLocaleDateString("de-DE")} · gelöscht {new Date(application.deletedAt!).toLocaleDateString("de-DE")} · wird am {formatPurgeDate(application.purgeAt)} endgültig gelöscht</span>
+            </div>
+            <RestoreApplicationButton applicationId={application.id} />
+          </li>
+        ))}</ul>}
+    </section>
+  );
 }

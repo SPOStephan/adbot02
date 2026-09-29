@@ -16,6 +16,7 @@ export function buildApplicationsCsv(applications: ApplicationRecord[], configs:
       configForApplication(configs, application),
       application.answers,
       application.answerLabels,
+      application.questionLabels,
     ),
   ]));
   const answerLabels = Array.from(new Set(Array.from(resolvedAnswers.values()).flatMap(answers => answers.map(answer => answer.label))));
@@ -83,7 +84,12 @@ export async function buildApplicationsPdf(applications: ApplicationRecord[], co
       configForApplication(configs, application),
       application.answers,
       application.answerLabels,
-    )) drawLine(`${answer.label}: ${answer.values.join(", ")}`);
+      application.questionLabels,
+    )) {
+      drawLine(answer.label, { color: rgb(0.36, 0.42, 0.48) });
+      drawLine(answer.values.join(", "), { bold: true });
+      y -= 4;
+    }
     if (application.resume) {
       y -= 8;
       drawLine(`Lebenslauf: ${application.resume.fileName}`);

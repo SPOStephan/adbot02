@@ -8,6 +8,7 @@ const config = structuredClone(defaultFunnel);
 const choicePage = config.pages.find(page => page.type === "choice-grid");
 if (!choicePage || choicePage.type !== "choice-grid") throw new Error("Auswahlseite fehlt");
 choicePage.name = "Sachkunde";
+choicePage.title = "Hast du einen <strong>Sachkundenachweis</strong>?";
 choicePage.questionKey = technicalQuestionKey;
 
 const application: ApplicationRecord = {
@@ -28,7 +29,7 @@ describe("Bewerbungsexporte", () => {
   it("erzeugt eine Excel-kompatible CSV mit dynamischen Antwortspalten und korrektem Escaping", () => {
     const csv = buildApplicationsCsv([application], [config]);
     expect(csv.charCodeAt(0)).toBe(0xfeff);
-    expect(csv).toContain('"Sachkunde"');
+    expect(csv).toContain('"Hast du einen Sachkundenachweis?"');
     expect(csv).not.toContain(technicalQuestionKey);
     expect(csv).toContain('"Muster; Erika"');
     expect(csv).toContain('"Beispiel ""GmbH"""');

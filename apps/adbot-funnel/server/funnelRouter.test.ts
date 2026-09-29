@@ -142,7 +142,7 @@ describe("Funnel-Router", () => {
     expect(again.metaQualityReason).toBe("tracking_disabled");
   });
 
-  it("liefert im Bewerbungs-Dashboard interne Seitennamen statt technischer Question-IDs", async () => {
+  it("liefert im Bewerbungs-Dashboard die sichtbare Frage statt technischer Question-IDs", async () => {
     const admin = appRouter.createCaller(adminContext);
     const publicCaller = appRouter.createCaller(publicContext);
     const { config } = await admin.funnel.adminConfig();
@@ -161,10 +161,33 @@ describe("Funnel-Router", () => {
     const detail = await admin.funnel.application({ id: result.id });
 
     expect(detail.displayAnswers).toEqual([
-      { label: "Sachkunde", values: ["Vertrieb"] },
-      { label: "Berufserfahrung", values: ["Mehr als 3 Jahre"] },
+      { label: "Welcher Bereich passt am besten zu dir?", values: ["Vertrieb"] },
+      { label: "Wie viel Berufserfahrung bringst du mit?", values: ["Mehr als 3 Jahre"] },
     ]);
     expect(JSON.stringify(detail.displayAnswers)).not.toContain(technicalQuestionKey);
+    expect(JSON.stringify(detail.displayAnswers)).not.toContain("Sachkunde");
+  });
+
+  it("verschiebt Einträge in den Papierkorb und stellt sie wieder her", async () => {
+    const admin = appRouter.createCaller(adminContext);
+    const publicCaller = appRouter.createCaller(publicContext);
+    const { config } = await admin.funnel.adminConfig();
+    const result = await publicCaller.funnel.submit({
+      funnelSlug: config.slug,
+      answers: { arbeitsbereich: ["vertrieb"], berufserfahrung: ["3-plus"] },
+      contact: { name: "Test Eintrag", email: "test@example.org", phone: "+49 123" },
+      consent: true,
+    });
+
+    const deleted = await admin.funnel.deleteApplication({ id: result.id });
+    expect(new Date(deleted.purgeAt).getTime() - new Date(deleted.deletedAt).getTime()).toBe(14 * 24 * 60 * 60 * 1000);
+    expect((await admin.funnel.applications()).map(item => item.id)).not.toContain(result.id);
+    expect((await admin.funnel.trashedApplications()).map(item => item.id)).toContain(result.id);
+    expect((await admin.funnel.application({ id: result.id })).purgeAt).toBe(deleted.purgeAt);
+
+    await admin.funnel.restoreApplication({ id: result.id });
+    expect((await admin.funnel.applications()).map(item => item.id)).toContain(result.id);
+    expect((await admin.funnel.trashedApplications()).map(item => item.id)).not.toContain(result.id);
   });
 
   it("schützt die Funnel-Bibliothek vor öffentlichen Aufrufen", async () => {
