@@ -3,6 +3,7 @@ import { resolveApplicationAnswers } from "@shared/applicationAnswers";
 import { funnelSubmissionLabel } from "@shared/funnelPurpose";
 import { parseNotificationEmails } from "@shared/notificationEmails";
 import { formatBerlinDateTime } from "@shared/berlinTime";
+import { recordMailLog } from "./mailLog";
 
 type MailEnvironment = {
   MAIL_FROM?: string;
@@ -91,18 +92,62 @@ export async function sendApplicationNotification(config: FunnelConfig, applicat
   const apiKey = process.env.RESEND_API_KEY;
   const from = resolveApplicationMailFrom(application);
   const recipients = parseNotificationEmails(config.notificationEmail);
-  if (!apiKey || !from || recipients.length === 0) return false;
+  const subject = `Neue ${funnelSubmissionLabel(config.purpose)}: ${application.contact.name ?? application.contact.email ?? application.id}`;
+  const logBase = {
+    kind: "application_notification",
+    funnelId: config.id,
+    funnelTitle: config.title,
+    applicationId: application.id,
+    recipients,
+    sender: from ?? "",
+    subject,
+  };
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from,
-      to: recipients,
-      subject: `Neue ${funnelSubmissionLabel(config.purpose)}: ${application.contact.name ?? application.contact.email ?? application.id}`,
-      html: buildApplicationNotificationHtml(config, application),
-    }),
+  const skippedReason = !apiKey
+    ? "RESEND_API_KEY fehlt"
+    : !from
+      ? "Absender (MAIL_FROM) fehlt"
+      : recipients.length === 0
+        ? "Keine Empfänger-E-Mail hinterlegt"
+        : null;
+  if (skippedReason) {
+    await recordMailLog({ ...logBase, status: "skipped", providerMessageId: null, error: skippedReason });
+    return false;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from,
+        to: recipients,
+        subject,
+        html: buildApplicationNotificationHtml(config, application),
+      }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await recordMailLog({ ...logBase, status: "failed", providerMessageId: null, error: `Resend nicht erreichbar: ${message}`.slice(0, 1000) });
+    throw error;
+  }
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    await recordMailLog({
+      ...logBase,
+      status: "failed",
+      providerMessageId: null,
+      error: `HTTP ${response.status}${detail ? `: ${detail}` : ""}`.slice(0, 1000),
+    });
+    throw new Error(`E-Mail-Versand fehlgeschlagen (${response.status}).`);
+  }
+  const body = await response.json().catch(() => null) as { id?: unknown } | null;
+  await recordMailLog({
+    ...logBase,
+    status: "sent",
+    providerMessageId: typeof body?.id === "string" ? body.id : null,
+    error: null,
   });
-  if (!response.ok) throw new Error(`E-Mail-Versand fehlgeschlagen (${response.status}).`);
   return true;
 }
