@@ -46,6 +46,7 @@ import {
   updateApplicationStatus,
 } from "../funnelStore";
 import { sendApplicationNotification } from "../mail";
+import { APPLICATION_NOTE_MAX_LENGTH, addApplicationNote, listApplicationNotes } from "../applicationNotes";
 import { buildApplicationsCsv, buildApplicationsPdf } from "../exports";
 import { sendMetaApplicationConversion, sendMetaLeadQualityEvent } from "../metaConversions";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
@@ -1156,6 +1157,28 @@ export const funnelRouter = router({
       ),
     };
   }),
+
+  applicationNotes: adminProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ input, ctx }) => {
+    await requireOwnedApplication(input.id, ctx.user);
+    return listApplicationNotes(input.id);
+  }),
+
+  addApplicationNote: adminProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      body: z.string().trim().min(1, "Bitte eine Notiz eingeben.").max(APPLICATION_NOTE_MAX_LENGTH, `Höchstens ${APPLICATION_NOTE_MAX_LENGTH} Zeichen.`),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await requireOwnedApplication(input.id, ctx.user);
+      // Autor kommt ausschließlich aus der Sitzung, nie vom Client.
+      return addApplicationNote({
+        applicationId: input.id,
+        authorEmail: ctx.user.email ?? "",
+        authorName: ctx.user.name ?? "",
+        authorLoginMethod: ctx.user.loginMethod ?? "",
+        body: input.body,
+      });
+    }),
 
   updateStatus: adminProcedure
     .input(z.object({ id: z.string().uuid(), status: applicationStatusSchema }))
