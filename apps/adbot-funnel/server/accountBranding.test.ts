@@ -34,3 +34,11 @@ describe("Konto-Branding im Dashboard", () => {
     expect(dashboardTitle("  ")).toBe("Adbot Funnel");
   });
 });
+
+describe("Hinterlegte Firmenangaben", () => {
+  it("bevorzugt den angezeigten Namen, dann den vollständigen Firmennamen", () => {
+    expect(deriveCompanyName({ displayName: "Boncred", companyName: "Boncred Finanzvermittlungs GmbH", email: "x@andere.de" })).toBe("Boncred");
+    expect(deriveCompanyName({ displayName: "  ", companyName: "Boncred Finanzvermittlungs GmbH", email: "x@andere.de" })).toBe("Boncred Finanzvermittlungs GmbH");
+    expect(deriveCompanyName({ displayName: "", companyName: "", email: "adbot@boncred.info" })).toBe("Boncred");
+  });
+});

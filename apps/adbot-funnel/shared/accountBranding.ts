@@ -1,6 +1,9 @@
 /** Branding für das Kunden-Dashboard: "<Firma> Funnel" plus Logo aus den Funnels des Kontos. */
 export type AccountBranding = {
+  /** Angezeigter Kurzname ("Boncred"), steht im Dashboard-Kopf vor "Funnel". */
   companyName: string | null;
+  /** Vollständiger Firmenname inkl. Rechtsform, falls im Konto hinterlegt. */
+  legalName: string | null;
   logoUrl: string | null;
   logoAlt: string;
 };
@@ -47,8 +50,17 @@ export function companyNameFromLogoAlt(logoAlt: string | null | undefined): stri
   return cleaned;
 }
 
-export function deriveCompanyName(input: { email?: string | null; logoAlt?: string | null }): string | null {
-  return companyNameFromEmail(input.email) ?? companyNameFromLogoAlt(input.logoAlt);
+/** Reihenfolge: hinterlegter Kurzname, hinterlegter Firmenname, Konto-Domain, Logo-Alternativtext. */
+export function deriveCompanyName(input: {
+  displayName?: string | null;
+  companyName?: string | null;
+  email?: string | null;
+  logoAlt?: string | null;
+}): string | null {
+  return input.displayName?.trim()
+    || input.companyName?.trim()
+    || companyNameFromEmail(input.email)
+    || companyNameFromLogoAlt(input.logoAlt);
 }
 
 export function dashboardTitle(companyName: string | null | undefined): string {

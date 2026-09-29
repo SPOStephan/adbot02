@@ -180,12 +180,12 @@ function DashboardLayoutContent({
                   {logoUrl ? (
                     <img
                       src={logoUrl}
-                      alt={branding?.logoAlt || title}
+                      alt={branding?.logoAlt || branding?.legalName || title}
                       className="max-h-10 max-w-[180px] object-contain object-left"
                       onError={() => setLogoFailed(true)}
                     />
                   ) : null}
-                  <span className="font-semibold tracking-tight truncate max-w-full">
+                  <span className="font-semibold tracking-tight truncate max-w-full" title={branding?.legalName ?? undefined}>
                     {title}
                   </span>
                 </div>

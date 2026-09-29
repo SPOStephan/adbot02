@@ -17,6 +17,7 @@ import {
 } from "../funnelMembers";
 import { getFunnelById, listFunnels } from "../funnelStore";
 import { getTenantOwnerUserId } from "../_core/session";
+import { EMPTY_ACCOUNT_PROFILE, getAccountProfile, saveAccountProfile, type FunnelAccountProfile } from "../funnelAccountProfiles";
 import { deriveCompanyName, type AccountBranding } from "@shared/accountBranding";
 import { resolveRequestFunnelHost } from "../resolveFunnelRequestHost";
 
@@ -65,13 +66,27 @@ async function firstFunnelLogo(funnelIds: string[]): Promise<LoginBranding | nul
   return null;
 }
 
+/** Fehlt die Tabelle noch (Migration offen), bleibt das Dashboard beim abgeleiteten Namen. */
+async function readProfileSafely(ownerUserId: string): Promise<FunnelAccountProfile> {
+  try {
+    return await getAccountProfile(ownerUserId);
+  } catch (error) {
+    console.warn("[dashboard] Firmenangaben nicht lesbar", error);
+    return EMPTY_ACCOUNT_PROFILE;
+  }
+}
+
 /** Firmenname + Logo für den Kopf des Kunden-Dashboards; Plattform-Admins behalten "Adbot Funnel". */
 async function accountBrandingForUser(user: User): Promise<AccountBranding> {
   const ownerUserId = getTenantOwnerUserId(user);
-  if (!ownerUserId) return { companyName: null, logoUrl: null, logoAlt: "" };
-  const logo = await firstFunnelLogo(await ownerFunnelIdsForBranding(ownerUserId));
+  if (!ownerUserId) return { companyName: null, legalName: null, logoUrl: null, logoAlt: "" };
+  const [profile, logo] = await Promise.all([
+    readProfileSafely(ownerUserId),
+    ownerFunnelIdsForBranding(ownerUserId).then(firstFunnelLogo),
+  ]);
   return {
-    companyName: deriveCompanyName({ email: user.email, logoAlt: logo?.logoAlt }),
+    companyName: deriveCompanyName({ ...profile, email: user.email, logoAlt: logo?.logoAlt }),
+    legalName: profile.companyName || null,
     logoUrl: logo?.logoUrl ?? null,
     logoAlt: logo?.logoAlt ?? "",
   };
@@ -94,9 +109,22 @@ export const membersRouter = router({
       return await accountBrandingForUser(ctx.user);
     } catch (error) {
       console.warn("[dashboard] Konto-Branding nicht lesbar", error);
-      return { companyName: deriveCompanyName({ email: ctx.user.email }), logoUrl: null, logoAlt: "" };
+      return { companyName: deriveCompanyName({ email: ctx.user.email }), legalName: null, logoUrl: null, logoAlt: "" };
     }
   }),
+
+  accountProfile: adminProcedure.query(async ({ ctx }): Promise<FunnelAccountProfile> => {
+    return getAccountProfile(requireAccountOwner(ctx.user));
+  }),
+
+  saveAccountProfile: adminProcedure
+    .input(z.object({
+      companyName: z.string().trim().max(200, "Höchstens 200 Zeichen."),
+      displayName: z.string().trim().max(80, "Höchstens 80 Zeichen."),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      return saveAccountProfile(requireAccountOwner(ctx.user), input);
+    }),
 
   list: adminProcedure.query(async ({ ctx }) => {
     const ownerUserId = requireAccountOwner(ctx.user);
