@@ -1,5 +1,5 @@
-import { FormEvent, useState } from "react";
-import { Copy, KeyRound, Loader2, RefreshCw, Trash2, UserPlus } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { Building2, Copy, KeyRound, Loader2, RefreshCw, Save, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatBerlinDateTime } from "@shared/berlinTime";
+import { dashboardTitle } from "@shared/accountBranding";
 
 type IssuedCredentials = { email: string; password: string };
 
@@ -46,6 +47,82 @@ function CredentialsBox({ credentials, onClose }: { credentials: IssuedCredentia
         <Button onClick={onClose} size="sm" type="button" variant="outline">Schließen</Button>
       </div>
     </div>
+  );
+}
+
+function CompanyProfile() {
+  const utils = trpc.useUtils();
+  const profileQuery = trpc.members.accountProfile.useQuery(undefined, { refetchOnWindowFocus: false });
+  const [companyName, setCompanyName] = useState("");
+  const [displayName, setDisplayName] = useState("");
+
+  useEffect(() => {
+    if (!profileQuery.data) return;
+    setCompanyName(profileQuery.data.companyName);
+    setDisplayName(profileQuery.data.displayName);
+  }, [profileQuery.data]);
+
+  const saveMutation = trpc.members.saveAccountProfile.useMutation({
+    onSuccess: profile => {
+      toast.success("Firmenangaben gespeichert");
+      utils.members.accountProfile.setData(undefined, profile);
+      void utils.members.accountBranding.invalidate();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  function onSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    saveMutation.mutate({ companyName, displayName });
+  }
+
+  const previewName = displayName.trim() || companyName.trim();
+
+  return (
+    <section className="space-y-4 rounded-2xl border bg-white p-6">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">Firma</h2>
+        <p className="text-sm text-muted-foreground">
+          Der angezeigte Name steht links oben im Dashboard. Leer lassen, dann wird er aus der Konto-Domain abgeleitet.
+        </p>
+      </div>
+      {profileQuery.error ? (
+        <p className="text-sm text-rose-700">{profileQuery.error.message}</p>
+      ) : null}
+      <form className="grid gap-4 md:grid-cols-2" onSubmit={onSave}>
+        <div className="space-y-2">
+          <Label htmlFor="company-name">Firmenname (vollständig)</Label>
+          <Input
+            id="company-name"
+            maxLength={200}
+            onChange={event => setCompanyName(event.target.value)}
+            placeholder="z. B. Boncred Finanzvermittlungs GmbH"
+            value={companyName}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="company-display-name">Angezeigter Name</Label>
+          <Input
+            id="company-display-name"
+            maxLength={80}
+            onChange={event => setDisplayName(event.target.value)}
+            placeholder="z. B. Boncred"
+            value={displayName}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+          <Button disabled={saveMutation.isPending || profileQuery.isLoading} type="submit">
+            {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Speichern
+          </Button>
+          {previewName ? (
+            <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <Building2 className="h-4 w-4" /> Im Dashboard: {dashboardTitle(previewName)}
+            </span>
+          ) : null}
+        </div>
+      </form>
+    </section>
   );
 }
 
@@ -101,6 +178,7 @@ function OwnerAccount() {
 
   return (
     <div className="space-y-8">
+      <CompanyProfile />
       <section className="space-y-4 rounded-2xl border bg-white p-6">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold">Weiteren Zugang anlegen</h2>
