@@ -6,6 +6,7 @@ import { clampCopySizeStep } from "@shared/copySize";
 import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, patchFunnelPage, toggleFunnelPageHidden, type FunnelPagePatch } from "@shared/funnelEditor";
 import { createEditorSaveController } from "@/lib/editorSave";
+import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
@@ -86,7 +87,12 @@ function FormRow({
 export default function FunnelEditor() {
   const { id: funnelId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const query = trpc.funnel.adminConfig.useQuery(funnelId ? { id: funnelId } : undefined, { enabled: Boolean(funnelId) });
+  // Always hydrate from a fresh server response: a cached copy from an earlier
+  // visit would show values (e.g. extra recipient emails) as lost.
+  const query = trpc.funnel.adminConfig.useQuery(
+    funnelId ? { id: funnelId } : undefined,
+    { enabled: Boolean(funnelId), ...SETTINGS_QUERY_OPTIONS },
+  );
   const accountDomainsQuery = trpc.funnel.accountDomains.useQuery();
   const customDomainsQuery = trpc.funnel.customDomains.useQuery(
     { funnelId: funnelId! },
@@ -122,7 +128,7 @@ export default function FunnelEditor() {
   }, [dirty]);
 
   useEffect(() => {
-    if (!query.data?.config) return;
+    if (!query.data?.config || !query.isFetchedAfterMount) return;
     if (loadedIdRef.current === query.data.config.id && configRef.current) return;
     loadedIdRef.current = query.data.config.id;
     configRef.current = query.data.config;
@@ -134,7 +140,7 @@ export default function FunnelEditor() {
     setDirty(false);
     history.reset();
     setAutosaveLabel("");
-  }, [query.data?.config]);
+  }, [query.data?.config, query.isFetchedAfterMount]);
 
   const persist = (silent: boolean) => {
     const request = saveController.requestPersist(silent);
@@ -142,8 +148,9 @@ export default function FunnelEditor() {
     const payload = request.payload;
     const notificationEmailWrite = payload.notificationEmail === loadedNotificationEmailRef.current ? "preserve" : "set";
     save.mutate({ ...payload, notificationEmailWrite }, {
-      onSuccess: async () => {
+      onSuccess: async saved => {
         if (notificationEmailWrite === "set") loadedNotificationEmailRef.current = payload.notificationEmail;
+        utils.funnel.adminConfig.setData({ id: saved.id }, current => current ? { ...current, config: saved } : current);
         const result = saveController.finishPersist(true);
         if (result.clearDirty) {
           setDirty(false);

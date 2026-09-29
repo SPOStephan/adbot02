@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -29,5 +32,21 @@ describe("settings query hydration", () => {
       fetchedAfterMount: true,
       hasLocalChanges: true,
     })).toBe(false);
+  });
+});
+
+describe("editor query hydration", () => {
+  const editorSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../client/src/pages/admin/FunnelEditor.tsx"),
+    "utf8",
+  );
+
+  it("lädt den Editor nur aus einer frischen Serverantwort, nicht aus einem alten Cache", () => {
+    expect(editorSource).toContain("...SETTINGS_QUERY_OPTIONS");
+    expect(editorSource).toContain("!query.isFetchedAfterMount");
+  });
+
+  it("schreibt gespeicherte Werte (z. B. weitere Empfänger-E-Mails) in den Cache zurück", () => {
+    expect(editorSource).toMatch(/adminConfig\.setData\(\{ id: saved\.id \}/);
   });
 });
