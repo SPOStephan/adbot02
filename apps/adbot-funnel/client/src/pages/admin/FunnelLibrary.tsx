@@ -221,7 +221,7 @@ export default function FunnelLibrary() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Funnel-Kennzahlen">
         <Metric icon={BriefcaseBusiness} label="Funnels gesamt" value={totals.funnels} detail={`${totals.published} veröffentlicht`} />
         <Metric icon={Sparkles} label="Aktive Kampagnen" value={totals.published} detail="öffentlich erreichbar" />
-        <Metric icon={Inbox} label="Eingänge" value={totals.applications} detail={`${totals.newApplications} noch neu`} accent />
+        <Metric icon={Inbox} label="Eingänge" value={totals.applications} detail={`${totals.newApplications} noch neu`} accent onClick={() => setLocation("/admin/applications")} />
         <button type="button" className="group flex min-h-28 items-center gap-4 rounded-2xl border border-dashed border-[#0165c3]/35 bg-blue-50/50 p-5 text-left transition hover:border-[#0165c3] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3]" onClick={openCreate}>
           <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#0165c3] text-white shadow-md shadow-blue-200"><Plus className="size-5" /></span>
           <span><strong className="block text-sm text-[#10253f]">Neue Vorlage</strong><small className="mt-1 block leading-5 text-muted-foreground">Mit einer neutralen Funnel-Struktur starten</small></span>
@@ -290,8 +290,11 @@ function SlugField({ id, value, placeholder, disabled = false, onChange }: { id:
   return <div className="grid gap-2"><Label htmlFor={id}>URL-Slug</Label><div className="flex items-center overflow-hidden rounded-md border bg-slate-50 focus-within:ring-2 focus-within:ring-ring"><span className="shrink-0 pl-3 text-xs text-muted-foreground">/f/</span><Input id={id} className="border-0 bg-transparent pl-0 shadow-none focus-visible:ring-0" maxLength={120} disabled={disabled} placeholder={placeholder} value={value} onChange={event => onChange(event.target.value)} /></div><p className="text-xs text-muted-foreground">Bei einer Kollision ergänzt der Server automatisch eine fortlaufende Nummer.</p></div>;
 }
 
-function Metric({ icon: Icon, label, value, detail, accent = false }: { icon: typeof Inbox; label: string; value: number; detail: string; accent?: boolean }) {
-  return <div className={`flex min-h-28 items-center gap-4 rounded-2xl border p-5 shadow-sm ${accent ? "border-blue-200 bg-blue-50/70" : "bg-white"}`}><span className={`grid size-11 shrink-0 place-items-center rounded-2xl ${accent ? "bg-[#0165c3] text-white" : "bg-slate-100 text-slate-600"}`}><Icon className="size-5" aria-hidden="true" /></span><div><span className="text-xs font-semibold text-muted-foreground">{label}</span><strong className="mt-1 block text-2xl tracking-tight">{value}</strong><small className="text-xs text-muted-foreground">{detail}</small></div></div>;
+function Metric({ icon: Icon, label, value, detail, accent = false, onClick }: { icon: typeof Inbox; label: string; value: number; detail: string; accent?: boolean; onClick?: () => void }) {
+  const className = `flex min-h-28 items-center gap-4 rounded-2xl border p-5 text-left shadow-sm ${accent ? "border-blue-200 bg-blue-50/70" : "bg-white"}`;
+  const content = <><span className={`grid size-11 shrink-0 place-items-center rounded-2xl ${accent ? "bg-[#0165c3] text-white" : "bg-slate-100 text-slate-600"}`}><Icon className="size-5" aria-hidden="true" /></span><div><span className="text-xs font-semibold text-muted-foreground">{label}</span><strong className="mt-1 block text-2xl tracking-tight">{value}</strong><small className="text-xs text-muted-foreground">{detail}</small></div></>;
+  if (!onClick) return <div className={className}>{content}</div>;
+  return <button type="button" className={`${className} cursor-pointer transition hover:border-[#0165c3] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3]`} onClick={onClick} aria-label={`${label}: ${value}, ${detail} – Übersicht öffnen`}>{content}</button>;
 }
 
 type FunnelCampaignStatus = {
