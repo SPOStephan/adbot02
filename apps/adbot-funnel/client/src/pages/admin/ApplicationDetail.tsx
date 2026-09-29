@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge, statusLabels } from "./Applications";
 import { DeleteApplicationButton, formatPurgeDate, RestoreApplicationButton } from "@/components/admin/ApplicationTrashControls";
+import { formatBerlinDateTime } from "@shared/berlinTime";
 
 function qualityLabel(quality?: LeadQuality) {
   return quality ? LEAD_QUALITY_LABELS[quality] : "Noch nicht bewertet";
@@ -98,7 +99,7 @@ export default function ApplicationDetail() {
           <h1 className="text-3xl font-bold tracking-tight">{application.contact.name || "Eintrag ohne Namen"}</h1>
           <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
             <CalendarDays className="size-4" aria-hidden="true" />
-            Eingegangen am {new Date(application.createdAt).toLocaleString("de-DE")}
+            Eingegangen am {formatBerlinDateTime(application.createdAt)}
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
@@ -174,7 +175,7 @@ export default function ApplicationDetail() {
         </div>
         {application.leadQualityAt && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Zuletzt bewertet am {new Date(application.leadQualityAt).toLocaleString("de-DE")}
+            Zuletzt bewertet am {formatBerlinDateTime(application.leadQualityAt)}
             {application.leadQualityMetaStatus ? ` · Meta: ${application.leadQualityMetaStatus}` : ""}
           </p>
         )}
@@ -237,7 +238,7 @@ export default function ApplicationDetail() {
           </div>
           <div>
             <dt className="font-semibold">Einwilligung</dt>
-            <dd>{new Date(application.consentAt).toLocaleString("de-DE")}</dd>
+            <dd>{formatBerlinDateTime(application.consentAt)}</dd>
           </div>
           <div className="sm:col-span-2">
             <dt className="font-semibold">Quelle</dt>

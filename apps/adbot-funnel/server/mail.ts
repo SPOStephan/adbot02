@@ -2,6 +2,7 @@ import type { ApplicationRecord, FunnelConfig } from "@shared/funnel";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
 import { funnelSubmissionLabel } from "@shared/funnelPurpose";
 import { parseNotificationEmails } from "@shared/notificationEmails";
+import { formatBerlinDateTime } from "@shared/berlinTime";
 
 type MailEnvironment = {
   MAIL_FROM?: string;
@@ -34,7 +35,7 @@ export function buildApplicationNotificationHtml(config: FunnelConfig, applicati
     <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;color:#10253f">
       <div style="height:8px;background:#0165c3;border-radius:8px 8px 0 0"></div>
       <h1 style="font-size:24px;margin:28px 0 8px">Neue ${escapeHtml(submissionLabel)} eingegangen</h1>
-      <p style="color:#5c6b7a">Funnel: ${escapeHtml(config.title)} · ${escapeHtml(new Date(application.createdAt).toLocaleString("de-DE"))}</p>
+      <p style="color:#5c6b7a">Funnel: ${escapeHtml(config.title)} · ${escapeHtml(formatBerlinDateTime(application.createdAt))}</p>
       <h2 style="font-size:17px;margin-top:28px">Kontaktdaten</h2><table>${contactRows}</table>
       <h2 style="font-size:17px;margin-top:28px">Antworten</h2><table style="width:100%;border-collapse:collapse">${answerRows}</table>
       ${application.resume ? `<p style="margin-top:24px"><strong>Lebenslauf:</strong> ${escapeHtml(application.resume.fileName)}</p>` : ""}

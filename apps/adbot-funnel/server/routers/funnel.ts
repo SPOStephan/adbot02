@@ -1,3 +1,4 @@
+import { berlinDateStamp } from "@shared/berlinTime";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { defaultFunnel, defaultFunnelForPurpose } from "@shared/defaultFunnel";
@@ -1206,7 +1207,7 @@ export const funnelRouter = router({
   exportCsv: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input, ctx }) => {
     const { applications, configs } = await applicationsWithConfigs(input?.funnelId, ctx.user);
     return {
-      fileName: `funnel-eingaenge-${new Date().toISOString().slice(0, 10)}.csv`,
+      fileName: `funnel-eingaenge-${berlinDateStamp()}.csv`,
       mimeType: "text/csv;charset=utf-8",
       dataBase64: Buffer.from(buildApplicationsCsv(applications, configs), "utf8").toString("base64"),
     };
@@ -1215,7 +1216,7 @@ export const funnelRouter = router({
   exportPdf: adminProcedure.input(optionalFunnelFilter).mutation(async ({ input, ctx }) => {
     const { applications, configs } = await applicationsWithConfigs(input?.funnelId, ctx.user);
     return {
-      fileName: `funnel-eingaenge-${new Date().toISOString().slice(0, 10)}.pdf`,
+      fileName: `funnel-eingaenge-${berlinDateStamp()}.pdf`,
       mimeType: "application/pdf",
       dataBase64: (await buildApplicationsPdf(applications, configs)).toString("base64"),
     };
