@@ -20,7 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Inbox, LayoutGrid, LogOut, PanelLeft } from "lucide-react";
+import { Inbox, LayoutGrid, LogOut, Megaphone, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { isAllowedFunnelAdminPath } from "@shared/funnelAdminPaths";
@@ -33,6 +33,7 @@ import { Button } from "./ui/button";
 const menuItems = [
   { icon: LayoutGrid, label: "Funnels", path: "/admin", matches: (location: string) => location === "/admin" || location.startsWith("/admin/funnels/") },
   { icon: Inbox, label: "Eingänge", path: "/admin/applications", matches: (location: string) => location.startsWith("/admin/applications") },
+  { icon: Megaphone, label: "Kampagnen", path: "/admin/campaigns", matches: (location: string) => location.startsWith("/admin/campaigns") },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

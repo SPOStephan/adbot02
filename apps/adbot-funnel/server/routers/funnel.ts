@@ -71,7 +71,7 @@ import {
   pushFunnelDomainUpsertToPortal,
 } from "../portalDomainSync";
 import { pushFunnelCreativeHandoffToPortal } from "../portalCreativeHandoff";
-import { loadPortalCampaignStatuses } from "../portalCampaignStatus";
+import { loadPortalCampaignOverview, loadPortalCampaignStatuses } from "../portalCampaignStatus";
 import { listFunnelLibraryIcons, requestFunnelLibraryIcon } from "../funnelIconStore";
 import { requireCustomerHostnameHttps } from "../customDomainHttpsReady";
 import {
@@ -444,6 +444,16 @@ export const funnelRouter = router({
       return loadPortalCampaignStatuses({
         ownerUserId,
         destinationUrls: input.destinationUrls,
+      });
+    }),
+
+  campaignOverview: adminProcedure
+    .input(z.object({ funnelUrls: z.array(z.string().url()).max(100) }))
+    .query(({ input, ctx }) => {
+      const ownerUserId = getTenantOwnerUserId(ctx.user) ?? ctx.user.openId;
+      return loadPortalCampaignOverview({
+        ownerUserId,
+        funnelUrls: input.funnelUrls,
       });
     }),
 

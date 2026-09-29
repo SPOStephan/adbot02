@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createPortalCampaignStatusToken,
+  loadPortalCampaignOverview,
   loadPortalCampaignStatuses,
 } from "./portalCampaignStatus";
 
@@ -72,5 +73,69 @@ describe("portal campaign status", () => {
     expect(body.token).toEqual(expect.any(String));
     expect(body).not.toHaveProperty("accessToken");
     expect(body).not.toHaveProperty("metaToken");
+  });
+
+  it("lädt die Kampagnen-Übersicht mit eigenem Token-Zweck und nur Funnel-Typen", async () => {
+    process.env.FUNNEL_SSO_SECRET = SECRET;
+    process.env.ADBOT_PORTAL_URL = "https://portal.test";
+    const campaign = (id: string, kind: string) => ({
+      id,
+      displayName: id,
+      kind,
+      lifecycle: "active",
+      statusLabel: "Aktiv",
+      funnelUrl: FUNNEL_URL,
+      destinationUrl: FUNNEL_URL,
+      variantDestinationUrl: null,
+      dailyBudgetMinor: 1000,
+      lifetimeBudgetMinor: null,
+      startTime: null,
+      stopTime: null,
+      spend: 5,
+      impressions: 100,
+      linkClicks: 4,
+      leads: 1,
+      currency: "EUR",
+      previewMode: "single",
+      cards: [],
+      totalCombinationCount: 0,
+      isTruncated: false,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          advertiserName: "Muster GmbH",
+          campaigns: [campaign("lead-1", "lead"), campaign("boost-1", "boost")],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await loadPortalCampaignOverview({
+      ownerUserId: OWNER,
+      funnelUrls: [FUNNEL_URL, FUNNEL_URL],
+      fetchImpl: fetchMock,
+    });
+    expect(result.available).toBe(true);
+    expect(result.advertiserName).toBe("Muster GmbH");
+    expect(result.campaigns.map(item => item.id)).toEqual(["lead-1"]);
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://portal.test/api/internal/funnel-campaign-overview",
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1].body));
+    expect(body.funnelUrls).toEqual([FUNNEL_URL]);
+    const [encoded] = String(body.token).split(".");
+    const payload = JSON.parse(Buffer.from(encoded!, "base64url").toString("utf8"));
+    expect(payload.purpose).toBe("funnel_campaign_overview");
+    expect(payload.sub).toBe(OWNER);
+  });
+
+  it("meldet einen Portal-Fehler als nicht verfügbar statt leer", async () => {
+    process.env.FUNNEL_SSO_SECRET = SECRET;
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 500 }));
+    await expect(
+      loadPortalCampaignOverview({ ownerUserId: OWNER, funnelUrls: [FUNNEL_URL], fetchImpl: fetchMock }),
+    ).resolves.toEqual({ available: false, advertiserName: null, campaigns: [] });
   });
 });
