@@ -24,6 +24,11 @@ import { CreativeTextVariantFields } from "@/components/CreativeTextVariantField
 import { DynamicCreativeImagesField } from "@/components/DynamicCreativeImagesField";
 import { SelectedCreativesByFormat } from "@/components/SelectedCreativesByFormat";
 import {
+  MetaAdPreviewGallery,
+  type MetaAdPreviewCard,
+} from "@/components/MetaAdPreviewGallery";
+import { buildMetaAdPreviewCombinations } from "@/lib/meta/ad-preview-combinations";
+import {
   fallbackCountryCode,
   toMetaEmploymentAdSetTargeting,
   toMetaAdSetTargeting,
@@ -68,6 +73,54 @@ type HeldPlan = {
   variantDestinationUrl?: string;
   useMetaExperiment?: boolean;
 };
+
+/** Same realistic Meta ad cards as the lead campaign preview. */
+function buildHeldPlanPreview(plan: HeldPlan): {
+  cards: MetaAdPreviewCard[];
+  total: number;
+  isTruncated: boolean;
+  mode: "single" | "dynamic" | "structural";
+} {
+  if (plan.structuralAdCount === 2 && plan.structuralAds) {
+    const assetId = plan.brandAssetIds[0];
+    const cards: MetaAdPreviewCard[] = assetId
+      ? plan.structuralAds.slice(0, 2).map((ad, index) => ({
+          assetId,
+          primaryText: ad.message || "Anzeigentext",
+          headline: ad.name || "Überschrift",
+          description: ad.description,
+          destinationUrl:
+            index === 1 && plan.variantDestinationUrl
+              ? plan.variantDestinationUrl
+              : plan.destinationUrl,
+          previewLabel: `Anzeige ${index + 1}${
+            plan.structuralAdSetCount === 2 ? ` · Anzeigengruppe ${index + 1}` : ""
+          }`,
+        }))
+      : [];
+    return { cards, total: cards.length, isTruncated: false, mode: "structural" };
+  }
+  const combinations = buildMetaAdPreviewCombinations({
+    assetIds: plan.brandAssetIds,
+    primaryTexts: plan.primaryTexts,
+    headlines: plan.headlines,
+    descriptions: plan.descriptions,
+    defaultPrimaryText: "Mehr erfahren.",
+    defaultHeadline: "Jetzt mehr erfahren",
+  });
+  return {
+    cards: combinations.combinations.map((combination) => ({
+      ...combination,
+      destinationUrl: plan.destinationUrl,
+    })),
+    total: combinations.totalCombinationCount,
+    isTruncated: combinations.isTruncated,
+    mode:
+      plan.dynamicCreativeImages || combinations.totalCombinationCount > 1
+        ? "dynamic"
+        : "single",
+  };
+}
 
 function objectiveLabel(objective: string): string {
   if (objective === "OUTCOME_TRAFFIC") {
@@ -1570,142 +1623,56 @@ export function TrafficLaunchCanary({
             So geht die Anzeige live — noch nichts ist bei Meta angelegt.
           </p>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-            <div className="space-y-2">
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  alt="Creative-Vorschau"
-                  className="aspect-square w-full object-cover"
-                  src={`/api/media-library/preview?assetId=${heldPlan.brandAssetIds[0]}`}
-                />
-              </div>
-              {heldPlan.brandAssetIds.length > 1 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {heldPlan.brandAssetIds.slice(1).map((id) => (
-                    <div
-                      className="overflow-hidden rounded-lg border border-slate-200 bg-white"
-                      key={id}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        alt="Weiteres Motiv"
-                        className="aspect-square w-full object-cover"
-                        src={`/api/media-library/preview?assetId=${id}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {heldPlan.dynamicCreativeImages ||
-              heldPlan.brandAssetIds.length > 1 ? (
-                <p className="text-xs font-semibold text-slate-600">
-                  Dynamic Creative: {heldPlan.brandAssetIds.length} Motive
-                </p>
-              ) : null}
-            </div>
-            <div className="min-w-0 space-y-4">
-              {heldPlan.structuralAdCount === 2 && heldPlan.structuralAds ? (
-                <>
+          {(() => {
+            const preview = buildHeldPlanPreview(heldPlan);
+            return (
+              <div className="mt-4 space-y-4">
+                {heldPlan.structuralAdCount === 2 ? (
                   <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
                     {heldPlan.variantDestinationUrl
                       ? "Zielseiten-Vergleich: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige + eigene URL (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
                       : heldPlan.structuralAdSetCount === 2
-                      ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
-                      : "Struktur: 1 Kampagne → 1 Anzeigengruppe → 2 Anzeigen"}
+                        ? "Struktur: 1 Kampagne → 2 Anzeigengruppen → je 1 Anzeige (Startbudget aufgeteilt, danach Erfolgsumschichtung)"
+                        : "Struktur: 1 Kampagne → 1 Anzeigengruppe → 2 Anzeigen"}
                   </p>
-                  {heldPlan.structuralAds.map((ad, index) => (
-                  <div
-                    className="space-y-2 rounded-xl border border-slate-200 bg-white p-4"
-                    key={`structural-ad-${index}`}
-                  >
-                    <p className="text-xs font-extrabold uppercase tracking-wide text-slate-500">
-                      Anzeige {index + 1}
-                      {heldPlan.structuralAdSetCount === 2
-                        ? ` · Anzeigengruppe ${index + 1}`
-                        : ""}
+                ) : null}
+                <MetaAdPreviewGallery
+                  advertiserName={
+                    facebookPages.find((page) => page.id === facebookPageId)
+                      ?.label ?? "Facebook-Seite der Kampagne"
+                  }
+                  assets={pickerAssets}
+                  callToActionLabel="Mehr erfahren"
+                  cards={preview.cards}
+                  instagramLabel={
+                    instagramAccounts.find(
+                      (account) => account.id === instagramActorId,
+                    )?.label ?? null
+                  }
+                  isTruncated={preview.isTruncated}
+                  mode={preview.mode}
+                  totalCombinationCount={preview.total}
+                />
+                {heldPlan.structuralAdCount === 2 ? (
+                  <div className="space-y-1">
+                    <p className="break-all text-xs font-medium text-blue-700">
+                      Funnel A: {heldPlan.destinationUrl}
                     </p>
-                    <p className="text-sm font-bold leading-6 text-slate-950">
-                      {ad.name || "Überschrift"}
-                    </p>
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                      {ad.message || "Anzeigentext"}
-                    </p>
-                    {ad.description ? (
-                      <p className="text-sm text-slate-500">{ad.description}</p>
+                    {heldPlan.variantDestinationUrl ? (
+                      <p className="break-all text-xs font-medium text-blue-700">
+                        Funnel B: {heldPlan.variantDestinationUrl}
+                      </p>
+                    ) : null}
+                    {heldPlan.useMetaExperiment ? (
+                      <p className="text-xs font-semibold text-slate-600">
+                        Nach dem Start: Meta-Experiment (SPLIT_TEST) versuchen
+                      </p>
                     ) : null}
                   </div>
-                ))}
-                </>
-              ) : (
-                <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="space-y-2">
-                    {(heldPlan.headlines.filter(Boolean).length
-                      ? heldPlan.headlines.filter(Boolean)
-                      : ["Überschrift"]
-                    ).map((line, index) => (
-                      <p
-                        className="text-sm font-bold leading-6 text-slate-950"
-                        key={`h-${index}`}
-                      >
-                        {heldPlan.headlines.filter(Boolean).length > 1
-                          ? `${index + 1}. ${line}`
-                          : line}
-                      </p>
-                    ))}
-                  </div>
-                  <div className="space-y-2">
-                    {(heldPlan.primaryTexts.filter(Boolean).length
-                      ? heldPlan.primaryTexts.filter(Boolean)
-                      : ["Anzeigentext"]
-                    ).map((line, index) => (
-                      <p
-                        className="whitespace-pre-wrap text-sm leading-6 text-slate-700"
-                        key={`p-${index}`}
-                      >
-                        {heldPlan.primaryTexts.filter(Boolean).length > 1
-                          ? `${index + 1}. ${line}`
-                          : line}
-                      </p>
-                    ))}
-                  </div>
-                  {heldPlan.descriptions.filter(Boolean).length ? (
-                    <div className="space-y-1">
-                      {heldPlan.descriptions
-                        .filter(Boolean)
-                        .map((line, index) => (
-                          <p className="text-sm text-slate-500" key={`d-${index}`}>
-                            {heldPlan.descriptions.filter(Boolean).length > 1
-                              ? `${index + 1}. ${line}`
-                              : line}
-                          </p>
-                        ))}
-                    </div>
-                  ) : null}
-                  <p className="break-all text-xs font-medium text-blue-700">
-                    {heldPlan.destinationUrl}
-                  </p>
-                </div>
-              )}
-              {heldPlan.structuralAdCount === 2 ? (
-                <div className="space-y-1">
-                  <p className="break-all text-xs font-medium text-blue-700">
-                    Funnel A: {heldPlan.destinationUrl}
-                  </p>
-                  {heldPlan.variantDestinationUrl ? (
-                    <p className="break-all text-xs font-medium text-blue-700">
-                      Funnel B: {heldPlan.variantDestinationUrl}
-                    </p>
-                  ) : null}
-                  {heldPlan.useMetaExperiment ? (
-                    <p className="text-xs font-semibold text-slate-600">
-                      Nach dem Start: Meta-Experiment (SPLIT_TEST) versuchen
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </div>
+                ) : null}
+              </div>
+            );
+          })()}
 
           <dl className="mt-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
             <div>
