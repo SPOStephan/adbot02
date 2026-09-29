@@ -24,9 +24,6 @@ export const ENV = {
   get storageBucket() {
     return readEnv("STORAGE_BUCKET").trim() || "application-resumes";
   },
-  get memberLogins() {
-    return readEnv("FUNNEL_MEMBER_LOGINS");
-  },
   get funnelSsoSecret() {
     return readEnv("FUNNEL_SSO_SECRET").trim();
   },
