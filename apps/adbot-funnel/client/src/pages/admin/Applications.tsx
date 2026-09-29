@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Download, FileDown, Inbox, Loader2, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Download, FileDown, Inbox, Loader2, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 import type { ApplicationRecord, ApplicationStatus, LeadQuality } from "@shared/funnel";
 import { LEAD_QUALITY_LABELS } from "@shared/leadValue";
 import { formatBerlinDate, formatBerlinTime } from "@shared/berlinTime";
-import { filterApplications, getApplicationTotals, type ApplicationFilter } from "@shared/applicationFilters";
+import { DEFAULT_APPLICATION_SORT, filterApplications, getApplicationTotals, nextApplicationSort, sortApplications, type ApplicationFilter, type ApplicationSort, type ApplicationSortKey } from "@shared/applicationFilters";
 import { trpc } from "@/lib/trpc";
 import { downloadBase64File } from "@/lib/download";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ export default function Applications() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ApplicationFilter>("all");
   const [showTrash, setShowTrash] = useState(false);
+  const [sort, setSort] = useState<ApplicationSort>(DEFAULT_APPLICATION_SORT);
 
   useEffect(() => { if (routedFunnelId) setSelectedFunnel(routedFunnelId); }, [routedFunnelId]);
 
@@ -73,7 +74,8 @@ export default function Applications() {
 
   const selectedSummary = funnelsQuery.data?.find(funnel => funnel.id === funnelId);
   const funnelTitles = useMemo(() => new Map((funnelsQuery.data ?? []).map(funnel => [funnel.slug, funnel.title])), [funnelsQuery.data]);
-  const applications = useMemo(() => filterApplications(query.data ?? [], { status, search, funnelTitles }), [funnelTitles, query.data, search, status]);
+  const applications = useMemo(() => sortApplications(filterApplications(query.data ?? [], { status, search, funnelTitles }), sort, funnelTitles), [funnelTitles, query.data, search, sort, status]);
+  const toggleSort = (key: ApplicationSortKey) => setSort(current => nextApplicationSort(current, key));
   const totals = useMemo(() => getApplicationTotals(query.data ?? []), [query.data]);
   const openApplication = (application: ApplicationRecord) => setLocation(routedFunnelId ? `/admin/funnels/${routedFunnelId}/applications/${application.id}` : `/admin/applications/${application.id}`);
 
@@ -99,13 +101,30 @@ export default function Applications() {
         </div>
 
         {query.isLoading ? <div className="grid min-h-72 place-items-center" role="status" aria-live="polite"><span className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin text-[#0165c3]" aria-hidden="true" />Eingänge werden geladen …</span></div> : query.error ? <div className="p-8 text-center text-destructive" role="alert">{query.error.message}</div> : applications.length === 0 ? <EmptyState hasAny={(query.data?.length ?? 0) > 0} /> : <>
-          <div className="hidden md:block"><Table><TableHeader><TableRow><TableHead>Person / Kontakt</TableHead>{!routedFunnelId && <TableHead>Funnel</TableHead>}<TableHead>Kontaktdaten</TableHead><TableHead>Eingang</TableHead><TableHead>Status</TableHead><TableHead>Bewertung</TableHead><TableHead className="text-right">Antworten</TableHead><TableHead className="w-12"><span className="sr-only">Löschen</span></TableHead></TableRow></TableHeader><TableBody>{applications.map(application => <ApplicationRow key={application.id} application={application} funnelTitle={funnelTitles.get(application.funnelSlug)} showFunnel={!routedFunnelId} onOpen={() => openApplication(application)} />)}</TableBody></Table></div>
+          <div className="hidden md:block"><Table><TableHeader><TableRow><SortableHead label="Person / Kontakt" sortKey="contact" sort={sort} onSort={toggleSort} />{!routedFunnelId && <SortableHead label="Funnel" sortKey="funnel" sort={sort} onSort={toggleSort} />}<SortableHead label="Kontaktdaten" sortKey="contactData" sort={sort} onSort={toggleSort} /><SortableHead label="Eingang" sortKey="createdAt" sort={sort} onSort={toggleSort} /><SortableHead label="Status" sortKey="status" sort={sort} onSort={toggleSort} /><SortableHead label="Bewertung" sortKey="rating" sort={sort} onSort={toggleSort} /><SortableHead label="Antworten" sortKey="answers" sort={sort} onSort={toggleSort} align="right" /><TableHead className="w-12"><span className="sr-only">Löschen</span></TableHead></TableRow></TableHeader><TableBody>{applications.map(application => <ApplicationRow key={application.id} application={application} funnelTitle={funnelTitles.get(application.funnelSlug)} showFunnel={!routedFunnelId} onOpen={() => openApplication(application)} />)}</TableBody></Table></div>
+          <div className="flex items-center gap-2 border-b p-3 md:hidden"><Select value={sort.key} onValueChange={value => setSort(current => ({ key: value as ApplicationSortKey, direction: current.key === value ? current.direction : value === "createdAt" ? "desc" : "asc" }))}><SelectTrigger className="flex-1" aria-label="Sortieren nach"><SelectValue /></SelectTrigger><SelectContent>{sortOptions.filter(option => option.key !== "funnel" || !routedFunnelId).map(option => <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>)}</SelectContent></Select><Button variant="outline" size="icon" aria-label={sort.direction === "asc" ? "Aufsteigend, umkehren" : "Absteigend, umkehren"} onClick={() => toggleSort(sort.key)}>{sort.direction === "asc" ? <ArrowUp className="size-4" aria-hidden="true" /> : <ArrowDown className="size-4" aria-hidden="true" />}</Button></div>
           <div className="divide-y md:hidden">{applications.map(application => <div key={application.id} className="flex items-start"><button className="block min-w-0 flex-1 p-4 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0165c3]" onClick={() => openApplication(application)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="block truncate">{application.contact.name || "Ohne Namen"}</strong><span className="mt-1 block truncate text-xs text-muted-foreground">{application.contact.email || application.contact.phone || "Keine Kontaktdaten"}</span>{!routedFunnelId && <span className="mt-1 block truncate text-xs font-semibold text-[#0165c3]">{funnelTitles.get(application.funnelSlug) ?? application.funnelSlug}</span>}</div><div className="flex flex-col items-end gap-2"><StatusBadge status={application.status} /><QualityBadge quality={application.leadQuality} /></div></div><div className="mt-3 flex items-center justify-between text-xs text-muted-foreground"><span>{formatBerlinDate(application.createdAt)}</span><span>{Object.keys(application.answers).length} Antworten</span></div></button><div className="py-3 pr-2"><DeleteApplicationButton applicationId={application.id} personLabel={application.contact.name || "unbekannt"} /></div></div>)}</div>
         </>}
       </section>
       </>}
     </div>
   );
+}
+
+const sortOptions: { key: ApplicationSortKey; label: string }[] = [
+  { key: "createdAt", label: "Eingang" },
+  { key: "contact", label: "Person / Kontakt" },
+  { key: "funnel", label: "Funnel" },
+  { key: "contactData", label: "Kontaktdaten" },
+  { key: "status", label: "Status" },
+  { key: "rating", label: "Bewertung" },
+  { key: "answers", label: "Antworten" },
+];
+
+function SortableHead({ label, sortKey, sort, onSort, align }: { label: string; sortKey: ApplicationSortKey; sort: ApplicationSort; onSort: (key: ApplicationSortKey) => void; align?: "right" }) {
+  const active = sort.key === sortKey;
+  const Icon = !active ? ArrowUpDown : sort.direction === "asc" ? ArrowUp : ArrowDown;
+  return <TableHead className={align === "right" ? "text-right" : undefined} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}><button type="button" className={`-mx-1 inline-flex items-center gap-1 rounded-sm px-1 py-0.5 font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0165c3] ${active ? "text-foreground" : ""}`} title={active ? `Sortierung umkehren (${sort.direction === "asc" ? "aufsteigend" : "absteigend"})` : `Nach ${label} sortieren`} onClick={() => onSort(sortKey)}>{label}<Icon className={`size-3.5 ${active ? "text-[#0165c3]" : "opacity-40"}`} aria-hidden="true" /></button></TableHead>;
 }
 
 function Stat({ label, value, active, onClick }: { label: string; value: number; active: boolean; onClick: () => void }) {
