@@ -16,6 +16,8 @@ import {
   toMemberSummary,
 } from "../funnelMembers";
 import { getFunnelById, listFunnels } from "../funnelStore";
+import { getTenantOwnerUserId } from "../_core/session";
+import { deriveCompanyName, type AccountBranding } from "@shared/accountBranding";
 import { resolveRequestFunnelHost } from "../resolveFunnelRequestHost";
 
 const passwordSchema = z.string().min(MEMBER_PASSWORD_MIN_LENGTH, `Mindestens ${MEMBER_PASSWORD_MIN_LENGTH} Zeichen.`).max(200);
@@ -40,18 +42,39 @@ async function loginBrandingForHost(hostname: string): Promise<LoginBranding | n
   if (host.kind === "funnel") {
     funnelIds = [host.funnelId];
   } else if (host.kind === "account") {
-    const owned = await listFunnels({ ownerUserId: host.ownerUserId });
-    funnelIds = [...owned]
-      .sort((a, b) => Number(b.status === "published") - Number(a.status === "published") || b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, 10)
-      .map(item => item.id);
+    funnelIds = await ownerFunnelIdsForBranding(host.ownerUserId);
   }
+  return firstFunnelLogo(funnelIds);
+}
+
+/** Veröffentlichte Funnels zuerst, dann die zuletzt bearbeiteten. */
+async function ownerFunnelIdsForBranding(ownerUserId: string): Promise<string[]> {
+  const owned = await listFunnels({ ownerUserId });
+  return [...owned]
+    .sort((a, b) => Number(b.status === "published") - Number(a.status === "published") || b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 10)
+    .map(item => item.id);
+}
+
+async function firstFunnelLogo(funnelIds: string[]): Promise<LoginBranding | null> {
   for (const id of funnelIds) {
     const config = await getFunnelById(id);
     const logoUrl = config?.brand.logoUrl?.trim();
     if (config && logoUrl) return { logoUrl, logoAlt: config.brand.logoAlt || config.title };
   }
   return null;
+}
+
+/** Firmenname + Logo für den Kopf des Kunden-Dashboards; Plattform-Admins behalten "Adbot Funnel". */
+async function accountBrandingForUser(user: User): Promise<AccountBranding> {
+  const ownerUserId = getTenantOwnerUserId(user);
+  if (!ownerUserId) return { companyName: null, logoUrl: null, logoAlt: "" };
+  const logo = await firstFunnelLogo(await ownerFunnelIdsForBranding(ownerUserId));
+  return {
+    companyName: deriveCompanyName({ email: user.email, logoAlt: logo?.logoAlt }),
+    logoUrl: logo?.logoUrl ?? null,
+    logoAlt: logo?.logoAlt ?? "",
+  };
 }
 
 export const membersRouter = router({
@@ -65,6 +88,15 @@ export const membersRouter = router({
         return null;
       }
     }),
+
+  accountBranding: adminProcedure.query(async ({ ctx }): Promise<AccountBranding> => {
+    try {
+      return await accountBrandingForUser(ctx.user);
+    } catch (error) {
+      console.warn("[dashboard] Konto-Branding nicht lesbar", error);
+      return { companyName: deriveCompanyName({ email: ctx.user.email }), logoUrl: null, logoAlt: "" };
+    }
+  }),
 
   list: adminProcedure.query(async ({ ctx }) => {
     const ownerUserId = requireAccountOwner(ctx.user);
