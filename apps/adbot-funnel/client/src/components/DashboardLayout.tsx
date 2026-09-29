@@ -20,12 +20,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Inbox, LayoutGrid, LogOut, Megaphone, PanelLeft } from "lucide-react";
+import { Inbox, LayoutGrid, LogOut, Megaphone, PanelLeft, UserCog } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { isAllowedFunnelAdminPath } from "@shared/funnelAdminPaths";
-import { isSharedFunnelHost } from "@/lib/funnelHost";
-import { portalFunnelSsoUrl } from "@/lib/portalUrl";
 import { AdminLoginForm } from "./AdminLoginForm";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
@@ -34,6 +32,7 @@ const menuItems = [
   { icon: LayoutGrid, label: "Funnels", path: "/admin", matches: (location: string) => location === "/admin" || location.startsWith("/admin/funnels/") },
   { icon: Inbox, label: "Eingänge", path: "/admin/applications", matches: (location: string) => location.startsWith("/admin/applications") },
   { icon: Megaphone, label: "Kampagnen", path: "/admin/campaigns", matches: (location: string) => location.startsWith("/admin/campaigns") },
+  { icon: UserCog, label: "Konto", path: "/admin/account", matches: (location: string) => location.startsWith("/admin/account") },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -52,7 +51,6 @@ export default function DashboardLayout({
   });
   const { loading, user } = useAuth();
   const [location] = useLocation();
-  const sharedHost = isSharedFunnelHost();
   const ssoError =
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("sso_error")
@@ -65,30 +63,12 @@ export default function DashboardLayout({
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
 
-  useEffect(() => {
-    if (loading || user || sharedHost || ssoError) return;
-    window.location.replace(portalFunnelSsoUrl(nextPath));
-  }, [loading, user, sharedHost, ssoError, nextPath]);
-
   if (loading) {
     return <DashboardLayoutSkeleton />
   }
 
   if (!user) {
-    if (!sharedHost && !ssoError) {
-      return (
-        <div className="grid min-h-screen place-items-center px-4 text-sm text-muted-foreground">
-          Weiterleitung zur Adbot-Anmeldung …
-        </div>
-      );
-    }
-    return (
-      <AdminLoginForm
-        mode={sharedHost ? "ops" : "customer"}
-        nextPath={nextPath}
-        ssoError={ssoError}
-      />
-    );
+    return <AdminLoginForm nextPath={nextPath} ssoError={ssoError} />;
   }
 
   return (

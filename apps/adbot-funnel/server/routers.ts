@@ -10,8 +10,10 @@ import {
   verifyAdminPassword,
 } from "./_core/session";
 import { verifyMemberPassword } from "./_core/memberLogins";
+import { touchMemberLogin } from "./funnelMembers";
 import { publicProcedure, router } from "./_core/trpc";
 import { funnelRouter } from "./routers/funnel";
+import { membersRouter } from "./routers/members";
 
 export const appRouter = router({
   system: systemRouter,
@@ -28,7 +30,7 @@ export const appRouter = router({
         const isPlatformAdmin = verifyAdminPassword(input.email, input.password);
         const member = isPlatformAdmin
           ? null
-          : verifyMemberPassword(input.email, input.password);
+          : await verifyMemberPassword(input.email, input.password);
         if (!isPlatformAdmin && !member) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
@@ -39,7 +41,8 @@ export const appRouter = router({
         const user = member
           ? buildMemberUser(member)
           : buildAdminUser(input.email.trim().toLowerCase());
-        const sessionToken = await createSessionToken(user);
+        const sessionToken = await createSessionToken(user, member ? { member } : {});
+        if (member) void touchMemberLogin(member.id);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, sessionToken, {
           ...cookieOptions,
@@ -57,6 +60,7 @@ export const appRouter = router({
     }),
   }),
   funnel: funnelRouter,
+  members: membersRouter,
 });
 
 export type AppRouter = typeof appRouter;

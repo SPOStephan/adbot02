@@ -5,7 +5,8 @@ import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { ENV, assertAuthConfigured } from "./env";
-import { findMemberLogin, memberCredentialVersion, type MemberLogin } from "./memberLogins";
+import { findMemberLogin, memberCredentialVersion } from "./memberLogins";
+import type { FunnelMember } from "../funnelMembers";
 
 export type AuthSource = "password" | "adbot-sso" | "member";
 
@@ -72,7 +73,7 @@ export function buildTenantUser(ownerUserId: string, email: string, name?: strin
 }
 
 /** Funnel-only-Login: gleicher Mandantenumfang wie `ownerUserId`, aber kein Plattform-Admin. */
-export function buildMemberUser(member: MemberLogin): User {
+export function buildMemberUser(member: Pick<FunnelMember, "ownerUserId" | "email" | "name">): User {
   return { ...buildTenantUser(member.ownerUserId, member.email, member.name), id: 3, loginMethod: "member" };
 }
 
@@ -85,15 +86,18 @@ export function getTenantOwnerUserId(user: User): string | null {
   return user.openId;
 }
 
-export async function createSessionToken(user: User): Promise<string> {
+export async function createSessionToken(
+  user: User,
+  options: { member?: Pick<FunnelMember, "passwordHash"> } = {},
+): Promise<string> {
   const authSource: AuthSource =
     user.loginMethod === "adbot-sso" || user.loginMethod === "member"
       ? user.loginMethod
       : "password";
   const ownerUserId = authSource === "password" ? null : user.openId;
-  const member = authSource === "member" && user.email ? findMemberLogin(user.email) : null;
+  const member = authSource === "member" ? options.member : undefined;
   if (authSource === "member" && !member) {
-    throw new Error("Mitglieds-Login ist nicht (mehr) konfiguriert.");
+    throw new Error("Mitglieds-Sitzung braucht den aktuellen Zugang.");
   }
 
   return new SignJWT({
@@ -173,9 +177,12 @@ export async function authenticateRequest(req: Request): Promise<User | null> {
   if (!claims) return null;
 
   if (claims.authSource === "member") {
-    // Bei jeder Anfrage gegen die aktuelle Konfiguration prüfen: Entfernen des Eintrags
+    // Bei jeder Anfrage gegen den gespeicherten Zugang prüfen: Löschen des Zugangs
     // oder ein neues Passwort beendet bestehende Sitzungen sofort.
-    const member = findMemberLogin(claims.email);
+    const member = await findMemberLogin(claims.email).catch(error => {
+      console.error("[member-login] Zugang nicht lesbar", error);
+      return null;
+    });
     if (
       !member ||
       member.ownerUserId !== claims.ownerUserId ||
