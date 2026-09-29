@@ -30,11 +30,11 @@ import { AdminLoginForm } from "./AdminLoginForm";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const menuItems = [
+const menuItems: Array<{ icon: typeof LayoutGrid; label: string; path: string; matches: (location: string) => boolean; ownerOnly?: boolean }> = [
   { icon: LayoutGrid, label: "Funnels", path: "/admin", matches: (location: string) => location === "/admin" || location.startsWith("/admin/funnels/") },
   { icon: Inbox, label: "Eingänge", path: "/admin/applications", matches: (location: string) => location.startsWith("/admin/applications") },
   { icon: Megaphone, label: "Kampagnen", path: "/admin/campaigns", matches: (location: string) => location.startsWith("/admin/campaigns") },
-  { icon: UserCog, label: "Konto", path: "/admin/account", matches: (location: string) => location.startsWith("/admin/account") },
+  { icon: UserCog, label: "Konto", path: "/admin/account", matches: (location: string) => location.startsWith("/admin/account"), ownerOnly: true },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -105,7 +105,10 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.matches(location));
+  const permissionsQuery = trpc.members.permissions.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  const canManageMembers = permissionsQuery.data?.canManageMembers === true;
+  const visibleMenuItems = menuItems.filter(item => !item.ownerOnly || canManageMembers);
+  const activeMenuItem = visibleMenuItems.find(item => item.matches(location));
   const isMobile = useIsMobile();
   const brandingQuery = trpc.members.accountBranding.useQuery(undefined, {
     retry: false,
@@ -195,7 +198,7 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
+              {visibleMenuItems.map(item => {
                 const isActive = item.matches(location);
                 return (
                   <SidebarMenuItem key={item.path}>

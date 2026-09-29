@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import type { User } from "../../drizzle/schema";
 import { adminProcedure, publicProcedure, router } from "../_core/trpc";
 import {
+  findMemberLogin,
   MEMBER_PASSWORD_MIN_LENGTH,
   hashMemberPassword,
   isReservedMemberEmail,
@@ -12,6 +13,7 @@ import {
   createMember,
   deleteMember,
   listMembersForOwner,
+  setMemberCanPromote,
   setMemberPasswordHash,
   toMemberSummary,
 } from "../funnelMembers";
@@ -77,7 +79,20 @@ async function accountBrandingForUser(user: User): Promise<AccountBranding> {
   };
 }
 
+/**
+ * Was die Oberfläche zeigen darf. Konto-Inhaber und Plattform-Admin sehen die Bewerben-Buttons immer;
+ * ein Funnel-Zugang nur, wenn der Konto-Inhaber es unter „Konto“ eingeschaltet hat.
+ */
+async function permissionsFor(user: User) {
+  const canManageMembers = user.loginMethod === "adbot-sso";
+  if (user.loginMethod !== "member") return { canManageMembers, canPromote: true };
+  const member = user.email ? await findMemberLogin(user.email) : null;
+  return { canManageMembers, canPromote: member?.canPromote === true };
+}
+
 export const membersRouter = router({
+  permissions: adminProcedure.query(({ ctx }) => permissionsFor(ctx.user)),
+
   loginBranding: publicProcedure
     .input(z.object({ hostname: z.string().min(1).max(253) }))
     .query(async ({ input }) => {
@@ -142,6 +157,15 @@ export const membersRouter = router({
         memberId: input.id,
         passwordHash: hashMemberPassword(input.password),
       });
+      if (!member) throw new TRPCError({ code: "NOT_FOUND", message: "Zugang nicht gefunden." });
+      return toMemberSummary(member);
+    }),
+
+  setCanPromote: adminProcedure
+    .input(z.object({ id: z.string().uuid(), canPromote: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const ownerUserId = requireAccountOwner(ctx.user);
+      const member = await setMemberCanPromote({ ownerUserId, memberId: input.id, canPromote: input.canPromote });
       if (!member) throw new TRPCError({ code: "NOT_FOUND", message: "Zugang nicht gefunden." });
       return toMemberSummary(member);
     }),

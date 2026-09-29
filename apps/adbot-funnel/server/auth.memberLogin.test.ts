@@ -113,4 +113,19 @@ describe("Funnel-only-Zugänge", () => {
       ownerCaller().members.create({ email: "kunde2@firma.de", name: "", password: "kurz" }),
     ).rejects.toThrow();
   });
+
+  it("Bewerben-Buttons sind für Zugänge standardmäßig aus und nur vom Inhaber einschaltbar", async () => {
+    expect(await ownerCaller().members.permissions()).toEqual({ canManageMembers: true, canPromote: true });
+
+    const created = await ownerCaller().members.create({ email: "kunde@firma.de", name: "", password: "kunden-passwort-123" });
+    expect(created.canPromote).toBe(false);
+    const { token } = await login("kunde@firma.de", "kunden-passwort-123");
+    const memberCaller = async () => appRouter.createCaller(makeCtx(await authenticateRequest(requestWith(token))));
+
+    expect(await (await memberCaller()).members.permissions()).toEqual({ canManageMembers: false, canPromote: false });
+    await expect((await memberCaller()).members.setCanPromote({ id: created.id, canPromote: true })).rejects.toThrow(/Konto-Inhaber/);
+
+    await ownerCaller().members.setCanPromote({ id: created.id, canPromote: true });
+    expect(await (await memberCaller()).members.permissions()).toEqual({ canManageMembers: false, canPromote: true });
+  });
 });
