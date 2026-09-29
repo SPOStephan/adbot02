@@ -27,3 +27,12 @@ export function portalCampaignLaunchUrl(
   }
   return url.toString();
 }
+
+/** „Mit Adbot-Konto anmelden“ im Login-Fenster zeigen? Standard: aus. Einschalten mit VITE_SHOW_ADBOT_LOGIN=true. */
+export function showAdbotLoginLink(): boolean {
+  const raw =
+    typeof import.meta !== "undefined"
+      ? (import.meta.env?.VITE_SHOW_ADBOT_LOGIN as string | undefined)
+      : undefined;
+  return raw?.trim().toLowerCase() === "true";
+}
