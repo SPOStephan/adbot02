@@ -6,7 +6,7 @@ export function normalizeFunnelHostname(value: string): string {
 
 export function isAllowedFunnelAdminPath(path: string): boolean {
   const value = path.trim();
-  if (value === "/admin" || value === "/admin/applications") return true;
+  if (value === "/admin" || value === "/admin/applications" || value === "/admin/campaigns") return true;
   if (
     /^\/admin\/funnels\/[0-9a-f-]{36}\/(applications|settings|editor)$/i.test(
       value,

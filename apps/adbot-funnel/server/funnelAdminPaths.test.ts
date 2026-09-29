@@ -8,6 +8,7 @@ describe("funnel admin next paths", () => {
   it("erlaubt Inbox und Funnel-Routen, lehnt offene Redirects ab", () => {
     expect(isAllowedFunnelAdminPath("/admin")).toBe(true);
     expect(isAllowedFunnelAdminPath("/admin/applications")).toBe(true);
+    expect(isAllowedFunnelAdminPath("/admin/campaigns")).toBe(true);
     expect(
       isAllowedFunnelAdminPath(
         "/admin/funnels/11111111-1111-4111-8111-111111111111/applications",

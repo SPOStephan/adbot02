@@ -17,6 +17,7 @@ const FunnelEditor = lazy(() => import("./pages/admin/FunnelEditor"));
 const Applications = lazy(() => import("./pages/admin/Applications"));
 const ApplicationDetail = lazy(() => import("./pages/admin/ApplicationDetail"));
 const Settings = lazy(() => import("./pages/admin/Settings"));
+const Campaigns = lazy(() => import("./pages/admin/Campaigns"));
 
 function FunnelLibraryRoute() {
   return <DashboardLayout><FunnelLibrary /></DashboardLayout>;
@@ -36,6 +37,10 @@ function ApplicationDetailRoute() {
 
 function SettingsRoute() {
   return <DashboardLayout><Settings /></DashboardLayout>;
+}
+
+function CampaignsRoute() {
+  return <DashboardLayout><Campaigns /></DashboardLayout>;
 }
 
 function RouteLoading() {
@@ -65,6 +70,7 @@ function Router() {
       <Route path={"/admin/editor"} component={LegacyAdminRedirect} />
       <Route path={"/admin/applications/:id"} component={ApplicationDetailRoute} />
       <Route path={"/admin/applications"} component={ApplicationsRoute} />
+      <Route path={"/admin/campaigns"} component={CampaignsRoute} />
       <Route path={"/admin/settings"} component={LegacyAdminRedirect} />
       <Route path={"/admin"} component={FunnelLibraryRoute} />
       <Route path={"/404"} component={NotFound} />

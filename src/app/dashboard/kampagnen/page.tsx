@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { FilePenLine } from "lucide-react";
 
+import { CampaignAdOverview } from "@/components/CampaignAdOverview";
 import { MetaAdAccountPicker } from "@/components/MetaAdAccountPicker";
 import { MetaCampaignDraftActions } from "@/components/MetaCampaignDraftActions";
 import {
@@ -12,6 +13,7 @@ import {
   DashboardContentSkeleton,
   DashboardPageHeader,
 } from "@/components/DashboardPageHeader";
+import { loadCampaignAdOverview } from "@/lib/dashboard/load-campaign-ad-overview";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
 import { toMetaCampaignDraftView } from "@/lib/meta/campaign-draft";
@@ -22,7 +24,21 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const maxDuration = 300;
 
-async function KampagnenBody() {
+type KampagnenSearchParams = Promise<{
+  typ?: string | string[];
+  ansicht?: string | string[];
+}>;
+
+function firstParam(value: string | string[] | undefined): string | null {
+  return (Array.isArray(value) ? value[0] : value) ?? null;
+}
+
+async function KampagnenBody({
+  searchParams,
+}: {
+  searchParams: KampagnenSearchParams;
+}) {
+  const query = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -58,6 +74,13 @@ async function KampagnenBody() {
       </section>
     );
   }
+
+  const campaignAdOverviewPromise = loadCampaignAdOverview({
+    userId: user.id,
+    platformAccountId: metaAccount.id,
+    currency: marketingCurrency,
+    imageMode: "portal",
+  });
 
   const { data: creativeCycleRows, error: creativeCycleError } = await supabase
     .from("meta_creative_optimization_cycles")
@@ -111,6 +134,7 @@ async function KampagnenBody() {
     .eq("status", "DRAFT")
     .order("updated_at", { ascending: false })
     .limit(50);
+  const campaignAdOverview = await campaignAdOverviewPromise;
   const campaignDrafts = Array.isArray(draftRows)
     ? draftRows.flatMap((row) => {
         const draft = toMetaCampaignDraftView(row as Record<string, unknown>);
@@ -173,6 +197,14 @@ async function KampagnenBody() {
         )}
       </section>
 
+      <CampaignAdOverview
+        advertiserName={campaignAdOverview.advertiserName}
+        initialKind={firstParam(query.typ)}
+        initialLifecycle={firstParam(query.ansicht)}
+        items={campaignAdOverview.items}
+        loadError={campaignAdOverview.error}
+      />
+
       <MetaCampaignOverview
         adAccounts={adAccountPickerOptions}
         campaigns={campaignRows}
@@ -208,7 +240,11 @@ async function KampagnenBody() {
   );
 }
 
-export default function KampagnenPage() {
+export default function KampagnenPage({
+  searchParams,
+}: {
+  searchParams: KampagnenSearchParams;
+}) {
   const copy = DASHBOARD_PAGE_COPY.kampagnen;
   return (
     <>
@@ -218,7 +254,7 @@ export default function KampagnenPage() {
         title={copy.title}
       />
       <Suspense fallback={<DashboardContentSkeleton />}>
-        <KampagnenBody />
+        <KampagnenBody searchParams={searchParams} />
       </Suspense>
     </>
   );
