@@ -60,6 +60,16 @@ export async function storagePut(
   return { key, url: `/api/storage/${key}` };
 }
 
+export async function storageRemove(relKeys: string[]): Promise<void> {
+  const keys = relKeys.map(normalizeKey).filter(Boolean);
+  if (keys.length === 0) return;
+  const supabase = requireStorage();
+  const { error } = await supabase.storage.from(ENV.storageBucket).remove(keys);
+  if (error) {
+    throw new Error(`Storage delete failed: ${error.message}`);
+  }
+}
+
 export async function storageGet(
   relKey: string,
 ): Promise<{ key: string; url: string }> {

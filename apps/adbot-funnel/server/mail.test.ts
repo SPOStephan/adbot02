@@ -10,7 +10,8 @@ describe("Bewerbungs-E-Mail", () => {
     const config = structuredClone(defaultFunnel);
     const choicePage = config.pages.find(page => page.type === "choice-grid");
     if (!choicePage || choicePage.type !== "choice-grid") throw new Error("Auswahlseite fehlt");
-    choicePage.name = "Sachkundenachweis";
+    choicePage.name = "sachkunde-intern";
+    choicePage.title = "Hast du einen Sachkundenachweis?";
     choicePage.questionKey = technicalQuestionKey;
     choicePage.options[0] = {
       ...choicePage.options[0]!,
@@ -31,7 +32,8 @@ describe("Bewerbungs-E-Mail", () => {
 
     const html = buildApplicationNotificationHtml(config, application);
 
-    expect(html).toContain("Sachkundenachweis");
+    expect(html).toContain("Hast du einen Sachkundenachweis?");
+    expect(html).not.toContain("sachkunde-intern");
     expect(html).toContain("Noch nicht, aber in Vorbereitung");
     expect(html).toContain("Erika Müster");
     expect(html).not.toContain(technicalQuestionKey);

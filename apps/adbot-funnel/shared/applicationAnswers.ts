@@ -1,5 +1,6 @@
 import type {
   ApplicationAnswerLabels,
+  ApplicationQuestionLabels,
   ApplicationRecord,
   ChoicePage,
   FunnelConfig,
@@ -27,6 +28,34 @@ function choicePages(config: FunnelConfig | undefined): Map<string, ChoicePage> 
 
 function visibleOptionLabel(label: string, fallback: string): string {
   return stripFormattedText(label).trim() || fallback;
+}
+
+/**
+ * The question exactly as the applicant read it on the funnel page: the page
+ * headline, falling back to the subtitle and finally the internal page name.
+ */
+export function visibleQuestionLabel(page: ChoicePage): string {
+  return stripFormattedText(page.title ?? "")
+    || stripFormattedText(page.subtitle ?? "")
+    || page.name.trim();
+}
+
+/**
+ * Captures the question wording visible at submission time, so later edits to
+ * the funnel do not change what an application shows as its question.
+ */
+export function snapshotApplicationQuestionLabels(
+  config: FunnelConfig,
+  answers: FunnelAnswers,
+): ApplicationQuestionLabels {
+  const pages = choicePages(config);
+  const snapshots: ApplicationQuestionLabels = {};
+  for (const key of Object.keys(answers)) {
+    const page = pages.get(key);
+    const label = page ? visibleQuestionLabel(page) : "";
+    if (label) snapshots[key] = label;
+  }
+  return snapshots;
 }
 
 /**
@@ -63,13 +92,15 @@ export function snapshotApplicationAnswerLabels(
 
 /**
  * Resolves persisted answer keys and stable option values to their visible
- * customer wording. For new records, submission-time snapshots take priority;
- * legacy records fall back to the current funnel configuration.
+ * customer wording: each answer is labelled with the question as the applicant
+ * saw it. For new records, submission-time snapshots take priority; legacy
+ * records fall back to the current funnel configuration.
  */
 export function resolveApplicationAnswers(
   config: FunnelConfig | undefined,
   answers: ApplicationRecord["answers"],
   answerLabels?: ApplicationAnswerLabels,
+  questionLabels?: ApplicationQuestionLabels,
 ): DisplayAnswer[] {
   const pages = choicePages(config);
 
@@ -86,7 +117,8 @@ export function resolveApplicationAnswers(
 
     return {
       label:
-        page?.name.trim()
+        questionLabels?.[key]?.trim()
+        || (page && visibleQuestionLabel(page))
         || (!isTechnicalAnswerKey(persistedLabel) && persistedLabel)
         || `Frage ${index + 1}`,
       values: values.map(value => snapshots?.[value] || optionLabels.get(value) || value),
