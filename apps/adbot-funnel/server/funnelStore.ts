@@ -27,6 +27,7 @@ import { normalizeFunnelLegal } from "@shared/legalPages";
 import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { snapshotApplicationAnswerLabels } from "@shared/applicationAnswers";
+import { formatNotificationEmails, parseNotificationEmails } from "@shared/notificationEmails";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
 
@@ -272,7 +273,7 @@ function funnelPayload(config: FunnelConfig, serverPrivate?: StoredServerPrivate
     slug: normalized.slug,
     title: normalized.title,
     config: storedConfig,
-    notification_email: normalized.notificationEmail,
+    notification_email: formatNotificationEmails(parseNotificationEmails(normalized.notificationEmail)),
     allowed_embed_origins: normalized.allowedEmbedOrigins,
     is_published: normalized.isPublished,
   };
