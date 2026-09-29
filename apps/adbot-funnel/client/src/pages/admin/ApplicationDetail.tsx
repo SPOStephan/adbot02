@@ -1,10 +1,12 @@
-import { ArrowLeft, Building2, CalendarDays, Download, FileText, Loader2, Mail, Phone, ThumbsDown, ThumbsUp, UserRound } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { ArrowLeft, Building2, CalendarDays, Download, FileText, Loader2, Mail, NotebookPen, Phone, ThumbsDown, ThumbsUp, UserRound } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 import type { ApplicationStatus, LeadQuality } from "@shared/funnel";
 import { LEAD_QUALITY_LABELS } from "@shared/leadValue";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge, statusLabels } from "./Applications";
 import { DeleteApplicationButton, formatPurgeDate, RestoreApplicationButton } from "@/components/admin/ApplicationTrashControls";
@@ -210,6 +212,8 @@ export default function ApplicationDetail() {
         </section>
       </div>
 
+      <ApplicationNotes applicationId={application.id} />
+
       {application.resume && (
         <section className="flex flex-col justify-between gap-4 rounded-2xl border bg-white p-5 shadow-sm sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-center gap-3">
@@ -260,4 +264,94 @@ function Contact({ icon: Icon, label, value, href }: { icon: typeof UserRound; l
     </>
   );
   return href ? <a className="flex items-center gap-3 rounded-xl transition hover:text-[#0165c3]" href={href}>{content}</a> : <div className="flex items-center gap-3">{content}</div>;
+}
+
+const NOTE_MAX_LENGTH = 5000;
+
+const loginMethodLabels: Record<string, string> = {
+  member: "Zugang",
+  "adbot-sso": "Konto-Inhaber",
+  password: "Adbot-Team",
+};
+
+function ApplicationNotes({ applicationId }: { applicationId: string }) {
+  const [draft, setDraft] = useState("");
+  const utils = trpc.useUtils();
+  const notesQuery = trpc.funnel.applicationNotes.useQuery({ id: applicationId });
+  const add = trpc.funnel.addApplicationNote.useMutation({
+    onSuccess: async () => {
+      setDraft("");
+      await utils.funnel.applicationNotes.invalidate({ id: applicationId });
+      toast.success("Notiz gespeichert");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const notes = notesQuery.data ?? [];
+  const canSubmit = draft.trim().length > 0 && !add.isPending;
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    add.mutate({ id: applicationId, body: draft });
+  }
+
+  return (
+    <section className="rounded-2xl border bg-white p-5 shadow-sm" aria-labelledby="application-notes-heading">
+      <div className="flex items-center gap-2">
+        <NotebookPen className="size-4 text-[#0165c3]" aria-hidden="true" />
+        <h2 id="application-notes-heading" className="font-bold">Aktennotizen</h2>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Jede Notiz wird mit Name und Zeitpunkt gespeichert und kann danach nicht mehr geändert werden.
+      </p>
+
+      {notesQuery.isLoading ? (
+        <p className="mt-5 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          Notizen werden geladen …
+        </p>
+      ) : notesQuery.error ? (
+        <p className="mt-5 text-sm text-destructive" role="alert">{notesQuery.error.message}</p>
+      ) : notes.length === 0 ? (
+        <p className="mt-5 text-sm text-muted-foreground">Noch keine Notizen.</p>
+      ) : (
+        <ol className="mt-5 grid gap-3">
+          {notes.map(note => (
+            <li key={note.id} className="rounded-xl bg-slate-50 p-4">
+              <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+                <strong className="text-sm text-foreground">{note.authorName || note.authorEmail || "Unbekannt"}</strong>
+                {note.authorName && note.authorEmail && note.authorName !== note.authorEmail && <span>{note.authorEmail}</span>}
+                {loginMethodLabels[note.authorLoginMethod] && <span>· {loginMethodLabels[note.authorLoginMethod]}</span>}
+                <time dateTime={note.createdAt} className="ml-auto">{new Date(note.createdAt).toLocaleString("de-DE")}</time>
+              </p>
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{note.body}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <form className="mt-5 grid gap-2 border-t pt-5" onSubmit={submit}>
+        <label htmlFor="application-note-input" className="text-sm font-semibold">Neue Notiz</label>
+        <Textarea
+          id="application-note-input"
+          value={draft}
+          onChange={event => setDraft(event.target.value)}
+          onKeyDown={event => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) submit(event);
+          }}
+          maxLength={NOTE_MAX_LENGTH}
+          rows={3}
+          placeholder="z. B. Telefonat geführt, Rückruf am Freitag vereinbart"
+          disabled={add.isPending}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <small className="text-xs text-muted-foreground">{draft.length.toLocaleString("de-DE")} / {NOTE_MAX_LENGTH.toLocaleString("de-DE")}</small>
+          <Button type="submit" className="bg-[#0165c3] hover:bg-[#0154a3]" disabled={!canSubmit}>
+            {add.isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Notiz speichern
+          </Button>
+        </div>
+      </form>
+    </section>
+  );
 }
