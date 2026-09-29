@@ -24,6 +24,8 @@ import { Inbox, LayoutGrid, LogOut, Megaphone, PanelLeft, UserCog } from "lucide
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { isAllowedFunnelAdminPath } from "@shared/funnelAdminPaths";
+import { dashboardTitle } from "@shared/accountBranding";
+import { trpc } from "@/lib/trpc";
 import { AdminLoginForm } from "./AdminLoginForm";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
@@ -105,6 +107,19 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.matches(location));
   const isMobile = useIsMobile();
+  const brandingQuery = trpc.members.accountBranding.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const branding = brandingQuery.data ?? null;
+  const title = brandingQuery.isLoading ? "" : dashboardTitle(branding?.companyName);
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logoUrl = branding?.logoUrl && !logoFailed ? branding.logoUrl : null;
+
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [branding?.logoUrl]);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -151,7 +166,7 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
+          <SidebarHeader className={`${logoUrl && !isCollapsed ? "min-h-16 py-3" : "h-16"} justify-center`}>
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
@@ -161,9 +176,17 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Adbot Funnel
+                <div className="flex flex-col items-start gap-1.5 min-w-0">
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt={branding?.logoAlt || title}
+                      className="max-h-10 max-w-[180px] object-contain object-left"
+                      onError={() => setLogoFailed(true)}
+                    />
+                  ) : null}
+                  <span className="font-semibold tracking-tight truncate max-w-full">
+                    {title}
                   </span>
                 </div>
               ) : null}
