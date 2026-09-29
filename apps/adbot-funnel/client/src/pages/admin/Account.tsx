@@ -7,6 +7,7 @@ import { suggestPassword } from "@/lib/suggestPassword";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatBerlinDateTime } from "@shared/berlinTime";
 import { dashboardTitle } from "@shared/accountBranding";
@@ -148,6 +149,10 @@ function OwnerAccount() {
   const resetMutation = trpc.members.resetPassword.useMutation({
     onError: error => toast.error(error.message),
   });
+  const promoteMutation = trpc.members.setCanPromote.useMutation({
+    onSuccess: () => void utils.members.list.invalidate(),
+    onError: error => toast.error(error.message),
+  });
   const removeMutation = trpc.members.remove.useMutation({
     onSuccess: () => {
       toast.success("Zugang gelöscht");
@@ -185,6 +190,7 @@ function OwnerAccount() {
           <h2 className="text-lg font-semibold">Weiteren Zugang anlegen</h2>
           <p className="text-sm text-muted-foreground">
             Die Person sieht und bearbeitet alle Funnel, Eingänge und Kampagnen dieses Kontos, wie du. Adbot selbst erreicht sie nicht.
+            Die Buttons zum Bewerben in Adbot sind für sie ausgeblendet, bis du sie unten einschaltest.
           </p>
         </div>
         {issued ? <CredentialsBox credentials={issued} onClose={() => setIssued(null)} /> : null}
@@ -237,6 +243,7 @@ function OwnerAccount() {
                 <TableHead>E-Mail</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Letzte Anmeldung</TableHead>
+                <TableHead>Bewerben-Buttons</TableHead>
                 <TableHead className="text-right">Aktionen</TableHead>
               </TableRow>
             </TableHeader>
@@ -246,6 +253,14 @@ function OwnerAccount() {
                   <TableCell className="font-medium">{member.email}</TableCell>
                   <TableCell>{member.name || "—"}</TableCell>
                   <TableCell>{formatDate(member.lastLoginAt)}</TableCell>
+                  <TableCell>
+                    <Switch
+                      aria-label={`Bewerben-Buttons für ${member.email} zeigen`}
+                      checked={member.canPromote}
+                      disabled={promoteMutation.isPending}
+                      onCheckedChange={checked => promoteMutation.mutate({ id: member.id, canPromote: checked })}
+                    />
+                  </TableCell>
                   <TableCell className="space-x-2 text-right">
                     <Button onClick={() => onReset(member.id, member.email)} size="sm" type="button" variant="outline">
                       <KeyRound className="mr-2 h-4 w-4" /> Neues Passwort

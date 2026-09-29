@@ -9,6 +9,7 @@ export type FunnelMember = {
   name: string;
   passwordHash: string;
   createdByEmail: string;
+  canPromote: boolean;
   lastLoginAt: string | null;
   createdAt: string;
 };
@@ -16,7 +17,7 @@ export type FunnelMember = {
 /** Ohne Passwort-Hash, für die Admin-Oberfläche. */
 export type FunnelMemberSummary = Omit<FunnelMember, "passwordHash" | "ownerUserId">;
 
-const COLUMNS = "id,owner_user_id,email,name,password_hash,created_by_email,last_login_at,created_at";
+const COLUMNS = "id,owner_user_id,email,name,password_hash,created_by_email,can_promote,last_login_at,created_at";
 
 let memoryMembers: FunnelMember[] = [];
 let client: SupabaseClient | null | undefined;
@@ -53,6 +54,7 @@ function mapRow(row: Record<string, unknown>): FunnelMember {
     name: String(row.name ?? ""),
     passwordHash: String(row.password_hash),
     createdByEmail: String(row.created_by_email ?? ""),
+    canPromote: row.can_promote === true,
     lastLoginAt: row.last_login_at == null ? null : String(row.last_login_at),
     createdAt: String(row.created_at),
   };
@@ -112,6 +114,7 @@ export async function createMember(input: {
       name: input.name.trim(),
       passwordHash: input.passwordHash,
       createdByEmail: input.createdByEmail,
+      canPromote: false,
       lastLoginAt: null,
       createdAt: new Date().toISOString(),
     };
@@ -151,6 +154,29 @@ export async function setMemberPasswordHash(input: {
   const { data, error } = await supabase
     .from("funnel_admin_members")
     .update({ password_hash: input.passwordHash })
+    .eq("id", input.memberId)
+    .eq("owner_user_id", input.ownerUserId)
+    .select(COLUMNS)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapRow(data as Record<string, unknown>) : null;
+}
+
+export async function setMemberCanPromote(input: {
+  ownerUserId: string;
+  memberId: string;
+  canPromote: boolean;
+}): Promise<FunnelMember | null> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    const member = memoryMembers.find(item => item.id === input.memberId && item.ownerUserId === input.ownerUserId);
+    if (!member) return null;
+    member.canPromote = input.canPromote;
+    return member;
+  }
+  const { data, error } = await supabase
+    .from("funnel_admin_members")
+    .update({ can_promote: input.canPromote })
     .eq("id", input.memberId)
     .eq("owner_user_id", input.ownerUserId)
     .select(COLUMNS)

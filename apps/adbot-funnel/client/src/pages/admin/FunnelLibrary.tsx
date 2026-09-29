@@ -81,6 +81,8 @@ export default function FunnelLibrary() {
   const [, setLocation] = useLocation();
   const query = trpc.funnel.funnels.useQuery();
   const accountDomainsQuery = trpc.funnel.accountDomains.useQuery();
+  const permissionsQuery = trpc.members.permissions.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  const canPromote = permissionsQuery.data?.canPromote === true;
   const readyAccountHostname = (accountDomainsQuery.data ?? []).find(domain => domain.status === "READY")?.hostname ?? null;
   const publicUrlsByFunnelId = useMemo(
     () => new Map(
@@ -240,7 +242,7 @@ export default function FunnelLibrary() {
 
         {query.isLoading ? <LibraryLoading /> : query.error ? <div className="p-10 text-center text-destructive" role="alert">{query.error.message}</div> : funnels.length === 0 ? <LibraryEmpty hasAny={(query.data?.length ?? 0) > 0} onCreate={openCreate} /> : <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-2 2xl:grid-cols-3">{funnels.map(funnel => {
           const publicUrl = publicUrlsByFunnelId.get(funnel.id) ?? "";
-          return <FunnelCard key={funnel.id} funnel={funnel} publicUrl={publicUrl} campaignStatus={campaignStatusesQuery.data?.[publicUrl]} busy={statusChange.isPending && statusChange.variables?.id === funnel.id} onNavigate={setLocation} onDuplicate={openDuplicate} onArchive={setArchiveTarget} onStatusChange={(id, nextStatus) => statusChange.mutate({ id, status: nextStatus })} />;
+          return <FunnelCard key={funnel.id} funnel={funnel} publicUrl={publicUrl} campaignStatus={campaignStatusesQuery.data?.[publicUrl]} canPromote={canPromote} busy={statusChange.isPending && statusChange.variables?.id === funnel.id} onNavigate={setLocation} onDuplicate={openDuplicate} onArchive={setArchiveTarget} onStatusChange={(id, nextStatus) => statusChange.mutate({ id, status: nextStatus })} />;
         })}</div>}
       </section>
 
@@ -306,7 +308,7 @@ type FunnelCampaignStatus = {
   updatedAt: string | null;
 };
 
-function FunnelCard({ funnel, publicUrl, campaignStatus, busy, onNavigate, onDuplicate, onArchive, onStatusChange }: { funnel: FunnelSummary; publicUrl: string; campaignStatus?: FunnelCampaignStatus; busy: boolean; onNavigate: (path: string) => void; onDuplicate: (funnel: FunnelSummary) => void; onArchive: (funnel: FunnelSummary) => void; onStatusChange: (id: string, status: FunnelStatus) => void }) {
+function FunnelCard({ funnel, publicUrl, campaignStatus, canPromote, busy, onNavigate, onDuplicate, onArchive, onStatusChange }: { funnel: FunnelSummary; publicUrl: string; campaignStatus?: FunnelCampaignStatus; canPromote: boolean; busy: boolean; onNavigate: (path: string) => void; onDuplicate: (funnel: FunnelSummary) => void; onArchive: (funnel: FunnelSummary) => void; onStatusChange: (id: string, status: FunnelStatus) => void }) {
   const hasLeadCampaign = Boolean(campaignStatus?.leadSubmitted || campaignStatus?.leadActive);
   return <article className={`group relative overflow-hidden rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg ${funnel.status === "archived" ? "bg-slate-50/70 opacity-80" : "bg-white"}`}>
     <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0165c3] via-cyan-400 to-transparent opacity-0 transition group-hover:opacity-100" />
@@ -316,7 +318,7 @@ function FunnelCard({ funnel, publicUrl, campaignStatus, busy, onNavigate, onDup
     {funnel.status === "published" && publicUrl ? <div className="mt-2 space-y-2">
       {hasLeadCampaign ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" role="status">{campaignStatus?.leadActive ? "Lead-Kampagne bei Meta aktiv" : "Lead-Kampagne an Meta übermittelt"}</p> : null}
       {campaignStatus?.trafficSubmitted || campaignStatus?.trafficActive ? <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800" role="status">{campaignStatus?.trafficActive ? "Kampagne für Landingpage-Aufrufe bei Meta aktiv" : "Kampagne für Landingpage-Aufrufe an Meta übermittelt"}</p> : null}
-      <Button className="w-full border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100" variant="outline" onClick={() => window.location.assign(portalCampaignLaunchUrl(publicUrl, hasLeadCampaign ? "landing-page-views" : "leads"))}><ArrowRight className="size-4" />{hasLeadCampaign ? "Zusätzlich für Landingpage-Aufrufe bewerben" : "Diesen Funnel in Adbot bewerben"}</Button>
+      {canPromote ? <Button className="w-full border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100" variant="outline" onClick={() => window.location.assign(portalCampaignLaunchUrl(publicUrl, hasLeadCampaign ? "landing-page-views" : "leads"))}><ArrowRight className="size-4" />{hasLeadCampaign ? "Zusätzlich für Landingpage-Aufrufe bewerben" : "Diesen Funnel in Adbot bewerben"}</Button> : null}
     </div> : null}
   </article>;
 }
