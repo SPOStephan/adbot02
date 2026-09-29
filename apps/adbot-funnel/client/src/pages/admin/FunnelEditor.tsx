@@ -33,6 +33,7 @@ import { BenefitsTileLayoutPicker } from "@/components/admin/BenefitsTileLayoutP
 import { StartBadgesField } from "@/components/admin/StartBadgesField";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
 import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
+import { NotificationEmailsField } from "@/components/admin/NotificationEmailsField";
 import { useFunnelEditorHistory } from "@/hooks/useFunnelEditorHistory";
 
 const pageLabels: Record<FunnelPage["type"], string> = { start: "Startseite", "choice-grid": "Symbolkacheln", "choice-list": "Buttonliste", contact: "Kontaktformular" };
@@ -507,7 +508,7 @@ export default function FunnelEditor() {
               <label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Social Proof anzeigen</strong><small className="text-muted-foreground">Vertrauenshinweis im Footer</small></span><Switch checked={config.socialProof.enabled} onCheckedChange={checked => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, enabled: checked } }))} /></label>
               <FormRow label="Social-Proof-Überschrift"><FormattedTextField rows={1} value={config.socialProof.eyebrow} onChange={value => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, eyebrow: value } }))} /></FormRow>
               <FormRow label="Social-Proof-Text"><FormattedTextField rows={3} value={config.socialProof.text} onChange={value => changeConfig(current => ({ ...current, socialProof: { ...current.socialProof, text: value } }))} /></FormRow>
-              <FormRow label="Empfänger-E-Mail"><Input type="email" placeholder="anfragen@unternehmen.de" value={config.notificationEmail} onChange={event => changeConfig(current => ({ ...current, notificationEmail: event.target.value }))} /></FormRow>
+              <FormRow label="Empfänger-E-Mails" hint="Eine Adresse pro Feld; alle erhalten die Benachrichtigung."><NotificationEmailsField value={config.notificationEmail} onChange={notificationEmail => changeConfig(current => ({ ...current, notificationEmail }))} /></FormRow>
               <div className="grid gap-3 rounded-2xl border p-4">
                 <div>
                   <p className="text-sm font-bold">Impressum und Datenschutz</p>

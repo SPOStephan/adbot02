@@ -6,6 +6,7 @@ import type { FunnelConfig, FunnelStatus } from "@shared/funnel";
 import { FUNNEL_PURPOSE_OPTIONS, funnelPurposeOption, funnelSubmissionPlural, type FunnelPurpose } from "@shared/funnelPurpose";
 import { legalPagesAreValid } from "@shared/legalPages";
 import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
+import { NotificationEmailsField } from "@/components/admin/NotificationEmailsField";
 import { SETTINGS_QUERY_OPTIONS, shouldHydrateSettingsFromQuery } from "@/lib/settingsHydration";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -349,7 +350,7 @@ export default function Settings() {
           <div className="space-y-2 sm:col-span-2"><Label htmlFor="funnel-title">Funnel-Titel</Label><Input id="funnel-title" maxLength={240} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} /></div>
           <div className="space-y-2 sm:col-span-2"><Label htmlFor="funnel-purpose">Funnel-Zweck</Label><Select value={draft.purpose} onValueChange={purpose => setDraft({ ...draft, purpose: purpose as FunnelPurpose })}><SelectTrigger id="funnel-purpose"><SelectValue /></SelectTrigger><SelectContent>{FUNNEL_PURPOSE_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">{funnelPurposeOption(draft.purpose).description}</p></div>
           <div className="space-y-2"><Label htmlFor="funnel-slug">URL-Slug</Label><Input id="funnel-slug" value={draft.slug} onChange={event => setDraft({ ...draft, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} /><p className="text-xs text-muted-foreground">Muss über alle Funnel hinweg eindeutig sein.</p></div>
-          <div className="space-y-2"><Label htmlFor="notification-email">Empfänger-E-Mail</Label><Input id="notification-email" type="email" value={draft.notificationEmail} placeholder="anfragen@unternehmen.de" onChange={event => setDraft({ ...draft, notificationEmail: event.target.value })} /><p className="text-xs text-muted-foreground">An diese Adresse werden neue {submissionPlural.toLowerCase()} dieses Funnels gemeldet.</p></div>
+          <div className="space-y-2"><Label htmlFor="notification-email">Empfänger-E-Mails</Label><NotificationEmailsField id="notification-email" value={draft.notificationEmail} onChange={notificationEmail => setDraft({ ...draft, notificationEmail })} /><p className="text-xs text-muted-foreground">An diese Adressen werden neue {submissionPlural.toLowerCase()} dieses Funnels gemeldet. Eine Adresse pro Feld.</p></div>
           <div className="space-y-3 sm:col-span-2">
             <LegalPagesFields
               legal={draft.legal}

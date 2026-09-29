@@ -28,6 +28,7 @@ import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRa
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { snapshotApplicationAnswerLabels, snapshotApplicationQuestionLabels } from "@shared/applicationAnswers";
 import { applicationPurgeCutoff } from "@shared/applicationTrash";
+import { formatNotificationEmails, parseNotificationEmails } from "@shared/notificationEmails";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
 
@@ -273,7 +274,7 @@ function funnelPayload(config: FunnelConfig, serverPrivate?: StoredServerPrivate
     slug: normalized.slug,
     title: normalized.title,
     config: storedConfig,
-    notification_email: normalized.notificationEmail,
+    notification_email: formatNotificationEmails(parseNotificationEmails(normalized.notificationEmail)),
     allowed_embed_origins: normalized.allowedEmbedOrigins,
     is_published: normalized.isPublished,
   };

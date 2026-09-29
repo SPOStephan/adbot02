@@ -3,6 +3,7 @@ import { FUNNEL_PURPOSES } from "./funnelPurpose";
 import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, LEGAL_PAGE_MODES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
+import { notificationEmailsAreValid } from "./notificationEmails";
 import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
 import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
@@ -147,7 +148,7 @@ export const funnelConfigSchema = z
     purpose: z.enum(FUNNEL_PURPOSES),
     status: funnelStatusSchema,
     isPublished: z.boolean(),
-    notificationEmail: z.union([z.literal(""), z.string().email()]),
+    notificationEmail: z.string().max(2000).refine(notificationEmailsAreValid, "Bitte nur gültige E-Mail-Adressen angeben (max. 10)."),
     allowedEmbedOrigins: z.array(z.string().url()).max(20),
     progress: z.object({
       layout: z.enum(PROGRESS_LAYOUTS).default(DEFAULT_PROGRESS_LAYOUT),

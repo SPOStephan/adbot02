@@ -5,8 +5,10 @@ import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { ENV, assertAuthConfigured } from "./env";
+import { findMemberLogin, memberCredentialVersion } from "./memberLogins";
+import type { FunnelMember } from "../funnelMembers";
 
-export type AuthSource = "password" | "adbot-sso";
+export type AuthSource = "password" | "adbot-sso" | "member";
 
 export type SessionClaims = {
   sub: string;
@@ -15,6 +17,7 @@ export type SessionClaims = {
   role: "admin";
   authSource: AuthSource;
   ownerUserId: string | null;
+  credentialVersion: string | null;
 };
 
 function secretKey() {
@@ -69,6 +72,11 @@ export function buildTenantUser(ownerUserId: string, email: string, name?: strin
   };
 }
 
+/** Funnel-only-Login: gleicher Mandantenumfang wie `ownerUserId`, aber kein Plattform-Admin. */
+export function buildMemberUser(member: Pick<FunnelMember, "ownerUserId" | "email" | "name">): User {
+  return { ...buildTenantUser(member.ownerUserId, member.email, member.name), id: 3, loginMethod: "member" };
+}
+
 export function isPlatformAdmin(user: User | null | undefined): boolean {
   return Boolean(user && user.loginMethod === "password");
 }
@@ -78,10 +86,19 @@ export function getTenantOwnerUserId(user: User): string | null {
   return user.openId;
 }
 
-export async function createSessionToken(user: User): Promise<string> {
+export async function createSessionToken(
+  user: User,
+  options: { member?: Pick<FunnelMember, "passwordHash"> } = {},
+): Promise<string> {
   const authSource: AuthSource =
-    user.loginMethod === "adbot-sso" ? "adbot-sso" : "password";
-  const ownerUserId = authSource === "adbot-sso" ? user.openId : null;
+    user.loginMethod === "adbot-sso" || user.loginMethod === "member"
+      ? user.loginMethod
+      : "password";
+  const ownerUserId = authSource === "password" ? null : user.openId;
+  const member = authSource === "member" ? options.member : undefined;
+  if (authSource === "member" && !member) {
+    throw new Error("Mitglieds-Sitzung braucht den aktuellen Zugang.");
+  }
 
   return new SignJWT({
     email: user.email,
@@ -89,6 +106,7 @@ export async function createSessionToken(user: User): Promise<string> {
     role: user.role,
     authSource,
     ownerUserId,
+    ...(member ? { cv: memberCredentialVersion(member) } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.openId)
@@ -112,13 +130,15 @@ export async function verifySessionToken(
     }
 
     const authSource: AuthSource =
-      payload.authSource === "adbot-sso" ? "adbot-sso" : "password";
+      payload.authSource === "adbot-sso" || payload.authSource === "member"
+        ? payload.authSource
+        : "password";
     const ownerUserId =
       typeof payload.ownerUserId === "string" && payload.ownerUserId.length > 0
         ? payload.ownerUserId
-        : authSource === "adbot-sso"
-          ? payload.sub
-          : null;
+        : authSource === "password"
+          ? null
+          : payload.sub;
 
     return {
       sub: payload.sub,
@@ -127,6 +147,7 @@ export async function verifySessionToken(
       role: "admin",
       authSource,
       ownerUserId,
+      credentialVersion: typeof payload.cv === "string" ? payload.cv : null,
     };
   } catch {
     return null;
@@ -154,6 +175,23 @@ export async function authenticateRequest(req: Request): Promise<User | null> {
 
   const claims = await verifySessionToken(readSessionToken(req));
   if (!claims) return null;
+
+  if (claims.authSource === "member") {
+    // Bei jeder Anfrage gegen den gespeicherten Zugang prüfen: Löschen des Zugangs
+    // oder ein neues Passwort beendet bestehende Sitzungen sofort.
+    const member = await findMemberLogin(claims.email).catch(error => {
+      console.error("[member-login] Zugang nicht lesbar", error);
+      return null;
+    });
+    if (
+      !member ||
+      member.ownerUserId !== claims.ownerUserId ||
+      claims.credentialVersion !== memberCredentialVersion(member)
+    ) {
+      return null;
+    }
+    return buildMemberUser(member);
+  }
 
   if (claims.authSource === "adbot-sso" && claims.ownerUserId) {
     return buildTenantUser(claims.ownerUserId, claims.email, claims.name);

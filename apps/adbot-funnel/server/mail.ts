@@ -1,6 +1,7 @@
 import type { ApplicationRecord, FunnelConfig } from "@shared/funnel";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
 import { funnelSubmissionLabel } from "@shared/funnelPurpose";
+import { parseNotificationEmails } from "@shared/notificationEmails";
 
 type MailEnvironment = {
   MAIL_FROM?: string;
@@ -88,14 +89,15 @@ export function resolveApplicationMailFrom(
 export async function sendApplicationNotification(config: FunnelConfig, application: ApplicationRecord) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = resolveApplicationMailFrom(application);
-  if (!apiKey || !from || !config.notificationEmail) return false;
+  const recipients = parseNotificationEmails(config.notificationEmail);
+  if (!apiKey || !from || recipients.length === 0) return false;
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from,
-      to: [config.notificationEmail],
+      to: recipients,
       subject: `Neue ${funnelSubmissionLabel(config.purpose)}: ${application.contact.name ?? application.contact.email ?? application.id}`,
       html: buildApplicationNotificationHtml(config, application),
     }),
