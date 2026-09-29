@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import type { PortalCampaignAdCard, PortalFunnelCampaign } from "@shared/portalCampaigns";
+import { formatBerlinDate } from "@shared/berlinTime";
 
 type KindFilter = "all" | "lead" | "traffic";
 type Lifecycle = "active" | "archived";
@@ -29,7 +30,7 @@ function formatNumber(value: number | null) {
 }
 
 function formatDate(value: string | null) {
-  return value ? new Date(value).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : null;
+  return value ? formatBerlinDate(value, { day: "2-digit", month: "2-digit", year: "numeric" }) : null;
 }
 
 function budgetLabel(campaign: PortalFunnelCampaign) {

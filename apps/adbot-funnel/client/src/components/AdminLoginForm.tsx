@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { getBrowserHostname } from "@/lib/funnelHost";
-import { portalFunnelSsoUrl } from "@/lib/portalUrl";
+import { portalFunnelSsoUrl, showAdbotLoginLink } from "@/lib/portalUrl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -102,9 +102,11 @@ export function AdminLoginForm({ nextPath = "/admin", ssoError = null }: Props) 
           {loginPending ? "Anmelden…" : "Anmelden"}
         </Button>
 
-        <a className="text-center text-xs text-muted-foreground underline-offset-4 hover:underline" href={portalHref}>
-          Mit Adbot-Konto anmelden
-        </a>
+        {showAdbotLoginLink() ? (
+          <a className="text-center text-xs text-muted-foreground underline-offset-4 hover:underline" href={portalHref}>
+            Mit Adbot-Konto anmelden
+          </a>
+        ) : null}
       </form>
     </div>
   );

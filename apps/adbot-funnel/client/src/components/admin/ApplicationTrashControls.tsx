@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { formatBerlinDate } from "@shared/berlinTime";
 
 function useInvalidateApplications() {
   const utils = trpc.useUtils();
@@ -37,7 +38,7 @@ export function useRestoreApplication() {
 }
 
 export function formatPurgeDate(purgeAt: string) {
-  return new Date(purgeAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatBerlinDate(purgeAt, { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 /**
