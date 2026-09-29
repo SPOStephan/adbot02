@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ApplicationRecord, FunnelConfig } from "@shared/funnel";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
+import { formatBerlinDateTime } from "@shared/berlinTime";
 
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
@@ -23,7 +24,7 @@ export function buildApplicationsCsv(applications: ApplicationRecord[], configs:
   const headers = ["ID", "Eingang", "Status", "Bewertung", "Lead-Wert", "Name", "Firma", "E-Mail", "Telefon", "Nachricht", ...answerLabels, "Lebenslauf"];
   const rows = applications.map(application => [
     application.id,
-    application.createdAt,
+    formatBerlinDateTime(application.createdAt),
     application.status,
     application.leadQuality === "good" ? "gut" : application.leadQuality === "bad" ? "schlecht" : "",
     application.leadValue ?? "",
@@ -74,7 +75,7 @@ export async function buildApplicationsPdf(applications: ApplicationRecord[], co
     };
     page.drawRectangle({ x: 0, y: 834, width: 595, height: 8, color: rgb(0.004, 0.396, 0.765) });
     drawLine(`Eintrag ${index + 1} von ${applications.length}`, { bold: true, size: 18 });
-    drawLine(`${new Date(application.createdAt).toLocaleString("de-DE")} · Status: ${application.status}`, { color: rgb(0.36, 0.42, 0.48) });
+    drawLine(`${formatBerlinDateTime(application.createdAt)} · Status: ${application.status}`, { color: rgb(0.36, 0.42, 0.48) });
     y -= 8;
     drawLine("Kontaktdaten", { bold: true, size: 13 });
     for (const [key, value] of Object.entries(application.contact)) drawLine(`${key}: ${value}`);
