@@ -68,6 +68,7 @@ Die Anwendung benötigt folgende serverseitige Konfigurationsgruppen. Geheimwert
 | Storage | `STORAGE_BUCKET` (Default `application-resumes`) | Private Lebensläufe/Favicons in Supabase Storage |
 | Resend | `RESEND_API_KEY`, `MAIL_FROM`, optional `MAIL_FROM_BY_FUNNEL_HOST` | Gebündelte Benachrichtigung; verifizierte Kundenabsender pro exaktem Funnel-Host mit sicherem Standardabsender als Fallback |
 | Admin-Authentifizierung | `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Geschützte Admin-Sitzung ohne Manus |
+| Funnel-only-Logins (optional) | `FUNNEL_MEMBER_LOGINS` | Zusätzliche Logins, z. B. für das Kundenunternehmen: gleicher Funnel-Umfang wie das angegebene Adbot-Konto, kein Adbot-Zugang. JSON-Array `[{"email","name","ownerUserId","passwordHash"}]`; Hash mit `node scripts/hash-member-password.mjs`. Eintrag entfernen oder Passwort ändern beendet bestehende Sitzungen. |
 
 Die produktive SQL-Migration liegt unter [`supabase/migrations/202607270001_initial_recruiting_schema.sql`](supabase/migrations/202607270001_initial_recruiting_schema.sql). Sie ist idempotent und enthält Tabellen, Indizes, Trigger, RLS-Aktivierung sowie explizite Rollenrechte.
 
