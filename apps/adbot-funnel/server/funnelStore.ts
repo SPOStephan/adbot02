@@ -31,6 +31,7 @@ import { applicationPurgeCutoff } from "@shared/applicationTrash";
 import { formatNotificationEmails, parseNotificationEmails } from "@shared/notificationEmails";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
 import { resetFunnelMediaStoreForTests } from "./funnelMediaStore";
+import { resetApplicationNotesMemoryForTests } from "./applicationNotes";
 
 const PAGE_SIZE = 1_000;
 const memoryStartedAt = new Date().toISOString();
@@ -1010,4 +1011,5 @@ export function resetMemoryStoreForTests() {
   memoryMetaServerSettings.clear();
   client = undefined;
   resetFunnelMediaStoreForTests();
+  resetApplicationNotesMemoryForTests();
 }

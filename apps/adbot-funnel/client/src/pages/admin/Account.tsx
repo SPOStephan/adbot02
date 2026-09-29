@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatBerlinDateTime } from "@shared/berlinTime";
 import { dashboardTitle } from "@shared/accountBranding";
+import { MailLogSection } from "@/components/admin/MailLogSection";
 
 type IssuedCredentials = { email: string; password: string };
 
@@ -282,6 +283,7 @@ export default function Account() {
           Weitere Zugänge verwaltet der Konto-Inhaber.
         </p>
       )}
+      <MailLogSection />
     </div>
   );
 }
