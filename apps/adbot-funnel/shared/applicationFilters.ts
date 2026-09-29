@@ -58,7 +58,7 @@ function sortValue(application: ApplicationRecord, key: ApplicationSortKey, funn
     case "contactData": return application.contact.email?.trim() || application.contact.phone?.trim() || undefined;
     case "createdAt": return Date.parse(application.createdAt) || 0;
     case "status": return STATUS_ORDER[application.status];
-    case "rating": return application.leadValue ?? (application.leadQuality === "good" ? 0 : application.leadQuality === "bad" ? -1 : undefined);
+    case "rating": return application.leadQuality === "good" ? 1 : application.leadQuality === "bad" ? 0 : undefined;
     case "answers": return Object.keys(application.answers).length;
   }
 }

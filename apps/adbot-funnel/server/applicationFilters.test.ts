@@ -77,11 +77,11 @@ describe("Bewerbungssortierung", () => {
     expect(ids(sortApplications(list, { key: "funnel", direction: "asc" }, titles))).toEqual(["3", "1", "2"]);
   });
 
-  it("sortiert Status im Bearbeitungsablauf und Bewertung nach Wert", () => {
+  it("sortiert Status im Bearbeitungsablauf und Bewertung Gut vor Schlecht vor offen", () => {
     const list = [
-      at("1", "2026-07-01T10:00:00.000Z", { status: "hired", leadValue: 500 }),
+      at("1", "2026-07-01T10:00:00.000Z", { status: "hired", leadQuality: "good" }),
       at("2", "2026-07-02T10:00:00.000Z", { status: "new" }),
-      at("3", "2026-07-03T10:00:00.000Z", { status: "reviewing", leadValue: 100 }),
+      at("3", "2026-07-03T10:00:00.000Z", { status: "reviewing", leadQuality: "bad" }),
     ];
     expect(ids(sortApplications(list, { key: "status", direction: "asc" }))).toEqual(["2", "3", "1"]);
     expect(ids(sortApplications(list, { key: "rating", direction: "desc" }))).toEqual(["1", "3", "2"]);

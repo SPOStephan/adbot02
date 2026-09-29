@@ -152,9 +152,6 @@ export default function ApplicationDetail() {
           </div>
           <div className="text-sm">
             <p className="font-semibold">{qualityLabel(application.leadQuality)}</p>
-            {application.leadValue !== undefined && (
-              <p className="text-xs text-muted-foreground">Antwort-Wert {application.leadValue.toLocaleString("de-DE")} €</p>
-            )}
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
