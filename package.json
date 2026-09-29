@@ -55,6 +55,7 @@
     "test:dco-multi-image": "node scripts/test-dco-multi-image.mjs",
     "test:funnel-url-split": "node scripts/test-funnel-url-split.mjs",
     "test:funnel-campaign-launch": "node scripts/test-funnel-campaign-launch.mjs && node --experimental-strip-types scripts/test-meta-ad-preview-combinations.mjs",
+    "test:campaign-ad-overview": "node --experimental-strip-types scripts/test-campaign-ad-overview.mjs",
     "test:meta-campaign-drafts": "node scripts/test-meta-campaign-drafts.mjs",
     "test:success-control-rank": "node scripts/test-success-control-rank.mjs",
     "test:ad-sibling-success-pause": "node scripts/test-ad-sibling-success-pause.mjs",

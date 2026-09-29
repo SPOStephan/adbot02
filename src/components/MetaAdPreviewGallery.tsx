@@ -7,6 +7,10 @@ import type { MetaAdPreviewCombination } from "@/lib/meta/ad-preview-combination
 export type MetaAdPreviewCard = MetaAdPreviewCombination & {
   destinationUrl: string;
   previewLabel?: string;
+  /** Direct image URL (e.g. synced Meta creative); wins over assetId. */
+  imageUrl?: string | null;
+  /** Per-card button text; falls back to the gallery's callToActionLabel. */
+  callToActionLabel?: string;
 };
 
 type PreviewAsset = {
@@ -23,6 +27,8 @@ type Props = {
   instagramLabel?: string | null;
   assets: readonly PreviewAsset[];
   callToActionLabel: string;
+  /** "live" describes ads already running at Meta instead of a launch preview. */
+  context?: "preview" | "live";
 };
 
 function destinationHostname(value: string): string {
@@ -37,6 +43,13 @@ function advertiserInitials(value: string): string {
   const words = value.trim().split(/\s+/).filter(Boolean);
   return (words.length > 1 ? `${words[0][0]}${words[1][0]}` : words[0]?.slice(0, 2) || "AD")
     .toUpperCase();
+}
+
+function imageSource(card: MetaAdPreviewCard): string | null {
+  if (card.imageUrl) return card.imageUrl;
+  return card.assetId
+    ? `/api/media-library/preview?assetId=${encodeURIComponent(card.assetId)}`
+    : null;
 }
 
 function combinationCountLabel(shown: number, total: number): string {
@@ -54,6 +67,7 @@ export function MetaAdPreviewGallery({
   instagramLabel,
   assets,
   callToActionLabel,
+  context = "preview",
 }: Props) {
   const assetNames = new Map(
     assets.map((asset) => [asset.id, asset.originalFilename]),
@@ -67,14 +81,20 @@ export function MetaAdPreviewGallery({
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-sm font-extrabold text-slate-950">
-            Meta-Anzeigenvorschau
+            {context === "live" ? "Anzeigen bei Meta" : "Meta-Anzeigenvorschau"}
           </h4>
           <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-blue-800 ring-1 ring-blue-200">
-            {combinationCountLabel(cards.length, totalCombinationCount)}
+            {context === "live" && mode !== "dynamic"
+              ? `${cards.length} ${cards.length === 1 ? "Anzeige" : "Anzeigen"}`
+              : combinationCountLabel(cards.length, totalCombinationCount)}
           </span>
         </div>
         <p className="mt-2 text-sm leading-6 text-slate-700">
-          {mode === "structural"
+          {context === "live" && mode !== "dynamic"
+            ? cards.length > 1
+              ? "Jede Karte zeigt eine Anzeige dieser Kampagne mit Motiv, Text, Headline und Zielseite."
+              : "So erscheint die Anzeige dieser Kampagne bei Meta."
+            : mode === "structural"
             ? "Jede Karte zeigt eine der zwei getrennten Anzeigen mit ihrem konkreten Motiv, Text, ihrer Headline und Zielseite."
             : mode === "dynamic"
               ? "Jede Karte kombiniert genau ein Motiv, einen Primary Text und eine Headline."
@@ -142,13 +162,20 @@ export function MetaAdPreviewGallery({
               </p>
 
               <div className="flex min-h-64 max-h-[430px] items-center justify-center overflow-hidden bg-slate-950">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  alt={`${filename} in ${label}`}
-                  className="max-h-[430px] w-full object-contain"
-                  loading="lazy"
-                  src={`/api/media-library/preview?assetId=${encodeURIComponent(card.assetId)}`}
-                />
+                {imageSource(card) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt={`${filename} in ${label}`}
+                    className="max-h-[430px] w-full object-contain"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    src={imageSource(card) ?? undefined}
+                  />
+                ) : (
+                  <p className="px-6 text-center text-sm font-semibold text-slate-300">
+                    Kein Motiv verfügbar
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
@@ -166,7 +193,7 @@ export function MetaAdPreviewGallery({
                   ) : null}
                 </div>
                 <span className="shrink-0 rounded-md bg-slate-200 px-3 py-2 text-xs font-extrabold text-slate-800">
-                  {callToActionLabel}
+                  {card.callToActionLabel ?? callToActionLabel}
                 </span>
               </div>
             </article>

@@ -6,10 +6,14 @@ import { getFunnelSsoSecret } from "@/lib/funnel-sso";
 
 const TOKEN_TTL_SECONDS = 5 * 60;
 const PURPOSE = "funnel_campaign_status" as const;
+/** Separate purpose so a status token can never read the full ad overview. */
+export const FUNNEL_CAMPAIGN_OVERVIEW_PURPOSE = "funnel_campaign_overview" as const;
+
+type FunnelTokenPurpose = typeof PURPOSE | typeof FUNNEL_CAMPAIGN_OVERVIEW_PURPOSE;
 
 type FunnelCampaignStatusTokenPayload = {
   v: 1;
-  purpose: typeof PURPOSE;
+  purpose: FunnelTokenPurpose;
   sub: string;
   nonce: string;
   iat: number;
@@ -32,6 +36,7 @@ function signature(value: string, secret: string): Buffer | null {
 export function verifyFunnelCampaignStatusToken(
   token: string,
   now = Date.now(),
+  purpose: FunnelTokenPurpose = PURPOSE,
 ): FunnelCampaignStatusTokenPayload | null {
   const parts = token.split(".");
   if (parts.length !== 2) return null;
@@ -58,7 +63,7 @@ export function verifyFunnelCampaignStatusToken(
   const typed = payload as Partial<FunnelCampaignStatusTokenPayload>;
   if (
     typed.v !== 1 ||
-    typed.purpose !== PURPOSE ||
+    typed.purpose !== purpose ||
     typeof typed.sub !== "string" ||
     !/^[0-9a-f-]{36}$/i.test(typed.sub) ||
     typeof typed.nonce !== "string" ||
