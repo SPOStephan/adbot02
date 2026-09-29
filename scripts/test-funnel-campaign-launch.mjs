@@ -72,6 +72,10 @@ assert.match(traffic, /toMetaEmploymentAdSetTargeting\(geo\)/);
 assert.match(traffic, /<CreativePickerModal[\s\S]*?multiSelect[\s\S]*?selectedAssetIds=\{pickerSelectedAssetIds\}/);
 assert.match(traffic, /onSelectionChange=\{applyCreativeSelection\}/);
 assert.match(traffic, /<SelectedCreativesByFormat/);
+// Realistic Meta ad preview (same gallery as the lead campaign).
+assert.match(traffic, /<MetaAdPreviewGallery/);
+assert.match(traffic, /buildMetaAdPreviewCombinations\(\{/);
+assert.doesNotMatch(traffic, /`\$\{index \+ 1\}\. \$\{line\}`/);
 const byFormat = read("src/components/SelectedCreativesByFormat.tsx");
 assert.match(byFormat, /META_FORMAT_SLOTS\.map/);
 assert.match(byFormat, /\/api\/media-library\/preview\?assetId=/);
