@@ -668,6 +668,42 @@ function describeAssetSyncError(
   };
 }
 
+/**
+ * Persist the per-asset Abruf outcome so a silently failing page/IG profile is
+ * visible in the database (meta_assets.last_sync_error) without server logs.
+ * Non-fatal: the content sync must never fail because of this bookkeeping.
+ */
+async function recordAssetSyncOutcome(input: {
+  connector: ConnectorRow;
+  assetId: string;
+  failure: ReturnType<typeof describeAssetSyncError> | null;
+}): Promise<void> {
+  const failure = input.failure;
+  const errorText = failure
+    ? [
+        failure.graphCode !== null ? `code=${failure.graphCode}` : null,
+        failure.graphSubcode !== null ? `subcode=${failure.graphSubcode}` : null,
+        failure.graphDetail ?? failure.error,
+      ]
+        .filter((part): part is string => Boolean(part))
+        .join(" ")
+        .slice(0, 500)
+    : null;
+  try {
+    await createAdminClient()
+      .from("meta_assets")
+      .update({
+        last_sync_error: errorText,
+        last_sync_error_at: failure ? new Date().toISOString() : null,
+      })
+      .eq("id", input.assetId)
+      .eq("platform_account_id", input.connector.id)
+      .eq("user_id", input.connector.user_id);
+  } catch {
+    // Optional until the migration is applied.
+  }
+}
+
 const META_PARENT_PAGE_ID_MIN_LENGTH = 5;
 
 /**
@@ -931,6 +967,11 @@ export async function syncMetaConnector(
         seenCount += persistedPosts.seenCount;
         newCount += persistedPosts.newCount;
         syncedAssetCount += 1;
+        await recordAssetSyncOutcome({
+          connector,
+          assetId: pageAsset.id,
+          failure: null,
+        });
         if (!page) {
           console.error("meta_sync_facebook_page_token_fallback", {
             platformAccountId: connector.id,
@@ -946,12 +987,23 @@ export async function syncMetaConnector(
         }
 
         failedAssetCount += 1;
+        const failure = describeAssetSyncError(
+          error,
+          hadRealPageToken
+            ? "facebook_page_sync_failed"
+            : "facebook_page_token_unavailable",
+        );
         console.error("meta_sync_facebook_page_failed", {
           platformAccountId: connector.id,
           pageId: pageAsset.meta_asset_id,
           hadRealPageToken,
           resolvedPageToken,
-          ...describeAssetSyncError(error, "facebook_page_sync_failed"),
+          ...failure,
+        });
+        await recordAssetSyncOutcome({
+          connector,
+          assetId: pageAsset.id,
+          failure,
         });
       }
     }
@@ -972,6 +1024,11 @@ export async function syncMetaConnector(
         seenCount += persistedMedia.seenCount;
         newCount += persistedMedia.newCount;
         syncedAssetCount += 1;
+        await recordAssetSyncOutcome({
+          connector,
+          assetId: instagramAsset.id,
+          failure: null,
+        });
       } catch (error) {
         if (
           error instanceof MetaGraphError &&
@@ -981,10 +1038,19 @@ export async function syncMetaConnector(
         }
 
         failedAssetCount += 1;
+        const failure = describeAssetSyncError(
+          error,
+          "instagram_account_sync_failed",
+        );
         console.error("meta_sync_instagram_account_failed", {
           platformAccountId: connector.id,
           instagramAccountId: instagramAsset.meta_asset_id,
-          ...describeAssetSyncError(error, "instagram_account_sync_failed"),
+          ...failure,
+        });
+        await recordAssetSyncOutcome({
+          connector,
+          assetId: instagramAsset.id,
+          failure,
         });
       }
     }

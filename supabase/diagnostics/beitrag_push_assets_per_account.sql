@@ -27,6 +27,8 @@ select
   a.created_at as connected_at,
   a.baseline_completed_at,
   a.last_synced_at,
+  a.last_sync_error,
+  a.last_sync_error_at,
   (a.asset_type <> 'instagram_account'
     or t.instagram_account_ids ? a.meta_asset_id) as selected_for_sync,
   st.asset_scope,
