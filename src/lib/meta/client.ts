@@ -550,9 +550,35 @@ function safeHttpsUrl(value: unknown): string | null {
   }
 }
 
+/**
+ * Truncate by Unicode code points (Postgres char_length) and drop unpaired
+ * surrogates. A plain String#slice can cut an emoji in half; the lone
+ * surrogate serialises as "\\ud83d" and Postgres jsonb rejects the whole RPC
+ * payload ("Unicode low surrogate must follow a high surrogate"). One such
+ * caption made every Abruf of that page/IG profile fail permanently.
+ */
+export function truncateTextSafely(text: string, maxLength: number): string {
+  const wellFormed = text.replace(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+    "",
+  );
+  const codePoints = Array.from(wellFormed);
+  return codePoints.length > maxLength
+    ? codePoints.slice(0, maxLength).join("")
+    : wellFormed;
+}
+
 function captionExcerpt(value: unknown): string | null {
   const text = asNonEmptyString(value)?.replace(/\s+/g, " ");
-  return text ? text.slice(0, META_CAPTION_MAX_LENGTH) : null;
+  return text ? truncateTextSafely(text, META_CAPTION_MAX_LENGTH) : null;
+}
+
+const META_CONTENT_URL_MAX_LENGTH = 2048;
+
+/** meta_content_candidates caps URLs at 2048; an overlong one must not fail the asset. */
+function contentUrl(value: unknown): string | null {
+  const url = safeHttpsUrl(value);
+  return url && url.length <= META_CONTENT_URL_MAX_LENGTH ? url : null;
 }
 
 function validPublishedAt(value: unknown): string | null {
@@ -1482,8 +1508,8 @@ function parseFacebookPost(value: unknown): MetaContentItem | null {
     id,
     contentType: safeHttpsUrl(value.full_picture) ? "image" : "post",
     captionExcerpt: captionExcerpt(value.message),
-    permalinkUrl: safeHttpsUrl(value.permalink_url),
-    previewUrl: safeHttpsUrl(value.full_picture),
+    permalinkUrl: contentUrl(value.permalink_url),
+    previewUrl: contentUrl(value.full_picture),
     publishedAt: validPublishedAt(value.created_time),
   };
 }
@@ -1527,8 +1553,8 @@ function parseInstagramMedia(value: unknown): MetaContentItem | null {
     id,
     contentType: instagramContentType(value),
     captionExcerpt: captionExcerpt(value.caption),
-    permalinkUrl: safeHttpsUrl(value.permalink),
-    previewUrl: safeHttpsUrl(value.thumbnail_url) ?? safeHttpsUrl(value.media_url),
+    permalinkUrl: contentUrl(value.permalink),
+    previewUrl: contentUrl(value.thumbnail_url) ?? contentUrl(value.media_url),
     publishedAt: validPublishedAt(value.timestamp),
   };
 }
@@ -1769,7 +1795,8 @@ export type MetaMarketingCollection<T> = {
 };
 
 function boundedText(value: unknown, maxLength: number): string | null {
-  return asNonEmptyString(value)?.replace(/\s+/g, " ").slice(0, maxLength) ?? null;
+  const text = asNonEmptyString(value)?.replace(/\s+/g, " ");
+  return text ? truncateTextSafely(text, maxLength) : null;
 }
 
 function metaObjectId(value: unknown): string | null {
