@@ -1066,6 +1066,77 @@ export function createAdminClient() {
     "resolved-ephemeral-page-token",
   );
 
+  // Multi-page accounts: IG profiles without a parent page link were never
+  // boostable (materialize raises). Abruf heals the link from /me/accounts.
+  const orphanAssets = defaultAssets("2026-07-27T09:00:00.000Z").map((asset) =>
+    asset.asset_type === "instagram_account"
+      ? { ...asset, parent_meta_asset_id: null }
+      : asset,
+  );
+  orphanAssets.push({
+    id: "10000000-0000-4000-8000-000000000005",
+    asset_type: "facebook_page",
+    meta_asset_id: "page-2",
+    parent_meta_asset_id: null,
+    baseline_completed_at: "2026-07-27T09:00:00.000Z",
+  });
+  const orphanHarness = makeAdminHarness({ assets: orphanAssets });
+  configureMeta(orphanHarness.admin, {
+    pagesResult: {
+      pages: [
+        {
+          id: "page-2",
+          name: "Second Page",
+          accessToken: "ephemeral-page-token-2",
+          instagramAccount: null,
+        },
+        {
+          id: "page-1",
+          name: "Test Page",
+          accessToken: "ephemeral-page-token",
+          instagramAccount: {
+            id: "178414000000001",
+            name: "Test Instagram",
+            username: "test_account",
+          },
+        },
+      ],
+      usage: emptyUsage,
+    },
+  });
+  const orphanResult = await syncModule.syncMetaConnector({
+    platformAccountId: orphanHarness.state.connector.id,
+    mode: "cron",
+  });
+  assert.equal(orphanResult.status, "success");
+  const parentRepairs = orphanHarness.state.updates.filter(
+    (update) =>
+      update.table === "meta_assets" &&
+      "parent_meta_asset_id" in update.values,
+  );
+  assert.equal(parentRepairs.length, 1);
+  assert.equal(parentRepairs[0].values.parent_meta_asset_id, "page-1");
+
+  assert.deepEqual(
+    syncModule.resolveInstagramParentPageRepairs({
+      pageAssetIds: new Set(["page-1", "page-2"]),
+      instagramAssets: [
+        // valid link to a connected page — never overwritten
+        { id: "a", meta_asset_id: "ig-a", parent_meta_asset_id: "page-2" },
+        // stale link to a page that is no longer connected
+        { id: "b", meta_asset_id: "ig-b", parent_meta_asset_id: "page-gone" },
+        // no page lists this IG — nothing to heal
+        { id: "c", meta_asset_id: "ig-c", parent_meta_asset_id: null },
+      ],
+      pages: [
+        { id: "page-1", instagramAccount: { id: "ig-a" } },
+        { id: "page-2", instagramAccount: { id: "ig-b" } },
+        { id: "page-9", instagramAccount: { id: "ig-c" } },
+      ],
+    }),
+    [{ assetId: "b", parentPageId: "page-2" }],
+  );
+
   const rateLimitUsage = {
     appPercent: 100,
     pagePercent: null,

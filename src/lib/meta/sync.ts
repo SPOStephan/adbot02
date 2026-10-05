@@ -638,6 +638,93 @@ async function claimConnector(
   return data === true;
 }
 
+const META_PARENT_PAGE_ID_MIN_LENGTH = 5;
+
+/**
+ * Instagram organic boosts need `parent_meta_asset_id` → a connected Facebook
+ * page (materialize_meta_organic_boost_plan raises otherwise). OAuth only sets
+ * it when the IG's own page was in the same dialog selection, and the
+ * orphan repair in organic-boost-ensure only covers single-page accounts. With
+ * several pages/IG profiles, unlinked IG accounts silently never got pushed.
+ * The page list from /me/accounts already carries each page's linked IG, so
+ * heal missing or stale links from it — never replace a valid connected link.
+ */
+export function resolveInstagramParentPageRepairs(input: {
+  pageAssetIds: Set<string>;
+  instagramAssets: Array<
+    Pick<AssetRow, "id" | "meta_asset_id" | "parent_meta_asset_id">
+  >;
+  pages: Array<{ id: string; instagramAccount: { id: string } | null }>;
+}): Array<{ assetId: string; parentPageId: string }> {
+  const pageIdByInstagramId = new Map<string, string>();
+  for (const page of input.pages) {
+    const instagramId = page.instagramAccount?.id;
+    if (
+      instagramId &&
+      input.pageAssetIds.has(page.id) &&
+      !pageIdByInstagramId.has(instagramId)
+    ) {
+      pageIdByInstagramId.set(instagramId, page.id);
+    }
+  }
+
+  const repairs: Array<{ assetId: string; parentPageId: string }> = [];
+  for (const asset of input.instagramAssets) {
+    const currentParent = asset.parent_meta_asset_id;
+    const linkValid =
+      typeof currentParent === "string" &&
+      currentParent.length >= META_PARENT_PAGE_ID_MIN_LENGTH &&
+      input.pageAssetIds.has(currentParent);
+    if (linkValid) {
+      continue;
+    }
+    const parentPageId = pageIdByInstagramId.get(asset.meta_asset_id);
+    if (parentPageId && parentPageId !== currentParent) {
+      repairs.push({ assetId: asset.id, parentPageId });
+    }
+  }
+  return repairs;
+}
+
+async function repairInstagramParentPageLinks(input: {
+  connector: ConnectorRow;
+  repairs: Array<{ assetId: string; parentPageId: string }>;
+}): Promise<void> {
+  if (!input.repairs.length) {
+    return;
+  }
+  const admin = createAdminClient();
+  for (const repair of input.repairs) {
+    try {
+      const { error } = await admin
+        .from("meta_assets")
+        .update({
+          parent_meta_asset_id: repair.parentPageId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", repair.assetId)
+        .eq("platform_account_id", input.connector.id)
+        .eq("user_id", input.connector.user_id)
+        .eq("asset_type", "instagram_account");
+      if (error) {
+        throw new Error(error.message);
+      }
+      console.info("meta_sync_instagram_parent_page_repaired", {
+        platformAccountId: input.connector.id,
+        assetId: repair.assetId,
+        parentPageId: repair.parentPageId,
+      });
+    } catch (error) {
+      // Non-fatal: content sync must continue; next Abruf retries.
+      console.error("meta_sync_instagram_parent_page_repair_failed", {
+        platformAccountId: input.connector.id,
+        assetId: repair.assetId,
+        error: error instanceof Error ? error.message : "repair_failed",
+      });
+    }
+  }
+}
+
 async function loadAssets(connector: ConnectorRow): Promise<AssetRow[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -759,6 +846,14 @@ export async function syncMetaConnector(
     const pagesById = new Map(
       refreshedPages.pages.map((page) => [page.id, page]),
     );
+    await repairInstagramParentPageLinks({
+      connector,
+      repairs: resolveInstagramParentPageRepairs({
+        pageAssetIds: new Set(pageAssets.map((asset) => asset.meta_asset_id)),
+        instagramAssets,
+        pages: refreshedPages.pages,
+      }),
+    });
     let seenCount = 0;
     let newCount = 0;
     let syncedAssetCount = 0;
@@ -857,6 +952,14 @@ export async function syncMetaConnector(
         }
 
         failedAssetCount += 1;
+        console.error("meta_sync_instagram_account_failed", {
+          platformAccountId: connector.id,
+          instagramAccountId: instagramAsset.meta_asset_id,
+          error:
+            error instanceof Error
+              ? error.message
+              : "instagram_account_sync_failed",
+        });
       }
     }
 
