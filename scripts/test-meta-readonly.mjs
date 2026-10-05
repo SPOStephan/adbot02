@@ -341,6 +341,17 @@ try {
   assert.ok(requests[0].url.searchParams.get("appsecret_proof"));
   assert.equal(facebook.items.length, 1);
   assert.equal(facebook.items[0].captionExcerpt.length, 500);
+
+  // An emoji straddling the 500 limit must not leave a lone surrogate:
+  // Postgres jsonb rejects "\ud83d" and the whole asset's Abruf fails.
+  const straddled = clientModule.truncateTextSafely(
+    `${"x".repeat(499)}😀 Rest`,
+    500,
+  );
+  assert.equal(Array.from(straddled).length, 500);
+  assert.ok(straddled.endsWith("😀"));
+  assert.doesNotMatch(JSON.stringify(straddled), /\\ud[89ab]/i);
+  assert.equal(clientModule.truncateTextSafely("a\ud83db", 10), "ab");
   assert.equal(facebook.items[0].permalinkUrl, null);
   assert.equal(facebook.items[0].previewUrl, "https://cdn.example.test/post.jpg");
   assert.equal(facebook.usage.appPercent, 23);

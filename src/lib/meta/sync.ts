@@ -519,7 +519,13 @@ async function recordContent(input: {
   });
 
   if (error) {
-    throw new Error("Meta content persistence failed");
+    // Keep the database reason: it lands in meta_assets.last_sync_error.
+    throw new Error(
+      `Meta content persistence failed: ${error.message ?? "unknown"}`.slice(
+        0,
+        300,
+      ),
+    );
   }
 
   const result = Array.isArray(data) ? data[0] : data;
