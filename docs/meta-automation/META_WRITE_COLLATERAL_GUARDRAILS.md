@@ -28,6 +28,8 @@ Beim **ersten** Abruf eines neu verbundenen FB/IG-Assets:
 
 Sonst werden frische Posts beim Extend fälschlich als Bestand begraben.
 
+Obergrenze (seit 2026-10-05): Beiträge älter als 7 Tage sind nie `is_new` — auch nicht nach einer Abruf-Lücke oder beim ersten Abruf Wochen nach Connect.
+
 Smoke: nach Asset-Extend + neuem Post → Kandidat `is_new=true` ohne zweiten Abruf-Zyklus nötig.
 
 ## Hochrisiko-Dateien / Themen
