@@ -638,6 +638,36 @@ async function claimConnector(
   return data === true;
 }
 
+/**
+ * Per-asset Abruf failures used to log only "Meta Graph API request failed",
+ * which hid why single pages/IG profiles silently stopped syncing for weeks
+ * (lost page role, missing permission, …). Log Meta's code + safe detail.
+ */
+function describeAssetSyncError(
+  error: unknown,
+  fallback: string,
+): {
+  error: string;
+  graphCode: number | null;
+  graphSubcode: number | null;
+  graphDetail: string | null;
+} {
+  if (error instanceof MetaGraphError) {
+    return {
+      error: error.message,
+      graphCode: error.code,
+      graphSubcode: error.subcode,
+      graphDetail: error.diagnosticDetail,
+    };
+  }
+  return {
+    error: error instanceof Error ? error.message : fallback,
+    graphCode: null,
+    graphSubcode: null,
+    graphDetail: null,
+  };
+}
+
 const META_PARENT_PAGE_ID_MIN_LENGTH = 5;
 
 /**
@@ -921,8 +951,7 @@ export async function syncMetaConnector(
           pageId: pageAsset.meta_asset_id,
           hadRealPageToken,
           resolvedPageToken,
-          error:
-            error instanceof Error ? error.message : "facebook_page_sync_failed",
+          ...describeAssetSyncError(error, "facebook_page_sync_failed"),
         });
       }
     }
@@ -955,10 +984,7 @@ export async function syncMetaConnector(
         console.error("meta_sync_instagram_account_failed", {
           platformAccountId: connector.id,
           instagramAccountId: instagramAsset.meta_asset_id,
-          error:
-            error instanceof Error
-              ? error.message
-              : "instagram_account_sync_failed",
+          ...describeAssetSyncError(error, "instagram_account_sync_failed"),
         });
       }
     }
