@@ -34,7 +34,7 @@ export const CONTACT_FIELD_CHARSET_LABELS: Record<ContactFieldCharset, string> =
   letters: "Nur Buchstaben",
 };
 
-export type ContactFieldPresetKey = "birthYear" | "postalCode" | "city";
+export type ContactFieldPresetKey = "birthYear" | "postalCodeCity" | "postalCode" | "city";
 
 /** Ready-made extra fields admins can add to a contact page with one click. */
 export const CONTACT_FIELD_PRESETS: Record<ContactFieldPresetKey, ContactFieldConfig> = {
@@ -48,6 +48,15 @@ export const CONTACT_FIELD_PRESETS: Record<ContactFieldPresetKey, ContactFieldCo
     yearMin: DEFAULT_BIRTH_YEAR_MIN,
     yearMax: DEFAULT_BIRTH_YEAR_MAX,
     yearStart: DEFAULT_BIRTH_YEAR_START,
+  },
+  postalCodeCity: {
+    key: "postalCodeCity",
+    label: "PLZ und Wohnort",
+    placeholder: "Wohnort",
+    enabled: true,
+    required: false,
+    inputType: "postal-city",
+    maxLength: 5,
   },
   postalCode: {
     key: "postalCode",
@@ -95,6 +104,7 @@ export function contactFieldCharset(field: ContactFieldConfig): ContactFieldChar
 
 export function contactFieldMaxLength(field: ContactFieldConfig): number {
   if (field.inputType === "textarea") return CONTACT_MESSAGE_MAX_LENGTH;
+  if (field.inputType === "postal-city") return CONTACT_FIELD_MAX_LENGTH;
   const max = Number(field.maxLength);
   return Number.isInteger(max) && max > 0 ? Math.min(max, CONTACT_FIELD_MAX_LENGTH) : CONTACT_FIELD_MAX_LENGTH;
 }
@@ -114,6 +124,41 @@ export function sanitizeContactFieldInput(field: ContactFieldConfig, value: stri
       ? value.replace(DISALLOWED_LETTERS, "")
       : value;
   return cleaned.slice(0, contactFieldMaxLength(field));
+}
+
+/** Maximum number of PLZ digits in a "postal-city" field (default 5). */
+export function postalCodeMaxLength(field: ContactFieldConfig): number {
+  const max = Number(field.maxLength);
+  return Number.isInteger(max) && max > 0 ? Math.min(max, 10) : 5;
+}
+
+/**
+ * A "postal-city" field is stored as one readable value, "50667 Köln", so it
+ * shows up as a single line in mails, exports and the entry view.
+ */
+export function splitPostalCity(value: string | undefined): { postalCode: string; city: string } {
+  const match = /^(\d*) ?([\s\S]*)$/.exec(value ?? "");
+  return { postalCode: match?.[1] ?? "", city: match?.[2] ?? value ?? "" };
+}
+
+export function joinPostalCity(postalCode: string, city: string): string {
+  return city ? `${postalCode} ${city}` : postalCode;
+}
+
+export function sanitizePostalCityInput(field: ContactFieldConfig, postalCode: string, city: string): string {
+  return joinPostalCity(
+    postalCode.replace(DISALLOWED_DIGITS, "").slice(0, postalCodeMaxLength(field)),
+    city.replace(DISALLOWED_LETTERS, "").replace(/^\s+/, "").slice(0, CONTACT_FIELD_MAX_LENGTH - 11),
+  );
+}
+
+/** True when a required field is still empty (both parts for PLZ + Wohnort). */
+export function contactFieldMissing(field: ContactFieldConfig, value: string | undefined): boolean {
+  if (field.inputType === "postal-city") {
+    const { postalCode, city } = splitPostalCity(value);
+    return !postalCode || !city.trim();
+  }
+  return !value?.trim();
 }
 
 export function birthYearRange(field: ContactFieldConfig) {
@@ -145,6 +190,14 @@ export function contactFieldValueError(field: ContactFieldConfig, value: string 
   if (!trimmed) return undefined;
   if (field.inputType === "year") {
     return birthYearOptions(field).includes(trimmed) ? undefined : `Bitte wähle bei „${field.label}“ ein Jahr aus der Liste.`;
+  }
+  if (field.inputType === "postal-city") {
+    const { postalCode, city } = splitPostalCity(trimmed);
+    if (postalCode.length > postalCodeMaxLength(field)) return `Die PLZ bei „${field.label}“ hat höchstens ${postalCodeMaxLength(field)} Ziffern.`;
+    if (!postalCode || !city.trim()) return `Bitte gib bei „${field.label}“ PLZ und Wohnort an.`;
+    if (new RegExp(DISALLOWED_LETTERS_SOURCE, "u").test(city)) return `Beim Wohnort in „${field.label}“ sind nur Buchstaben erlaubt.`;
+    if (trimmed.length > CONTACT_FIELD_MAX_LENGTH) return `„${field.label}“ ist zu lang.`;
+    return undefined;
   }
   if (trimmed.length > contactFieldMaxLength(field)) return `„${field.label}“ ist zu lang.`;
   const charset = contactFieldCharset(field);

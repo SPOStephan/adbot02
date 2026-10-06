@@ -2,7 +2,7 @@ import { useEffect, useRef, type ChangeEvent, type CSSProperties, type FormEvent
 import { copySizeCssVars } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type ApplicationContact, type ContactFieldConfig, type ContactPage } from "@shared/funnel";
 import { ArrowLeft, Check, FileText, Loader2, UploadCloud, X } from "lucide-react";
-import { birthYearOptions, birthYearRange, contactFieldCharset, contactFieldMaxLength, contactFieldValueError, sanitizeContactFieldInput } from "@shared/contactFields";
+import { birthYearOptions, birthYearRange, contactFieldCharset, contactFieldMaxLength, contactFieldMissing, contactFieldValueError, postalCodeMaxLength, sanitizeContactFieldInput, sanitizePostalCityInput, splitPostalCity } from "@shared/contactFields";
 import { FormattedText } from "./FormattedText";
 import { YearSelect } from "./YearSelect";
 
@@ -73,13 +73,15 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
           {page.fields.filter(field => field.enabled).map(field => {
             const fieldId = `${page.id}-${field.key}`;
             const value = contact[field.key] ?? "";
-            const isInvalid = Boolean(error && ((field.required && !value.trim()) || contactFieldValueError(field, value)));
+            const isInvalid = Boolean(error && ((field.required && contactFieldMissing(field, value)) || contactFieldValueError(field, value)));
             return <div className={field.inputType === "textarea" ? "funnel-field funnel-field-wide" : "funnel-field"} key={field.key}>
               <label htmlFor={fieldId}>{field.label}{field.required && <em>*</em>}</label>
               {field.inputType === "textarea" ? (
                 <textarea id={fieldId} value={value} placeholder={field.placeholder} required={field.required} aria-invalid={isInvalid} rows={4} onChange={event => onContactChange(field.key, event.target.value)} />
               ) : field.inputType === "year" ? (
                 <YearSelect id={fieldId} value={value} years={birthYearOptions(field)} startYear={String(birthYearRange(field).start)} placeholder={field.placeholder} required={field.required} invalid={isInvalid} onChange={year => onContactChange(field.key, year)} />
+              ) : field.inputType === "postal-city" ? (
+                <PostalCityInput id={fieldId} field={field} value={value} invalid={isInvalid} onChange={next => onContactChange(field.key, next)} />
               ) : (
                 <input id={fieldId} type={field.inputType} value={value} placeholder={field.placeholder} required={field.required} aria-invalid={isInvalid} maxLength={field.inputType === "text" ? contactFieldMaxLength(field) : undefined} {...charsetInputProps(field)} autoComplete={autoCompleteFor(field.key)} onChange={event => onContactChange(field.key, sanitizeContactFieldInput(field, event.target.value))} />
               )}
@@ -122,4 +124,15 @@ function autoCompleteFor(key: string) {
 
 function charsetInputProps(field: ContactFieldConfig) {
   return contactFieldCharset(field) === "digits" ? { inputMode: "numeric" as const, pattern: "[0-9]*" } : {};
+}
+
+/** PLZ and Wohnort side by side in one row, stored together as "50667 Köln". */
+function PostalCityInput({ id, field, value, invalid, onChange }: { id: string; field: ContactFieldConfig; value: string; invalid: boolean; onChange: (value: string) => void }) {
+  const { postalCode, city } = splitPostalCity(value);
+  return (
+    <div className="funnel-postal-city">
+      <input id={id} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="postal-code" aria-label={`${field.label}: PLZ`} placeholder="PLZ" value={postalCode} maxLength={postalCodeMaxLength(field)} required={field.required} aria-invalid={invalid} onChange={event => onChange(sanitizePostalCityInput(field, event.target.value, city))} />
+      <input id={`${id}-city`} type="text" autoComplete="address-level2" aria-label={`${field.label}: Wohnort`} placeholder={field.placeholder || "Wohnort"} value={city} required={field.required} aria-invalid={invalid} onChange={event => onChange(sanitizePostalCityInput(field, postalCode, event.target.value))} />
+    </div>
+  );
 }

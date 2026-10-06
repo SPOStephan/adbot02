@@ -198,11 +198,11 @@ export type ContactFieldConfig = {
   placeholder: string;
   enabled: boolean;
   required: boolean;
-  /** "year" renders a year dropdown (e.g. Geburtsjahr). */
-  inputType: "text" | "email" | "tel" | "textarea" | "year";
+  /** "year" renders a year dropdown (e.g. Geburtsjahr); "postal-city" PLZ + Wohnort in one row. */
+  inputType: "text" | "email" | "tel" | "textarea" | "year" | "postal-city";
   /** Allowed characters for "text" fields; defaults to "any". */
   charset?: ContactFieldCharset;
-  /** Optional maximum number of characters for "text" fields. */
+  /** Optional maximum number of characters for "text" fields (PLZ digits for "postal-city"). */
   maxLength?: number;
   yearMin?: number;
   yearMax?: number;

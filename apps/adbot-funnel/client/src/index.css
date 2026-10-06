@@ -468,6 +468,7 @@
   .funnel-field input { min-height: 48px; }
   .funnel-field textarea { min-height: 104px; resize: vertical; }
   .funnel-field input:focus, .funnel-field textarea:focus { border-color: var(--funnel-accent); background: white; box-shadow: 0 0 0 3px color-mix(in srgb, var(--funnel-accent) 13%, transparent); }
+  .funnel-postal-city { display: grid; grid-template-columns: minmax(78px, 30%) minmax(0, 1fr); gap: 8px; }
   .funnel-year-select { position: relative; }
   .funnel-year-trigger { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--funnel-line); border-radius: 12px; padding: 12px 13px; background: #fbfdff; color: var(--funnel-ink); font: inherit; font-size: 14px; font-weight: 500; text-align: left; outline: none; cursor: pointer; transition: border-color 160ms, box-shadow 160ms, background-color 160ms; }
   .funnel-year-trigger.is-empty span { color: var(--funnel-muted); }

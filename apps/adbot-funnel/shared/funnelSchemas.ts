@@ -117,7 +117,7 @@ const contactFieldSchema = z.object({
   placeholder: z.string().max(240),
   enabled: z.boolean(),
   required: z.boolean(),
-  inputType: z.enum(["text", "email", "tel", "textarea", "year"]),
+  inputType: z.enum(["text", "email", "tel", "textarea", "year", "postal-city"]),
   charset: z.enum(["any", "digits", "letters"]).optional(),
   maxLength: z.number().int().min(1).max(CONTACT_FIELD_MAX_LENGTH).optional(),
   yearMin: contactFieldYearSchema.optional(),
