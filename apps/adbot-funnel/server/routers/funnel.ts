@@ -77,7 +77,10 @@ import {
   pushFunnelDomainRevokeToPortal,
   pushFunnelDomainUpsertToPortal,
 } from "../portalDomainSync";
-import { pushFunnelCreativeHandoffToPortal } from "../portalCreativeHandoff";
+import {
+  pushFunnelCreativeHandoffToPortal,
+  shouldPushPublishedFunnel,
+} from "../portalCreativeHandoff";
 import { loadPortalCampaignOverview, loadPortalCampaignStatuses } from "../portalCampaignStatus";
 import { listFunnelLibraryIcons, requestFunnelLibraryIcon } from "../funnelIconStore";
 import { requireCustomerHostnameHttps } from "../customDomainHttpsReady";
@@ -643,7 +646,7 @@ export const funnelRouter = router({
       { ...config, slug, isPublished: input.status === "published" },
       { notificationEmailWrite },
     );
-    if (saved.status === "published" && existing.purpose !== saved.purpose) {
+    if (shouldPushPublishedFunnel(existing, saved)) {
       await pushPublishedFunnelToPortal(saved, ctx.user);
     }
     return saved;
