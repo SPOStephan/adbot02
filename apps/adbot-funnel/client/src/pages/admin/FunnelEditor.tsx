@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, Eye, EyeOff, GripVertical, ImageIcon, Loader2, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, Eye, EyeOff, GripVertical, ImageIcon, Loader2, Plus, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
 import { clampCopySizeStep } from "@shared/copySize";
-import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
+import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactFieldCharset, type ContactFieldConfig, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, patchFunnelPage, toggleFunnelPageHidden, type FunnelPagePatch } from "@shared/funnelEditor";
 import { createEditorSaveController } from "@/lib/editorSave";
+import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, type ContactFieldPresetKey } from "@shared/contactFields";
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
@@ -877,5 +878,97 @@ function OptionalProgressColor({
 }
 
 function ContactEditor({ page, patch }: { page: ContactPage; patch: (value: FunnelPagePatch) => void }) {
-  return <div className="grid gap-4"><Label>Formularfelder</Label>{page.fields.map(field => <div key={field.key} className="grid gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex items-center justify-between gap-3"><strong className="text-sm">{field.key}</strong><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs">Aktiv<Switch checked={field.enabled} onCheckedChange={enabled => patch({ fields: page.fields.map(item => item.key === field.key ? { ...item, enabled } : item) } as Partial<FunnelPage>)} /></label><label className="flex items-center gap-2 text-xs">Pflicht<Switch checked={field.required} disabled={!field.enabled} onCheckedChange={required => patch({ fields: page.fields.map(item => item.key === field.key ? { ...item, required } : item) } as Partial<FunnelPage>)} /></label></div></div><Input value={field.label} onChange={event => patch({ fields: page.fields.map(item => item.key === field.key ? { ...item, label: event.target.value } : item) } as Partial<FunnelPage>)} /><Input value={field.placeholder} onChange={event => patch({ fields: page.fields.map(item => item.key === field.key ? { ...item, placeholder: event.target.value } : item) } as Partial<FunnelPage>)} /></div>)}<FormRow label="Datenschutz-Einwilligung"><FormattedTextField rows={3} value={page.consentLabel} onChange={value => patch({ consentLabel: value } as Partial<FunnelPage>)} /></FormRow><label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Lebenslauf-Upload</strong><small className="text-muted-foreground">PDF, DOC und DOCX</small></span><Switch checked={page.resumeEnabled} onCheckedChange={resumeEnabled => patch({ resumeEnabled } as Partial<FunnelPage>)} /></label>{page.resumeEnabled && <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm font-semibold">Upload als Pflichtfeld</span><Switch checked={page.resumeRequired} onCheckedChange={resumeRequired => patch({ resumeRequired } as Partial<FunnelPage>)} /></label>}<FormRow label="Erfolgsüberschrift"><FormattedTextField rows={1} value={page.successTitle} onChange={value => patch({ successTitle: value } as Partial<FunnelPage>)} /></FormRow><FormRow label="Erfolgstext"><FormattedTextField rows={3} value={page.successText} onChange={value => patch({ successText: value } as Partial<FunnelPage>)} /></FormRow></div>;
+  const setFields = (fields: ContactFieldConfig[]) => patch({ fields } as Partial<FunnelPage>);
+  const updateField = (key: string, value: Partial<ContactFieldConfig>) => setFields(page.fields.map(item => item.key === key ? { ...item, ...value } : item));
+  const moveField = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= page.fields.length) return;
+    const fields = [...page.fields];
+    [fields[index], fields[target]] = [fields[target]!, fields[index]!];
+    setFields(fields);
+  };
+  const keys = page.fields.map(field => field.key);
+  const canAdd = page.fields.length < MAX_CONTACT_FIELDS;
+  const addField = (field: ContactFieldConfig) => {
+    if (!canAdd) return;
+    const fields = [...page.fields];
+    // Neue Felder landen vor dem Freitext, damit die Nachricht am Ende bleibt.
+    const messageIndex = fields.findIndex(item => item.key === "message");
+    fields.splice(messageIndex >= 0 ? messageIndex : fields.length, 0, field);
+    setFields(fields);
+  };
+  const presetKeys = Object.keys(CONTACT_FIELD_PRESETS) as ContactFieldPresetKey[];
+  return <div className="grid gap-4">
+    <Label>Formularfelder</Label>
+    {page.fields.map((field, index) => {
+      const builtin = isBuiltinContactFieldKey(field.key);
+      const range = field.inputType === "year" ? birthYearRange(field) : undefined;
+      return <div key={field.key} className="grid gap-3 rounded-xl border bg-slate-50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <strong className="text-sm">{contactFieldEditorTitle(field)}</strong>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs">Aktiv<Switch checked={field.enabled} onCheckedChange={enabled => updateField(field.key, { enabled })} /></label>
+            <label className="flex items-center gap-2 text-xs">Pflicht<Switch checked={field.required} disabled={!field.enabled} onCheckedChange={required => updateField(field.key, { required })} /></label>
+            <span className="flex items-center">
+              <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={`${field.label} nach oben`} disabled={index === 0} onClick={() => moveField(index, -1)}><ArrowUp className="size-4" /></Button>
+              <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={`${field.label} nach unten`} disabled={index === page.fields.length - 1} onClick={() => moveField(index, 1)}><ArrowDown className="size-4" /></Button>
+              {!builtin && <Button type="button" size="icon" variant="ghost" className="size-7 text-red-600" aria-label={`${field.label} entfernen`} disabled={page.fields.length <= 1} onClick={() => setFields(page.fields.filter(item => item.key !== field.key))}><Trash2 className="size-4" /></Button>}
+            </span>
+          </div>
+        </div>
+        <Input aria-label="Beschriftung" value={field.label} onChange={event => updateField(field.key, { label: event.target.value })} />
+        <Input aria-label="Platzhalter" placeholder="Platzhalter" value={field.placeholder} onChange={event => updateField(field.key, { placeholder: event.target.value })} />
+        {field.inputType === "text" && !builtin && <div className="grid gap-2">
+          <span className="text-xs font-semibold text-muted-foreground">Erlaubte Eingabe</span>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(CONTACT_FIELD_CHARSET_LABELS) as ContactFieldCharset[]).map(charset => (
+              <Button key={charset} type="button" size="sm" variant={contactFieldCharset(field) === charset ? "default" : "outline"} aria-pressed={contactFieldCharset(field) === charset} onClick={() => updateField(field.key, { charset })}>{CONTACT_FIELD_CHARSET_LABELS[charset]}</Button>
+            ))}
+          </div>
+          <label className="grid gap-1 text-xs text-muted-foreground">Maximale Zeichenzahl (leer = {CONTACT_FIELD_MAX_LENGTH})
+            <Input type="number" min={1} max={CONTACT_FIELD_MAX_LENGTH} value={field.maxLength ?? ""} onChange={event => {
+              const max = Number.parseInt(event.target.value, 10);
+              updateField(field.key, { maxLength: Number.isInteger(max) && max > 0 ? Math.min(max, CONTACT_FIELD_MAX_LENGTH) : undefined });
+            }} />
+          </label>
+        </div>}
+        {range && <div className="grid grid-cols-3 gap-2">
+          {([["yearMax", "Jüngster Jahrgang", range.max], ["yearStart", "Startjahr", range.start], ["yearMin", "Ältester Jahrgang", range.min]] as const).map(([key, label, current]) => (
+            <label key={key} className="grid gap-1 text-xs text-muted-foreground">{label}
+              <YearNumberInput value={field[key] ?? current} onCommit={year => updateField(field.key, { [key]: year })} />
+            </label>
+          ))}
+        </div>}
+      </div>;
+    })}
+    <div className="grid gap-2 rounded-xl border border-dashed p-3">
+      <span className="text-sm font-semibold">Feld hinzufügen</span>
+      <div className="flex flex-wrap gap-2">
+        {presetKeys.map(key => (
+          <Button key={key} type="button" size="sm" variant="outline" disabled={!canAdd || keys.includes(key)} onClick={() => addField({ ...CONTACT_FIELD_PRESETS[key] })}><Plus className="size-4" />{CONTACT_FIELD_PRESETS[key].label}</Button>
+        ))}
+        <Button type="button" size="sm" variant="outline" disabled={!canAdd} onClick={() => addField(createCustomContactField(keys))}><Plus className="size-4" />Eigenes Feld</Button>
+      </div>
+      {!canAdd && <small className="text-muted-foreground">Höchstens {MAX_CONTACT_FIELDS} Felder pro Kontaktseite.</small>}
+    </div>
+    <FormRow label="Datenschutz-Einwilligung"><FormattedTextField rows={3} value={page.consentLabel} onChange={value => patch({ consentLabel: value } as Partial<FunnelPage>)} /></FormRow><label className="flex items-center justify-between rounded-xl border p-3"><span><strong className="block text-sm">Lebenslauf-Upload</strong><small className="text-muted-foreground">PDF, DOC und DOCX</small></span><Switch checked={page.resumeEnabled} onCheckedChange={resumeEnabled => patch({ resumeEnabled } as Partial<FunnelPage>)} /></label>{page.resumeEnabled && <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm font-semibold">Upload als Pflichtfeld</span><Switch checked={page.resumeRequired} onCheckedChange={resumeRequired => patch({ resumeRequired } as Partial<FunnelPage>)} /></label>}<FormRow label="Erfolgsüberschrift"><FormattedTextField rows={1} value={page.successTitle} onChange={value => patch({ successTitle: value } as Partial<FunnelPage>)} /></FormRow><FormRow label="Erfolgstext"><FormattedTextField rows={3} value={page.successText} onChange={value => patch({ successText: value } as Partial<FunnelPage>)} /></FormRow></div>;
+}
+
+function contactFieldEditorTitle(field: ContactFieldConfig) {
+  if (isBuiltinContactFieldKey(field.key)) return BUILTIN_CONTACT_FIELD_LABELS[field.key];
+  if (field.inputType === "year") return "Jahresauswahl";
+  if (Object.hasOwn(CONTACT_FIELD_PRESETS, field.key)) return CONTACT_FIELD_PRESETS[field.key as ContactFieldPresetKey].label;
+  return "Eigenes Feld";
+}
+
+/** Commits only complete years, so typing "19…" never saves an invalid value. */
+function YearNumberInput({ value, onCommit }: { value: number; onCommit: (year: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const year = Number.parseInt(draft, 10);
+    if (Number.isInteger(year) && year >= 1900 && year <= 2100) onCommit(year);
+    else setDraft(String(value));
+  };
+  return <Input type="number" inputMode="numeric" min={1900} max={2100} value={draft} onChange={event => setDraft(event.target.value)} onBlur={commit} onKeyDown={event => { if (event.key === "Enter") commit(); }} />;
 }

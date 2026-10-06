@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, Building2, CalendarDays, Download, FileText, Loader2, Mail, NotebookPen, Phone, ThumbsDown, ThumbsUp, UserRound } from "lucide-react";
+import { ArrowLeft, Building2, CalendarDays, Download, FileText, Loader2, Mail, MapPin, NotebookPen, Phone, Tag, ThumbsDown, ThumbsUp, UserRound } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 import type { ApplicationStatus, LeadQuality } from "@shared/funnel";
@@ -188,6 +188,9 @@ export default function ApplicationDetail() {
             <Contact icon={Building2} label="Firma" value={application.contact.company} />
             <Contact icon={Mail} label="E-Mail" value={application.contact.email} href={application.contact.email ? `mailto:${application.contact.email}` : undefined} />
             <Contact icon={Phone} label="Telefon" value={application.contact.phone} href={application.contact.phone ? `tel:${application.contact.phone}` : undefined} />
+            {(application.extraContactFields ?? []).map(field => (
+              <Contact key={field.key} icon={extraContactIcon(field.key)} label={field.label} value={field.value} />
+            ))}
           </div>
           {application.contact.message && (
             <div className="mt-6 border-t pt-5">
@@ -249,6 +252,12 @@ export default function ApplicationDetail() {
       </section>
     </div>
   );
+}
+
+function extraContactIcon(key: string): typeof UserRound {
+  if (key === "birthYear") return CalendarDays;
+  if (key === "postalCode" || key === "city") return MapPin;
+  return Tag;
 }
 
 function Contact({ icon: Icon, label, value, href }: { icon: typeof UserRound; label: string; value?: string; href?: string }) {

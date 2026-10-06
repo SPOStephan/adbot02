@@ -184,7 +184,13 @@ export type FunnelOption = {
   leadValue?: number;
 };
 
-export type ContactFieldKey = "name" | "company" | "email" | "phone" | "message";
+/** The five fields every contact page has had from the start. */
+export type BuiltinContactFieldKey = "name" | "company" | "email" | "phone" | "message";
+
+/** Built-in key, preset key (birthYear, postalCode, city) or an admin-defined key. */
+export type ContactFieldKey = string;
+
+export type ContactFieldCharset = "any" | "digits" | "letters";
 
 export type ContactFieldConfig = {
   key: ContactFieldKey;
@@ -192,7 +198,16 @@ export type ContactFieldConfig = {
   placeholder: string;
   enabled: boolean;
   required: boolean;
-  inputType: "text" | "email" | "tel" | "textarea";
+  /** "year" renders a year dropdown (e.g. Geburtsjahr). */
+  inputType: "text" | "email" | "tel" | "textarea" | "year";
+  /** Allowed characters for "text" fields; defaults to "any". */
+  charset?: ContactFieldCharset;
+  /** Optional maximum number of characters for "text" fields. */
+  maxLength?: number;
+  yearMin?: number;
+  yearMax?: number;
+  /** Year the dropdown opens at while nothing is selected. */
+  yearStart?: number;
 };
 
 type FunnelPageBase = {
@@ -483,6 +498,9 @@ export type ApplicationQuestionLabels = Record<string, string>;
 
 export type ApplicationContact = Partial<Record<ContactFieldKey, string>>;
 
+/** contact field key → field label visible at submission time (extra fields only) */
+export type ApplicationContactLabels = Record<string, string>;
+
 export type ResumeMetadata = {
   key: string;
   url: string;
@@ -517,6 +535,7 @@ export type ApplicationRecord = {
   answerLabels?: ApplicationAnswerLabels;
   questionLabels?: ApplicationQuestionLabels;
   contact: ApplicationContact;
+  contactLabels?: ApplicationContactLabels;
   consentAt: string;
   trackingConsentAt?: string;
   metaEventId?: string;

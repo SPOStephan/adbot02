@@ -14,6 +14,7 @@ import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
 import { ChoiceStep } from "@/components/funnel/ChoiceStep";
 import { ContactStep, type ResumeDraft } from "@/components/funnel/ContactStep";
+import { contactFieldValueError } from "@shared/contactFields";
 import { FormattedText } from "@/components/funnel/FormattedText";
 import { FunnelLibraryIconSync } from "@/components/funnel/FunnelLibraryIconSync";
 
@@ -97,9 +98,12 @@ function FunnelView({
   const send = () => {
     if (!currentPage || currentPage.type !== "contact") return;
     for (const field of currentPage.fields) {
-      if (field.enabled && field.required && !contact[field.key]?.trim()) {
-        setValidationError(`Bitte fülle das Feld „${field.label}“ aus.`); return;
+      if (!field.enabled) continue;
+      if (field.required && !contact[field.key]?.trim()) {
+        setValidationError(field.inputType === "year" ? `Bitte wähle bei „${field.label}“ ein Jahr aus.` : `Bitte fülle das Feld „${field.label}“ aus.`); return;
       }
+      const valueError = contactFieldValueError(field, contact[field.key]);
+      if (valueError) { setValidationError(valueError); return; }
     }
     if (currentPage.consentRequired && !consent) { setValidationError("Bitte bestätige die Datenschutz-Einwilligung."); return; }
     if (currentPage.resumeRequired && !resume) { setValidationError("Bitte lade deinen Lebenslauf hoch."); return; }
@@ -113,7 +117,7 @@ function FunnelView({
     submit.mutate({
       funnelSlug: config.slug,
       answers,
-      contact,
+      contact: Object.fromEntries(Object.entries(contact).filter((entry): entry is [string, string] => typeof entry[1] === "string")),
       consent,
       metaEventId,
       ...metaBrowserIdentifiers,

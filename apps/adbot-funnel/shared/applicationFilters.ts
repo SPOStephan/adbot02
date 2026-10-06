@@ -1,4 +1,5 @@
 import type { ApplicationRecord, ApplicationStatus } from "./funnel";
+import { isBuiltinContactFieldKey } from "./contactFields";
 
 export type ApplicationFilter = ApplicationStatus | "all" | "active";
 
@@ -25,6 +26,9 @@ export function filterApplications(
       application.contact.company,
       application.contact.email,
       application.contact.phone,
+      ...Object.entries(application.contact)
+        .filter(([key]) => !isBuiltinContactFieldKey(key))
+        .map(([, value]) => value),
       application.id,
       application.funnelSlug,
       options.funnelTitles?.get(application.funnelSlug),

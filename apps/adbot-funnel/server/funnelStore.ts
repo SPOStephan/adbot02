@@ -27,6 +27,7 @@ import { normalizeFunnelLegal } from "@shared/legalPages";
 import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { snapshotApplicationAnswerLabels, snapshotApplicationQuestionLabels } from "@shared/applicationAnswers";
+import { snapshotApplicationContactLabels } from "@shared/contactFields";
 import { applicationPurgeCutoff } from "@shared/applicationTrash";
 import { formatNotificationEmails, parseNotificationEmails } from "@shared/notificationEmails";
 import { decryptMetaSecret, encryptMetaSecret } from "./metaSecrets";
@@ -683,6 +684,7 @@ export async function createApplication(submission: ApplicationSubmission): Prom
     answerLabels: snapshotApplicationAnswerLabels(funnel, submission.answers),
     questionLabels: snapshotApplicationQuestionLabels(funnel, submission.answers),
     contact: submission.contact,
+    contactLabels: snapshotApplicationContactLabels(funnel, submission.contact),
     consentAt: now,
     metaEventId: submission.metaEventId,
     metaFbp: submission.metaFbp,
@@ -733,6 +735,7 @@ const APPLICATION_SIDECAR_KEYS = [
   "__leadQualityMetaStatus",
   "__answerLabels",
   "__questionLabels",
+  "__contactLabels",
   "__deletedAt",
 ] as const;
 
@@ -758,6 +761,9 @@ function encodeApplicationSidecar(record: ApplicationRecord): Record<string, str
     ...(record.questionLabels && Object.keys(record.questionLabels).length > 0
       ? { __questionLabels: JSON.stringify(record.questionLabels) }
       : {}),
+    ...(record.contactLabels && Object.keys(record.contactLabels).length > 0
+      ? { __contactLabels: JSON.stringify(record.contactLabels) }
+      : {}),
     ...(record.deletedAt ? { __deletedAt: record.deletedAt } : {}),
   };
 }
@@ -782,6 +788,12 @@ function parseApplicationAnswerLabels(
   } catch {
     return undefined;
   }
+}
+
+function parseApplicationContactLabels(
+  value: string | undefined,
+): ApplicationRecord["contactLabels"] {
+  return parseApplicationQuestionLabels(value);
 }
 
 function parseApplicationQuestionLabels(
@@ -833,6 +845,7 @@ function mapApplication(row: Record<string, unknown>): ApplicationRecord {
     answerLabels: parseApplicationAnswerLabels(sidecar.__answerLabels),
     questionLabels: parseApplicationQuestionLabels(sidecar.__questionLabels),
     contact: row.contact as ApplicationRecord["contact"],
+    contactLabels: parseApplicationContactLabels(sidecar.__contactLabels),
     consentAt: String(row.consent_at),
     trackingConsentAt: sidecar.__trackingConsentAt || undefined,
     metaEventId: sidecar.__metaEventId || undefined,
