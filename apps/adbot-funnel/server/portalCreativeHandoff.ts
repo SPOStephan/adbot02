@@ -72,6 +72,23 @@ export function publicFunnelDestinationUrl(input: {
   return `${shared}/f/${input.slug}`;
 }
 
+/**
+ * A published funnel must reach the portal whenever its public URL or purpose
+ * is new to it: first publish (also via the editor switch), slug change or
+ * purpose change. Plain saves of an unchanged published funnel stay quiet.
+ */
+export function shouldPushPublishedFunnel(
+  previous: { status: string; slug: string; purpose: FunnelPurpose },
+  saved: { status: string; slug: string; purpose: FunnelPurpose },
+): boolean {
+  if (saved.status !== "published") return false;
+  return (
+    previous.status !== "published" ||
+    previous.slug !== saved.slug ||
+    previous.purpose !== saved.purpose
+  );
+}
+
 /** Best-effort: never throws into Funnel publish. */
 export async function pushFunnelCreativeHandoffToPortal(input: {
   ownerUserId: string | null;
