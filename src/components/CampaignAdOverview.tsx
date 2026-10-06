@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Archive, Megaphone, PlayCircle } from "lucide-react";
 
 import { MetaAdPreviewGallery } from "@/components/MetaAdPreviewGallery";
+import { MetaCampaignDuplicateButton } from "@/components/MetaCampaignDuplicateButton";
 import {
   CAMPAIGN_KIND_LABELS,
   CAMPAIGN_KIND_ORDER,
@@ -299,6 +300,9 @@ export function CampaignAdOverviewCard({
         </dl>
       </summary>
       <div className="border-t border-slate-200 bg-white p-4">
+        {item.launchedByAdbot && item.kind === "lead" ? (
+          <MetaCampaignDuplicateButton platformCampaignId={item.platformCampaignId} />
+        ) : null}
         {item.destinationUrl ? (
           <p className="mb-3 break-all text-xs font-medium text-blue-700">
             Zielseite: {item.destinationUrl}

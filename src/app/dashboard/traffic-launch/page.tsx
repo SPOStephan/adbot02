@@ -40,6 +40,7 @@ type PageProps = {
     funnelUrl?: string | string[];
     campaignGoal?: string | string[];
     ideaId?: string | string[];
+    kopie?: string | string[];
   }>;
 };
 
@@ -48,7 +49,7 @@ async function TrafficLaunchBody({
   query,
 }: {
   funnelHeader?: ReactNode;
-  query: { assetId?: string | string[]; draftId?: string | string[]; funnelUrl?: string | string[]; campaignGoal?: string | string[]; ideaId?: string | string[] };
+  query: { assetId?: string | string[]; draftId?: string | string[]; funnelUrl?: string | string[]; campaignGoal?: string | string[]; ideaId?: string | string[]; kopie?: string | string[] };
 }) {
   const supabase = await createClient();
   const {
@@ -263,7 +264,26 @@ async function TrafficLaunchBody({
         brandProfileId={brandProfileView?.id ?? null}
         currency={marketingCurrency}
         data={draftOnboardingData}
-        header={funnelHeader}
+        header={
+          initialDraft && query.kopie === "1" ? (
+            <>
+              {funnelHeader}
+              <section
+                className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950"
+                role="status"
+              >
+                <p className="font-bold">Kopie: {initialDraft.campaignName}</p>
+                <p className="mt-1 text-sm leading-6">
+                  Texte, Bilder, Budget und Einstellungen sind übernommen. Passe jetzt
+                  das Zielgebiet und die Ziel-URL (Funnel-Endung) an und starte die
+                  Kampagne. Die Kopie ist als Entwurf unter Kampagnen gespeichert.
+                </p>
+              </section>
+            </>
+          ) : (
+            funnelHeader
+          )
+        }
         facebookPages={launchFacebookPages}
         instagramAccounts={launchInstagramAccounts}
         initialDestinationUrl={initialFunnelUrl}
