@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ApplicationRecord, FunnelConfig } from "@shared/funnel";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
+import { resolveApplicationContactFields, resolveExtraContactFields } from "@shared/contactFields";
 import { formatBerlinDateTime } from "@shared/berlinTime";
 
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
@@ -21,7 +22,12 @@ export function buildApplicationsCsv(applications: ApplicationRecord[], configs:
     ),
   ]));
   const answerLabels = Array.from(new Set(Array.from(resolvedAnswers.values()).flatMap(answers => answers.map(answer => answer.label))));
-  const headers = ["ID", "Eingang", "Status", "Bewertung", "Lead-Wert", "Name", "Firma", "E-Mail", "Telefon", "Nachricht", ...answerLabels, "Lebenslauf"];
+  const extraContactFields = new Map(applications.map(application => [
+    application.id,
+    resolveExtraContactFields(configForApplication(configs, application), application.contact, application.contactLabels),
+  ]));
+  const extraContactLabels = Array.from(new Set(Array.from(extraContactFields.values()).flatMap(fields => fields.map(field => field.label))));
+  const headers = ["ID", "Eingang", "Status", "Bewertung", "Lead-Wert", "Name", "Firma", "E-Mail", "Telefon", "Nachricht", ...extraContactLabels, ...answerLabels, "Lebenslauf"];
   const rows = applications.map(application => [
     application.id,
     formatBerlinDateTime(application.createdAt),
@@ -33,6 +39,7 @@ export function buildApplicationsCsv(applications: ApplicationRecord[], configs:
     application.contact.email ?? "",
     application.contact.phone ?? "",
     application.contact.message ?? "",
+    ...extraContactLabels.map(label => extraContactFields.get(application.id)?.filter(field => field.label === label).map(field => field.value).join(" | ") ?? ""),
     ...answerLabels.map(label => resolvedAnswers.get(application.id)?.filter(answer => answer.label === label).flatMap(answer => answer.values).join(" | ") ?? ""),
     application.resume?.fileName ?? "",
   ]);
@@ -78,7 +85,9 @@ export async function buildApplicationsPdf(applications: ApplicationRecord[], co
     drawLine(`${formatBerlinDateTime(application.createdAt)} · Status: ${application.status}`, { color: rgb(0.36, 0.42, 0.48) });
     y -= 8;
     drawLine("Kontaktdaten", { bold: true, size: 13 });
-    for (const [key, value] of Object.entries(application.contact)) drawLine(`${key}: ${value}`);
+    for (const field of resolveApplicationContactFields(configForApplication(configs, application), application.contact, application.contactLabels)) {
+      drawLine(`${field.label}: ${field.value}`);
+    }
     y -= 8;
     drawLine("Antworten", { bold: true, size: 13 });
     for (const answer of resolveApplicationAnswers(

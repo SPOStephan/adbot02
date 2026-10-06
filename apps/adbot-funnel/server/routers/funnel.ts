@@ -50,6 +50,7 @@ import { APPLICATION_NOTE_MAX_LENGTH, addApplicationNote, listApplicationNotes }
 import { buildApplicationsCsv, buildApplicationsPdf } from "../exports";
 import { sendMetaApplicationConversion, sendMetaLeadQualityEvent } from "../metaConversions";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
+import { contactFieldValueError, pickEnabledContactValues, resolveExtraContactFields } from "@shared/contactFields";
 import { applicationPurgeAt } from "@shared/applicationTrash";
 import {
   listCustomDomainsForFunnel,
@@ -100,13 +101,17 @@ function validateSubmission(config: FunnelConfig, submission: z.infer<typeof app
   }
   if (contactPage.consentRequired && !submission.consent) throw new TRPCError({ code: "BAD_REQUEST", message: "Die Datenschutz-Einwilligung ist erforderlich." });
   for (const field of contactPage.fields) {
-    if (field.enabled && field.required && !submission.contact[field.key]?.trim()) {
+    if (!field.enabled) continue;
+    if (field.required && !submission.contact[field.key]?.trim()) {
       throw new TRPCError({ code: "BAD_REQUEST", message: `${field.label} ist ein Pflichtfeld.` });
     }
+    const valueError = contactFieldValueError(field, submission.contact[field.key]);
+    if (valueError) throw new TRPCError({ code: "BAD_REQUEST", message: valueError });
   }
   if (contactPage.resumeEnabled && contactPage.resumeRequired && !submission.resume) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Bitte lade deinen Lebenslauf hoch." });
   }
+  return { contact: pickEnabledContactValues(contactPage, submission.contact) };
 }
 
 async function requireFunnel(id: string) {
@@ -431,7 +436,7 @@ export const funnelRouter = router({
     })) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Funnel nicht gefunden." });
     }
-    validateSubmission(config, input);
+    const { contact } = validateSubmission(config, input);
 
     let resume: ResumeMetadata | undefined;
     if (input.resume) {
@@ -444,7 +449,7 @@ export const funnelRouter = router({
       resume = { key: stored.key, url: stored.url, fileName: input.resume.fileName, mimeType: input.resume.mimeType, size: input.resume.size };
     }
 
-    const submission: ApplicationSubmission = { ...input, resume };
+    const submission: ApplicationSubmission = { ...input, contact, resume };
     const application = await createApplication(submission);
     const forwardedFor = ctx.req.headers["x-forwarded-for"];
     const clientIp = (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(",")[0])?.trim()
@@ -1155,6 +1160,7 @@ export const funnelRouter = router({
         application.answerLabels,
         application.questionLabels,
       ),
+      extraContactFields: resolveExtraContactFields(config, application.contact, application.contactLabels),
     };
   }),
 
@@ -1222,6 +1228,7 @@ export const funnelRouter = router({
           application.answerLabels,
           application.questionLabels,
         ),
+        extraContactFields: resolveExtraContactFields(config, application.contact, application.contactLabels),
         metaQuality: metaQuality.status,
         metaQualityReason: "reason" in metaQuality ? metaQuality.reason : undefined,
       };

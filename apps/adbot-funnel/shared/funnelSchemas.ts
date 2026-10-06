@@ -4,6 +4,7 @@ import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
 import { notificationEmailsAreValid } from "./notificationEmails";
+import { CONTACT_FIELD_KEY_PATTERN, CONTACT_FIELD_MAX_LENGTH, CONTACT_MESSAGE_MAX_LENGTH, MAX_CONTACT_FIELDS } from "./contactFields";
 import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
 import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
@@ -108,18 +109,32 @@ const choicePageSchema = pageBaseSchema.extend({
   options: z.array(optionSchema).min(2).max(12),
 });
 
+const contactFieldYearSchema = z.number().int().min(1900).max(2100);
+
 const contactFieldSchema = z.object({
-  key: z.enum(["name", "company", "email", "phone", "message"]),
+  key: z.string().regex(CONTACT_FIELD_KEY_PATTERN),
   label: z.string().min(1).max(160),
   placeholder: z.string().max(240),
   enabled: z.boolean(),
   required: z.boolean(),
-  inputType: z.enum(["text", "email", "tel", "textarea"]),
+  inputType: z.enum(["text", "email", "tel", "textarea", "year"]),
+  charset: z.enum(["any", "digits", "letters"]).optional(),
+  maxLength: z.number().int().min(1).max(CONTACT_FIELD_MAX_LENGTH).optional(),
+  yearMin: contactFieldYearSchema.optional(),
+  yearMax: contactFieldYearSchema.optional(),
+  yearStart: contactFieldYearSchema.optional(),
+  // Out-of-order years are clamped by birthYearRange() at render time.
 });
 
 const contactPageSchema = pageBaseSchema.extend({
   type: z.literal("contact"),
-  fields: z.array(contactFieldSchema).min(1).max(5),
+  fields: z.array(contactFieldSchema).min(1).max(MAX_CONTACT_FIELDS).superRefine((fields, context) => {
+    const seen = new Set<string>();
+    fields.forEach((field, index) => {
+      if (seen.has(field.key)) context.addIssue({ code: "custom", path: [index, "key"], message: `Das Kontaktfeld „${field.label}“ ist doppelt vorhanden.` });
+      seen.add(field.key);
+    });
+  }),
   consentLabel: formattedTextSchema(1200, 1),
   consentRequired: z.boolean(),
   resumeEnabled: z.boolean(),
@@ -288,13 +303,19 @@ export const applicationSubmissionSchema = z
   .object({
     funnelSlug: z.string().min(1).max(120),
     answers: z.record(z.string(), z.array(z.string().max(300)).max(12)),
-    contact: z.object({
-      name: z.string().max(240).optional(),
-      company: z.string().max(240).optional(),
-      email: z.string().email().max(320).optional(),
-      phone: z.string().max(80).optional(),
-      message: z.string().max(4000).optional(),
-    }),
+    contact: z
+      .record(z.string().regex(CONTACT_FIELD_KEY_PATTERN), z.string().max(CONTACT_MESSAGE_MAX_LENGTH))
+      .superRefine((contact, context) => {
+        const entries = Object.entries(contact);
+        if (entries.length > MAX_CONTACT_FIELDS) context.addIssue({ code: "custom", message: "Zu viele Kontaktfelder." });
+        for (const [key, value] of entries) {
+          const max = key === "message" ? CONTACT_MESSAGE_MAX_LENGTH : key === "email" ? 320 : key === "phone" ? 80 : CONTACT_FIELD_MAX_LENGTH;
+          if (value.length > max) context.addIssue({ code: "custom", path: [key], message: `Höchstens ${max} Zeichen.` });
+        }
+        if (contact.email && !z.string().email().safeParse(contact.email).success) {
+          context.addIssue({ code: "custom", path: ["email"], message: "Bitte gib eine gültige E-Mail-Adresse ein." });
+        }
+      }),
     consent: z.boolean(),
     metaEventId: z.string().uuid().optional(),
     metaFbp: z.string().max(255).optional(),

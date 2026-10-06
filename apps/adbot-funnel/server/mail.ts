@@ -1,5 +1,6 @@
 import type { ApplicationRecord, FunnelConfig } from "@shared/funnel";
 import { resolveApplicationAnswers } from "@shared/applicationAnswers";
+import { resolveApplicationContactFields } from "@shared/contactFields";
 import { funnelSubmissionLabel } from "@shared/funnelPurpose";
 import { parseNotificationEmails } from "@shared/notificationEmails";
 import { formatBerlinDateTime } from "@shared/berlinTime";
@@ -20,8 +21,8 @@ const escapeHtml = (value: unknown) =>
 
 export function buildApplicationNotificationHtml(config: FunnelConfig, application: ApplicationRecord) {
   const submissionLabel = funnelSubmissionLabel(config.purpose);
-  const contactRows = Object.entries(application.contact)
-    .map(([key, value]) => `<tr><td style="padding:6px 12px 6px 0;color:#5c6b7a">${escapeHtml(key)}</td><td style="padding:6px 0"><strong>${escapeHtml(value)}</strong></td></tr>`)
+  const contactRows = resolveApplicationContactFields(config, application.contact, application.contactLabels)
+    .map(field => `<tr><td style="padding:6px 12px 6px 0;color:#5c6b7a;vertical-align:top">${escapeHtml(field.label)}</td><td style="padding:6px 0;white-space:pre-wrap"><strong>${escapeHtml(field.value)}</strong></td></tr>`)
     .join("");
   const answerRows = resolveApplicationAnswers(
     config,
