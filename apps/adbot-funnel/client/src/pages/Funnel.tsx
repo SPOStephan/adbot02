@@ -14,7 +14,7 @@ import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
 import { ChoiceStep } from "@/components/funnel/ChoiceStep";
 import { ContactStep, type ResumeDraft } from "@/components/funnel/ContactStep";
-import { contactFieldValueError } from "@shared/contactFields";
+import { contactFieldMissing, contactFieldValueError } from "@shared/contactFields";
 import { FormattedText } from "@/components/funnel/FormattedText";
 import { FunnelLibraryIconSync } from "@/components/funnel/FunnelLibraryIconSync";
 
@@ -99,7 +99,7 @@ function FunnelView({
     if (!currentPage || currentPage.type !== "contact") return;
     for (const field of currentPage.fields) {
       if (!field.enabled) continue;
-      if (field.required && !contact[field.key]?.trim()) {
+      if (field.required && contactFieldMissing(field, contact[field.key])) {
         setValidationError(field.inputType === "year" ? `Bitte wähle bei „${field.label}“ ein Jahr aus.` : `Bitte fülle das Feld „${field.label}“ aus.`); return;
       }
       const valueError = contactFieldValueError(field, contact[field.key]);

@@ -6,7 +6,7 @@ import { clampCopySizeStep } from "@shared/copySize";
 import { canHideFunnelPage, isCopyFieldVisible, isFunnelPageHidden, type ChoicePage, type ContactFieldCharset, type ContactFieldConfig, type ContactPage, type FunnelConfig, type FunnelPage, type StartPage } from "@shared/funnel";
 import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, patchFunnelPage, toggleFunnelPageHidden, type FunnelPagePatch } from "@shared/funnelEditor";
 import { createEditorSaveController } from "@/lib/editorSave";
-import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, type ContactFieldPresetKey } from "@shared/contactFields";
+import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, postalCodeMaxLength, type ContactFieldPresetKey } from "@shared/contactFields";
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
@@ -932,6 +932,12 @@ function ContactEditor({ page, patch }: { page: ContactPage; patch: (value: Funn
             }} />
           </label>
         </div>}
+        {field.inputType === "postal-city" && <label className="grid gap-1 text-xs text-muted-foreground">Stellen der PLZ (5 für Deutschland, 4 für Österreich und die Schweiz)
+          <Input type="number" min={1} max={10} value={postalCodeMaxLength(field)} onChange={event => {
+            const max = Number.parseInt(event.target.value, 10);
+            updateField(field.key, { maxLength: Number.isInteger(max) && max > 0 ? Math.min(max, 10) : undefined });
+          }} />
+        </label>}
         {range && <div className="grid grid-cols-3 gap-2">
           {([["yearMax", "Jüngster Jahrgang", range.max], ["yearStart", "Startjahr", range.start], ["yearMin", "Ältester Jahrgang", range.min]] as const).map(([key, label, current]) => (
             <label key={key} className="grid gap-1 text-xs text-muted-foreground">{label}
@@ -957,6 +963,7 @@ function ContactEditor({ page, patch }: { page: ContactPage; patch: (value: Funn
 function contactFieldEditorTitle(field: ContactFieldConfig) {
   if (isBuiltinContactFieldKey(field.key)) return BUILTIN_CONTACT_FIELD_LABELS[field.key];
   if (field.inputType === "year") return "Jahresauswahl";
+  if (field.inputType === "postal-city") return "PLZ und Wohnort";
   if (Object.hasOwn(CONTACT_FIELD_PRESETS, field.key)) return CONTACT_FIELD_PRESETS[field.key as ContactFieldPresetKey].label;
   return "Eigenes Feld";
 }
