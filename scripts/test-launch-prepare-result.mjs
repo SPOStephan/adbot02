@@ -85,6 +85,7 @@ try {
   assert.match(migration, /enrich_meta_customer_launch_prepare_result/);
   assert.match(migration, /brand_asset_ids/);
   assert.match(migration, /prepared_at/);
+  assert.match(migration, /p_prepared_at::text/);
   assert.match(migration, /outcome' = 'CREATED'/);
   assert.doesNotMatch(
     migration,
