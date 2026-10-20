@@ -29,6 +29,7 @@ try {
   );
 
   const {
+    countDetectionSources,
     isDetectionInWindow,
     localDayKey,
     summarizeDetectionWindows,
@@ -43,36 +44,44 @@ try {
     {
       source: "instagram",
       firstSeenAt: "2026-08-21T08:05:00.000Z",
+      publishedAt: "2026-08-21T08:00:00.000Z",
     },
     {
       source: "facebook",
+      // Seen earlier, but published today — must count as "today".
       firstSeenAt: "2026-08-19T12:00:00.000Z",
+      publishedAt: "2026-08-21T09:00:00.000Z",
     },
     {
       source: "instagram",
       firstSeenAt: "2026-08-10T12:00:00.000Z",
+      publishedAt: "2026-08-10T12:00:00.000Z",
     },
   ];
 
   const summary = summarizeDetectionWindows(items, noonBerlin);
-  assert.equal(summary.today.total, 1);
+  assert.equal(summary.today.total, 2);
   assert.equal(summary.today.instagram, 1);
-  assert.equal(summary.today.facebook, 0);
+  assert.equal(summary.today.facebook, 1);
   assert.equal(summary.week.total, 2);
   assert.equal(summary.week.facebook, 1);
   assert.equal(summary.week.instagram, 1);
 
-  assert.equal(
-    isDetectionInWindow(items[0].firstSeenAt, "today", noonBerlin),
-    true,
+  assert.equal(isDetectionInWindow(items[0], "today", noonBerlin), true);
+  assert.equal(isDetectionInWindow(items[1], "today", noonBerlin), true);
+  assert.equal(isDetectionInWindow(items[1], "week", noonBerlin), true);
+  assert.equal(isDetectionInWindow(items[2], "today", noonBerlin), false);
+
+  // Visible-list counts must match warning inputs (no separate summary path).
+  const todayItems = items.filter((item) =>
+    isDetectionInWindow(item, "today", noonBerlin),
   );
+  const visibleCounts = countDetectionSources(todayItems);
+  assert.equal(visibleCounts.facebook, 1);
+  assert.equal(visibleCounts.instagram, 1);
   assert.equal(
-    isDetectionInWindow(items[1].firstSeenAt, "today", noonBerlin),
+    visibleCounts.instagram > 0 && visibleCounts.facebook === 0,
     false,
-  );
-  assert.equal(
-    isDetectionInWindow(items[1].firstSeenAt, "week", noonBerlin),
-    true,
   );
 
   const snapshotSource = await readFile(
@@ -82,7 +91,10 @@ try {
   assert.match(snapshotSource, /detectionHistory/);
   assert.match(snapshotSource, /assetSyncHints/);
   assert.match(snapshotSource, /first_seen_at, last_seen_at, is_new/);
-  assert.match(snapshotSource, /\.gte\("first_seen_at"/);
+  assert.match(
+    snapshotSource,
+    /first_seen_at\.gte\.\$\{historySince\},published_at\.gte\.\$\{historySince\}/,
+  );
 
   const panelSource = await readFile(
     join(root, "src/components/MetaContentSyncPanel.tsx"),
@@ -90,7 +102,12 @@ try {
   );
   assert.match(panelSource, /erkannte-beitraege/);
   assert.match(panelSource, /Erkennungsrückschau/);
-  assert.match(panelSource, /Heute erkannt|Diese Woche/);
+  assert.match(panelSource, /countDetectionSources\(historyItems\)/);
+  assert.match(panelSource, /showFacebookGapHint/);
+  assert.doesNotMatch(
+    panelSource,
+    /snapshot\.detectionSummary\.today/,
+  );
 
   const routeSource = await readFile(
     join(root, "src/app/api/connectors/meta/sync/route.ts"),

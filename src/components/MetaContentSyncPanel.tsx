@@ -25,8 +25,11 @@ import { MetaSyncButton } from "@/components/MetaSyncButton";
 import { OrganicBoostAutoPlanner } from "@/components/OrganicBoostAutoPlanner";
 import { shouldListAsContentCandidate } from "@/lib/meta/content-candidate-lifecycle";
 import {
+  countDetectionSources,
   isDetectionInWindow,
+  summarizeDetectionWindows,
   type ContentDetectionSourceCounts,
+  type DetectionHistoryWindow,
 } from "@/lib/meta/content-detection-history";
 import type {
   ContentAssetSyncHint,
@@ -131,7 +134,7 @@ type SyncSnapshotState = {
   assetSyncHints: ContentAssetSyncHint[];
 };
 
-type DetectionHistoryWindow = "today" | "week";
+type DetectionHistoryWindowState = DetectionHistoryWindow;
 
 const EMPTY_SOURCE_COUNTS: ContentDetectionSourceCounts = {
   facebook: 0,
@@ -213,7 +216,7 @@ export function MetaContentSyncPanel({
   const [snapshot, setSnapshot] = useState(initial);
   const [now, setNow] = useState(() => Date.now());
   const [historyWindow, setHistoryWindow] =
-    useState<DetectionHistoryWindow>("today");
+    useState<DetectionHistoryWindowState>("today");
   const inFlightRef = useRef(false);
 
   const displayNextSyncAt = useMemo(
@@ -341,14 +344,21 @@ export function MetaContentSyncPanel({
   const historyItems = useMemo(() => {
     const clock = new Date(now);
     return snapshot.detectionHistory.filter((item) =>
-      isDetectionInWindow(item.firstSeenAt, historyWindow, clock),
+      isDetectionInWindow(item, historyWindow, clock),
     );
   }, [historyWindow, now, snapshot.detectionHistory]);
 
-  const historySummary =
-    historyWindow === "today"
-      ? snapshot.detectionSummary.today
-      : snapshot.detectionSummary.week;
+  // Counts and warning must come from the same filtered list — never from a
+  // separate server summary that can disagree with what the user sees.
+  const historySummary = useMemo(
+    () => countDetectionSources(historyItems),
+    [historyItems],
+  );
+
+  const detectionChipSummary = useMemo(() => {
+    const clock = new Date(now);
+    return summarizeDetectionWindows(snapshot.detectionHistory, clock);
+  }, [now, snapshot.detectionHistory]);
 
   const facebookSyncHint = snapshot.assetSyncHints.find(
     (hint) => hint.assetType === "facebook_page",
@@ -356,6 +366,11 @@ export function MetaContentSyncPanel({
   const instagramSyncHint = snapshot.assetSyncHints.find(
     (hint) => hint.assetType === "instagram_account",
   );
+
+  const showFacebookGapHint =
+    historyWindow === "today" &&
+    historySummary.instagram > 0 &&
+    historySummary.facebook === 0;
 
   return (
     <>
@@ -623,8 +638,8 @@ export function MetaContentSyncPanel({
           <div className="flex flex-wrap gap-2">
             {(
               [
-                ["today", "Heute", snapshot.detectionSummary.today],
-                ["week", "Diese Woche", snapshot.detectionSummary.week],
+                ["today", "Heute", detectionChipSummary.today],
+                ["week", "Diese Woche", detectionChipSummary.week],
               ] as const
             ).map(([key, label, counts]) => {
               const active = historyWindow === key;
@@ -653,8 +668,8 @@ export function MetaContentSyncPanel({
 
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
           Übersicht der zuletzt beim Abruf gespeicherten Beiträge — unabhängig davon,
-          ob sie noch als offene Kandidaten gelten. Hilft zu sehen, ob Facebook und
-          Instagram überhaupt ankommen.
+          ob sie noch als offene Kandidaten gelten. Heute/Woche zählt nach
+          Veröffentlichungsdatum oder Erkennungszeit.
         </p>
 
         <dl className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -684,13 +699,11 @@ export function MetaContentSyncPanel({
           </div>
         </dl>
 
-        {historyWindow === "today" &&
-        historySummary.instagram > 0 &&
-        historySummary.facebook === 0 ? (
+        {showFacebookGapHint ? (
           <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-            Heute wurden Instagram-Beiträge erkannt, aber keine Facebook-Beiträge.
-            Wenn auf der Seite neue Posts liegen, prüfe den Asset-Abruf oben
-            (Status „Teilweise aktualisiert“ oder fehlendes Facebook-Datum).
+            In dieser Ansicht: Instagram-Beiträge ja, Facebook-Beiträge nein. Wenn
+            auf der Seite neue Posts liegen, prüfe den Asset-Abruf oben (Status
+            „Teilweise aktualisiert“ oder fehlendes Facebook-Datum).
           </p>
         ) : null}
 
