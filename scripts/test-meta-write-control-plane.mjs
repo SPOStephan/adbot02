@@ -30,6 +30,10 @@ const scopeRegressionPath = join(
   scriptsDirectory,
   "test-meta-customer-campaign-scope.sql",
 );
+const statusRegressionPath = join(
+  scriptsDirectory,
+  "test-meta-customer-campaign-status.sql",
+);
 const canaryRegressionPath = join(
   scriptsDirectory,
   "test-meta-budget-canary.sql",
@@ -183,6 +187,14 @@ try {
   ]);
   if (!scopeStdout.includes("Meta customer campaign scope checks passed")) {
     throw new Error("Customer campaign scope regression did not emit its success marker");
+  }
+
+  const { stdout: statusStdout } = await run(psqlPath, [
+    ...psqlBase,
+    "--file", statusRegressionPath,
+  ]);
+  if (!statusStdout.includes("Meta customer campaign status checks passed")) {
+    throw new Error("Customer campaign status regression did not emit its success marker");
   }
 
   const { stdout: canaryStdout } = await run(psqlPath, [

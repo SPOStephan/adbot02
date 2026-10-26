@@ -99,6 +99,26 @@ async function signBrandAssetImages(
   return urls;
 }
 
+/** Latest SUCCEEDED automatic and customer status decisions, newest first. */
+async function loadStatusDecisions(
+  admin: AdminClient,
+  userId: string,
+  platformAccountId: string | null,
+): Promise<Row[]> {
+  let query = admin
+    .from("mutation_plans")
+    .select("source_rule_key,planned_payload,terminal_at")
+    .eq("user_id", userId)
+    .eq("status", "SUCCEEDED")
+    .in("source_rule_key", ["lead_underperformer_pause_v1", "customer_status_change"]);
+  if (platformAccountId) query = query.eq("platform_account_id", platformAccountId);
+  const { data, error } = await query
+    .order("terminal_at", { ascending: false, nullsFirst: false })
+    .limit(MAX_CAMPAIGNS);
+  if (error) throw error;
+  return (data ?? []) as Row[];
+}
+
 /**
  * Loads every current Meta campaign of one customer with its ads, creatives
  * and the Adbot launch plan behind it. Read-only; scoped by user id (and the
@@ -155,7 +175,7 @@ export async function loadCampaignAdOverview(input: {
     const campaignIds = ids(campaigns, "id");
     const platformCampaignIds = ids(campaigns, "platform_campaign_id");
 
-    const [adGroups, campaignBindings, performance] = await Promise.all([
+    const [adGroups, campaignBindings, performance, autoPauses] = await Promise.all([
       selectIn(campaignIds, (chunk) =>
         admin
           .from("ad_groups")
@@ -179,6 +199,7 @@ export async function loadCampaignAdOverview(input: {
           .eq("user_id", input.userId)
           .in("campaign_id", chunk),
       ),
+      loadStatusDecisions(admin, input.userId, input.platformAccountId ?? null),
     ]);
 
     const [ads, plans] = await Promise.all([
@@ -223,6 +244,7 @@ export async function loadCampaignAdOverview(input: {
       plans,
       campaignBindings,
       performance,
+      autoPauses,
       currency: input.currency ?? "EUR",
       now: Date.now(),
       brandAssetImageUrl: (assetId) =>

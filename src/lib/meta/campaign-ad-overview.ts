@@ -74,6 +74,8 @@ export type CampaignAdOverviewItem = {
   cards: CampaignAdCard[];
   totalCombinationCount: number;
   isTruncated: boolean;
+  /** Why Adbot paused this campaign automatically (shown while it stays paused). */
+  autoPauseNote: string | null;
 };
 
 type Row = Record<string, unknown>;
@@ -86,6 +88,12 @@ export type CampaignAdOverviewInput = {
   plans: readonly Row[];
   campaignBindings: readonly Row[];
   performance: readonly Row[];
+  /**
+   * SUCCEEDED status plans (lead_underperformer_pause_v1 and
+   * customer_status_change), newest first: a later customer decision hides
+   * the automatic pause note.
+   */
+  autoPauses?: readonly Row[];
   currency: string;
   now: number;
   brandAssetImageUrl: (assetId: string) => string | null;
@@ -441,6 +449,45 @@ function buildCards(input: {
   };
 }
 
+function formatMoney(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("de-DE", { style: "currency", currency }).format(value);
+  } catch {
+    return `${value.toFixed(2)} ${currency}`;
+  }
+}
+
+/** "Adbot hat … pausiert" line from a lead_underperformer_pause_v1 plan. */
+export function leadUnderperformerPauseNote(
+  plan: Row,
+  currency: string,
+): string | null {
+  const evidence = record(record(plan.planned_payload)?.evidence);
+  if (!evidence) return null;
+  const spend = finite(evidence.spend);
+  const leads = finite(evidence.leads);
+  const cpl = finite(evidence.cpl);
+  const referenceCpl = finite(evidence.reference_cpl);
+  if (spend === null || leads === null || referenceCpl === null) return null;
+  const when = timestamp(plan.terminal_at);
+  const date = when
+    ? new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" }).format(
+        new Date(when),
+      )
+    : null;
+  const result =
+    leads > 0 && cpl !== null
+      ? `${formatMoney(cpl, currency)} pro Lead`
+      : `${formatMoney(spend, currency)} ausgegeben ohne Lead`;
+  const reference = text(evidence.reference_campaign_name);
+  return (
+    `Adbot hat diese Kampagne${date ? ` am ${date}` : ""} automatisch pausiert: ` +
+    `${result} in 7 Tagen, die beste Lead-Kampagne` +
+    `${reference ? ` („${friendlyCampaignName(reference)}“)` : ""} lag bei ` +
+    `${formatMoney(referenceCpl, currency)} pro Lead.`
+  );
+}
+
 export function buildCampaignAdOverview(
   input: CampaignAdOverviewInput,
 ): CampaignAdOverviewItem[] {
@@ -486,6 +533,14 @@ export function buildCampaignAdOverview(
   for (const row of input.performance) {
     const id = text(row.campaign_id);
     if (id) performanceByCampaign.set(id, row);
+  }
+
+  const autoPauseByCampaign = new Map<string, Row>();
+  for (const plan of input.autoPauses ?? []) {
+    const objectId = text(record(plan.planned_payload)?.object_id);
+    if (objectId && !autoPauseByCampaign.has(objectId)) {
+      autoPauseByCampaign.set(objectId, plan);
+    }
   }
 
   const items: CampaignAdOverviewItem[] = [];
@@ -538,6 +593,20 @@ export function buildCampaignAdOverview(
       leads: finite(performance?.leads),
       currency: text(performance?.currency) ?? input.currency,
       adCount: ads.length,
+      autoPauseNote: (() => {
+        const autoPause = autoPauseByCampaign.get(platformCampaignId);
+        if (
+          !autoPause ||
+          autoPause.source_rule_key !== "lead_underperformer_pause_v1" ||
+          statusLabel !== "Pausiert"
+        ) {
+          return null;
+        }
+        return leadUnderperformerPauseNote(
+          autoPause,
+          text(performance?.currency) ?? input.currency,
+        );
+      })(),
       ...buildCards({
         kind,
         plan,

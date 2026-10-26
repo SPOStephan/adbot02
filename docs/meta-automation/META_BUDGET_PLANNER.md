@@ -82,3 +82,16 @@ npx tsc --noEmit
 ```
 
 Der Fresh-Cluster-Test startet einen temporären PostgreSQL-Cluster, spielt Bootstrap und alle Migrationen in Produktionsreihenfolge ein und prüft unter anderem `1,75`-/`2,10`-Exposure, Tagesmonotonie, Hard Caps, 20-Prozent-Fenster, zwölfstündigen Cooldown, Snapshotdrift, Planidempotenz, RLS, RPC-Grants und Auditverkettung.
+
+## Automatische Pause schwacher Lead-Kampagnen (`lead_underperformer_pause_v1`)
+
+Entscheidung des Owners am 2026-10-26: „Vergleich im Konto“. Läuft nach jedem Marketing-Abruf (`run_meta_lead_underperformer_pause`, aufgerufen aus `src/lib/meta/sync.ts`) und stellt höchstens einen PAUSE-Plan pro Konto und 24 h in die normale Executor-Queue.
+
+- Zeitfenster sind die letzten 7 Insight-Tage des Kontos (Ad-Zeilen aus `performance_data`, je Kampagne summiert).
+- Referenz ist der niedrigste CPL unter den laufenden Lead-Kampagnen des Kontos mit mindestens 3 Leads.
+- Kandidat ist eine laufende Adbot-Lead-Kampagne (`active-launch-chain`, MANAGED), die mindestens 7 Tage alt ist. Sie muss Spend ≥ 3 × Referenz-CPL haben und entweder 0 Leads oder einen CPL über 2 × Referenz-CPL.
+- Die Referenzkampagne selbst wird nie pausiert. Beitrag-Push ist ausgeschlossen.
+- Nötig sind `allow_status_changes` und ein Kill-Switch auf ALLOW. Die Belege stehen in `planned_payload.evidence`. Die Kampagnenübersicht zeigt den Grund an.
+- Setzt der Kunde die Kampagne fort, ist sie 7 Tage geschützt. Der Hard-Cap-Day-Resume reaktiviert automatisch pausierte Kampagnen nicht (`later_status_change_wins`).
+
+Nächste Ausbaustufe (Owner, 2026-10-26): Der Vergleich soll netzwerkübergreifend werden, also über mehrere Werbeplattformen hinweg. Die Regel nutzt deshalb bewusst den Kosten pro Lead als plattformneutrale Kennzahl. Ein späteres plattformübergreifendes Performance-Modell ersetzt `meta_lead_campaign_window`.

@@ -5,6 +5,8 @@ import { Archive, Megaphone, PlayCircle } from "lucide-react";
 
 import { MetaAdPreviewGallery } from "@/components/MetaAdPreviewGallery";
 import { MetaCampaignDuplicateButton } from "@/components/MetaCampaignDuplicateButton";
+import { MetaCampaignStatusButton } from "@/components/MetaCampaignStatusButton";
+import { campaignStatusAction } from "@/lib/meta/campaign-status-change";
 import {
   CAMPAIGN_KIND_LABELS,
   CAMPAIGN_KIND_ORDER,
@@ -243,6 +245,7 @@ export function CampaignAdOverviewCard({
 }) {
   const since = formatDate(item.startTime);
   const until = formatDate(item.stopTime);
+  const statusTarget = campaignStatusAction(item);
   return (
     <details
       className="group rounded-xl border border-slate-200 bg-slate-50/60"
@@ -300,6 +303,19 @@ export function CampaignAdOverviewCard({
         </dl>
       </summary>
       <div className="border-t border-slate-200 bg-white p-4">
+        {item.autoPauseNote ? (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+            {item.autoPauseNote} Mit „Kampagne fortsetzen“ läuft sie wieder; Adbot pausiert sie
+            danach mindestens 7 Tage nicht erneut.
+          </p>
+        ) : null}
+        {statusTarget ? (
+          <MetaCampaignStatusButton
+            campaignName={item.displayName}
+            platformCampaignId={item.platformCampaignId}
+            target={statusTarget}
+          />
+        ) : null}
         {item.launchedByAdbot && item.kind === "lead" ? (
           <MetaCampaignDuplicateButton platformCampaignId={item.platformCampaignId} />
         ) : null}
