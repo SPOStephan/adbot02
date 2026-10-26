@@ -9,14 +9,23 @@
 --    button, or an earlier day-resume that a manual Ads-Manager pause undid),
 --    the campaign is no longer resumed automatically. Organic-boost campaigns
 --    keep their existing resume behaviour (no collateral on Beitrag-Push).
+-- 3) run_meta_lead_underperformer_pause pauses at most one comparatively weak
+--    Adbot Lead campaign per account and day (7-day CPL > 2 x account best).
 
 begin;
 
-create or replace function public.queue_meta_customer_campaign_status_change(
+-- Shared PAUSE/ACTIVATE plan builder for one MANAGED campaign target. Callers
+-- own every eligibility rule; this only checks the write gates and queues.
+create or replace function public.queue_meta_campaign_status_plan_internal(
   p_user_id uuid,
   p_platform_account_id uuid,
-  p_platform_campaign_id text,
-  p_status text
+  p_automation_target_id uuid,
+  p_status text,
+  p_source_rule_key text,
+  p_evidence jsonb,
+  p_actor_type text,
+  p_actor_id text,
+  p_planned_at timestamptz
 )
 returns jsonb
 language plpgsql
@@ -26,7 +35,6 @@ as $$
 declare
   v_status text := upper(coalesce(p_status, ''));
   v_action text;
-  v_now timestamptz := now();
   v_policy public.automation_policies%rowtype;
   v_target public.automation_targets%rowtype;
   v_campaign public.campaigns%rowtype;
@@ -51,46 +59,25 @@ begin
   if v_status not in ('PAUSED', 'ACTIVE') then
     return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'invalid_status');
   end if;
-  if coalesce(p_platform_campaign_id, '') !~ '^[1-9][0-9]{0,39}$' then
-    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'invalid_campaign_id');
+  if p_source_rule_key not in ('customer_status_change', 'lead_underperformer_pause_v1')
+    or p_actor_type not in ('CUSTOMER', 'SYSTEM')
+    or jsonb_typeof(coalesce(p_evidence, '{}'::jsonb)) <> 'object' then
+    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'invalid_request');
   end if;
   v_action := case when v_status = 'PAUSED' then 'PAUSE' else 'ACTIVATE' end;
-  v_step_prefix := case when v_status = 'PAUSED' then 'customer-pause' else 'customer-resume' end;
-
-  if not exists (
-    select 1
-    from public.platform_accounts pa
-    where pa.id = p_platform_account_id
-      and pa.user_id = p_user_id
-      and pa.platform = 'meta'
-      and pa.revoked_at is null
-  ) then
-    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'invalid_account');
-  end if;
-
-  -- Only campaigns Adbot launched itself, never Beitrag-Push.
-  if not exists (
-    select 1
-    from public.remote_object_bindings binding
-    join public.mutation_plans launch on launch.id = binding.plan_id
-    where binding.platform_account_id = p_platform_account_id
-      and binding.user_id = p_user_id
-      and binding.object_type = 'CAMPAIGN'
-      and binding.remote_object_id = p_platform_campaign_id
-      and launch.source_rule_key = 'active-launch-chain'
-  ) then
-    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'not_adbot_launch');
-  end if;
+  v_step_prefix := case
+    when p_source_rule_key = 'lead_underperformer_pause_v1' then 'lead-underperformer-pause'
+    when v_status = 'PAUSED' then 'customer-pause'
+    else 'customer-resume'
+  end;
 
   select target.* into v_target
   from public.automation_targets target
-  where target.user_id = p_user_id
+  where target.id = p_automation_target_id
+    and target.user_id = p_user_id
     and target.platform_account_id = p_platform_account_id
     and target.target_type = 'CAMPAIGN'
-    and target.platform_object_id = p_platform_campaign_id
     and target.status = 'MANAGED'
-  order by target.updated_at desc
-  limit 1
   for update;
 
   if not found then
@@ -150,7 +137,7 @@ begin
   end if;
   if v_status = 'ACTIVE'
     and v_campaign.stop_time is not null
-    and v_campaign.stop_time <= v_now then
+    and v_campaign.stop_time <= p_planned_at then
     return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'campaign_schedule_ended');
   end if;
 
@@ -185,20 +172,21 @@ begin
 
   v_payload := jsonb_build_object(
     'schema_version', 1,
-    'contract', 'meta_customer_campaign_status_v1',
+    'contract', 'meta_campaign_status_v1',
     'operation', 'UPDATE_STATUS',
     'object_type', 'CAMPAIGN',
     'object_id', v_target.platform_object_id,
     'target_key', v_target.target_key,
     'status', v_status,
-    'requested_by', 'customer',
-    'requested_at', v_now
+    'requested_by', lower(p_actor_type),
+    'requested_at', p_planned_at,
+    'evidence', coalesce(p_evidence, '{}'::jsonb)
   );
   v_payload_hash := public.meta_sha256(v_payload::text);
   v_idempotency_key := public.meta_sha256(
     p_user_id::text || '|' || p_platform_account_id::text || '|'
-    || v_policy.id::text || '|customer-status|' || v_target.target_key
-    || '|' || v_payload_hash
+    || v_policy.id::text || '|' || p_source_rule_key || '|'
+    || v_target.target_key || '|' || v_payload_hash
   );
 
   insert into public.mutation_plans (
@@ -209,7 +197,7 @@ begin
     priority, safety_action, not_before, max_attempts, created_at, updated_at
   ) values (
     v_plan_id, p_user_id, p_platform_account_id, v_policy.id,
-    v_campaign.last_seen_sync_id, 'customer_status_change', 1, v_action,
+    v_campaign.last_seen_sync_id, p_source_rule_key, 1, v_action,
     'CAMPAIGN', v_target.target_key, v_target.campaign_scope_key,
     v_target.budget_owner_key, v_target.id, v_idempotency_key,
     jsonb_build_object(
@@ -217,7 +205,9 @@ begin
       'source_marketing_sync_id', v_campaign.last_seen_sync_id
     ),
     jsonb_build_object('status', v_status),
-    v_payload, v_payload_hash, 'PENDING', 20, false, v_now, 3, v_now, v_now
+    v_payload, v_payload_hash, 'PENDING',
+    case when p_actor_type = 'CUSTOMER' then 20 else 51 end,
+    false, p_planned_at, 3, p_planned_at, p_planned_at
   );
 
   v_validate_request := jsonb_build_object(
@@ -239,7 +229,7 @@ begin
   v_reconcile_request := jsonb_build_object(
     'expected_status', v_status,
     'safety_action', false,
-    'requested_by', 'customer'
+    'requested_by', lower(p_actor_type)
   );
 
   insert into public.mutation_plan_steps (
@@ -276,8 +266,12 @@ begin
 
   perform public.append_meta_mutation_audit_event(
     p_user_id, p_platform_account_id, v_policy.id, v_plan_id,
-    null, null, 'CUSTOMER', p_user_id::text,
-    'CUSTOMER_CAMPAIGN_STATUS_QUEUED',
+    null, null, p_actor_type, p_actor_id,
+    case
+      when p_source_rule_key = 'lead_underperformer_pause_v1'
+        then 'LEAD_UNDERPERFORMER_PAUSE_QUEUED'
+      else 'CUSTOMER_CAMPAIGN_STATUS_QUEUED'
+    end,
     jsonb_build_object('status', v_current_status),
     v_payload, '{}'::jsonb,
     jsonb_build_object('status', v_status, 'plan_status', 'PENDING'),
@@ -285,14 +279,110 @@ begin
       'idempotency_key', v_idempotency_key,
       'payload_hash', v_payload_hash
     ),
-    null, null, null, null, null, v_now
+    null, null, null, null, null, p_planned_at
   );
 
   return jsonb_build_object(
     'outcome', 'CREATED',
-    'reason', 'customer_status_change',
+    'reason', p_source_rule_key,
     'plan_id', v_plan_id,
     'action_type', v_action
+  );
+end;
+$$;
+
+revoke all on function public.queue_meta_campaign_status_plan_internal(
+  uuid, uuid, uuid, text, text, jsonb, text, text, timestamptz
+) from public, anon, authenticated, service_role;
+
+comment on function public.queue_meta_campaign_status_plan_internal(
+  uuid, uuid, uuid, text, text, jsonb, text, text, timestamptz
+) is
+  'Queues a non-safety PAUSE/ACTIVATE plan (VALIDATE/UPDATE_STATUS/READ/RECONCILE) for one MANAGED campaign target behind the policy and kill-switch gates.';
+
+-- True when the campaign was created by an Adbot customer launch (never
+-- Beitrag-Push, which uses source_rule_key organic-boost).
+create or replace function public.meta_campaign_is_adbot_launch(
+  p_user_id uuid,
+  p_platform_account_id uuid,
+  p_platform_campaign_id text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.remote_object_bindings binding
+    join public.mutation_plans launch on launch.id = binding.plan_id
+    where binding.platform_account_id = p_platform_account_id
+      and binding.user_id = p_user_id
+      and binding.object_type = 'CAMPAIGN'
+      and binding.remote_object_id = p_platform_campaign_id
+      and launch.source_rule_key = 'active-launch-chain'
+  );
+$$;
+
+revoke all on function public.meta_campaign_is_adbot_launch(uuid, uuid, text)
+  from public, anon, authenticated, service_role;
+
+create or replace function public.queue_meta_customer_campaign_status_change(
+  p_user_id uuid,
+  p_platform_account_id uuid,
+  p_platform_campaign_id text,
+  p_status text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_target_id uuid;
+begin
+  if upper(coalesce(p_status, '')) not in ('PAUSED', 'ACTIVE') then
+    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'invalid_status');
+  end if;
+  if coalesce(p_platform_campaign_id, '') !~ '^[1-9][0-9]{0,39}$' then
+    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'invalid_campaign_id');
+  end if;
+
+  if not exists (
+    select 1
+    from public.platform_accounts pa
+    where pa.id = p_platform_account_id
+      and pa.user_id = p_user_id
+      and pa.platform = 'meta'
+      and pa.revoked_at is null
+  ) then
+    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'invalid_account');
+  end if;
+
+  if not public.meta_campaign_is_adbot_launch(
+    p_user_id, p_platform_account_id, p_platform_campaign_id
+  ) then
+    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'not_adbot_launch');
+  end if;
+
+  select target.id into v_target_id
+  from public.automation_targets target
+  where target.user_id = p_user_id
+    and target.platform_account_id = p_platform_account_id
+    and target.target_type = 'CAMPAIGN'
+    and target.platform_object_id = p_platform_campaign_id
+    and target.status = 'MANAGED'
+  order by target.updated_at desc
+  limit 1;
+
+  if v_target_id is null then
+    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'target_not_managed');
+  end if;
+
+  return public.queue_meta_campaign_status_plan_internal(
+    p_user_id, p_platform_account_id, v_target_id, p_status,
+    'customer_status_change', '{}'::jsonb, 'CUSTOMER', p_user_id::text, now()
   );
 end;
 $$;
@@ -308,6 +398,214 @@ comment on function public.queue_meta_customer_campaign_status_change(
   uuid, uuid, text, text
 ) is
   'Queues a customer PAUSE/ACTIVATE plan for an Adbot-launched (active-launch-chain) MANAGED campaign; organic-boost campaigns are excluded.';
+
+-- 7-day spend/leads of the account's running Lead campaigns (ad-level rows
+-- summed per campaign).
+create or replace function public.meta_lead_campaign_window(
+  p_user_id uuid,
+  p_platform_account_id uuid,
+  p_window_end date,
+  p_planned_at timestamptz
+)
+returns table (
+  campaign_id uuid,
+  platform_campaign_id text,
+  name text,
+  spend numeric,
+  leads bigint,
+  first_day date,
+  start_time timestamptz
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select
+    c.id,
+    c.platform_campaign_id,
+    c.name,
+    coalesce(sum(pd.spend), 0),
+    coalesce(sum(pd.leads), 0)::bigint,
+    min(pd.date),
+    c.start_time
+  from public.campaigns c
+  join public.performance_data pd
+    on pd.campaign_id = c.id
+   and pd.user_id = p_user_id
+   and pd.platform_account_id = p_platform_account_id
+   and pd.platform = 'meta'
+   and pd.date between p_window_end - 6 and p_window_end
+  where c.user_id = p_user_id
+    and c.platform_account_id = p_platform_account_id
+    and c.is_current
+    and upper(coalesce(c.objective, '')) in ('OUTCOME_LEADS', 'LEAD_GENERATION')
+    and upper(coalesce(c.status, '')) = 'ACTIVE'
+    and upper(coalesce(c.effective_status, c.status, '')) = 'ACTIVE'
+    and (c.stop_time is null or c.stop_time > p_planned_at)
+  group by c.id, c.platform_campaign_id, c.name, c.start_time;
+$$;
+
+revoke all on function public.meta_lead_campaign_window(uuid, uuid, date, timestamptz)
+  from public, anon, authenticated, service_role;
+
+-- Automatic pause of a comparatively weak Adbot Lead campaign (owner decision
+-- 2026-10-26, "Vergleich im Konto"):
+--   * window: the last 7 insight days of the account
+--   * reference: lowest cost per lead among the account's running Lead
+--     campaigns with at least 3 leads in the window
+--   * candidate: running Adbot Lead campaign (active-launch-chain, MANAGED),
+--     at least 7 days old, spend >= 3 x reference CPL, and either 0 leads or
+--     CPL > 2 x reference CPL; never the reference campaign itself
+--   * at most one automatic pause per account per 24 hours
+--   * a customer resume within the last 7 days protects the campaign
+create or replace function public.run_meta_lead_underperformer_pause(
+  p_user_id uuid,
+  p_platform_account_id uuid,
+  p_planned_at timestamptz default now()
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_window_end date;
+  v_reference record;
+  v_candidate record;
+  v_result jsonb;
+  v_min_leads constant integer := 3;
+  v_cpl_factor constant numeric := 2;
+  v_spend_factor constant numeric := 3;
+begin
+  if p_planned_at < now() - interval '5 minutes'
+    or p_planned_at > now() + interval '1 minute' then
+    return jsonb_build_object('outcome', 'BLOCKED', 'reason', 'invalid_planner_time');
+  end if;
+
+  if not exists (
+    select 1
+    from public.automation_policies ap
+    where ap.user_id = p_user_id
+      and ap.platform_account_id = p_platform_account_id
+      and ap.is_current
+      and ap.status = 'ACTIVE'
+      and ap.allow_status_changes
+  ) then
+    return jsonb_build_object('outcome', 'SKIPPED', 'reason', 'status_changes_not_allowed');
+  end if;
+
+  if exists (
+    select 1
+    from public.mutation_plans mp
+    where mp.user_id = p_user_id
+      and mp.platform_account_id = p_platform_account_id
+      and mp.source_rule_key = 'lead_underperformer_pause_v1'
+      and mp.status not in ('CANCELLED', 'PREFLIGHT_FAILED', 'STALE', 'BLOCKED')
+      and mp.created_at > p_planned_at - interval '24 hours'
+  ) then
+    return jsonb_build_object('outcome', 'SKIPPED', 'reason', 'daily_pause_limit');
+  end if;
+
+  select max(pd.date) into v_window_end
+  from public.performance_data pd
+  where pd.user_id = p_user_id
+    and pd.platform_account_id = p_platform_account_id
+    and pd.platform = 'meta';
+
+  if v_window_end is null then
+    return jsonb_build_object('outcome', 'SKIPPED', 'reason', 'no_insights');
+  end if;
+
+  select w.*, w.spend / w.leads as cpl into v_reference
+  from public.meta_lead_campaign_window(
+      p_user_id, p_platform_account_id, v_window_end, p_planned_at
+    ) w
+  where w.leads >= v_min_leads
+    and w.spend > 0
+  order by w.spend / w.leads asc, w.leads desc
+  limit 1;
+
+  if v_reference.campaign_id is null then
+    return jsonb_build_object('outcome', 'SKIPPED', 'reason', 'no_reference_campaign');
+  end if;
+
+  for v_candidate in
+    select
+      w.*,
+      target.id as target_id,
+      case when w.leads > 0 then w.spend / w.leads else null end as cpl
+    from public.meta_lead_campaign_window(
+      p_user_id, p_platform_account_id, v_window_end, p_planned_at
+    ) w
+    join public.automation_targets target
+      on target.user_id = p_user_id
+     and target.platform_account_id = p_platform_account_id
+     and target.target_type = 'CAMPAIGN'
+     and target.campaign_id = w.campaign_id
+     and target.status = 'MANAGED'
+    where w.campaign_id <> v_reference.campaign_id
+      and coalesce(w.start_time, w.first_day::timestamptz) <= p_planned_at - interval '7 days'
+      and w.spend >= v_spend_factor * v_reference.cpl
+      and (w.leads = 0 or w.spend / w.leads > v_cpl_factor * v_reference.cpl)
+      and public.meta_campaign_is_adbot_launch(
+        p_user_id, p_platform_account_id, w.platform_campaign_id
+      )
+      and not exists (
+        select 1
+        from public.mutation_plans resumed
+        where resumed.user_id = p_user_id
+          and resumed.platform_account_id = p_platform_account_id
+          and resumed.target_type = 'CAMPAIGN'
+          and resumed.target_key = target.target_key
+          and resumed.source_rule_key = 'customer_status_change'
+          and resumed.action_type = 'ACTIVATE'
+          and resumed.status = 'SUCCEEDED'
+          and resumed.created_at > p_planned_at - interval '7 days'
+      )
+    order by (w.leads = 0) desc,
+      case when w.leads > 0 then w.spend / w.leads else w.spend end desc
+    limit 1
+  loop
+    v_result := public.queue_meta_campaign_status_plan_internal(
+      p_user_id, p_platform_account_id, v_candidate.target_id, 'PAUSED',
+      'lead_underperformer_pause_v1',
+      jsonb_build_object(
+        'rule', 'lead_cpl_vs_account_best_7d',
+        'window_start', v_window_end - 6,
+        'window_end', v_window_end,
+        'spend', round(v_candidate.spend, 2),
+        'leads', v_candidate.leads,
+        'cpl', case when v_candidate.cpl is null then null else round(v_candidate.cpl, 2) end,
+        'reference_campaign_id', v_reference.platform_campaign_id,
+        'reference_campaign_name', v_reference.name,
+        'reference_cpl', round(v_reference.cpl, 2),
+        'reference_leads', v_reference.leads,
+        'cpl_factor', v_cpl_factor,
+        'spend_factor', v_spend_factor
+      ),
+      'SYSTEM', 'meta-lead-underperformer', p_planned_at
+    );
+    return v_result || jsonb_build_object(
+      'campaign_id', v_candidate.platform_campaign_id
+    );
+  end loop;
+
+  return jsonb_build_object('outcome', 'SKIPPED', 'reason', 'no_underperformer');
+end;
+$$;
+
+revoke all on function public.run_meta_lead_underperformer_pause(
+  uuid, uuid, timestamptz
+) from public, anon, authenticated;
+grant execute on function public.run_meta_lead_underperformer_pause(
+  uuid, uuid, timestamptz
+) to service_role;
+
+comment on function public.run_meta_lead_underperformer_pause(
+  uuid, uuid, timestamptz
+) is
+  'Queues at most one daily PAUSE for an Adbot Lead campaign whose 7-day cost per lead is more than twice the account best (spend >= 3 x best CPL).';
 
 -- Hard-cap day-resume: a later SUCCEEDED PAUSE/ACTIVATE wins over the old
 -- hard-cap safety pause. Patched in place like 20260809110000/120000 so the

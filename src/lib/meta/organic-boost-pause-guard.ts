@@ -140,7 +140,8 @@ export function isAutomatedPauseAction(input: {
       rule === "hard_cap_exposure_breach" ||
       rule === "ad_sibling_success_pause_7d" ||
       rule.startsWith("hard_cap") ||
-      rule.includes("sibling_success_pause")
+      rule.includes("sibling_success_pause") ||
+      rule.startsWith("lead_underperformer_pause")
     );
   }
   return false;

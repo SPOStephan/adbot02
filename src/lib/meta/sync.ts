@@ -33,6 +33,7 @@ import { createAdminClient } from "../supabase/admin";
 import { nextHourlyRun } from "./schedule";
 import { resolveMarketingAdAccountId } from "./ad-account";
 import { runMetaCreativeFormatOptimizerAfterSnapshot } from "./creative-format-optimizer";
+import { runMetaLeadUnderperformerPause } from "./lead-underperformer-pause";
 
 const SYNC_LOCK_SECONDS = 5 * 60;
 const MANUAL_SYNC_COOLDOWN_SECONDS = 60;
@@ -1202,6 +1203,18 @@ export async function syncMetaConnector(
                 errorName: error instanceof Error ? error.name : "unknown",
               });
             }
+          }
+
+          try {
+            await runMetaLeadUnderperformerPause({
+              platformAccountId: connector.id,
+              userId: connector.user_id,
+            });
+          } catch (error) {
+            console.error("meta_lead_underperformer_pause_failed", {
+              platformAccountId: connector.id,
+              errorName: error instanceof Error ? error.name : "unknown",
+            });
           }
 
           plannerAttemptedAt = plannerAttemptedAt ?? new Date().toISOString();

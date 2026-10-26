@@ -38,11 +38,39 @@ assert.match(status.campaignStatusBlockedMessage("unknown_reason"), /nicht vorbe
 assert.equal(status.isTerminalPlanStatus("SUCCEEDED"), true);
 assert.equal(status.isTerminalPlanStatus("PENDING"), false);
 
+const overviewLib = await import(join(root, "src/lib/meta/campaign-ad-overview.ts"));
+const note = overviewLib.leadUnderperformerPauseNote(
+  {
+    terminal_at: "2026-10-26T08:00:00Z",
+    planned_payload: {
+      object_id: "120",
+      evidence: {
+        spend: 90, leads: 2, cpl: 45, reference_cpl: 10,
+        reference_campaign_name: "Immo02 [0123456789ab-c]",
+      },
+    },
+  },
+  "EUR",
+);
+assert.match(note, /automatisch pausiert/);
+assert.match(note, /45,00\s€ pro Lead/);
+assert.match(note, /„Immo02“/);
+assert.match(note, /10,00\s€ pro Lead/);
+const zeroLead = overviewLib.leadUnderperformerPauseNote(
+  { planned_payload: { evidence: { spend: 40, leads: 0, cpl: null, reference_cpl: 10 } } },
+  "EUR",
+);
+assert.match(zeroLead, /40,00\s€ ausgegeben ohne Lead/);
+assert.equal(overviewLib.leadUnderperformerPauseNote({ planned_payload: {} }, "EUR"), null);
+
 const migration = await read("supabase/migrations/20261026120000_meta_customer_campaign_status.sql");
 assert.match(migration, /launch\.source_rule_key = 'active-launch-chain'/);
 assert.match(migration, /resume_respects_later_status_change/);
 assert.match(migration, /later_status_change_wins/);
 assert.match(migration, /launch\.source_rule_key = 'organic-boost'/);
+assert.match(migration, /run_meta_lead_underperformer_pause/);
+const sync = await read("src/lib/meta/sync.ts");
+assert.match(sync, /runMetaLeadUnderperformerPause\(/);
 
 const overview = await read("src/components/CampaignAdOverview.tsx");
 assert.match(overview, /campaignStatusAction\(item\)/);

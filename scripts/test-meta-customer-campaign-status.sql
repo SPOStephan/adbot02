@@ -352,4 +352,265 @@ $$;
 
 rollback;
 
+-- Automatic pause of a comparatively weak Adbot Lead campaign.
+begin;
+
+insert into auth.users (id, email)
+values ('15000000-0000-4000-8000-000000000001', 'lead-pause@example.test');
+
+insert into public.platform_accounts (
+  id, user_id, platform, platform_account_id, account_name, access_token,
+  ad_account_ids, meta_scopes, marketing_meta_ad_account_id,
+  marketing_currency, marketing_timezone_name, marketing_sync_status,
+  marketing_sync_id, marketing_last_success_at, marketing_campaign_count,
+  marketing_ad_set_count, marketing_ad_count, marketing_creative_count,
+  marketing_insight_count, marketing_recommendation_count,
+  marketing_insights_since, marketing_insights_until
+) values (
+  '25000000-0000-4000-8000-000000000001',
+  '15000000-0000-4000-8000-000000000001',
+  'meta', 'lead-pause', 'Lead Pause Meta', null,
+  '["act_666666666666"]'::jsonb,
+  array['ads_read','ads_management']::text[],
+  '666666666666', 'EUR', 'Europe/Berlin', 'success',
+  '35000000-0000-4000-8000-000000000001', now(),
+  4, 4, 4, 0, 4, 0, current_date - 13, current_date
+);
+
+select public.append_meta_kill_switch_state(
+  'ACCOUNT',
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  null,
+  'ALLOW', 'Lead underperformer regression fixture', 'OPERATOR', 'test'
+);
+
+insert into public.automation_policies (
+  id, user_id, platform_account_id, version, status, currency,
+  account_daily_hard_cap_minor, default_campaign_daily_hard_cap_minor,
+  budget_change_limit_bps, cooldown_seconds,
+  standard_flex_spend_multiplier_bps,
+  shared_budget_flex_spend_multiplier_bps,
+  allow_budget_changes, allow_status_changes, allow_new_launches,
+  require_verified_domain, policy_payload, policy_hash, is_current,
+  customer_confirmed_at, customer_confirmed_by, activated_at
+) values (
+  '85000000-0000-4000-8000-000000000001',
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  1, 'ACTIVE', 'EUR', 10000, 5000, 2000, 43200, 17500, 21000,
+  true, true, true, true,
+  '{"campaign_objectives":"ALL","regions":"ALL","domains":"ALL"}'::jsonb,
+  repeat('f', 64), true, now(),
+  '15000000-0000-4000-8000-000000000001', now()
+);
+
+-- n: 1 = reference (CPL 10), 2 = weak Adbot (CPL 45), 3 = weak but young,
+-- 4 = weak but not launched by Adbot.
+insert into public.campaigns (
+  id, user_id, platform_account_id, platform_campaign_id, name, status,
+  effective_status, objective, daily_budget_minor, start_time,
+  last_seen_sync_id, last_seen_at, is_current
+)
+select
+  ('45000000-0000-4000-8000-00000000000' || n)::uuid,
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  '66666666660' || n, 'Lead ' || n, 'ACTIVE', 'ACTIVE', 'OUTCOME_LEADS', 2000,
+  now() - case when n = 3 then interval '3 days' else interval '20 days' end,
+  '35000000-0000-4000-8000-000000000001', now(), true
+from generate_series(1, 4) n;
+
+insert into public.ad_groups (
+  id, user_id, platform_account_id, campaign_id, platform_ad_group_id,
+  name, status, effective_status, optimization_goal, daily_budget_minor,
+  lifetime_budget_minor, last_seen_sync_id, last_seen_at, is_current
+)
+select
+  ('55000000-0000-4000-8000-00000000000' || n)::uuid,
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  ('45000000-0000-4000-8000-00000000000' || n)::uuid,
+  '66666666670' || n, 'Ad Set ' || n, 'ACTIVE', 'ACTIVE', 'LEAD_GENERATION',
+  null, null, '35000000-0000-4000-8000-000000000001', now(), true
+from generate_series(1, 4) n;
+
+insert into public.ads (
+  id, user_id, platform_account_id, ad_group_id, platform_ad_id,
+  name, status, effective_status, creative_id, platform_creative_id,
+  last_seen_sync_id, last_seen_at, is_current
+)
+select
+  ('75000000-0000-4000-8000-00000000000' || n)::uuid,
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  ('55000000-0000-4000-8000-00000000000' || n)::uuid,
+  '66666666680' || n, 'Ad ' || n, 'ACTIVE', 'ACTIVE', null, null,
+  '35000000-0000-4000-8000-000000000001', now(), true
+from generate_series(1, 4) n;
+
+insert into public.performance_data (
+  entity_id, entity_type, date, impressions, clicks, spend, platform,
+  user_id, platform_account_id, campaign_id, ad_group_id, ad_id, leads,
+  currency, last_seen_sync_id
+)
+select
+  ('75000000-0000-4000-8000-00000000000' || n)::uuid, 'ad', current_date - d,
+  1000, 10,
+  case n when 1 then 20 when 2 then 18 when 3 then 18 else 18 end,
+  'meta',
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  ('45000000-0000-4000-8000-00000000000' || n)::uuid,
+  ('55000000-0000-4000-8000-00000000000' || n)::uuid,
+  ('75000000-0000-4000-8000-00000000000' || n)::uuid,
+  case when n = 1 then 2 when d < 2 then 1 else 0 end,
+  'EUR', '35000000-0000-4000-8000-000000000001'
+from generate_series(1, 4) n, generate_series(0, 4) d;
+
+insert into public.automation_targets (
+  id, user_id, platform_account_id, target_type, target_key,
+  platform_object_id, campaign_scope_key, budget_owner_type,
+  budget_owner_key, campaign_id, status, last_reconciled_at
+)
+select
+  ('56000000-0000-4000-8000-00000000000' || n)::uuid,
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  'CAMPAIGN', 'campaign:66666666660' || n, '66666666660' || n,
+  'campaign:66666666660' || n, 'CAMPAIGN', 'campaign:66666666660' || n,
+  ('45000000-0000-4000-8000-00000000000' || n)::uuid, 'MANAGED', now()
+from generate_series(1, 4) n;
+
+insert into public.mutation_plans (
+  id, user_id, platform_account_id, policy_id, source_marketing_sync_id,
+  source_rule_key, source_rule_version, action_type, target_type, target_key,
+  idempotency_key, expected_before, intended_after, planned_payload,
+  payload_hash, status, terminal_at, created_at
+)
+select
+  ('b5000000-0000-4000-8000-00000000000' || n)::uuid,
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001',
+  '85000000-0000-4000-8000-000000000001',
+  '35000000-0000-4000-8000-000000000001',
+  'active-launch-chain', 1, 'LAUNCH_CHAIN', 'CHAIN', 'launch:lead-' || n,
+  repeat(n::text, 63) || 'a', '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
+  repeat(n::text, 63) || 'b', 'SUCCEEDED', now() - interval '20 days',
+  now() - interval '20 days'
+from generate_series(1, 3) n;
+
+insert into public.mutation_plan_steps (
+  id, plan_id, user_id, platform_account_id, step_index, step_key,
+  operation, object_type, planned_request, request_hash,
+  expected_result, compensation_operation, status
+)
+select
+  ('c5000000-0000-4000-8000-00000000000' || n)::uuid,
+  ('b5000000-0000-4000-8000-00000000000' || n)::uuid,
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001', 0, 'create-campaign',
+  'CREATE', 'CAMPAIGN', '{}'::jsonb, repeat(n::text, 63) || 'c', '{}', 'NONE',
+  'RECONCILED'
+from generate_series(1, 3) n;
+
+insert into public.remote_object_bindings (
+  plan_id, step_id, user_id, platform_account_id, object_type,
+  remote_object_id, request_fingerprint, local_campaign_id, reconciled_at
+)
+select
+  ('b5000000-0000-4000-8000-00000000000' || n)::uuid,
+  ('c5000000-0000-4000-8000-00000000000' || n)::uuid,
+  '15000000-0000-4000-8000-000000000001',
+  '25000000-0000-4000-8000-000000000001', 'CAMPAIGN', '66666666660' || n,
+  repeat(n::text, 63) || 'c',
+  ('45000000-0000-4000-8000-00000000000' || n)::uuid, now()
+from generate_series(1, 3) n;
+
+do $$
+declare
+  v_result jsonb;
+  v_plan public.mutation_plans%rowtype;
+begin
+  v_result := public.run_meta_lead_underperformer_pause(
+    '15000000-0000-4000-8000-000000000001',
+    '25000000-0000-4000-8000-000000000001',
+    now()
+  );
+  if v_result->>'outcome' <> 'CREATED'
+    or v_result->>'campaign_id' <> '666666666602' then
+    raise exception 'Weak Adbot Lead campaign was not paused: %', v_result;
+  end if;
+
+  select * into v_plan from public.mutation_plans
+  where id = (v_result->>'plan_id')::uuid;
+  if v_plan.action_type <> 'PAUSE'
+    or v_plan.safety_action
+    or v_plan.source_rule_key <> 'lead_underperformer_pause_v1'
+    or (v_plan.planned_payload #>> '{evidence,reference_cpl}')::numeric <> 10
+    or (v_plan.planned_payload #>> '{evidence,cpl}')::numeric <> 45
+    or (v_plan.planned_payload #>> '{evidence,leads}')::integer <> 2 then
+    raise exception 'Lead underperformer plan has the wrong shape: %', v_plan.planned_payload;
+  end if;
+
+  v_result := public.run_meta_lead_underperformer_pause(
+    '15000000-0000-4000-8000-000000000001',
+    '25000000-0000-4000-8000-000000000001',
+    now()
+  );
+  if v_result->>'reason' <> 'daily_pause_limit' then
+    raise exception 'Only one automatic pause per day: %', v_result;
+  end if;
+
+  update public.mutation_plans
+  set status = 'CANCELLED', terminal_at = now(), updated_at = now()
+  where id = v_plan.id;
+  update public.automation_policies
+  set allow_status_changes = false
+  where id = '85000000-0000-4000-8000-000000000001';
+  v_result := public.run_meta_lead_underperformer_pause(
+    '15000000-0000-4000-8000-000000000001',
+    '25000000-0000-4000-8000-000000000001',
+    now()
+  );
+  if v_result->>'reason' <> 'status_changes_not_allowed' then
+    raise exception 'Automatic pause needs allowed status changes: %', v_result;
+  end if;
+  update public.automation_policies
+  set allow_status_changes = true
+  where id = '85000000-0000-4000-8000-000000000001';
+
+  -- Only the young and the non-Adbot campaign remain weak: nothing to pause.
+  update public.campaigns
+  set status = 'PAUSED', effective_status = 'PAUSED'
+  where id = '45000000-0000-4000-8000-000000000002';
+  v_result := public.run_meta_lead_underperformer_pause(
+    '15000000-0000-4000-8000-000000000001',
+    '25000000-0000-4000-8000-000000000001',
+    now()
+  );
+  if v_result->>'reason' <> 'no_underperformer' then
+    raise exception 'Young or foreign campaigns must not be paused: %', v_result;
+  end if;
+end;
+$$;
+
+do $$
+begin
+  if has_function_privilege(
+    'authenticated',
+    'public.run_meta_lead_underperformer_pause(uuid,uuid,timestamptz)',
+    'execute'
+  ) or has_function_privilege(
+    'service_role',
+    'public.queue_meta_campaign_status_plan_internal(uuid,uuid,uuid,text,text,jsonb,text,text,timestamptz)',
+    'execute'
+  ) then
+    raise exception 'Lead underperformer RPC privileges are incorrect';
+  end if;
+end;
+$$;
+
+rollback;
+
 select 'Meta customer campaign status checks passed' as result;
