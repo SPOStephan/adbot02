@@ -16,6 +16,7 @@ Wenn Beitrag-Push = **AUTO** und Account-Schreiben = **ALLOW**:
 6. Ein freigegebener Kundenstart (`active-launch-chain` mit Approval) wird nie durch den Refreeze eines *anderen* Launches terminal `BLOCKED`: Solange ein freigegebener Launch offen ist, bleibt ACCOUNT ALLOW; ein ACCOUNT-FREEZE lässt ihn warten (`account_write_gate_waiting`), statt ihn abzubrechen. Reine Read-back/Reconcile-Reste sind keine Writes.
 7. Ein Executor-Lauf endet am Schrittlimit an einer sauberen Schrittgrenze (`yield_meta_mutation_execution`) und bleibt ohne Recovery-Sonderfall claimbar.
 8. Ein freigegebener Kundenstart mit bestehender Meta-Kampagne darf seine restlichen Writes auch in späteren Läufen senden (`meta_launch_resume_dispatch_ok`); eine Ablehnung *vor* dem Senden (`NOT_APPLIED`) macht ihn `RETRYABLE`, nie `FAILED`.
+9. Eine Kunden-Pause (Button „Kampagne pausieren“, `customer_status_change`) oder eine spätere manuelle Pause nach einem Hard-Cap-Day-Resume wird vom Hard-Cap-Day-Resume nicht überstimmt (`later_status_change_wins`). Beitrag-Push behält sein bisheriges Resume-Verhalten; der Button ist für Beitrag-Push gesperrt.
 
 Vorfall 2026-09-28 (Vertrieb02): Lauf endete nach 24 Schritten direkt vor `activate-ad` (Plan mit 1/1 Attempts nicht mehr claimbar); nach Recovery fror der FAILED-Terminal eines Geschwister-Launches das ACCOUNT ein, 0,18 s später wurde Vertrieb02 `BLOCKED writes_frozen`. Anzeige blieb PAUSED.
 

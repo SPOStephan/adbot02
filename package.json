@@ -58,6 +58,7 @@
     "test:campaign-ad-overview": "node --experimental-strip-types scripts/test-campaign-ad-overview.mjs",
     "test:meta-campaign-drafts": "node scripts/test-meta-campaign-drafts.mjs",
     "test:meta-campaign-draft-duplicate": "node --experimental-strip-types scripts/test-meta-campaign-draft-duplicate.mjs",
+    "test:meta-campaign-status-change": "node --experimental-strip-types scripts/test-meta-campaign-status-change.mjs",
     "test:success-control-rank": "node scripts/test-success-control-rank.mjs",
     "test:ad-sibling-success-pause": "node scripts/test-ad-sibling-success-pause.mjs",
     "test:meta-money": "node scripts/test-meta-money.mjs",
