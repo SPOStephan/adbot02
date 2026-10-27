@@ -194,8 +194,20 @@ begin
 
   select count(*) into v_steps from public.mutation_plan_steps
   where plan_id = v_plan.id;
-  if v_steps <> 4 then
-    raise exception 'Customer pause plan needs 4 steps, got %', v_steps;
+  if v_steps <> 3 then
+    raise exception 'Customer pause plan needs 3 steps, got %', v_steps;
+  end if;
+  -- Exactly one Meta write: no validate_only pre-call (Meta #613, 1 call/30 s).
+  if exists (
+    select 1 from public.mutation_plan_steps
+    where plan_id = v_plan.id and operation = 'VALIDATE'
+  ) or not exists (
+    select 1 from public.mutation_plan_steps
+    where plan_id = v_plan.id and step_index = 0 and operation = 'UPDATE'
+      and depends_on_step_id is null
+      and planned_request->>'mode' = 'execute'
+  ) then
+    raise exception 'Customer pause must send a single Meta write';
   end if;
 
   v_again := public.queue_meta_customer_campaign_status_change(

@@ -226,7 +226,8 @@ try {
       'from "@/lib/meta/creative-format-fresh-preflight";',
       'from "./creative-format-fresh-preflight.mjs";',
     )
-    .replace('from "./write-client";', 'from "./write-client.mjs";');
+    .replace('from "./write-client";', 'from "./write-client.mjs";')
+    .replace('from "./rate-limit-retry";', 'from "./rate-limit-retry.mjs";');
 
   assert.match(executorSource, /await input\.beforeRemote\(\)/);
   assert.match(executorSource, /remoteOutcome:.*"UNKNOWN"/s);
@@ -247,6 +248,10 @@ try {
     { path: "/api/cron/meta-executor", schedule: "* * * * *" },
   );
 
+  await writeFile(
+    join(temporaryDirectory, "rate-limit-retry.mjs"),
+    transpile(await readFile(source("src/lib/meta/rate-limit-retry.ts"), "utf8")),
+  );
   await writeFile(join(temporaryDirectory, "crypto.mjs"), transpile(cryptoSource));
   await writeFile(join(temporaryDirectory, "client.mjs"), transpile(clientSource));
   await writeFile(join(temporaryDirectory, "write-client.mjs"), transpile(writeClientSource));
@@ -615,6 +620,38 @@ export function needsMetaCreativeFreshPreflight(input){
     assert.equal(harness.failures[0].failure.errorClass, "RATE_LIMIT");
     assert.equal(harness.failures[0].failure.remoteOutcome, "NOT_APPLIED");
     assert.equal(harness.failures[0].failure.retryAfterSeconds, 321);
+  }
+
+  {
+    // Meta's per-object 30 s write limit retries after a minute, not 15.
+    globalThis.fetch = async () => jsonResponse(
+      {
+        error: {
+          message:
+            "(#613) Calls to this API have exceeded the concurrent request rate limit of 1 calls per 30 seconds.",
+          type: "OAuthException",
+          code: 613,
+        },
+      },
+      { status: 400 },
+    );
+    const update = step({
+      request: {
+        operation: "UPDATE_BUDGET",
+        mode: "validate_only",
+        object_id: "222222222",
+        budget_type: "daily_budget",
+        amount_minor: 11000,
+      },
+    });
+    const harness = dependenciesFor({ firstStep: update });
+    const result = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-concurrent-rate-limit",
+      dependencies: harness.dependencies,
+    });
+    assert.equal(result.outcome, "retryable");
+    assert.equal(harness.failures[0].failure.errorCode, "meta_rate_limit_613");
+    assert.equal(harness.failures[0].failure.retryAfterSeconds, 60);
   }
 
   {

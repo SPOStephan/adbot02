@@ -10,6 +10,10 @@ import { MetaGraphError, type MetaUsageSnapshot } from "./client";
 import { decryptAccessToken } from "./crypto";
 import { getMetaSyncEnv } from "./env";
 import {
+  isShortConcurrentRateLimit,
+  SHORT_CONCURRENT_RATE_LIMIT_RETRY_SECONDS,
+} from "./rate-limit-retry";
+import {
   isAutomatedPauseAction,
   isOrganicBoostRemoteObject,
 } from "@/lib/meta/organic-boost-pause-guard";
@@ -752,7 +756,10 @@ function classifyFailure(
       errorCode: graphErrorCode,
       errorDetail: error.diagnosticDetail,
       remoteOutcome: "NOT_APPLIED",
-      retryAfterSeconds: error.usage.retryAfterSeconds ?? (error.rateLimited ? 900 : 120),
+      retryAfterSeconds: error.usage.retryAfterSeconds
+        ?? (isShortConcurrentRateLimit(error.code, haystack)
+          ? SHORT_CONCURRENT_RATE_LIMIT_RETRY_SECONDS
+          : error.rateLimited ? 900 : 120),
     };
   }
 
