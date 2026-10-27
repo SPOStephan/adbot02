@@ -270,6 +270,7 @@ declare
   v_result jsonb;
   v_status text;
   v_claimed integer;
+  v_claim record;
 begin
   update public.automation_policies
   set allow_budget_changes = false
@@ -323,10 +324,17 @@ begin
     raise exception 'Claimable customer resume was not queued: %', v_result;
   end if;
 
-  select count(*) into v_claimed
+  select * into v_claim
   from public.claim_meta_mutation_execution(
     'status-test-worker', 60, (v_result->>'plan_id')::uuid
   );
+  v_claimed := case when v_claim.execution_id is null then 0 else 1 end;
+  if v_claimed = 1 then
+    -- The per-step dispatch gate right before the Meta request must agree.
+    perform public.begin_meta_mutation_step_dispatch(
+      v_claim.execution_id, v_claim.first_step_id, v_claim.lease_token
+    );
+  end if;
   select status into v_status from public.mutation_plans
   where id = (v_result->>'plan_id')::uuid;
   if v_claimed <> 1 then
@@ -364,6 +372,7 @@ do $$
 declare
   v_result jsonb;
   v_claimed integer;
+  v_claim record;
 begin
   perform public.append_meta_kill_switch_state(
     'ACCOUNT',
@@ -405,10 +414,17 @@ begin
   if v_result->>'outcome' <> 'CREATED' then
     raise exception 'Claimable customer resume after refreeze was not queued: %', v_result;
   end if;
-  select count(*) into v_claimed
+  select * into v_claim
   from public.claim_meta_mutation_execution(
     'status-test-worker', 60, (v_result->>'plan_id')::uuid
   );
+  v_claimed := case when v_claim.execution_id is null then 0 else 1 end;
+  if v_claimed = 1 then
+    -- The per-step dispatch gate right before the Meta request must agree.
+    perform public.begin_meta_mutation_step_dispatch(
+      v_claim.execution_id, v_claim.first_step_id, v_claim.lease_token
+    );
+  end if;
   if v_claimed <> 1 then
     raise exception 'Customer plan was not claimed under the launch refreeze';
   end if;
