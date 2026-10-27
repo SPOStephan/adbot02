@@ -1,5 +1,5 @@
 import { accountFunnelPath, preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
-import { Archive, Globe2, Loader2, Megaphone, MoreHorizontal, PlayCircle } from "lucide-react";
+import { Archive, Globe2, Loader2, Megaphone, MoreHorizontal, Pause, Play, PlayCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -176,6 +176,12 @@ function CampaignCard({ campaign, advertiserName, funnelTitle, defaultOpen }: { 
         </dl>
       </summary>
       <div className="border-t border-slate-200 bg-white p-4">
+        {campaign.autoPauseNote ? (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+            {campaign.autoPauseNote} Mit „Kampagne fortsetzen“ läuft sie wieder; Adbot pausiert sie danach mindestens 7 Tage nicht erneut.
+          </p>
+        ) : null}
+        <CampaignStatusButton campaign={campaign} />
         {campaign.cards.length === 0 ? (
           <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-600">Für diese Kampagne liegen noch keine Anzeigendaten vor. Sie erscheinen nach dem nächsten Abruf von Meta.</p>
         ) : (
@@ -192,6 +198,68 @@ function CampaignCard({ campaign, advertiserName, funnelTitle, defaultOpen }: { 
         )}
       </div>
     </details>
+  );
+}
+
+/** Pause for running, resume for paused Adbot campaigns; none for ended ones. */
+function statusTarget(campaign: PortalFunnelCampaign): "PAUSED" | "ACTIVE" | null {
+  if (!campaign.launchedByAdbot || !campaign.platformCampaignId) return null;
+  if (campaign.lifecycle === "active") return "PAUSED";
+  if (campaign.statusLabel === "Pausiert") return "ACTIVE";
+  return null;
+}
+
+function CampaignStatusButton({ campaign }: { campaign: PortalFunnelCampaign }) {
+  const utils = trpc.useUtils();
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const mutation = trpc.funnel.changeCampaignStatus.useMutation();
+  const target = statusTarget(campaign);
+  if (!target || !campaign.platformCampaignId) return null;
+  const pausing = target === "PAUSED";
+  const platformCampaignId = campaign.platformCampaignId;
+
+  async function changeStatus() {
+    const question = pausing
+      ? `„${campaign.displayName}“ bei Meta pausieren? Die Anzeigen laufen dann nicht mehr, bis du sie fortsetzt.`
+      : `„${campaign.displayName}“ bei Meta fortsetzen? Die Anzeigen laufen danach wieder mit dem bisherigen Budget.`;
+    if (!window.confirm(question)) return;
+    setNotice(null);
+    setError(null);
+    try {
+      const result = await mutation.mutateAsync({ platformCampaignId, status: target! });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setNotice(
+        result.status === "QUEUED"
+          ? "Die Änderung ist vorgemerkt und wird in Kürze an Meta übertragen."
+          : pausing ? "Die Kampagne ist pausiert." : "Die Kampagne läuft wieder.",
+      );
+      await utils.funnel.campaignOverview.invalidate();
+    } catch {
+      setError("Die Statusänderung ist fehlgeschlagen.");
+    }
+  }
+
+  const Icon = mutation.isPending ? Loader2 : pausing ? Pause : Play;
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={changeStatus}
+        disabled={mutation.isPending}
+        className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${pausing ? "border-amber-300 text-amber-800 hover:bg-amber-50" : "border-emerald-300 text-emerald-800 hover:bg-emerald-50"}`}
+      >
+        <Icon aria-hidden="true" className={mutation.isPending ? "size-4 animate-spin" : "size-4"} />
+        {mutation.isPending
+          ? pausing ? "Wird pausiert …" : "Wird fortgesetzt …"
+          : pausing ? "Kampagne pausieren" : "Kampagne fortsetzen"}
+      </button>
+      {notice ? <p className="mt-2 text-xs font-semibold text-emerald-700" role="status">{notice}</p> : null}
+      {error ? <p className="mt-2 text-xs font-semibold text-red-700" role="alert">{error}</p> : null}
+    </div>
   );
 }
 

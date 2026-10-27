@@ -81,7 +81,11 @@ import {
   pushFunnelCreativeHandoffToPortal,
   shouldPushPublishedFunnel,
 } from "../portalCreativeHandoff";
-import { loadPortalCampaignOverview, loadPortalCampaignStatuses } from "../portalCampaignStatus";
+import {
+  changePortalCampaignStatus,
+  loadPortalCampaignOverview,
+  loadPortalCampaignStatuses,
+} from "../portalCampaignStatus";
 import { listFunnelLibraryIcons, requestFunnelLibraryIcon } from "../funnelIconStore";
 import { requireCustomerHostnameHttps } from "../customDomainHttpsReady";
 import {
@@ -496,6 +500,22 @@ export const funnelRouter = router({
       return loadPortalCampaignOverview({
         ownerUserId,
         funnelUrls: input.funnelUrls,
+      });
+    }),
+
+  changeCampaignStatus: adminProcedure
+    .input(
+      z.object({
+        platformCampaignId: z.string().regex(/^[1-9]\d{0,39}$/),
+        status: z.enum(["PAUSED", "ACTIVE"]),
+      }),
+    )
+    .mutation(({ input, ctx }) => {
+      const ownerUserId = getTenantOwnerUserId(ctx.user) ?? ctx.user.openId;
+      return changePortalCampaignStatus({
+        ownerUserId,
+        platformCampaignId: input.platformCampaignId,
+        status: input.status,
       });
     }),
 

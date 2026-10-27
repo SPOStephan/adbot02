@@ -8,8 +8,13 @@ const TOKEN_TTL_SECONDS = 5 * 60;
 const PURPOSE = "funnel_campaign_status" as const;
 /** Separate purpose so a status token can never read the full ad overview. */
 export const FUNNEL_CAMPAIGN_OVERVIEW_PURPOSE = "funnel_campaign_overview" as const;
+/** Only this purpose may pause or resume a campaign from the Funnel admin. */
+export const FUNNEL_CAMPAIGN_STATUS_CHANGE_PURPOSE = "funnel_campaign_status_change" as const;
 
-type FunnelTokenPurpose = typeof PURPOSE | typeof FUNNEL_CAMPAIGN_OVERVIEW_PURPOSE;
+type FunnelTokenPurpose =
+  | typeof PURPOSE
+  | typeof FUNNEL_CAMPAIGN_OVERVIEW_PURPOSE
+  | typeof FUNNEL_CAMPAIGN_STATUS_CHANGE_PURPOSE;
 
 type FunnelCampaignStatusTokenPayload = {
   v: 1;

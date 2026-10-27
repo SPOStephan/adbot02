@@ -10,6 +10,7 @@ import { ENV } from "./_core/env";
 const TOKEN_TTL_SECONDS = 5 * 60;
 const PURPOSE = "funnel_campaign_status" as const;
 const OVERVIEW_PURPOSE = "funnel_campaign_overview" as const;
+const STATUS_CHANGE_PURPOSE = "funnel_campaign_status_change" as const;
 
 export type PortalFunnelCampaignStatus = {
   leadActive: boolean;
@@ -30,7 +31,7 @@ function portalBaseUrl(): string {
 export function createPortalCampaignStatusToken(input: {
   ownerUserId: string;
   now?: number;
-  purpose?: typeof PURPOSE | typeof OVERVIEW_PURPOSE;
+  purpose?: typeof PURPOSE | typeof OVERVIEW_PURPOSE | typeof STATUS_CHANGE_PURPOSE;
 }): string | null {
   const secret = ENV.funnelSsoSecret;
   if (secret.length < 32 || !/^[0-9a-f-]{36}$/i.test(input.ownerUserId)) return null;
@@ -127,5 +128,64 @@ export async function loadPortalCampaignOverview(input: {
     };
   } catch {
     return { ...empty, available: false };
+  }
+}
+
+export type PortalCampaignStatusChangeResult =
+  | { ok: true; status: "APPLIED" | "QUEUED" | "UNCHANGED" }
+  | { ok: false; message: string };
+
+/**
+ * Pauses or resumes an Adbot-launched campaign through the portal. Adbot
+ * checks ownership, Beitrag-Push exclusion and every write gate.
+ */
+export async function changePortalCampaignStatus(input: {
+  ownerUserId: string;
+  platformCampaignId: string;
+  status: "PAUSED" | "ACTIVE";
+  fetchImpl?: typeof fetch;
+}): Promise<PortalCampaignStatusChangeResult> {
+  const token = createPortalCampaignStatusToken({
+    ownerUserId: input.ownerUserId,
+    purpose: STATUS_CHANGE_PURPOSE,
+  });
+  if (!token) return { ok: false, message: "Die Verbindung zu Adbot ist nicht eingerichtet." };
+
+  try {
+    const response = await (input.fetchImpl ?? fetch)(
+      `${portalBaseUrl()}/api/internal/funnel-campaign-status-change`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          token,
+          platformCampaignId: input.platformCampaignId,
+          status: input.status,
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(55_000),
+      },
+    );
+    const body = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      status?: unknown;
+      message?: unknown;
+    };
+    if (
+      response.ok &&
+      body.ok === true &&
+      (body.status === "APPLIED" || body.status === "QUEUED" || body.status === "UNCHANGED")
+    ) {
+      return { ok: true, status: body.status };
+    }
+    return {
+      ok: false,
+      message:
+        typeof body.message === "string" && body.message
+          ? body.message
+          : "Die Statusänderung ist fehlgeschlagen.",
+    };
+  } catch {
+    return { ok: false, message: "Adbot war gerade nicht erreichbar. Bitte noch einmal versuchen." };
   }
 }
