@@ -976,7 +976,10 @@ export async function runMetaMutationExecutorOnce(input: {
         );
         if (needsMetaCreativeFreshPreflight({
           plannedPayload: claim.plannedPayload,
-          operation: requiredString(step.plannedRequest.operation),
+          // Status-plan reads (pause/resume) carry no request operation.
+          operation: typeof step.plannedRequest.operation === "string"
+            ? step.plannedRequest.operation
+            : "",
           objectType: step.objectType,
           stepOperation: step.operation,
           plannedRequest: step.plannedRequest,

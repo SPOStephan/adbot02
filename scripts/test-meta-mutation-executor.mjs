@@ -392,6 +392,80 @@ export function needsMetaCreativeFreshPreflight(input){
   }
 
   {
+    // Customer pause plan as queue_meta_campaign_status_plan_internal builds
+    // it: UPDATE, then a READ whose request carries no operation, RECONCILE.
+    const requests = [];
+    globalThis.fetch = async (input, init) => {
+      requests.push({ url: new URL(String(input)), init });
+      if (init.method === "GET") {
+        return jsonResponse({
+          id: "333333333",
+          account_id: "111111111",
+          status: "PAUSED",
+          effective_status: "PAUSED",
+        });
+      }
+      return jsonResponse({ success: true });
+    };
+    const update = step({
+      operation: "UPDATE",
+      objectType: "CAMPAIGN",
+      request: {
+        operation: "UPDATE_STATUS",
+        object_type: "CAMPAIGN",
+        object_id: "333333333",
+        status: "PAUSED",
+        mode: "execute",
+      },
+    });
+    const read = step({
+      id: IDS.step2,
+      index: 1,
+      operation: "READ",
+      objectType: "CAMPAIGN",
+      request: {
+        object_type: "CAMPAIGN",
+        object_id: "333333333",
+        fields: ["id", "status", "effective_status", "updated_time"],
+      },
+    });
+    const reconcile = step({
+      id: IDS.step3,
+      index: 2,
+      operation: "RECONCILE",
+      objectType: "CAMPAIGN",
+      request: {
+        expected_status: "PAUSED",
+        safety_action: false,
+        requested_by: "customer",
+      },
+    });
+    const harness = dependenciesFor({
+      firstStep: update,
+      nextSteps: [read, reconcile],
+      claimOverrides: {
+        actionType: "PAUSE",
+        targetType: "CAMPAIGN",
+        targetKey: "campaign:333333333",
+        plannedPayload: { contract: "meta_campaign_status_v1" },
+      },
+    });
+    const result = await executor.runMetaMutationExecutorOnce({
+      workerId: "test-worker-customer-pause",
+      dependencies: harness.dependencies,
+    });
+    assert.equal(harness.failures.length, 0, JSON.stringify(harness.failures));
+    assert.equal(result.outcome, "succeeded");
+    assert.equal(result.stepsProcessed, 3);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].init.method, "POST");
+    assert.equal(requests[0].init.body.get("status"), "PAUSED");
+    assert.equal(requests[0].init.body.has("execution_options"), false);
+    assert.equal(requests[1].init.method, "GET");
+    assert.equal(harness.snapshots[0].value.status, "PAUSED");
+  }
+
+  {
     let fetchCalls = 0;
     globalThis.fetch = async () => {
       fetchCalls += 1;
