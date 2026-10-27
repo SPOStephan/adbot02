@@ -6,6 +6,14 @@ const root = join(new URL("..", import.meta.url).pathname);
 const read = (path) => readFile(join(root, path), "utf8");
 
 const status = await import(join(root, "src/lib/meta/campaign-status-change.ts"));
+const rateLimit = await import(join(root, "src/lib/meta/rate-limit-retry.ts"));
+
+const concurrent613 =
+  "(#613) Calls to this API have exceeded the concurrent request rate limit of 1 calls per 30 seconds.";
+assert.equal(rateLimit.isShortConcurrentRateLimit(613, concurrent613.toLowerCase()), true);
+assert.equal(rateLimit.isShortConcurrentRateLimit(613, "(#613) Calls to this API have exceeded the rate limit."), false);
+assert.equal(rateLimit.isShortConcurrentRateLimit(17, concurrent613), false);
+assert.equal(rateLimit.SHORT_CONCURRENT_RATE_LIMIT_RETRY_SECONDS, 60);
 
 assert.deepEqual(
   status.parseCampaignStatusChangeRequest({ platformCampaignId: " 120201 ", status: "PAUSED" }),
