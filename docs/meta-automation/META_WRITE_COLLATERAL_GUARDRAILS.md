@@ -17,6 +17,7 @@ Wenn Beitrag-Push = **AUTO** und Account-Schreiben = **ALLOW**:
 7. Ein Executor-Lauf endet am Schrittlimit an einer sauberen Schrittgrenze (`yield_meta_mutation_execution`) und bleibt ohne Recovery-Sonderfall claimbar.
 8. Ein freigegebener Kundenstart mit bestehender Meta-Kampagne darf seine restlichen Writes auch in späteren Läufen senden (`meta_launch_resume_dispatch_ok`); eine Ablehnung *vor* dem Senden (`NOT_APPLIED`) macht ihn `RETRYABLE`, nie `FAILED`.
 9. Eine Kunden-Pause (Button „Kampagne pausieren“, `customer_status_change`) oder eine spätere manuelle Pause nach einem Hard-Cap-Day-Resume wird vom Hard-Cap-Day-Resume nicht überstimmt (`later_status_change_wins`). Beitrag-Push behält sein bisheriges Resume-Verhalten; der Button ist für Beitrag-Push gesperrt.
+10. Der Kunden-Button darf eine Adbot-Kampagne auch dann pausieren/fortsetzen, wenn ihr Campaign-Target `SUSPENDED` ist (Budget-Autonomie aus oder Kampagne unter Autonomie abgewählt). Diese Ausnahme gilt nur für `customer_status_change` PAUSE/ACTIVATE (Queue und Executor-Claim); Policy `allow_status_changes`, Kill-Switch ALLOW und Before-State bleiben Pflicht. Das Target bleibt `SUSPENDED`, automatische Regeln (`lead_underperformer_pause_v1`, Budget) brauchen weiter `MANAGED`.
 
 Vorfall 2026-09-28 (Vertrieb02): Lauf endete nach 24 Schritten direkt vor `activate-ad` (Plan mit 1/1 Attempts nicht mehr claimbar); nach Recovery fror der FAILED-Terminal eines Geschwister-Launches das ACCOUNT ein, 0,18 s später wurde Vertrieb02 `BLOCKED writes_frozen`. Anzeige blieb PAUSED.
 
