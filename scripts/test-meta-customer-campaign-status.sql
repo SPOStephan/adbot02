@@ -263,6 +263,94 @@ begin
 end;
 $$;
 
+-- Without budget autonomy the planner refresh suspends the launch target. The
+-- customer button must still pause/resume it; automatic rules must not.
+do $$
+declare
+  v_result jsonb;
+  v_status text;
+  v_claimed integer;
+begin
+  update public.automation_policies
+  set allow_budget_changes = false
+  where id = '84000000-0000-4000-8000-000000000001';
+  update public.automation_targets
+  set last_reconciled_at = now()
+  where id = '54000000-0000-4000-8000-000000000001';
+  select status into v_status from public.automation_targets
+  where id = '54000000-0000-4000-8000-000000000001';
+  if v_status <> 'SUSPENDED' then
+    raise exception 'Fixture target should be SUSPENDED, got %', v_status;
+  end if;
+
+  v_result := public.queue_meta_campaign_status_plan_internal(
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    '54000000-0000-4000-8000-000000000001',
+    'ACTIVE', 'lead_underperformer_pause_v1', '{}'::jsonb, 'SYSTEM', 'test', now()
+  );
+  if v_result->>'reason' is distinct from 'target_not_managed' then
+    raise exception 'Automatic rules must not use a SUSPENDED target: %', v_result;
+  end if;
+
+  v_result := public.queue_meta_customer_campaign_status_change(
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    '555555555501', 'ACTIVE'
+  );
+  if v_result->>'outcome' <> 'CREATED' then
+    raise exception 'Customer resume of a SUSPENDED target was not queued: %', v_result;
+  end if;
+
+  update public.mutation_plans
+  set status = 'CANCELLED', terminal_at = now(), updated_at = now()
+  where id = (v_result->>'plan_id')::uuid;
+
+  update public.platform_accounts
+  set access_token_encrypted = 'encrypted', token_iv = 'iv', token_auth_tag = 'tag'
+  where id = '24000000-0000-4000-8000-000000000001';
+
+  -- The RPC stamps the click time (clock_timestamp); queue a claimable copy
+  -- with a planned time inside this test transaction.
+  v_result := public.queue_meta_campaign_status_plan_internal(
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    '54000000-0000-4000-8000-000000000001',
+    'ACTIVE', 'customer_status_change', '{}'::jsonb, 'CUSTOMER', 'test',
+    now() - interval '1 second'
+  );
+  if v_result->>'outcome' <> 'CREATED' then
+    raise exception 'Claimable customer resume was not queued: %', v_result;
+  end if;
+
+  select count(*) into v_claimed
+  from public.claim_meta_mutation_execution(
+    'status-test-worker', 60, (v_result->>'plan_id')::uuid
+  );
+  select status into v_status from public.mutation_plans
+  where id = (v_result->>'plan_id')::uuid;
+  if v_claimed <> 1 then
+    raise exception 'Customer plan on a SUSPENDED target was not claimed (plan %)', v_status;
+  end if;
+
+  select status into v_status from public.automation_targets
+  where id = '54000000-0000-4000-8000-000000000001';
+  if v_status <> 'SUSPENDED' then
+    raise exception 'Customer status change must not re-manage the target: %', v_status;
+  end if;
+
+  update public.mutation_plans
+  set status = 'CANCELLED', terminal_at = now(), updated_at = now()
+  where id = (v_result->>'plan_id')::uuid;
+  update public.automation_policies
+  set allow_budget_changes = true
+  where id = '84000000-0000-4000-8000-000000000001';
+  update public.automation_targets
+  set last_reconciled_at = now()
+  where id = '54000000-0000-4000-8000-000000000001';
+end;
+$$;
+
 -- Hard-cap day-resume must not undo the customer pause above.
 insert into public.mutation_plans (
   id, user_id, platform_account_id, policy_id, source_marketing_sync_id,

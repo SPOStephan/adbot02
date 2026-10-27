@@ -28,7 +28,7 @@ const BLOCKED_MESSAGES: Record<string, string> = {
   not_adbot_launch:
     "Nur Kampagnen, die Adbot selbst gestartet hat, lassen sich hier pausieren. Beitrag-Push steuerst du in den Beitrag-Push-Einstellungen.",
   target_not_managed:
-    "Adbot steuert diese Kampagne gerade nicht. Schalte die Automatik unter Autonomie ein oder ändere den Status im Meta Werbeanzeigenmanager.",
+    "Adbot findet für diese Kampagne keine Zuordnung. Bitte einmal Meta-Daten abrufen und erneut versuchen.",
   policy_inactive:
     "Es gibt keine aktive Automatik-Freigabe für dieses Konto. Bitte die Freigabe unter Autonomie bestätigen.",
   status_changes_not_allowed:
