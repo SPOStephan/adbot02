@@ -339,6 +339,12 @@ begin
     raise exception 'Customer status change must not re-manage the target: %', v_status;
   end if;
 
+  -- Release the account write lease the test claim took.
+  update public.meta_account_operation_leases
+  set lease_kind = null, lease_token = null, owner_id = null,
+      acquired_at = null, expires_at = null, updated_at = now()
+  where platform_account_id = '24000000-0000-4000-8000-000000000001';
+
   update public.mutation_plans
   set status = 'CANCELLED', terminal_at = now(), updated_at = now()
   where id = (v_result->>'plan_id')::uuid;
@@ -351,6 +357,178 @@ begin
 end;
 $$;
 
+
+-- The automatic account refreeze after an accepted launch must not stop the
+-- customer button; a customer Not-Aus and automatic rules stay blocked.
+do $$
+declare
+  v_result jsonb;
+  v_claimed integer;
+begin
+  perform public.append_meta_kill_switch_state(
+    'ACCOUNT',
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    null, 'FREEZE_WRITES', 'Atomarer Aktiv-Launch hat alle Remote-Writes beendet',
+    'SYSTEM', 'meta-launch-canary-refreeze'
+  );
+
+  v_result := public.queue_meta_campaign_status_plan_internal(
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    '54000000-0000-4000-8000-000000000001',
+    'ACTIVE', 'lead_underperformer_pause_v1', '{}'::jsonb, 'SYSTEM', 'test', now()
+  );
+  if v_result->>'reason' is distinct from 'writes_frozen' then
+    raise exception 'Automatic rules must stay frozen after a launch: %', v_result;
+  end if;
+
+  v_result := public.queue_meta_customer_campaign_status_change(
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    '555555555501', 'ACTIVE'
+  );
+  if v_result->>'outcome' <> 'CREATED' then
+    raise exception 'Customer click must pass the launch refreeze: %', v_result;
+  end if;
+  update public.mutation_plans
+  set status = 'CANCELLED', terminal_at = now(), updated_at = now()
+  where id = (v_result->>'plan_id')::uuid;
+
+  v_result := public.queue_meta_campaign_status_plan_internal(
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    '54000000-0000-4000-8000-000000000001',
+    'ACTIVE', 'customer_status_change', '{}'::jsonb, 'CUSTOMER', 'test',
+    now() - interval '2 seconds'
+  );
+  if v_result->>'outcome' <> 'CREATED' then
+    raise exception 'Claimable customer resume after refreeze was not queued: %', v_result;
+  end if;
+  select count(*) into v_claimed
+  from public.claim_meta_mutation_execution(
+    'status-test-worker', 60, (v_result->>'plan_id')::uuid
+  );
+  if v_claimed <> 1 then
+    raise exception 'Customer plan was not claimed under the launch refreeze';
+  end if;
+  if (
+    select ks.mode from public.get_effective_meta_kill_switch(
+      '14000000-0000-4000-8000-000000000001',
+      '24000000-0000-4000-8000-000000000001', null
+    ) ks
+  ) <> 'FREEZE_WRITES' then
+    raise exception 'Customer click must not unfreeze the account';
+  end if;
+  update public.meta_account_operation_leases
+  set lease_kind = null, lease_token = null, owner_id = null,
+      acquired_at = null, expires_at = null, updated_at = now()
+  where platform_account_id = '24000000-0000-4000-8000-000000000001';
+  update public.mutation_plans
+  set status = 'CANCELLED', terminal_at = now(), updated_at = now()
+  where id = (v_result->>'plan_id')::uuid;
+
+  perform public.append_meta_kill_switch_state(
+    'ACCOUNT',
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    null, 'FREEZE_WRITES', 'Kunde hat Not-Aus gedrückt', 'CUSTOMER',
+    '14000000-0000-4000-8000-000000000001'
+  );
+  v_result := public.queue_meta_customer_campaign_status_change(
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    '555555555501', 'ACTIVE'
+  );
+  if v_result->>'reason' is distinct from 'writes_frozen' then
+    raise exception 'Customer Not-Aus must still block the button: %', v_result;
+  end if;
+
+  perform public.append_meta_kill_switch_state(
+    'ACCOUNT',
+    '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    null, 'ALLOW', 'Customer status regression fixture', 'OPERATOR', 'test'
+  );
+end;
+$$;
+
+-- After a launch the account returns to its pre-launch write gate state.
+do $$
+declare
+  v_round integer;
+  v_prior text;
+  v_plan_id uuid;
+  v_mode text;
+begin
+  for v_round in 1..2 loop
+    v_prior := case when v_round = 1 then 'ALLOW' else 'FREEZE_WRITES' end;
+    perform public.append_meta_kill_switch_state(
+      'ACCOUNT', '14000000-0000-4000-8000-000000000001',
+      '24000000-0000-4000-8000-000000000001', null, v_prior,
+      'Kunde hat den Schreibmodus gesetzt', 'CUSTOMER',
+      '14000000-0000-4000-8000-000000000001'
+    );
+    perform public.append_meta_kill_switch_state(
+      'ACCOUNT', '14000000-0000-4000-8000-000000000001',
+      '24000000-0000-4000-8000-000000000001', null, 'FREEZE_WRITES',
+      'Automatische Freeze-Phase für Kampagnen-Vorbereitung', 'CUSTOMER',
+      '14000000-0000-4000-8000-000000000001'
+    );
+    perform public.append_meta_kill_switch_state(
+      'ACCOUNT', '14000000-0000-4000-8000-000000000001',
+      '24000000-0000-4000-8000-000000000001', null, 'ALLOW',
+      'Exakt bestätigter atomarer Aktiv-Launch', 'CUSTOMER',
+      '14000000-0000-4000-8000-000000000001'
+    );
+    if public.meta_account_pre_launch_kill_mode(
+      '14000000-0000-4000-8000-000000000001',
+      '24000000-0000-4000-8000-000000000001'
+    ) is distinct from v_prior then
+      raise exception 'Pre-launch mode must be %', v_prior;
+    end if;
+
+    v_plan_id := gen_random_uuid();
+    insert into public.mutation_plans (
+      id, user_id, platform_account_id, policy_id, source_marketing_sync_id,
+      source_rule_key, source_rule_version, action_type, target_type, target_key,
+      idempotency_key, expected_before, intended_after, planned_payload,
+      payload_hash, status, created_at
+    ) values (
+      v_plan_id,
+      '14000000-0000-4000-8000-000000000001',
+      '24000000-0000-4000-8000-000000000001',
+      '84000000-0000-4000-8000-000000000001',
+      '34000000-0000-4000-8000-000000000001',
+      'active-launch-chain', 1, 'LAUNCH_CHAIN', 'CHAIN', 'launch:refreeze-' || v_round,
+      public.meta_sha256('refreeze-' || v_round), '{}'::jsonb, '{}'::jsonb,
+      '{}'::jsonb, public.meta_sha256('refreeze-payload-' || v_round),
+      'PENDING', now()
+    );
+    update public.mutation_plans
+    set status = 'SUCCEEDED', terminal_at = now(), updated_at = now()
+    where id = v_plan_id;
+
+    select kss.mode into v_mode
+    from public.kill_switch_state kss
+    where kss.scope_type = 'ACCOUNT'
+      and kss.platform_account_id = '24000000-0000-4000-8000-000000000001'
+    order by kss.sequence desc
+    limit 1;
+    if v_mode is distinct from (
+      case when v_round = 1 then 'ALLOW' else 'FREEZE_WRITES' end
+    ) then
+      raise exception 'Launch round % (prior %) left the account %', v_round, v_prior, v_mode;
+    end if;
+  end loop;
+
+  perform public.append_meta_kill_switch_state(
+    'ACCOUNT', '14000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001', null, 'ALLOW',
+    'Customer status regression fixture', 'OPERATOR', 'test'
+  );
+end;
+$$;
 -- Hard-cap day-resume must not undo the customer pause above.
 insert into public.mutation_plans (
   id, user_id, platform_account_id, policy_id, source_marketing_sync_id,
