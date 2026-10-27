@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  changePortalCampaignStatus,
   createPortalCampaignStatusToken,
   loadPortalCampaignOverview,
   loadPortalCampaignStatuses,
@@ -137,5 +138,44 @@ describe("portal campaign status", () => {
     await expect(
       loadPortalCampaignOverview({ ownerUserId: OWNER, funnelUrls: [FUNNEL_URL], fetchImpl: fetchMock }),
     ).resolves.toEqual({ available: false, advertiserName: null, campaigns: [] });
+  });
+
+  it("pausiert über das Portal mit eigenem Token-Zweck", async () => {
+    process.env.FUNNEL_SSO_SECRET = SECRET;
+    process.env.ADBOT_PORTAL_URL = "https://portal.test";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, status: "APPLIED" }), { status: 200 }),
+    );
+    await expect(
+      changePortalCampaignStatus({
+        ownerUserId: OWNER,
+        platformCampaignId: "120200001",
+        status: "PAUSED",
+        fetchImpl: fetchMock,
+      }),
+    ).resolves.toEqual({ ok: true, status: "APPLIED" });
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://portal.test/api/internal/funnel-campaign-status-change",
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1].body));
+    expect(body).toMatchObject({ platformCampaignId: "120200001", status: "PAUSED" });
+    const [encoded] = String(body.token).split(".");
+    const payload = JSON.parse(Buffer.from(encoded!, "base64url").toString("utf8"));
+    expect(payload.purpose).toBe("funnel_campaign_status_change");
+  });
+
+  it("gibt die Adbot-Meldung weiter, wenn die Änderung blockiert ist", async () => {
+    process.env.FUNNEL_SSO_SECRET = SECRET;
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: false, message: "Status ändern ist aus." }), { status: 409 }),
+    );
+    await expect(
+      changePortalCampaignStatus({
+        ownerUserId: OWNER,
+        platformCampaignId: "120200001",
+        status: "ACTIVE",
+        fetchImpl: fetchMock,
+      }),
+    ).resolves.toEqual({ ok: false, message: "Status ändern ist aus." });
   });
 });

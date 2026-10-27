@@ -80,4 +80,8 @@ const route = await read("src/app/api/meta/automation/campaign-status/route.ts")
 assert.match(route, /readControlJson/);
 assert.match(route, /authenticateMetaCustomer/);
 
+const funnelRoute = await read("src/app/api/internal/funnel-campaign-status-change/route.ts");
+assert.match(funnelRoute, /FUNNEL_CAMPAIGN_STATUS_CHANGE_PURPOSE/);
+assert.match(funnelRoute, /changeMetaCampaignStatus/);
+
 console.log("Meta campaign status change checks passed");

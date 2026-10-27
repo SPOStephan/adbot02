@@ -15,6 +15,11 @@ export type PortalCampaignAdCard = {
 
 export type PortalFunnelCampaign = {
   id: string;
+  /** Meta campaign id; used for Pausieren/Fortsetzen. */
+  platformCampaignId?: string;
+  launchedByAdbot?: boolean;
+  /** Why Adbot paused the campaign automatically, while it stays paused. */
+  autoPauseNote?: string | null;
   displayName: string;
   kind: "lead" | "traffic";
   lifecycle: "active" | "archived";
