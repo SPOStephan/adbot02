@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, normalizeBadgeBackground, patchStartBadge, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, buttonOverrideVars, resolveEyebrowBox, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
+import { badgeEditorBackground, badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, normalizeBadgeBackground, patchStartBadge, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, buttonOverrideVars, resolveEyebrowBox, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout, resolveStartTextAlign } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -177,6 +177,11 @@ describe("Startseiten-Layouts", () => {
     expect(resolveBadgeBorderWidth(12)).toBe(8);
     expect(resolveBadgeBorderWidth(2.6)).toBe(3);
     expect(normalizeBadgeBackground("Transparent")).toBe("transparent");
+    expect(badgeEditorBackground({ backgroundColor: "transparent" }, "#FFFFFF", "transparent")).toBe("#334155");
+    expect(badgeEditorBackground({ backgroundColor: "transparent" }, "#10253F", "transparent")).toBe("transparent");
+    expect(badgeEditorBackground({ backgroundColor: "#0165C3" }, "#FFFFFF", "#0165C3")).toBe("#0165C3");
+    expect(resolveStartTextAlign("left")).toBe("left");
+    expect(resolveStartTextAlign(undefined)).toBe("center");
     expect(normalizeBadgeBackground("#0165c3")).toBe("#0165C3");
     expect(normalizeBadgeBackground("rgba(0,0,0,0)")).toBe("");
     expect(moveStartBadge(start.badges, "badge-2", "badge-1").map(badge => badge.id)).toEqual(["badge-2", "badge-1"]);

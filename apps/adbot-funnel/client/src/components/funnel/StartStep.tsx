@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { copySizeCssVars, copySizeScale } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage, type StartRequirements } from "@shared/funnel";
-import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveStartLayout, buttonOverrideVars } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveStartLayout, startAlignClass, buttonOverrideVars } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -82,6 +82,7 @@ function BenefitsStartStep({
   // A gradient is painted by FunnelChrome across logo, progress and hero, so the hero stays transparent.
   const heroBackground = heroFill.solid;
   const eyebrowBox = resolveEyebrowBox(page.eyebrowBoxBackground, page.eyebrowBoxColor);
+  const headlineAlign = startAlignClass(page.headlineAlign);
 
   return (
     <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
@@ -106,11 +107,11 @@ function BenefitsStartStep({
               style={imageLayout === "wide" ? { "--hero-image-radius": `${imageRadius}px` } as CSSProperties : undefined}
             />
           ) : null}
-          {isPageEyebrowShown(page) && <FormattedText as="p" className={`funnel-start-benefits-kicker${eyebrowBox ? " is-boxed" : ""}`} style={eyebrowBox} value={page.eyebrow} />}
-          <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
-          {isPageSubtitleShown(page) && <FormattedText as="p" className="funnel-start-benefits-subtitle" value={page.subtitle} />}
+          {isPageEyebrowShown(page) && <FormattedText as="p" className={`funnel-start-benefits-kicker${eyebrowBox ? " is-boxed" : ""}${headlineAlign}`} style={eyebrowBox} value={page.eyebrow} />}
+          <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? headlineAlign.trim() || undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
+          {isPageSubtitleShown(page) && <FormattedText as="p" className={`funnel-start-benefits-subtitle${headlineAlign}`} value={page.subtitle} />}
           {(page.badges ?? []).length > 0 && (
-            <ul className="funnel-start-benefits-badges">
+            <ul className={`funnel-start-benefits-badges${startAlignClass(page.badgesAlign)}`}>
               {(page.badges ?? []).map(badge => {
                 const colors = resolveBadgeColors(badge, ink, brand?.accentColor);
                 return (
@@ -131,7 +132,7 @@ function BenefitsStartStep({
               })}
             </ul>
           )}
-          {isPageDescriptionShown(page) && <FormattedText as="p" className="funnel-start-benefits-lead" value={page.description} />}
+          {isPageDescriptionShown(page) && <FormattedText as="p" className={`funnel-start-benefits-lead${startAlignClass(page.descriptionAlign)}`} value={page.description} />}
           <button className="funnel-primary-button funnel-start-benefits-button" type="button" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor) as CSSProperties | undefined} onClick={onContinue}>
             {page.buttonLabel}
           </button>

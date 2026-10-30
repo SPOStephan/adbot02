@@ -289,6 +289,9 @@ export type StartBenefit = {
 
 export type StartBadgeIconPosition = "left" | "right";
 
+/** Horizontal alignment in the "benefits" start header. Undefined = centered (previous fixed look). */
+export type StartTextAlign = "center" | "left";
+
 export type StartRequirementsIconStyle = "filled" | "plain";
 
 export type StartRequirementItem = {
@@ -369,6 +372,10 @@ export type StartPage = FunnelPageBase & {
   eyebrowBoxColor: string;
   /** Empty = muted body text. Text color of the note under the header button. */
   trustNoteColor?: string;
+  /** Überzeile, Überschrift and Sub-Headline. */
+  headlineAlign?: StartTextAlign;
+  descriptionAlign?: StartTextAlign;
+  badgesAlign?: StartTextAlign;
   badges: StartBadge[];
   /** Missing on older funnels; treated as switched off. */
   requirements?: StartRequirements;
@@ -429,6 +436,8 @@ export type FunnelBrand = {
   buttonColor: string;
   /** Empty string picks white or dark ink depending on the button color. */
   buttonTextColor: string;
+  /** "SSL-verschlüsselt" top right. Empty string = muted body text. */
+  securityTextColor?: string;
 };
 
 export type FunnelProgressColors = {

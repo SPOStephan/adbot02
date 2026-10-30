@@ -26,7 +26,7 @@ import { clampCopySizeStep } from "@shared/copySize";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { normalizeFunnelLegal } from "@shared/legalPages";
 import { resolveStartRequirements } from "@shared/startRequirements";
-import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, normalizeBadgeBackground, resolveBadgeBorderWidth, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, normalizeBadgeBackground, resolveBadgeBorderWidth, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout, resolveStartTextAlign } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { snapshotApplicationAnswerLabels, snapshotApplicationQuestionLabels } from "@shared/applicationAnswers";
 import { snapshotApplicationContactLabels } from "@shared/contactFields";
@@ -200,6 +200,9 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         eyebrowBoxBackground?: string;
         eyebrowBoxColor?: string;
         trustNoteColor?: string;
+        headlineAlign?: string;
+        descriptionAlign?: string;
+        badgesAlign?: string;
         heroImageLayout?: string;
         heroImageRadius?: number;
         badges?: StartBadge[];
@@ -234,6 +237,9 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         eyebrowBoxBackground: optionalHex(startPage.eyebrowBoxBackground) || "",
         eyebrowBoxColor: optionalHex(startPage.eyebrowBoxColor) || "",
         trustNoteColor: optionalHex(startPage.trustNoteColor) || "",
+        headlineAlign: resolveStartTextAlign(startPage.headlineAlign),
+        descriptionAlign: resolveStartTextAlign(startPage.descriptionAlign),
+        badgesAlign: resolveStartTextAlign(startPage.badgesAlign),
         badges: Array.isArray(startPage.badges)
           ? startPage.badges.slice(0, MAX_START_BADGES).map(badge => ({
             id: badge.id || randomUUID(),

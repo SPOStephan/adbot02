@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { ArrowLeftRight, GripVertical, Trash2 } from "lucide-react";
 import type { StartBadge } from "@shared/funnel";
-import { badgeFromTemplate, emptyStartBadge, MAX_START_BADGES, moveStartBadge, patchStartBadge, MAX_BADGE_BORDER_WIDTH, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, START_BADGE_TEMPLATES } from "@shared/startLayout";
+import { badgeEditorBackground, badgeFromTemplate, emptyStartBadge, isLightColor, MAX_START_BADGES, moveStartBadge, patchStartBadge, MAX_BADGE_BORDER_WIDTH, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, START_BADGE_TEMPLATES } from "@shared/startLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,7 +78,7 @@ export function StartBadgesField({
               <li
                 key={badge.id}
                 className={`inline-flex max-w-full items-center gap-1 rounded-full border px-1 py-1 ${isDropTarget ? "ring-2 ring-[#0165c3]" : ""} ${isDragging ? "opacity-50" : ""} ${isEditing ? "ring-2 ring-slate-400" : ""}`}
-                style={{ background: colors.background, color: colors.text, borderColor: resolveBadgeBorderColor(badge, colors.text, "color-mix(in srgb, #10253f 14%, transparent)"), borderWidth: resolveBadgeBorderWidth(badge.borderWidth), "--badge-fg": colors.text } as CSSProperties}
+                style={{ background: badgeEditorBackground(badge, colors.text, colors.background), color: colors.text, borderColor: resolveBadgeBorderColor(badge, colors.text, "color-mix(in srgb, #10253f 14%, transparent)"), borderWidth: resolveBadgeBorderWidth(badge.borderWidth), "--badge-fg": colors.text } as CSSProperties}
                 onDragOver={event => {
                   if (!draggingId) return;
                   event.preventDefault();
@@ -164,7 +164,7 @@ export function StartBadgesField({
             <p className="text-xs text-muted-foreground">Übernimmt die Textfarbe des Badges. Standard links vom Text.</p>
             <IconPicker
               value={resolveBadgeIcon(editing.icon)}
-              color={resolveBadgeColors(editing, fallbackTextColor, brandColor).text}
+              color={readableOnWhite(resolveBadgeColors(editing, fallbackTextColor, brandColor).text)}
               allowEmpty
               emptyLabel="Kein Icon"
               onChange={icon => patch(editing.id, { icon })}
@@ -237,4 +237,9 @@ function defaultBorderHex(badge: StartBadge, fallbackTextColor: string, brandCol
   const colors = resolveBadgeColors(badge, fallbackTextColor, brandColor);
   const border = resolveBadgeBorderColor({ backgroundColor: badge.backgroundColor }, colors.text, "#E2E5EA");
   return border.startsWith("#") ? border : colors.text;
+}
+
+/** Icon tiles in the picker are white; light badge text is shown dark there so the icons stay visible. */
+function readableOnWhite(color: string): string {
+  return isLightColor(color) ? "#10253F" : color;
 }
