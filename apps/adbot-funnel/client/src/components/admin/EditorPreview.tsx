@@ -25,7 +25,7 @@ export function EditorPreview({ config, page }: { config: FunnelConfig; page: Fu
           Vorschau einer ausgeblendeten Seite – Besucher sehen sie nicht.
         </p>
       ) : null}
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} {...legalFooterLinks(config, { imprintUrl: `/f/${config.slug}/impressum`, privacyUrl: `/f/${config.slug}/datenschutz` })} step={step} totalSteps={visible.length} showProgress={!hidden} pages={visible} progress={config.progress} fullBleed={benefitsStart} topBackground={topFill.solid} topGradient={topFill.gradient}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} {...legalFooterLinks(config, { imprintUrl: `/f/${config.slug}/impressum`, privacyUrl: `/f/${config.slug}/datenschutz` })} step={step} totalSteps={visible.length} showProgress={!hidden} pages={visible} startPage={page.type === "start"} progress={config.progress} fullBleed={benefitsStart} topBackground={topFill.solid} topGradient={topFill.gradient}>
         {page.type === "start" ? (
           <StartStep page={page} brand={config.brand} onContinue={() => undefined} />
         ) : page.type === "choice-grid" || page.type === "choice-list" ? (

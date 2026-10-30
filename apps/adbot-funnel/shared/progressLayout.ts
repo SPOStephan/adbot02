@@ -204,20 +204,32 @@ export function resolveProgressSegments(
 }
 
 export function normalizeProgress(input?: Partial<FunnelProgress> | null): FunnelProgress {
-  const colors = input?.colors ?? EMPTY_PROGRESS_COLORS;
   return {
     layout: resolveProgressLayout(input?.layout),
-    colors: {
-      active: hexOrEmpty(colors.active),
-      completed: hexOrEmpty(colors.completed),
-      upcoming: hexOrEmpty(colors.upcoming),
-      text: hexOrEmpty(colors.text),
-      muted: hexOrEmpty(colors.muted),
-      track: hexOrEmpty(colors.track),
-    },
+    colors: normalizeProgressColors(input?.colors),
     stages: normalizeProgressStages(input?.stages),
     contentGapPx: clampProgressContentGapPx(input?.contentGapPx),
+    ...(input?.stepsColors ? { stepsColors: { enabled: input.stepsColors.enabled === true, ...normalizeProgressColors(input.stepsColors) } } : {}),
   };
+}
+
+function normalizeProgressColors(input?: Partial<FunnelProgressColors> | null): FunnelProgressColors {
+  const colors = input ?? EMPTY_PROGRESS_COLORS;
+  return {
+    active: hexOrEmpty(colors.active),
+    completed: hexOrEmpty(colors.completed),
+    upcoming: hexOrEmpty(colors.upcoming),
+    text: hexOrEmpty(colors.text),
+    muted: hexOrEmpty(colors.muted),
+    track: hexOrEmpty(colors.track),
+  };
+}
+
+/** Colors the progress bar uses on one page: the start page keeps `colors`, later pages may switch to `stepsColors`. */
+export function progressColorsForPage(progress: Pick<FunnelProgress, "colors" | "stepsColors">, isStartPage: boolean): FunnelProgressColors {
+  if (isStartPage || !progress.stepsColors?.enabled) return progress.colors;
+  const { enabled: _enabled, ...colors } = progress.stepsColors;
+  return colors;
 }
 
 export function normalizeProgressStages(input?: FunnelProgressStage[] | null): FunnelProgressStage[] {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { FUNNEL_PURPOSES } from "./funnelPurpose";
-import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, LEGAL_PAGE_MODES, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
+import { BENEFITS_TILE_GAPS, BENEFITS_TILE_LAYOUTS, FUNNEL_STATUSES, HERO_IMAGE_LAYOUTS, LEGAL_PAGE_MODES, LOGO_TINTS, META_CONVERSION_TRIGGERS, PAGE_TYPES, PROGRESS_LAYOUTS, START_PAGE_LAYOUTS } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
 import { notificationEmailsAreValid } from "./notificationEmails";
@@ -221,6 +221,15 @@ export const funnelConfigSchema = z
         startPageId: z.string().min(1).max(80),
       })).max(6).default([]),
       contentGapPx: z.number().int().min(MIN_PROGRESS_CONTENT_GAP_PX).max(MAX_PROGRESS_CONTENT_GAP_PX).default(DEFAULT_PROGRESS_CONTENT_GAP_PX),
+      stepsColors: z.object({
+        enabled: z.boolean().default(false),
+        active: optionalHexColorSchema.default(""),
+        completed: optionalHexColorSchema.default(""),
+        upcoming: optionalHexColorSchema.default(""),
+        text: optionalHexColorSchema.default(""),
+        muted: optionalHexColorSchema.default(""),
+        track: optionalHexColorSchema.default(""),
+      }).optional(),
     }).default({ layout: DEFAULT_PROGRESS_LAYOUT, colors: EMPTY_PROGRESS_COLORS, stages: [], contentGapPx: DEFAULT_PROGRESS_CONTENT_GAP_PX }),
     brand: z.object({
       logoUrl: z.string().max(2048).refine(value => value === "" || value.startsWith("/") || /^https?:\/\//i.test(value), "Logo muss eine HTTPS-/HTTP- oder interne URL sein."),
@@ -238,6 +247,13 @@ export const funnelConfigSchema = z
       buttonColor: optionalHexColorSchema.default(""),
       buttonTextColor: optionalHexColorSchema.default(""),
       securityTextColor: optionalHexColorSchema.default(""),
+      logoTint: z.enum(LOGO_TINTS).optional(),
+      stepsHeader: z.object({
+        enabled: z.boolean().default(false),
+        logoUrl: z.string().max(2048).refine(value => value === "" || value.startsWith("/") || /^https?:\/\//i.test(value), "Logo muss eine HTTPS-/HTTP- oder interne URL sein.").default(""),
+        logoTint: z.enum(LOGO_TINTS).default("original"),
+        securityTextColor: optionalHexColorSchema.default(""),
+      }).optional(),
     }),
     socialProof: z.object({
       enabled: z.boolean(),

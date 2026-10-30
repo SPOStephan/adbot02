@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type PropsWithChildren } from "react";
 import type { FunnelBrand, FunnelConfig, FunnelSocialProof } from "@shared/funnel";
-import { DEFAULT_PROGRESS } from "@shared/progressLayout";
+import { isStartPageStep, logoTintFilter, resolveFunnelHeader } from "@shared/funnelHeader";
+import { DEFAULT_PROGRESS, progressColorsForPage } from "@shared/progressLayout";
 import { resolveButtonColors } from "@shared/startLayout";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { FunnelProgress } from "./FunnelProgress";
@@ -23,6 +24,8 @@ type FunnelChromeProps = PropsWithChildren<{
   /** Optional CSS gradient spanning logo, progress and the start hero as one surface. */
   topGradient?: string;
   pages?: FunnelConfig["pages"];
+  /** Overrides the start-page detection from pages[step] (editor preview of hidden pages). */
+  startPage?: boolean;
   progress?: FunnelConfig["progress"];
   onBack?: () => void;
   onForward?: () => void;
@@ -43,12 +46,17 @@ export function FunnelChrome({
   topBackground,
   topGradient,
   pages,
+  startPage,
   progress,
   onBack,
   onForward,
   children,
 }: FunnelChromeProps) {
   const button = resolveButtonColors(brand);
+  const isStartPage = startPage ?? isStartPageStep(pages, step);
+  const header = resolveFunnelHeader(brand, isStartPage);
+  const logoFilter = logoTintFilter(header.logoTint);
+  const pageProgress = progress ?? DEFAULT_PROGRESS;
   const brandStyle = {
     backgroundColor: brand.backgroundColor,
     color: brand.textColor,
@@ -72,8 +80,8 @@ export function FunnelChrome({
     <>
       <header className="funnel-header" aria-label="Funnel-Kopfbereich">
         <div className="funnel-logo-wrap">
-          {brand.logoUrl ? (
-            <img className="funnel-logo" src={brand.logoUrl} alt={brand.logoAlt} />
+          {header.logoUrl ? (
+            <img className="funnel-logo" src={header.logoUrl} alt={brand.logoAlt} style={logoFilter ? { filter: logoFilter } : undefined} />
           ) : (
             <div className="funnel-wordmark" aria-label={brand.logoAlt}>
               <span className="funnel-wordmark-mark">ME</span>
@@ -81,13 +89,13 @@ export function FunnelChrome({
             </div>
           )}
         </div>
-        <div className="funnel-security" style={brand.securityTextColor ? { color: brand.securityTextColor } : undefined}><LockKeyhole size={14} /> SSL-verschlüsselt</div>
+        <div className="funnel-security" style={header.securityTextColor ? { color: header.securityTextColor } : undefined}><LockKeyhole size={14} /> SSL-verschlüsselt</div>
       </header>
 
       {showProgress && pages ? (
         <FunnelProgress
           brand={brand}
-          progress={progress ?? DEFAULT_PROGRESS}
+          progress={{ ...pageProgress, colors: progressColorsForPage(pageProgress, isStartPage) }}
           pages={pages}
           step={step}
           onBack={onBack}
