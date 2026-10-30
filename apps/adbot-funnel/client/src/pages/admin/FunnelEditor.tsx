@@ -9,7 +9,7 @@ import { createEditorSaveController } from "@/lib/editorSave";
 import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, postalCodeMaxLength, type ContactFieldPresetKey } from "@shared/contactFields";
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, EMPTY_PROGRESS_COLORS, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
-import { EMPTY_STEPS_HEADER } from "@shared/funnelHeader";
+import { DEFAULT_SECURITY_TEXT, EMPTY_STEPS_HEADER, MAX_SECURITY_TEXT, resolveSecurityIcon } from "@shared/funnelHeader";
 import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, MAX_BUTTON_RADIUS, resolveButtonColors, resolveButtonRadius, resolveStartLayout } from "@shared/startLayout";
 import { resolveStartRequirements } from "@shared/startRequirements";
 import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
@@ -535,8 +535,8 @@ export default function FunnelEditor() {
                 <div><p className="text-sm font-bold">Grundfarben</p><p className="text-xs text-muted-foreground">Hintergrund und Text des gesamten Funnels.</p></div>
                 <FormRow label="Akzentfarbe" hint="Verbindliche Markenfarbe für Fortschritt und Akzente; Buttons nutzen sie, solange unten keine eigene Button-Farbe gesetzt ist."><div className="flex items-center gap-3"><span className="size-10 rounded-xl border shadow-sm" style={{ background: "#0165c3" }} /><Input value="#0165c3" readOnly /></div></FormRow>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><BrandColorField label="Hintergrund" value={config.brand.backgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, backgroundColor: value } }))} /><BrandColorField label="Textfarbe" value={config.brand.textColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, textColor: value } }))} /></div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><OptionalStartColor label="„SSL-verschlüsselt“ – Textfarbe" value={config.brand.securityTextColor ?? ""} fallback={config.brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe. Hinweis oben rechts neben dem Logo." onChange={securityTextColor => changeConfig(current => ({ ...current, brand: { ...current.brand, securityTextColor } }))} /></div>
               </div>
+              <SecurityNoteSettings config={config} changeConfig={changeConfig} />
               <div className="grid gap-4 rounded-2xl border p-4">
                 <div><p className="text-sm font-bold">Buttons</p><p className="text-xs text-muted-foreground">Farbe der Haupt-Buttons (z. B. „Jetzt rausfinden“), unabhängig vom Fortschrittsbalken. Leer = Akzentfarbe wie bisher.</p></div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><OptionalStartColor label="Button-Farbe" value={config.brand.buttonColor} fallback={resolveButtonColors(config.brand).background} emptyHint="Leer = Akzentfarbe (wie Fortschrittsbalken)." onChange={buttonColor => changeConfig(current => ({ ...current, brand: { ...current.brand, buttonColor } }))} /><OptionalStartColor label="Button-Schriftfarbe" value={config.brand.buttonTextColor} fallback={resolveButtonColors(config.brand).text} emptyHint="Leer = automatisch Weiß oder Dunkel, passend zur Button-Farbe." onChange={buttonTextColor => changeConfig(current => ({ ...current, brand: { ...current.brand, buttonTextColor } }))} /></div>
@@ -949,6 +949,38 @@ function ProgressColorFields({
   );
 }
 
+function SecurityNoteSettings({
+  config,
+  changeConfig,
+}: {
+  config: FunnelConfig;
+  changeConfig: (updater: (current: FunnelConfig) => FunnelConfig, immediate?: boolean) => void;
+}) {
+  const brand = config.brand;
+  const patch = (value: Partial<FunnelConfig["brand"]>, immediate = true) => changeConfig(current => ({ ...current, brand: { ...current.brand, ...value } }), immediate);
+  const text = brand.securityText ?? DEFAULT_SECURITY_TEXT;
+  const icon = resolveSecurityIcon(brand.securityIcon);
+  const textColor = brand.securityTextColor ?? "";
+  return (
+    <div className="grid gap-4 rounded-2xl border p-4">
+      <div><p className="text-sm font-bold">Hinweis oben rechts</p><p className="text-xs text-muted-foreground">Standard: Schloss-Icon und „{DEFAULT_SECURITY_TEXT}“ neben dem Logo. Text und Icon lassen sich einzeln ändern oder ausblenden. Farben ab Seite 2 stellen Sie unter „Anderes Logo ab Seite 2“ ein.</p></div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormRow label="Text" hint={`Leer = kein Text, nur das Icon. Maximal ${MAX_SECURITY_TEXT} Zeichen.`}>
+          <div className="flex gap-2">
+            <Input value={text} maxLength={MAX_SECURITY_TEXT} placeholder="Kein Text" onChange={event => patch({ securityText: event.target.value }, false)} />
+            {text !== DEFAULT_SECURITY_TEXT ? <Button type="button" size="sm" variant="ghost" onClick={() => patch({ securityText: undefined })}>Standard</Button> : null}
+          </div>
+        </FormRow>
+        <FormRow label="Icon" hint="„Kein Icon“ blendet es aus.">
+          <IconPicker value={icon} allowEmpty emptyLabel="Kein Icon" color={brand.securityIconColor || textColor || brand.textColor} onChange={securityIcon => patch({ securityIcon })} />
+        </FormRow>
+        <OptionalStartColor label="Textfarbe" value={textColor} fallback={brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe." onChange={securityTextColor => patch({ securityTextColor })} />
+        <OptionalStartColor label="Icon-Farbe" value={brand.securityIconColor ?? ""} fallback={textColor || brand.textColor} emptyHint="Leer = wie die Textfarbe." onChange={securityIconColor => patch({ securityIconColor })} />
+      </div>
+    </div>
+  );
+}
+
 function StepsHeaderSettings({
   config,
   changeConfig,
@@ -989,7 +1021,8 @@ function StepsHeaderSettings({
               <Input value={steps.logoUrl} placeholder="Leer = Logo der Startseite" onChange={event => patch({ logoUrl: event.target.value }, false)} />
             </FormRow>
             <LogoTintPicker label="Logo-Farbe ab Seite 2" value={steps.logoTint} onChange={logoTint => patch({ logoTint })} />
-            <OptionalStartColor label="„SSL-verschlüsselt“ ab Seite 2" value={steps.securityTextColor} fallback={config.brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe." onChange={securityTextColor => patch({ securityTextColor })} />
+            <OptionalStartColor label="Hinweis oben rechts ab Seite 2 – Textfarbe" value={steps.securityTextColor} fallback={config.brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe." onChange={securityTextColor => patch({ securityTextColor })} />
+            <OptionalStartColor label="Hinweis oben rechts ab Seite 2 – Icon-Farbe" value={steps.securityIconColor ?? ""} fallback={steps.securityTextColor || config.brand.textColor} emptyHint="Leer = wie die Textfarbe." onChange={securityIconColor => patch({ securityIconColor })} />
           </div>
         </div>
       ) : null}

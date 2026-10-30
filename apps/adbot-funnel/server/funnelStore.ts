@@ -23,7 +23,7 @@ import type {
   StartPage,
 } from "@shared/funnel";
 import { clampCopySizeStep } from "@shared/copySize";
-import { normalizeStepsHeader, resolveLogoTint } from "@shared/funnelHeader";
+import { DEFAULT_SECURITY_ICON, normalizeStepsHeader, resolveLogoTint, resolveSecurityIcon, resolveSecurityText } from "@shared/funnelHeader";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { normalizeFunnelLegal } from "@shared/legalPages";
 import { resolveStartRequirements } from "@shared/startRequirements";
@@ -295,6 +295,12 @@ function normalizeBrand(brand?: Partial<FunnelBrand>): FunnelBrand {
   const merged = { ...defaultFunnel.brand, ...(brand ?? {}) } as FunnelBrand;
   if (merged.logoTint !== undefined) merged.logoTint = resolveLogoTint(merged.logoTint);
   if (merged.stepsHeader !== undefined) merged.stepsHeader = normalizeStepsHeader(merged.stepsHeader);
+  if (merged.securityText !== undefined) merged.securityText = resolveSecurityText(merged.securityText);
+  if (merged.securityIcon !== undefined) {
+    const icon = resolveSecurityIcon(merged.securityIcon);
+    merged.securityIcon = icon === "" || isSelectableFunnelIcon(icon) ? icon : DEFAULT_SECURITY_ICON;
+  }
+  if (merged.securityIconColor !== undefined) merged.securityIconColor = /^#[0-9a-fA-F]{6}$/.test(String(merged.securityIconColor)) ? merged.securityIconColor : "";
   return merged;
 }
 

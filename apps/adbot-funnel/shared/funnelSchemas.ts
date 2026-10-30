@@ -6,6 +6,7 @@ import { sanitizeFormattedText, stripFormattedText } from "./formattedText";
 import { notificationEmailsAreValid } from "./notificationEmails";
 import { CONTACT_FIELD_KEY_PATTERN, CONTACT_FIELD_MAX_LENGTH, CONTACT_MESSAGE_MAX_LENGTH, MAX_CONTACT_FIELDS } from "./contactFields";
 import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
+import { MAX_SECURITY_TEXT } from "./funnelHeader";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
 import { MAX_REQUIREMENTS_SIDE_PADDING, MAX_START_REQUIREMENT_TEXT, MAX_START_REQUIREMENTS } from "./startRequirements";
 import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_BADGE_BORDER_WIDTH, MAX_BUTTON_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
@@ -247,12 +248,16 @@ export const funnelConfigSchema = z
       buttonColor: optionalHexColorSchema.default(""),
       buttonTextColor: optionalHexColorSchema.default(""),
       securityTextColor: optionalHexColorSchema.default(""),
+      securityText: z.string().max(MAX_SECURITY_TEXT).optional(),
+      securityIcon: z.string().max(80).refine(value => value === "" || isSelectableFunnelIcon(value), "Unbekanntes Icon.").optional(),
+      securityIconColor: optionalHexColorSchema.optional(),
       logoTint: z.enum(LOGO_TINTS).optional(),
       stepsHeader: z.object({
         enabled: z.boolean().default(false),
         logoUrl: z.string().max(2048).refine(value => value === "" || value.startsWith("/") || /^https?:\/\//i.test(value), "Logo muss eine HTTPS-/HTTP- oder interne URL sein.").default(""),
         logoTint: z.enum(LOGO_TINTS).default("original"),
         securityTextColor: optionalHexColorSchema.default(""),
+        securityIconColor: optionalHexColorSchema.optional(),
       }).optional(),
     }),
     socialProof: z.object({

@@ -50,6 +50,7 @@ export const LUCIDE_FUNNEL_ICONS = [
   "laptop",
   "leaf",
   "lightbulb",
+  "lock",
   "mail",
   "map-pin",
   "message-circle",
@@ -134,6 +135,7 @@ export const FUNNEL_OPTION_ICON_LABELS: Record<FunnelOptionIcon, string> = {
   laptop: "Laptop",
   leaf: "Nachhaltigkeit",
   lightbulb: "Idee",
+  lock: "Schloss",
   mail: "E-Mail",
   "map-pin": "Standort",
   "message-circle": "Nachricht",
@@ -446,6 +448,12 @@ export type FunnelBrand = {
   buttonTextColor: string;
   /** "SSL-verschlüsselt" top right. Empty string = muted body text. */
   securityTextColor?: string;
+  /** Note top right. Missing = "SSL-verschlüsselt", empty string hides the text. */
+  securityText?: string;
+  /** Catalog icon before the note. Missing = lock, empty string hides the icon. */
+  securityIcon?: string;
+  /** Empty or missing = same color as the note text. */
+  securityIconColor?: string;
   /** Recolors the logo image. Missing = original colors. */
   logoTint?: LogoTint;
   /** Logo and header on every page after the start page. Missing or disabled = same as the start page. */
@@ -462,6 +470,8 @@ export type FunnelStepsHeader = {
   logoTint: LogoTint;
   /** Empty = muted body text. */
   securityTextColor: string;
+  /** Empty = same color as the note text. Missing on funnels saved before it existed. */
+  securityIconColor?: string;
 };
 
 export type FunnelProgressColors = {

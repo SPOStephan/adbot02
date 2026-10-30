@@ -6,7 +6,22 @@ export const EMPTY_STEPS_HEADER: FunnelStepsHeader = {
   logoUrl: "",
   logoTint: "original",
   securityTextColor: "",
+  securityIconColor: "",
 };
+
+export const DEFAULT_SECURITY_TEXT = "SSL-verschlüsselt";
+export const DEFAULT_SECURITY_ICON = "lock";
+export const MAX_SECURITY_TEXT = 60;
+
+/** Missing = the default note, an explicitly empty string hides it. */
+export function resolveSecurityText(value?: string | null): string {
+  return typeof value === "string" ? value.trim().slice(0, MAX_SECURITY_TEXT) : DEFAULT_SECURITY_TEXT;
+}
+
+/** Missing = lock, an explicitly empty string hides the icon. */
+export function resolveSecurityIcon(value?: string | null): string {
+  return typeof value === "string" ? value.trim() : DEFAULT_SECURITY_ICON;
+}
 
 export const LOGO_TINT_META: Array<{ id: LogoTint; title: string; description: string }> = [
   { id: "original", title: "Original", description: "Logo wie hochgeladen." },
@@ -34,8 +49,13 @@ export function normalizeStepsHeader(input?: Partial<FunnelStepsHeader> | null):
     enabled: input?.enabled === true,
     logoUrl: typeof input?.logoUrl === "string" ? input.logoUrl.trim().slice(0, 2048) : "",
     logoTint: resolveLogoTint(input?.logoTint),
-    securityTextColor: typeof input?.securityTextColor === "string" && /^#[0-9a-fA-F]{6}$/.test(input.securityTextColor) ? input.securityTextColor : "",
+    securityTextColor: hexOrEmpty(input?.securityTextColor),
+    securityIconColor: hexOrEmpty(input?.securityIconColor),
   };
+}
+
+function hexOrEmpty(value: unknown): string {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "";
 }
 
 /** The page of type "start" uses the start settings; legal pages and all later steps use the follow-up settings. */
@@ -46,7 +66,11 @@ export function isStartPageStep(pages: Pick<FunnelPage, "type">[] | undefined, s
 export type ResolvedFunnelHeader = {
   logoUrl: string;
   logoTint: LogoTint;
+  securityText: string;
+  securityIcon: string;
   securityTextColor: string;
+  /** Empty = inherits the text color. */
+  securityIconColor: string;
 };
 
 /** Logo and "SSL-verschlüsselt" for one page. Without enabled follow-up settings every page looks like the start page. */
@@ -54,13 +78,18 @@ export function resolveFunnelHeader(brand: FunnelBrand, isStartPage: boolean): R
   const start: ResolvedFunnelHeader = {
     logoUrl: brand.logoUrl,
     logoTint: resolveLogoTint(brand.logoTint),
+    securityText: resolveSecurityText(brand.securityText),
+    securityIcon: resolveSecurityIcon(brand.securityIcon),
     securityTextColor: brand.securityTextColor ?? "",
+    securityIconColor: brand.securityIconColor ?? "",
   };
   const steps = brand.stepsHeader;
   if (isStartPage || !steps?.enabled) return start;
   return {
+    ...start,
     logoUrl: steps.logoUrl || brand.logoUrl,
     logoTint: resolveLogoTint(steps.logoTint),
     securityTextColor: steps.securityTextColor ?? "",
+    securityIconColor: steps.securityIconColor ?? "",
   };
 }
