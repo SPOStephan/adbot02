@@ -319,6 +319,10 @@ export type StartPage = FunnelPageBase & {
   benefitsCardBackground: string;
   /** Empty = brand background. Colors everything above the Vorteile band. */
   heroSectionBackground: string;
+  /** Empty = solid heroSectionBackground. Otherwise the top area fades from heroSectionBackground to this color. */
+  heroSectionBackgroundEnd: string;
+  /** Optional middle gradient stop at 40 %. Ignored without heroSectionBackgroundEnd. */
+  heroSectionBackgroundMid: string;
   badges: StartBadge[];
   heroBackgroundAssetId: string;
   heroBackgroundDesktopUrl: string;

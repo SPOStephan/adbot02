@@ -96,6 +96,25 @@ export function customHeroSectionBackground(value?: string | null): string | und
   return optionalStartHex(value) || undefined;
 }
 
+export const HERO_GRADIENT_ANGLE = 170;
+export const HERO_GRADIENT_MID_STOP = 40;
+
+/**
+ * Fill for the area above the Vorteile band (logo, progress and hero).
+ * solid = one color per element; gradient = one linear gradient spanning the whole area,
+ * slightly tilted (lightest top right) with an optional middle stop at 40 %.
+ * Without a valid start color nothing is custom (canvas color stays visible).
+ */
+export function customHeroSectionFill(start?: string | null, end?: string | null, mid?: string | null): { solid?: string; gradient?: string } {
+  const from = optionalStartHex(start);
+  if (!from) return {};
+  const to = optionalStartHex(end);
+  if (!to) return { solid: from };
+  const middle = optionalStartHex(mid);
+  const stops = [`${from} 0%`, ...(middle ? [`${middle} ${HERO_GRADIENT_MID_STOP}%`] : []), `${to} 100%`];
+  return { gradient: `linear-gradient(${HERO_GRADIENT_ANGLE}deg, ${stops.join(", ")})` };
+}
+
 export function resolveBenefitsCardBackground(value?: string | null): string {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
     ? value.toUpperCase()

@@ -9,7 +9,7 @@ import { getBrowserHostname } from "@/lib/funnelHost";
 import { visibleFunnelPages, type ApplicationContact, type FunnelAnswers, type FunnelConfig } from "@shared/funnel";
 import { funnelPurposeOption } from "@shared/funnelPurpose";
 import { legalFooterLinks } from "@shared/legalPages";
-import { customHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
+import { customHeroSectionFill, resolveStartLayout } from "@shared/startLayout";
 import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
 import { ChoiceStep } from "@/components/funnel/ChoiceStep";
@@ -143,11 +143,14 @@ function FunnelView({
     }, onError: error => setValidationError(error.message) });
   };
 
+  const benefitsStart = !submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits";
+  const topFill = benefitsStart && currentPage?.type === "start" ? customHeroSectionFill(currentPage.heroSectionBackground, currentPage.heroSectionBackgroundEnd, currentPage.heroSectionBackgroundMid) : {};
+
   return (
     <div ref={topRef}>
       <FunnelLibraryIconSync />
       <EmbedHeightReporter />
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} {...legalFooterLinks(config, paths)} step={step} totalSteps={pages.length} showProgress={!submitted} pages={pages} progress={config.progress} onBack={back} onForward={next} fullBleed={!submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits"} topBackground={!submitted && currentPage?.type === "start" && resolveStartLayout(currentPage) === "benefits" ? customHeroSectionBackground(currentPage.heroSectionBackground) : undefined}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} {...legalFooterLinks(config, paths)} step={step} totalSteps={pages.length} showProgress={!submitted} pages={pages} progress={config.progress} onBack={back} onForward={next} fullBleed={benefitsStart} topBackground={topFill.solid} topGradient={topFill.gradient}>
         {submitted && contactPage?.type === "contact" ? (
           <section className="funnel-success" aria-live="polite" aria-labelledby="funnel-success-title"><span className="funnel-success-icon" aria-hidden="true"><CircleCheckBig /></span><p className="funnel-eyebrow">Erfolgreich übermittelt</p><FormattedText as="h1" id="funnel-success-title" tabIndex={-1} value={contactPage.successTitle} /><FormattedText as="p" value={contactPage.successText} /></section>
         ) : currentPage?.type === "start" ? (

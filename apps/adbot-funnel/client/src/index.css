@@ -542,6 +542,8 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
   }
   .funnel-start-top { display: grid; }
+  .funnel-canvas-benefits { position: relative; isolation: isolate; }
+  .funnel-top-gradient { position: absolute; inset: 0 0 auto; z-index: -1; pointer-events: none; }
   .funnel-canvas-benefits .funnel-main {
     width: 100%;
     max-width: none;
