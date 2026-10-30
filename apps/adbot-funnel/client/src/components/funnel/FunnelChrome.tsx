@@ -1,9 +1,10 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type PropsWithChildren } from "react";
 import type { FunnelBrand, FunnelConfig, FunnelSocialProof } from "@shared/funnel";
-import { isStartPageStep, logoTintFilter, resolveFunnelHeader } from "@shared/funnelHeader";
+import { DEFAULT_SECURITY_ICON, isStartPageStep, logoTintFilter, resolveFunnelHeader } from "@shared/funnelHeader";
 import { DEFAULT_PROGRESS, progressColorsForPage } from "@shared/progressLayout";
 import { resolveButtonColors } from "@shared/startLayout";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { FunnelIcon } from "./FunnelIcon";
 import { FunnelProgress } from "./FunnelProgress";
 import { FormattedText } from "./FormattedText";
 
@@ -89,7 +90,16 @@ export function FunnelChrome({
             </div>
           )}
         </div>
-        <div className="funnel-security" style={header.securityTextColor ? { color: header.securityTextColor } : undefined}><LockKeyhole size={14} /> SSL-verschlüsselt</div>
+        {header.securityIcon || header.securityText ? (
+          <div className="funnel-security" style={header.securityTextColor ? { color: header.securityTextColor } : undefined}>
+            {header.securityIcon === DEFAULT_SECURITY_ICON ? (
+              <LockKeyhole size={14} color={header.securityIconColor || undefined} aria-hidden="true" />
+            ) : header.securityIcon ? (
+              <FunnelIcon name={header.securityIcon} className="funnel-security-icon" color={header.securityIconColor || undefined} fit="picker" />
+            ) : null}
+            {header.securityText ? <span>{header.securityText}</span> : null}
+          </div>
+        ) : null}
       </header>
 
       {showProgress && pages ? (
