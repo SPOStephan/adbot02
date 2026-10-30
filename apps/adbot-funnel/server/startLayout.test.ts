@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, patchStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, patchStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, buttonOverrideVars, resolveEyebrowBox, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -194,5 +194,41 @@ describe("Startseiten-Layouts", () => {
       expect(page.heroImageLayout).toBe("circle");
       expect(page.heroImageRadius).toBe(28);
     }
+  });
+});
+
+describe("Button-Farbe", () => {
+  it("nutzt ohne eigene Farbe die Akzentfarbe wie bisher", () => {
+    expect(resolveButtonColors(defaultFunnel.brand)).toEqual({ background: "#0165c3", text: "#ffffff", hover: undefined });
+  });
+
+  it("trennt die Button-Farbe vom Fortschritt und wählt passenden Text", () => {
+    expect(resolveButtonColors({ ...defaultFunnel.brand, buttonColor: "#ffd400" })).toMatchObject({ background: "#ffd400", text: "#10253f" });
+    expect(resolveButtonColors({ ...defaultFunnel.brand, buttonColor: "#c0392b", buttonTextColor: "#fff000" })).toMatchObject({ background: "#c0392b", text: "#fff000" });
+    expect(resolveButtonColors({ ...defaultFunnel.brand, buttonColor: "#c0392b" }).hover).toContain("#c0392b");
+  });
+
+  it("akzeptiert leere oder gültige Hexwerte im Schema", () => {
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, brand: { ...defaultFunnel.brand, buttonColor: "#ff6600", buttonTextColor: "" } }).success).toBe(true);
+    expect(funnelConfigSchema.safeParse({ ...defaultFunnel, brand: { ...defaultFunnel.brand, buttonColor: "orange" } }).success).toBe(false);
+  });
+
+  it("überschreibt die Farbe pro Button, leer erbt die globale Einstellung", () => {
+    expect(buttonOverrideVars("", "")).toBeUndefined();
+    expect(buttonOverrideVars(undefined, undefined)).toBeUndefined();
+    expect(buttonOverrideVars("#ffd400", "")).toMatchObject({ "--funnel-button": "#ffd400", "--funnel-button-text": "#10253f" });
+    expect(buttonOverrideVars("", "#000000")).toEqual({ "--funnel-button-text": "#000000" });
+  });
+
+  it("normalisiert Button-Farben pro Seite verlustfrei", () => {
+    const config = structuredClone(defaultFunnel);
+    const start = config.pages.find(page => page.type === "start");
+    if (!start || start.type !== "start") throw new Error("start page missing");
+    Object.assign(start, { buttonColor: "#ffd400", secondaryButtonColor: "kaputt" });
+    const normalized = normalizeFunnelConfig(config, true);
+    const normalizedStart = normalized.pages.find(page => page.type === "start");
+    expect(normalizedStart).toMatchObject({ buttonColor: "#ffd400", buttonTextColor: "", secondaryButtonColor: "", secondaryButtonTextColor: "" });
+    expect(funnelConfigSchema.safeParse(normalized).success).toBe(true);
+    expect(normalized.pages.filter(page => page.type !== "start").every(page => page.buttonColor === "")).toBe(true);
   });
 });

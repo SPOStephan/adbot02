@@ -136,6 +136,10 @@ function normalizeStatus(config: Partial<LegacyFunnelConfig>, published?: boolea
   return (published ?? config.isPublished) ? "published" : "draft";
 }
 
+function storedHexColor(value: unknown) {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "";
+}
+
 export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: boolean): FunnelConfig {
   const { __serverPrivate: _serverPrivate, ...publicConfig } = config as LegacyFunnelConfig & { __serverPrivate?: unknown };
   const status = normalizeStatus(config, published);
@@ -165,6 +169,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
       progressTitle: typeof page.progressTitle === "string" ? page.progressTitle.slice(0, 80) : "",
       progressHint: typeof page.progressHint === "string" ? page.progressHint.slice(0, 160) : "",
       progressIcon,
+      buttonColor: storedHexColor(page.buttonColor),
+      buttonTextColor: storedHexColor(page.buttonTextColor),
     };
     if (page.type === "choice-grid" || page.type === "choice-list") {
       return {
@@ -196,6 +202,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         badges?: StartBadge[];
         benefitsBandTitle?: string;
         secondaryButtonLabel?: string;
+        secondaryButtonColor?: string;
+        secondaryButtonTextColor?: string;
       };
       const optionalHex = (value: unknown) => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toUpperCase() : undefined;
       return {
@@ -203,6 +211,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         layout: resolveStartLayout(startPage),
         benefitsBandTitle: typeof startPage.benefitsBandTitle === "string" ? startPage.benefitsBandTitle : "",
         secondaryButtonLabel: typeof startPage.secondaryButtonLabel === "string" ? startPage.secondaryButtonLabel : "",
+        secondaryButtonColor: storedHexColor(startPage.secondaryButtonColor),
+        secondaryButtonTextColor: storedHexColor(startPage.secondaryButtonTextColor),
         heroBackgroundAssetId: typeof startPage.heroBackgroundAssetId === "string" ? startPage.heroBackgroundAssetId : "",
         heroBackgroundDesktopUrl: typeof startPage.heroBackgroundDesktopUrl === "string" ? startPage.heroBackgroundDesktopUrl : "",
         heroBackgroundMobileUrl: typeof startPage.heroBackgroundMobileUrl === "string" ? startPage.heroBackgroundMobileUrl : "",

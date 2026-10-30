@@ -28,6 +28,11 @@ const optionSchema = z.object({
   leadValue: z.number().min(0).max(10_000).optional(),
 });
 
+const optionalHexColorSchema = z.string().max(16).refine(
+  value => value === "" || /^#[0-9a-fA-F]{6}$/.test(value),
+  "Farbwert muss #RRGGBB sein oder leer bleiben.",
+);
+
 const pageBaseSchema = z.object({
   id: z.string().min(1),
   type: z.enum(PAGE_TYPES),
@@ -37,6 +42,8 @@ const pageBaseSchema = z.object({
   subtitle: formattedTextSchema(240).default(""),
   description: formattedTextSchema(1200),
   buttonLabel: z.string().min(1).max(100),
+  buttonColor: optionalHexColorSchema.default(""),
+  buttonTextColor: optionalHexColorSchema.default(""),
   progressTitle: z.string().max(80).default(""),
   progressHint: z.string().max(160).default(""),
   progressIcon: iconSchema.default("sparkles"),
@@ -50,11 +57,6 @@ const pageBaseSchema = z.object({
   subtitleSizeStep: z.number().int().min(MIN_COPY_SIZE_STEP).max(MAX_COPY_SIZE_STEP).default(DEFAULT_COPY_SIZE_STEP),
   descriptionSizeStep: z.number().int().min(MIN_COPY_SIZE_STEP).max(MAX_COPY_SIZE_STEP).default(DEFAULT_COPY_SIZE_STEP),
 });
-
-const optionalHexColorSchema = z.string().max(16).refine(
-  value => value === "" || /^#[0-9a-fA-F]{6}$/.test(value),
-  "Farbwert muss #RRGGBB sein oder leer bleiben.",
-);
 
 const startBenefitSchema = z.object({
   id: z.string().min(1),
@@ -88,6 +90,8 @@ const startPageSchema = pageBaseSchema.extend({
   trustNote: formattedTextSchema(300),
   benefitsBandTitle: formattedTextSchema(200).default(""),
   secondaryButtonLabel: z.string().max(100).default(""),
+  secondaryButtonColor: optionalHexColorSchema.default(""),
+  secondaryButtonTextColor: optionalHexColorSchema.default(""),
   benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
   benefitsTileLayout: z.enum(BENEFITS_TILE_LAYOUTS).default(DEFAULT_BENEFITS_TILE_LAYOUT),
   benefitsTileGap: z.enum(BENEFITS_TILE_GAPS).default(DEFAULT_BENEFITS_TILE_GAP),
@@ -199,6 +203,8 @@ export const funnelConfigSchema = z
       choiceSelectedBackgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
       choiceSelectedTextColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
       choiceSelectedBorderColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      buttonColor: optionalHexColorSchema.default(""),
+      buttonTextColor: optionalHexColorSchema.default(""),
     }),
     socialProof: z.object({
       enabled: z.boolean(),

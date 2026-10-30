@@ -220,6 +220,9 @@ type FunnelPageBase = {
   subtitle: string;
   description: string;
   buttonLabel: string;
+  /** Per-page button colors; empty or missing uses the global Branding → Buttons setting. */
+  buttonColor?: string;
+  buttonTextColor?: string;
   /** Short public label in the progress indicator. Empty falls back to the page name. */
   progressTitle: string;
   /** Optional second line under the progress title. */
@@ -310,6 +313,9 @@ export type StartPage = FunnelPageBase & {
   trustNote: string;
   benefitsBandTitle: string;
   secondaryButtonLabel: string;
+  /** Bottom button colors; empty or missing uses the global Branding → Buttons setting. */
+  secondaryButtonColor?: string;
+  secondaryButtonTextColor?: string;
   benefits: StartBenefit[];
   benefitsTileLayout: BenefitsTileLayout;
   benefitsTileGap: BenefitsTileGap;
@@ -381,6 +387,10 @@ export type FunnelBrand = {
   choiceSelectedBackgroundColor: string;
   choiceSelectedTextColor: string;
   choiceSelectedBorderColor: string;
+  /** Primary button ("Jetzt …"). Empty string uses the accent color, so the progress bar stays independent. */
+  buttonColor: string;
+  /** Empty string picks white or dark ink depending on the button color. */
+  buttonTextColor: string;
 };
 
 export type FunnelProgressColors = {

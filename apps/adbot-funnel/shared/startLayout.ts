@@ -230,6 +230,35 @@ export function clampHeroBackgroundFocusX(value: unknown) {
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
+export type ResolvedButtonColors = {
+  background: string;
+  text: string;
+  /** Undefined keeps the stylesheet's default hover shade. */
+  hover?: string;
+};
+
+/** Primary button colors; empty values fall back to the shared accent so legacy funnels look unchanged. */
+export function resolveButtonColors(brand: { accentColor: string; buttonColor?: string; buttonTextColor?: string }): ResolvedButtonColors {
+  const custom = brand.buttonColor?.trim() ?? "";
+  const background = custom || brand.accentColor || "#0165c3";
+  const text = brand.buttonTextColor?.trim() || (custom ? contrastOnAccent(custom) : "#ffffff");
+  return { background, text, hover: custom ? `color-mix(in srgb, ${custom} 82%, black)` : undefined };
+}
+
+/**
+ * CSS variables for one button that overrides the global button colors.
+ * Empty values keep the inherited Branding → Buttons setting.
+ */
+export function buttonOverrideVars(color?: string, textColor?: string): Record<string, string> | undefined {
+  const background = color?.trim() ?? "";
+  const text = textColor?.trim() || (background ? contrastOnAccent(background) : "");
+  if (!background && !text) return undefined;
+  return {
+    ...(background ? { "--funnel-button": background, "--funnel-button-hover": `color-mix(in srgb, ${background} 82%, black)` } : {}),
+    ...(text ? { "--funnel-button-text": text } : {}),
+  };
+}
+
 export function contrastOnAccent(accentColor: string) {
   const hex = accentColor.replace("#", "");
   if (hex.length !== 6) return "#ffffff";
