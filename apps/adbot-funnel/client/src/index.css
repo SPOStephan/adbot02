@@ -1052,6 +1052,11 @@ strong.funnel-formatted { display: block; }
   line-height: 1.45;
   outline: none;
 }
+/* Nur im Editor: helle Schrift (z. B. Weiß auf dunklem Hero) bleibt lesbar. */
+.formatted-text-field.has-light-text {
+  background: #334155;
+  color: #f8fafc;
+}
 .formatted-text-field:focus {
   border-color: #0165c3;
   box-shadow: 0 0 0 3px rgb(1 101 195 / 15%);

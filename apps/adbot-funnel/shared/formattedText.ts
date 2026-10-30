@@ -61,6 +61,19 @@ export function normalizeCssColor(value: string): string | null {
   return rgbToHex(Number(rgb[1]), Number(rgb[2]), Number(rgb[3]));
 }
 
+/** True when any inline text color is light (e.g. white), so it would vanish on the white editor field. */
+export function hasLightTextColor(html: string): boolean {
+  for (const match of html.matchAll(/color\s*[:=]\s*["']?\s*(#[0-9a-fA-F]{3,6}|rgba?\([^)]*\))/gi)) {
+    const hex = normalizeCssColor(match[1]!);
+    if (!hex) continue;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    if ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62) return true;
+  }
+  return false;
+}
+
 function spanColor(attrs: string): string | null {
   const style = attrs.match(/\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
   const raw = style?.[1] ?? style?.[2] ?? "";

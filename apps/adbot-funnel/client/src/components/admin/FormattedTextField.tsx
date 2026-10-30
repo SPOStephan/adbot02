@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Bold, Italic, Underline } from "lucide-react";
-import { normalizeCssColor, sanitizeFormattedText } from "@shared/formattedText";
+import { hasLightTextColor, normalizeCssColor, sanitizeFormattedText } from "@shared/formattedText";
 import { normalizeHexColor } from "@/lib/hexColor";
 import { ColorValueEditor } from "@/components/admin/ColorValueEditor";
 import { Button } from "@/components/ui/button";
@@ -162,6 +162,8 @@ export function FormattedTextField({
   const savedRangeRef = useRef<Range | null>(null);
   const [color, setColor] = useState("#10253F");
   const [colorOpen, setColorOpen] = useState(false);
+  // Editor-only: light text (e.g. white for a dark hero) gets a dark field so it stays readable. Not saved.
+  const lightText = hasLightTextColor(value || "");
 
   useEffect(() => {
     const node = ref.current;
@@ -249,7 +251,7 @@ export function FormattedTextField({
       </div>
       <div
         ref={ref}
-        className="formatted-text-field"
+        className={`formatted-text-field${lightText ? " has-light-text" : ""}`}
         contentEditable
         role="textbox"
         aria-multiline={rows > 1}
@@ -272,6 +274,7 @@ export function FormattedTextField({
           commit();
         }}
       />
+      {lightText ? <p className="text-xs text-muted-foreground">Helle Schrift: Das Feld ist nur hier im Editor dunkel hinterlegt, damit der Text lesbar bleibt.</p> : null}
     </div>
   );
 }
