@@ -427,9 +427,9 @@ export default function FunnelEditor() {
               >
                 <FormattedTextField value={selectedPage.description} rows={3} onChange={value => patchPage({ description: value }, false)} />
               </FormRow>
-              <FormRow label={selectedPage.type === "start" ? "Button-Beschriftung (oben)" : "Button-Beschriftung"}><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
+              <FormRow label={selectedPage.type === "start" ? "Button im Kopfbereich – Beschriftung" : "Button-Beschriftung"} hint={selectedPage.type === "start" ? "Der Button direkt unter Überschrift und Beschreibung." : undefined}><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
               <ButtonColorFields
-                label={selectedPage.type === "start" ? "Button oben" : "Button"}
+                label={selectedPage.type === "start" ? "Button im Kopfbereich" : "Button"}
                 brand={config.brand}
                 color={selectedPage.buttonColor ?? ""}
                 textColor={selectedPage.buttonTextColor ?? ""}
@@ -692,22 +692,9 @@ function StartPageFields({
           <FormRow label="Trenner-Überschrift" hint="Volle Fläche in der Brandingfarbe, z. B. „Deine Vorteile bei uns“.">
             <FormattedTextField rows={1} value={page.benefitsBandTitle} onChange={value => patch({ benefitsBandTitle: value } as Partial<FunnelPage>, false)} />
           </FormRow>
-          <FormRow label="Hinweis unter dem oberen Button">
+          <FormRow label="Hinweis unter dem Button im Kopfbereich">
             <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
-          <FormRow label="Unterer Button" hint="Leer = gleiche Beschriftung wie der Button oben.">
-            <Input value={page.secondaryButtonLabel} placeholder={page.buttonLabel} onChange={event => patch({ secondaryButtonLabel: event.target.value } as Partial<FunnelPage>, false)} />
-          </FormRow>
-          <ButtonColorFields
-            label="Button unten"
-            brand={brand}
-            color={page.secondaryButtonColor ?? ""}
-            textColor={page.secondaryButtonTextColor ?? ""}
-            onChange={value => patch({
-              ...(value.buttonColor !== undefined ? { secondaryButtonColor: value.buttonColor } : {}),
-              ...(value.buttonTextColor !== undefined ? { secondaryButtonTextColor: value.buttonTextColor } : {}),
-            } as Partial<FunnelPage>)}
-          />
           <BenefitsTileLayoutPicker
             value={tileLayout}
             onChange={benefitsTileLayout => patch({ benefitsTileLayout } as Partial<FunnelPage>)}
@@ -776,6 +763,19 @@ function StartPageFields({
               </Button>
             )}
           </div>
+          <FormRow label="Button am Seitenende – Beschriftung" hint="Der Button ganz unten, nach den Icon-Kacheln. Leer = gleiche Beschriftung wie der Button im Kopfbereich.">
+            <Input value={page.secondaryButtonLabel} placeholder={page.buttonLabel} onChange={event => patch({ secondaryButtonLabel: event.target.value } as Partial<FunnelPage>, false)} />
+          </FormRow>
+          <ButtonColorFields
+            label="Button am Seitenende"
+            brand={brand}
+            color={page.secondaryButtonColor ?? ""}
+            textColor={page.secondaryButtonTextColor ?? ""}
+            onChange={value => patch({
+              ...(value.buttonColor !== undefined ? { secondaryButtonColor: value.buttonColor } : {}),
+              ...(value.buttonTextColor !== undefined ? { secondaryButtonTextColor: value.buttonTextColor } : {}),
+            } as Partial<FunnelPage>)}
+          />
         </>
       )}
     </>
