@@ -9,6 +9,7 @@ export function IconColorField({
   onChange,
   presetLabel = "Brandingfarbe",
   resetLabel = "Branding verwenden",
+  allowTransparent = false,
 }: {
   label: string;
   value?: string;
@@ -16,8 +17,11 @@ export function IconColorField({
   onChange: (value: string | undefined) => void;
   presetLabel?: string;
   resetLabel?: string;
+  /** Offers "transparent" as a value (stored literally); the color editor is hidden while it is active. */
+  allowTransparent?: boolean;
 }) {
-  const resolved = value || brandColor;
+  const transparent = allowTransparent && value === "transparent";
+  const resolved = transparent ? brandColor : value || brandColor;
   const usingBrand = !value;
 
   return (
@@ -28,9 +32,30 @@ export function IconColorField({
           ? <span className="text-[11px] font-medium text-muted-foreground">{presetLabel}</span>
           : <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => onChange(undefined)}>{resetLabel}</Button>}
       </div>
-      <div className="rounded-xl border bg-white p-2">
-        <ColorValueEditor value={resolved} onChange={onChange} ariaLabel={label} />
-      </div>
+      {transparent ? (
+        <div
+          className="flex h-10 items-center justify-center rounded-xl border text-xs font-semibold text-muted-foreground"
+          style={{ backgroundImage: "repeating-conic-gradient(#e2e8f0 0% 25%, #ffffff 0% 50%)", backgroundSize: "12px 12px" }}
+        >
+          Transparent
+        </div>
+      ) : (
+        <div className="rounded-xl border bg-white p-2">
+          <ColorValueEditor value={resolved} onChange={onChange} ariaLabel={label} />
+        </div>
+      )}
+      {allowTransparent ? (
+        <Button
+          type="button"
+          size="sm"
+          variant={transparent ? "secondary" : "outline"}
+          className="h-8 bg-white text-xs"
+          aria-pressed={transparent}
+          onClick={() => onChange(transparent ? undefined : "transparent")}
+        >
+          {transparent ? "Farbe statt transparent" : "Transparent"}
+        </Button>
+      ) : null}
     </div>
   );
 }

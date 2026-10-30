@@ -101,6 +101,7 @@ export const defaultFunnel: FunnelConfig = {
       heroSectionBackgroundMid: "",
       eyebrowBoxBackground: "",
       eyebrowBoxColor: "",
+      trustNoteColor: "",
       badges: [],
       heroBackgroundAssetId: "",
       heroBackgroundDesktopUrl: "",

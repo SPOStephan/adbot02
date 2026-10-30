@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { copySizeCssVars } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
-import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveStartLayout, buttonOverrideVars } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveStartLayout, buttonOverrideVars } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -35,7 +35,7 @@ export function StartStep({
         <button className="funnel-primary-button" type="button" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor) as CSSProperties | undefined} onClick={onContinue}>
           {page.buttonLabel}<ArrowRight size={19} />
         </button>
-        {page.trustNote && <p className="funnel-trust-note">{page.trustNote}</p>}
+        {page.trustNote && <p className="funnel-trust-note" style={page.trustNoteColor ? { color: page.trustNoteColor } : undefined}>{page.trustNote}</p>}
       </div>
       <div className="funnel-hero-art" aria-hidden="true">
         {page.heroImageUrl ? (
@@ -119,7 +119,8 @@ function BenefitsStartStep({
                     style={{
                       background: colors.background,
                       color: colors.text,
-                      borderColor: badge.backgroundColor || "color-mix(in srgb, var(--funnel-ink) 14%, transparent)",
+                      borderColor: resolveBadgeBorderColor(badge, colors.text, "color-mix(in srgb, var(--funnel-ink) 14%, transparent)"),
+                      borderWidth: resolveBadgeBorderWidth(badge.borderWidth),
                       "--badge-fg": colors.text,
                     } as CSSProperties}
                   >
@@ -133,7 +134,7 @@ function BenefitsStartStep({
           <button className="funnel-primary-button funnel-start-benefits-button" type="button" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor) as CSSProperties | undefined} onClick={onContinue}>
             {page.buttonLabel}
           </button>
-          {page.trustNote && <p className="funnel-trust-note">{page.trustNote}</p>}
+          {page.trustNote && <p className="funnel-trust-note" style={page.trustNoteColor ? { color: page.trustNoteColor } : undefined}>{page.trustNote}</p>}
         </div>
       </div>
 

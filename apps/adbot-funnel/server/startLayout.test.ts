@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, patchStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, buttonOverrideVars, resolveEyebrowBox, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, normalizeBadgeBackground, patchStartBadge, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, buttonOverrideVars, resolveEyebrowBox, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -92,6 +92,24 @@ describe("Startseiten-Layouts", () => {
     }
   });
 
+  it("speichert transparente Badges, Randfarbe/-breite und Hinweis-Textfarbe", () => {
+    const withBadges = (badges: unknown[]) => defaultFunnel.pages.map(page => page.type === "start" ? { ...page, badges, trustNoteColor: "#c8102e" } : page);
+    const parsed = funnelConfigSchema.parse({
+      ...defaultFunnel,
+      pages: withBadges([
+        { id: "badge-1", label: "Homeoffice", backgroundColor: "#0165c3" },
+        { id: "badge-2", label: "Remote", backgroundColor: "transparent", borderColor: "#ffffff", borderWidth: 3 },
+      ]),
+    });
+    const start = normalizeFunnelConfig(parsed).pages[0];
+    if (start?.type !== "start") throw new Error("Startseite fehlt");
+    expect(start.trustNoteColor).toBe("#C8102E");
+    expect(start.badges[0]).toMatchObject({ backgroundColor: "#0165C3" });
+    expect(start.badges[0]?.borderWidth).toBeUndefined();
+    expect(start.badges[1]).toMatchObject({ backgroundColor: "transparent", borderColor: "#FFFFFF", borderWidth: 3 });
+    expect(() => funnelConfigSchema.parse({ ...defaultFunnel, pages: withBadges([{ id: "b", label: "X", borderWidth: 9 }]) })).toThrow();
+  });
+
   it("nimmt einspaltige Kacheln, Badges und Vorlagen an", () => {
     const pages = defaultFunnel.pages.map(page => page.type === "start"
       ? {
@@ -148,6 +166,19 @@ describe("Startseiten-Layouts", () => {
     expect(resolveBadgeColors({ backgroundColor: "#E8F2FB" }, "#10253f", "#0165C3")).toEqual({ background: "#E8F2FB", text: "#0165C3" });
     expect(resolveBadgeColors({ backgroundColor: "#E8F2FB", textColor: "#C8102E" }, "#10253f", "#0165C3")).toEqual({ background: "#E8F2FB", text: "#C8102E" });
     expect(resolveBadgeColors({ backgroundColor: "#e8f2fb", textColor: "#0165c3" }, "#10253f")).toEqual({ background: "#E8F2FB", text: "#0165C3" });
+    expect(resolveBadgeColors({ backgroundColor: "transparent" }, "#10253f", "#0165C3")).toEqual({ background: "transparent", text: "#10253F" });
+    expect(resolveBadgeColors({ backgroundColor: "transparent", textColor: "#ffffff" }, "#10253f")).toEqual({ background: "transparent", text: "#FFFFFF" });
+    expect(resolveBadgeBorderColor({ backgroundColor: "transparent" }, "#FFFFFF", "fallback")).toBe("color-mix(in srgb, #FFFFFF 35%, transparent)");
+    expect(resolveBadgeBorderColor({ backgroundColor: "#0165c3" }, "#FFFFFF", "fallback")).toBe("#0165C3");
+    expect(resolveBadgeBorderColor({}, "#FFFFFF", "fallback")).toBe("fallback");
+    expect(resolveBadgeBorderColor({ backgroundColor: "transparent", borderColor: "#c8102e" }, "#FFFFFF", "fallback")).toBe("#C8102E");
+    expect(resolveBadgeBorderWidth(undefined)).toBe(1);
+    expect(resolveBadgeBorderWidth(0)).toBe(0);
+    expect(resolveBadgeBorderWidth(12)).toBe(8);
+    expect(resolveBadgeBorderWidth(2.6)).toBe(3);
+    expect(normalizeBadgeBackground("Transparent")).toBe("transparent");
+    expect(normalizeBadgeBackground("#0165c3")).toBe("#0165C3");
+    expect(normalizeBadgeBackground("rgba(0,0,0,0)")).toBe("");
     expect(moveStartBadge(start.badges, "badge-2", "badge-1").map(badge => badge.id)).toEqual(["badge-2", "badge-1"]);
     expect(moveStartBadge(start.badges, "badge-1", "badge-1")).toBe(start.badges);
     expect(moveStartBadge(start.badges, "fehlt", "badge-1")).toBe(start.badges);
