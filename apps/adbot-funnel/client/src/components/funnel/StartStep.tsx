@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { copySizeCssVars } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
-import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -20,11 +20,12 @@ export function StartStep({
   if (resolveStartLayout(page) === "benefits") {
     return <BenefitsStartStep page={page} brand={brand} onContinue={onContinue} />;
   }
+  const eyebrowBox = resolveEyebrowBox(page.eyebrowBoxBackground, page.eyebrowBoxColor);
 
   return (
     <section className="funnel-step funnel-start-step" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
       <div className="funnel-copy">
-        {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-eyebrow" value={page.eyebrow} />}
+        {isPageEyebrowShown(page) && <FormattedText as="p" className={`funnel-eyebrow${eyebrowBox ? " is-boxed" : ""}`} style={eyebrowBox} value={page.eyebrow} />}
         <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
         {isPageSubtitleShown(page) && <FormattedText as="p" className="funnel-subtitle" value={page.subtitle} />}
         {isPageDescriptionShown(page) && <FormattedText as="p" className="funnel-description" value={page.description} />}
@@ -79,6 +80,7 @@ function BenefitsStartStep({
   const heroFill = customHeroSectionFill(page.heroSectionBackground, page.heroSectionBackgroundEnd, page.heroSectionBackgroundMid);
   // A gradient is painted by FunnelChrome across logo, progress and hero, so the hero stays transparent.
   const heroBackground = heroFill.solid;
+  const eyebrowBox = resolveEyebrowBox(page.eyebrowBoxBackground, page.eyebrowBoxColor);
 
   return (
     <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
@@ -103,7 +105,7 @@ function BenefitsStartStep({
               style={imageLayout === "wide" ? { "--hero-image-radius": `${imageRadius}px` } as CSSProperties : undefined}
             />
           ) : null}
-          {isPageEyebrowShown(page) && <FormattedText as="p" className="funnel-start-benefits-kicker" value={page.eyebrow} />}
+          {isPageEyebrowShown(page) && <FormattedText as="p" className={`funnel-start-benefits-kicker${eyebrowBox ? " is-boxed" : ""}`} style={eyebrowBox} value={page.eyebrow} />}
           <FormattedText as="h1" id={`${page.id}-title`} className={isPageTitleShown(page) ? undefined : "funnel-sr-only"} tabIndex={-1} value={page.title} />
           {isPageSubtitleShown(page) && <FormattedText as="p" className="funnel-start-benefits-subtitle" value={page.subtitle} />}
           {(page.badges ?? []).length > 0 && (

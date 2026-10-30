@@ -9,7 +9,7 @@ import { createEditorSaveController } from "@/lib/editorSave";
 import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, postalCodeMaxLength, type ContactFieldPresetKey } from "@shared/contactFields";
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
-import { benefitsFromBullets, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
 import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -626,6 +626,11 @@ function StartPageFields({
   const addBenefit = () => patch({ benefits: [...page.benefits, emptyStartBenefit()] } as Partial<FunnelPage>);
   return (
     <>
+      <EyebrowBoxField
+        background={page.eyebrowBoxBackground ?? ""}
+        color={page.eyebrowBoxColor ?? ""}
+        onChange={next => patch(next as Partial<FunnelPage>)}
+      />
       {layout === "classic" && (
         <>
           <HeroImageField
@@ -854,6 +859,41 @@ function OptionalStartColor({
     <div className="grid gap-1">
       <BrandColorField label={label} value={value || fallback} onChange={onChange} hint={value ? "Eigene Farbe für dieses Element." : (emptyHint ?? "Leer = Standard der Vorlage.")} />
       {value ? <Button type="button" size="sm" variant="ghost" className="justify-start px-0" onClick={() => onChange("")}>Standard verwenden</Button> : null}
+    </div>
+  );
+}
+
+function EyebrowBoxField({
+  background,
+  color,
+  onChange,
+}: {
+  background: string;
+  color: string;
+  onChange: (value: { eyebrowBoxBackground?: string; eyebrowBoxColor?: string }) => void;
+}) {
+  const boxed = Boolean(background);
+  return (
+    <div className="grid gap-2">
+      <label className="flex items-center justify-between rounded-xl border p-3">
+        <span><strong className="block text-sm">Überzeile als Kasten</strong><small className="text-muted-foreground">Setzt die Überzeile in einen farbigen Kasten, z. B. „Wir suchen Dich!“.</small></span>
+        <Switch
+          checked={boxed}
+          onCheckedChange={enabled => onChange(enabled ? { eyebrowBoxBackground: DEFAULT_EYEBROW_BOX_BACKGROUND } : { eyebrowBoxBackground: "", eyebrowBoxColor: "" })}
+        />
+      </label>
+      {boxed ? (
+        <div className="grid gap-3">
+          <BrandColorField label="Überzeile – Kastenfarbe" value={background} onChange={eyebrowBoxBackground => onChange({ eyebrowBoxBackground })} />
+          <OptionalStartColor
+            label="Überzeile – Schriftfarbe"
+            value={color}
+            fallback={contrastOnAccent(background)}
+            emptyHint="Leer = automatisch gut lesbar auf der Kastenfarbe."
+            onChange={eyebrowBoxColor => onChange({ eyebrowBoxColor })}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
