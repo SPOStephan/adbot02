@@ -416,8 +416,8 @@
   .funnel-trust-note { margin: 12px 0 0; color: var(--funnel-muted); font-size: 11px; }
 
   .funnel-primary-button, .funnel-secondary-button { min-height: 52px; border-radius: 14px; padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; font-size: 14px; font-weight: 780; transition: transform 150ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 180ms, background-color 180ms; }
-  .funnel-primary-button { border: 0; color: #fff; background: var(--funnel-accent); box-shadow: 0 12px 30px color-mix(in srgb, var(--funnel-accent) 28%, transparent); }
-  .funnel-primary-button:hover:not(:disabled) { background: var(--funnel-accent-dark); box-shadow: 0 16px 34px color-mix(in srgb, var(--funnel-accent) 32%, transparent); transform: translateY(-1px); }
+  .funnel-primary-button { border: 0; color: var(--funnel-button-text, #fff); background: var(--funnel-button, var(--funnel-accent)); box-shadow: 0 12px 30px color-mix(in srgb, var(--funnel-button, var(--funnel-accent)) 28%, transparent); }
+  .funnel-primary-button:hover:not(:disabled) { background: var(--funnel-button-hover, var(--funnel-accent-dark)); box-shadow: 0 16px 34px color-mix(in srgb, var(--funnel-button, var(--funnel-accent)) 32%, transparent); transform: translateY(-1px); }
   .funnel-primary-button:active:not(:disabled), .funnel-secondary-button:active:not(:disabled) { transform: scale(0.97); }
   .funnel-primary-button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
   .funnel-secondary-button { color: var(--funnel-ink); background: #fff; border: 1px solid var(--funnel-line); }

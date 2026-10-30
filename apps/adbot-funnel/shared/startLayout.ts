@@ -230,6 +230,21 @@ export function clampHeroBackgroundFocusX(value: unknown) {
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
+export type ResolvedButtonColors = {
+  background: string;
+  text: string;
+  /** Undefined keeps the stylesheet's default hover shade. */
+  hover?: string;
+};
+
+/** Primary button colors; empty values fall back to the shared accent so legacy funnels look unchanged. */
+export function resolveButtonColors(brand: { accentColor: string; buttonColor?: string; buttonTextColor?: string }): ResolvedButtonColors {
+  const custom = brand.buttonColor?.trim() ?? "";
+  const background = custom || brand.accentColor || "#0165c3";
+  const text = brand.buttonTextColor?.trim() || (custom ? contrastOnAccent(custom) : "#ffffff");
+  return { background, text, hover: custom ? `color-mix(in srgb, ${custom} 82%, black)` : undefined };
+}
+
 export function contrastOnAccent(accentColor: string) {
   const hex = accentColor.replace("#", "");
   if (hex.length !== 6) return "#ffffff";

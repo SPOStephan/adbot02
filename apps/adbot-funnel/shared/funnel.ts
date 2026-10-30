@@ -381,6 +381,10 @@ export type FunnelBrand = {
   choiceSelectedBackgroundColor: string;
   choiceSelectedTextColor: string;
   choiceSelectedBorderColor: string;
+  /** Primary button ("Jetzt …"). Empty string uses the accent color, so the progress bar stays independent. */
+  buttonColor: string;
+  /** Empty string picks white or dark ink depending on the button color. */
+  buttonTextColor: string;
 };
 
 export type FunnelProgressColors = {

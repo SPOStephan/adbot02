@@ -199,6 +199,8 @@ export const funnelConfigSchema = z
       choiceSelectedBackgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
       choiceSelectedTextColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
       choiceSelectedBorderColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      buttonColor: optionalHexColorSchema.default(""),
+      buttonTextColor: optionalHexColorSchema.default(""),
     }),
     socialProof: z.object({
       enabled: z.boolean(),

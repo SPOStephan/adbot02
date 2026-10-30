@@ -27,6 +27,8 @@ export const defaultFunnel: FunnelConfig = {
     choiceSelectedBackgroundColor: "#eef7ff",
     choiceSelectedTextColor: "#10253f",
     choiceSelectedBorderColor: "#0165c3",
+    buttonColor: "",
+    buttonTextColor: "",
   },
   progress: {
     layout: "percent",

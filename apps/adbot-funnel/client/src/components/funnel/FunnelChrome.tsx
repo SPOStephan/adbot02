@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type PropsWithChildren } from "react";
 import type { FunnelBrand, FunnelConfig, FunnelSocialProof } from "@shared/funnel";
 import { DEFAULT_PROGRESS } from "@shared/progressLayout";
+import { resolveButtonColors } from "@shared/startLayout";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { FunnelProgress } from "./FunnelProgress";
 import { FormattedText } from "./FormattedText";
@@ -47,6 +48,7 @@ export function FunnelChrome({
   onForward,
   children,
 }: FunnelChromeProps) {
+  const button = resolveButtonColors(brand);
   const brandStyle = {
     backgroundColor: brand.backgroundColor,
     color: brand.textColor,
@@ -60,6 +62,9 @@ export function FunnelChrome({
     "--funnel-choice-selected-bg": brand.choiceSelectedBackgroundColor,
     "--funnel-choice-selected-text": brand.choiceSelectedTextColor,
     "--funnel-choice-selected-border": brand.choiceSelectedBorderColor,
+    "--funnel-button": button.background,
+    "--funnel-button-text": button.text,
+    ...(button.hover ? { "--funnel-button-hover": button.hover } : {}),
   } as CSSProperties;
   const canvasRef = useRef<HTMLDivElement>(null);
   const gradientHeight = useHeroFillHeight(canvasRef, fullBleed ? topGradient : undefined);

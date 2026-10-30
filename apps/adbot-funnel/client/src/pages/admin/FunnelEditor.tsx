@@ -9,7 +9,7 @@ import { createEditorSaveController } from "@/lib/editorSave";
 import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, postalCodeMaxLength, type ContactFieldPresetKey } from "@shared/contactFields";
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
-import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveStartLayout } from "@shared/startLayout";
+import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, resolveStartLayout } from "@shared/startLayout";
 import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -506,8 +506,12 @@ export default function FunnelEditor() {
               </div>
               <div className="grid gap-4 rounded-2xl border p-4">
                 <div><p className="text-sm font-bold">Grundfarben</p><p className="text-xs text-muted-foreground">Hintergrund und Text des gesamten Funnels.</p></div>
-                <FormRow label="Akzentfarbe" hint="Verbindliche Markenfarbe für Buttons und Fortschritt."><div className="flex items-center gap-3"><span className="size-10 rounded-xl border shadow-sm" style={{ background: "#0165c3" }} /><Input value="#0165c3" readOnly /></div></FormRow>
+                <FormRow label="Akzentfarbe" hint="Verbindliche Markenfarbe für Fortschritt und Akzente; Buttons nutzen sie, solange unten keine eigene Button-Farbe gesetzt ist."><div className="flex items-center gap-3"><span className="size-10 rounded-xl border shadow-sm" style={{ background: "#0165c3" }} /><Input value="#0165c3" readOnly /></div></FormRow>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><BrandColorField label="Hintergrund" value={config.brand.backgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, backgroundColor: value } }))} /><BrandColorField label="Textfarbe" value={config.brand.textColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, textColor: value } }))} /></div>
+              </div>
+              <div className="grid gap-4 rounded-2xl border p-4">
+                <div><p className="text-sm font-bold">Buttons</p><p className="text-xs text-muted-foreground">Farbe der Haupt-Buttons (z. B. „Jetzt rausfinden“), unabhängig vom Fortschrittsbalken. Leer = Akzentfarbe wie bisher.</p></div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><OptionalStartColor label="Button-Farbe" value={config.brand.buttonColor} fallback={resolveButtonColors(config.brand).background} emptyHint="Leer = Akzentfarbe (wie Fortschrittsbalken)." onChange={buttonColor => changeConfig(current => ({ ...current, brand: { ...current.brand, buttonColor } }))} /><OptionalStartColor label="Button-Schriftfarbe" value={config.brand.buttonTextColor} fallback={resolveButtonColors(config.brand).text} emptyHint="Leer = automatisch Weiß oder Dunkel, passend zur Button-Farbe." onChange={buttonTextColor => changeConfig(current => ({ ...current, brand: { ...current.brand, buttonTextColor } }))} /></div>
               </div>
               <div className="grid gap-4 rounded-2xl border p-4">
                 <div><p className="text-sm font-bold">Klickbare Antwortkästen</p><p className="text-xs text-muted-foreground">Normale und ausgewählte Zustände lassen sich getrennt gestalten. In der Vorschau können Sie eine Antwort anklicken.</p></div>

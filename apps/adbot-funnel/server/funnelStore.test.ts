@@ -115,6 +115,8 @@ describe("Mehr-Funnel-Speicher", () => {
     Reflect.deleteProperty(legacyConfig.brand, "choiceSelectedBackgroundColor");
     Reflect.deleteProperty(legacyConfig.brand, "choiceSelectedTextColor");
     Reflect.deleteProperty(legacyConfig.brand, "choiceSelectedBorderColor");
+    Reflect.deleteProperty(legacyConfig.brand, "buttonColor");
+    Reflect.deleteProperty(legacyConfig.brand, "buttonTextColor");
     legacyConfig.pages.filter(page => page.type !== "start").forEach(page => Reflect.deleteProperty(page, "eyebrow"));
     const legacyOption = legacyConfig.pages.find(page => page.type === "choice-grid")?.options[0] as { icon: string } | undefined;
     if (legacyOption) legacyOption.icon = "historisches-sondericon";
@@ -133,6 +135,8 @@ describe("Mehr-Funnel-Speicher", () => {
       choiceSelectedBackgroundColor: "#eef7ff",
       choiceSelectedTextColor: "#10253f",
       choiceSelectedBorderColor: "#0165c3",
+      buttonColor: "",
+      buttonTextColor: "",
     });
     expect(normalized.pages.find(page => page.type === "choice-grid")?.eyebrow).toBe("Kurze Frage");
     expect(normalized.pages.find(page => page.type === "choice-list")?.eyebrow).toBe("Kurze Frage");
