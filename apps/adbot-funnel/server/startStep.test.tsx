@@ -236,4 +236,15 @@ describe("StartStep Layouts", () => {
     expect(left).toMatch(/<h1[^>]*class="is-align-left[ "]/);
     expect(left).not.toContain("funnel-start-benefits-lead is-align-left");
   });
+
+  it("setzt Button-Ausrichtung und Eckenradius pro Button", () => {
+    const base: StartPage = { ...getStartPage(), layout: "benefits" };
+    const plain = renderToStaticMarkup(<StartStep page={base} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(plain).not.toContain("is-align-full");
+    expect(plain).not.toContain("border-radius");
+    const custom = renderToStaticMarkup(<StartStep page={{ ...base, buttonAlign: "full", buttonRadius: 6, secondaryButtonRadius: 0 }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(custom).toContain("funnel-start-benefits-button is-align-full");
+    expect(custom).toContain("border-radius:6px");
+    expect(custom).toContain("border-radius:0px");
+  });
 });

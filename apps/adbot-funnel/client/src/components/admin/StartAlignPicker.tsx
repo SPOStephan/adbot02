@@ -1,6 +1,6 @@
-import { AlignCenter, AlignLeft } from "lucide-react";
-import type { StartTextAlign } from "@shared/funnel";
-import { resolveStartTextAlign } from "@shared/startLayout";
+import { AlignCenter, AlignLeft, MoveHorizontal } from "lucide-react";
+import type { StartButtonAlign, StartTextAlign } from "@shared/funnel";
+import { resolveStartButtonAlign, resolveStartTextAlign } from "@shared/startLayout";
 
 export type StartAlignValues = {
   headlineAlign?: StartTextAlign;
@@ -58,6 +58,44 @@ export function StartAlignPicker({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const BUTTON_OPTIONS: { id: StartButtonAlign; title: string; Icon: typeof AlignLeft }[] = [
+  { id: "left", title: "Linksbündig", Icon: AlignLeft },
+  { id: "center", title: "Zentriert", Icon: AlignCenter },
+  { id: "full", title: "Volle Breite", Icon: MoveHorizontal },
+];
+
+export function StartButtonAlignPicker({
+  value,
+  onChange,
+}: {
+  value?: StartButtonAlign;
+  onChange: (next: StartButtonAlign) => void;
+}) {
+  const current = resolveStartButtonAlign(value);
+  return (
+    <div className="grid gap-2 rounded-xl border bg-slate-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Button im Kopfbereich – Ausrichtung</p>
+      <div className="grid grid-cols-3 gap-1 rounded-lg bg-white p-1">
+        {BUTTON_OPTIONS.map(option => {
+          const selected = option.id === current;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(option.id)}
+              className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-bold transition ${selected ? "bg-[#0165c3] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              <option.Icon className="size-3.5" />
+              {option.title}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

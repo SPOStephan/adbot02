@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Copy, ExternalLink, Eye, EyeOff, GripVertical, ImageIcon, Loader2, Plus, Save, Settings2, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
@@ -9,7 +9,7 @@ import { createEditorSaveController } from "@/lib/editorSave";
 import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, postalCodeMaxLength, type ContactFieldPresetKey } from "@shared/contactFields";
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
-import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, resolveStartLayout } from "@shared/startLayout";
+import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, MAX_BUTTON_RADIUS, resolveButtonColors, resolveButtonRadius, resolveStartLayout } from "@shared/startLayout";
 import { resolveStartRequirements } from "@shared/startRequirements";
 import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
 import { trpc } from "@/lib/trpc";
@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrandColorField } from "@/components/admin/BrandColorField";
-import { StartAlignPicker } from "@/components/admin/StartAlignPicker";
+import { StartAlignPicker, StartButtonAlignPicker } from "@/components/admin/StartAlignPicker";
 import { EditorPreview } from "@/components/admin/EditorPreview";
 import { HeroBackgroundField } from "@/components/admin/HeroBackgroundField";
 import { HeroImageField } from "@/components/admin/HeroImageField";
@@ -436,8 +436,13 @@ export default function FunnelEditor() {
                 brand={config.brand}
                 color={selectedPage.buttonColor ?? ""}
                 textColor={selectedPage.buttonTextColor ?? ""}
+                radius={selectedPage.buttonRadius}
+                defaultRadius={selectedPage.type === "start" && resolveStartLayout(selectedPage) === "benefits" ? "rund" : "14 px"}
                 onChange={value => patchPage(value as Partial<FunnelPage>)}
               />
+              {selectedPage.type === "start" && resolveStartLayout(selectedPage) === "benefits" ? (
+                <StartButtonAlignPicker value={selectedPage.buttonAlign} onChange={buttonAlign => patchPage({ buttonAlign } as Partial<FunnelPage>)} />
+              ) : null}
               {resolveProgressLayout(config.progress?.layout) === "segments" ? (
                 <div className="grid gap-2 rounded-2xl border p-4">
                   <p className="text-sm font-bold">Stufe in der Fortschrittsanzeige</p>
@@ -801,9 +806,12 @@ function StartPageFields({
             brand={brand}
             color={page.secondaryButtonColor ?? ""}
             textColor={page.secondaryButtonTextColor ?? ""}
+            radius={page.secondaryButtonRadius}
+            defaultRadius="rund"
             onChange={value => patch({
               ...(value.buttonColor !== undefined ? { secondaryButtonColor: value.buttonColor } : {}),
               ...(value.buttonTextColor !== undefined ? { secondaryButtonTextColor: value.buttonTextColor } : {}),
+              ...("buttonRadius" in value ? { secondaryButtonRadius: value.buttonRadius } : {}),
             } as Partial<FunnelPage>)}
           />
         </>
@@ -901,20 +909,41 @@ function ButtonColorFields({
   brand,
   color,
   textColor,
+  radius,
+  defaultRadius,
   onChange,
 }: {
   label: string;
   brand: FunnelConfig["brand"];
   color: string;
   textColor: string;
-  onChange: (value: { buttonColor?: string; buttonTextColor?: string }) => void;
+  radius?: number;
+  /** Shown as placeholder: the layout's built-in corner radius. */
+  defaultRadius: string;
+  onChange: (value: { buttonColor?: string; buttonTextColor?: string; buttonRadius?: number }) => void;
 }) {
   const global = resolveButtonColors(brand);
   const textFallback = color ? contrastOnAccent(color) : global.text;
+  const radiusId = useId();
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <OptionalStartColor label={`${label} – Farbe`} value={color} fallback={global.background} emptyHint="Leer = globale Button-Farbe (Branding)." onChange={buttonColor => onChange({ buttonColor })} />
       <OptionalStartColor label={`${label} – Schriftfarbe`} value={textColor} fallback={textFallback} emptyHint={color ? "Leer = automatisch passend zur Button-Farbe." : "Leer = globale Button-Schriftfarbe (Branding)."} onChange={buttonTextColor => onChange({ buttonTextColor })} />
+      <div className="grid content-start gap-2">
+        <Label htmlFor={radiusId}>{label} – Eckenradius (px)</Label>
+        <Input
+          id={radiusId}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_BUTTON_RADIUS}
+          step={1}
+          placeholder={defaultRadius}
+          value={radius ?? ""}
+          onChange={event => onChange({ buttonRadius: event.target.value === "" ? undefined : resolveButtonRadius(Number(event.target.value)) })}
+        />
+        <p className="text-xs text-muted-foreground">0 = eckig, ab etwa 26 voll rund. Leer = Standard ({defaultRadius}).</p>
+      </div>
     </div>
   );
 }

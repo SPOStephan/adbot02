@@ -103,7 +103,7 @@ export function ContactStep({ page, contact, consent, resume, error, pending, on
         {error && <div id={`${page.id}-error`} ref={errorRef} className="funnel-form-error" role="alert" tabIndex={-1}>{error}</div>}
         <div className="funnel-step-actions">
           <button className="funnel-secondary-button" type="button" onClick={onBack} disabled={pending}><ArrowLeft size={18} />Zurück</button>
-          <button className="funnel-primary-button" type="submit" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor) as CSSProperties | undefined} disabled={pending} aria-busy={pending}>{pending ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}{pending ? "Wird gesendet …" : page.buttonLabel}</button>
+          <button className="funnel-primary-button" type="submit" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor, page.buttonRadius) as CSSProperties | undefined} disabled={pending} aria-busy={pending}>{pending ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}{pending ? "Wird gesendet …" : page.buttonLabel}</button>
         </div>
       </form>
     </section>

@@ -8,7 +8,7 @@ import { CONTACT_FIELD_KEY_PATTERN, CONTACT_FIELD_MAX_LENGTH, CONTACT_MESSAGE_MA
 import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
 import { MAX_START_REQUIREMENT_TEXT, MAX_START_REQUIREMENTS } from "./startRequirements";
-import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_BADGE_BORDER_WIDTH, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
+import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_BADGE_BORDER_WIDTH, MAX_BUTTON_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
 
@@ -45,6 +45,7 @@ const pageBaseSchema = z.object({
   buttonLabel: z.string().min(1).max(100),
   buttonColor: optionalHexColorSchema.default(""),
   buttonTextColor: optionalHexColorSchema.default(""),
+  buttonRadius: z.number().int().min(0).max(MAX_BUTTON_RADIUS).optional(),
   progressTitle: z.string().max(80).default(""),
   progressHint: z.string().max(160).default(""),
   progressIcon: iconSchema.default("sparkles"),
@@ -115,6 +116,8 @@ const startPageSchema = pageBaseSchema.extend({
   secondaryButtonLabel: z.string().max(100).default(""),
   secondaryButtonColor: optionalHexColorSchema.default(""),
   secondaryButtonTextColor: optionalHexColorSchema.default(""),
+  secondaryButtonRadius: z.number().int().min(0).max(MAX_BUTTON_RADIUS).optional(),
+  buttonAlign: z.enum(["center", "left", "full"]).optional(),
   benefits: z.array(startBenefitSchema).max(MAX_START_BENEFITS).default([]),
   benefitsTileLayout: z.enum(BENEFITS_TILE_LAYOUTS).default(DEFAULT_BENEFITS_TILE_LAYOUT),
   benefitsTileGap: z.enum(BENEFITS_TILE_GAPS).default(DEFAULT_BENEFITS_TILE_GAP),

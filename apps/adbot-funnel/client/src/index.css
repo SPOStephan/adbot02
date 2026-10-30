@@ -617,6 +617,7 @@
   /* Linksbündig pro Element (Editor „Ausrichtung“); ohne Klasse bleibt alles zentriert. */
   .funnel-start-benefits-hero-copy > .is-align-left { justify-self: start; text-align: left; }
   .funnel-start-benefits-badges.is-align-left { justify-self: stretch; justify-content: flex-start; }
+  .funnel-start-benefits-hero-copy > .funnel-start-benefits-button.is-align-full { justify-self: stretch; width: 100%; min-width: 0; }
   .funnel-start-benefits-badge {
     display: inline-flex;
     align-items: center;
