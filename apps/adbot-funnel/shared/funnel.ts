@@ -446,6 +446,22 @@ export type FunnelBrand = {
   buttonTextColor: string;
   /** "SSL-verschlüsselt" top right. Empty string = muted body text. */
   securityTextColor?: string;
+  /** Recolors the logo image. Missing = original colors. */
+  logoTint?: LogoTint;
+  /** Logo and header on every page after the start page. Missing or disabled = same as the start page. */
+  stepsHeader?: FunnelStepsHeader;
+};
+
+export const LOGO_TINTS = ["original", "white", "dark"] as const;
+export type LogoTint = (typeof LOGO_TINTS)[number];
+
+export type FunnelStepsHeader = {
+  enabled: boolean;
+  /** Empty = the start page logo. */
+  logoUrl: string;
+  logoTint: LogoTint;
+  /** Empty = muted body text. */
+  securityTextColor: string;
 };
 
 export type FunnelProgressColors = {
@@ -470,7 +486,12 @@ export type FunnelProgress = {
   stages: FunnelProgressStage[];
   /** Space in px between the progress block and the page content below. */
   contentGapPx: number;
+  /** Own colors for every page after the start page. Missing or disabled = same colors as the start page. */
+  stepsColors?: FunnelProgressStepsColors;
 };
+
+/** Empty values use the standard colors (accent on light background), not the start page colors. */
+export type FunnelProgressStepsColors = FunnelProgressColors & { enabled: boolean };
 
 export type FunnelSocialProof = {
   enabled: boolean;

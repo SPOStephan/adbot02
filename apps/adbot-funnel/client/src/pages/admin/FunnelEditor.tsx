@@ -8,7 +8,8 @@ import { deleteFunnelPage, duplicateFunnelPage, moveFunnelPage, patchFunnelPage,
 import { createEditorSaveController } from "@/lib/editorSave";
 import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, postalCodeMaxLength, type ContactFieldPresetKey } from "@shared/contactFields";
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
-import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
+import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, EMPTY_PROGRESS_COLORS, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
+import { EMPTY_STEPS_HEADER } from "@shared/funnelHeader";
 import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, MAX_BUTTON_RADIUS, resolveButtonColors, resolveButtonRadius, resolveStartLayout } from "@shared/startLayout";
 import { resolveStartRequirements } from "@shared/startRequirements";
 import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
@@ -38,6 +39,7 @@ import { StartBadgesField } from "@/components/admin/StartBadgesField";
 import { StartRequirementsField } from "@/components/admin/StartRequirementsField";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
 import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
+import { LogoPreviewTile, LogoTintPicker } from "@/components/admin/LogoTintPicker";
 import { NotificationEmailsField } from "@/components/admin/NotificationEmailsField";
 import { useFunnelEditorHistory } from "@/hooks/useFunnelEditorHistory";
 
@@ -219,9 +221,15 @@ export default function FunnelEditor() {
     },
     onError: error => toast.error(error.message),
   });
+  const logoUploadTarget = useRef<"start" | "steps">("start");
   const logoUpload = trpc.funnel.uploadLogo.useMutation({
     onSuccess: uploaded => {
-      changeConfig(current => ({ ...current, brand: { ...current.brand, logoUrl: uploaded.url } }));
+      changeConfig(current => ({
+        ...current,
+        brand: logoUploadTarget.current === "steps"
+          ? { ...current.brand, stepsHeader: { ...EMPTY_STEPS_HEADER, ...current.brand.stepsHeader, enabled: true, logoUrl: uploaded.url } }
+          : { ...current.brand, logoUrl: uploaded.url },
+      }));
       toast.success("Logo hochgeladen.");
     },
     onError: error => toast.error(error.message),
@@ -243,8 +251,9 @@ export default function FunnelEditor() {
       toast.error("Die Favicon-Datei konnte nicht gelesen werden.");
     }
   };
-  const selectLogo = async (file?: File) => {
+  const selectLogo = async (file?: File, target: "start" | "steps" = "start") => {
     if (!file || !config) return;
+    logoUploadTarget.current = target;
     const mimeType = file.type === "image/png" || file.type === "image/webp" || file.type === "image/jpeg"
       ? file.type
       : /\.png$/i.test(file.name) ? "image/png"
@@ -495,7 +504,7 @@ export default function FunnelEditor() {
               <div className="grid gap-4 rounded-2xl border bg-slate-50/70 p-4">
                 <div><p className="text-sm font-bold">Logo & Browser-Icon</p><p className="text-xs text-muted-foreground">Diese Angaben gelten nur für diesen Funnel.</p></div>
                 <div className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
-                  <div className="grid h-16 place-items-center overflow-hidden rounded-2xl border bg-white px-2 shadow-sm">{config.brand.logoUrl ? <img className="max-h-12 max-w-full object-contain" src={config.brand.logoUrl} alt={config.brand.logoAlt || "Logo-Vorschau"} /> : <ImageIcon className="size-7 text-slate-400" aria-hidden="true" />}</div>
+                  {config.brand.logoUrl ? <LogoPreviewTile url={config.brand.logoUrl} alt={config.brand.logoAlt || "Logo-Vorschau"} tint={config.brand.logoTint} /> : <div className="grid h-16 place-items-center overflow-hidden rounded-2xl border bg-white px-2 shadow-sm"><ImageIcon className="size-7 text-slate-400" aria-hidden="true" /></div>}
                   <div className="grid gap-3">
                     <FormRow label="Logo" hint="PNG, JPG oder WebP, maximal 2 MB. Erscheint oben im Funnel.">
                       <div className="flex flex-wrap gap-2">
@@ -511,7 +520,9 @@ export default function FunnelEditor() {
                     </FormRow>
                   </div>
                 </div>
+                <LogoTintPicker label="Logo-Farbe" value={config.brand.logoTint} onChange={logoTint => changeConfig(current => ({ ...current, brand: { ...current.brand, logoTint } }))} />
                 <FormRow label="Logo-Alternativtext"><Input value={config.brand.logoAlt} onChange={event => changeConfig(current => ({ ...current, brand: { ...current.brand, logoAlt: event.target.value } }))} /></FormRow>
+                <StepsHeaderSettings config={config} changeConfig={changeConfig} uploading={logoUpload.isPending} onUpload={file => void selectLogo(file, "steps")} />
                 <div className="grid gap-3 sm:grid-cols-[72px_minmax(0,1fr)]">
                   <div className="grid size-[72px] place-items-center overflow-hidden rounded-2xl border bg-white shadow-sm">{config.brand.faviconUrl ? <img className="size-10 object-contain" src={config.brand.faviconUrl} alt="Favicon-Vorschau" /> : <ImageIcon className="size-7 text-slate-400" aria-hidden="true" />}</div>
                   <div className="grid gap-3">
@@ -838,6 +849,12 @@ function ProgressSettings({
   const patchColor = (key: keyof typeof progress.colors, value: string) => {
     patchProgress({ colors: { ...progress.colors, [key]: value } });
   };
+  const segments = resolveProgressLayout(progress.layout) === "segments";
+  const stepsColors = progress.stepsColors ?? { enabled: false, ...EMPTY_PROGRESS_COLORS };
+  const resolvedSteps = resolveProgressColors(config.brand, stepsColors);
+  const patchStepsColor = (key: keyof typeof progress.colors, value: string) => {
+    patchProgress({ stepsColors: { ...stepsColors, [key]: value } });
+  };
 
   return (
     <div className="grid gap-4 rounded-2xl border p-4">
@@ -881,25 +898,101 @@ function ProgressSettings({
           ))}
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {resolveProgressLayout(progress.layout) === "segments" ? (
+      <ProgressColorFields segments={segments} colors={progress.colors} resolved={resolved} onChange={patchColor} />
+      <div className="grid gap-3 rounded-xl border bg-slate-50/70 p-3">
+        <label className="flex items-center justify-between gap-3">
+          <span><strong className="block text-sm">Eigene Farben ab Seite 2</strong><small className="text-muted-foreground">Für Folgeseiten mit anderem Hintergrund als die Startseite, z. B. weißer Balken auf blauer Startseite, danach blauer Balken auf hellem Grund.</small></span>
+          <Switch checked={stepsColors.enabled} onCheckedChange={enabled => patchProgress({ stepsColors: { ...stepsColors, enabled } })} />
+        </label>
+        {stepsColors.enabled ? (
           <>
-            <OptionalProgressColor label="Aktiver Balken" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
-            <OptionalProgressColor label="Erledigter Balken" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
-            <OptionalProgressColor label="Leerer Balken" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
-            <OptionalProgressColor label="Beschriftung" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
+            <p className="text-xs text-muted-foreground">Gilt auf allen Seiten nach der Startseite. Leere Felder nutzen die Standardfarben (Akzentfarbe auf hellem Grund), nicht die Farben der Startseite.</p>
+            <ProgressColorFields segments={segments} colors={stepsColors} resolved={resolvedSteps} onChange={patchStepsColor} />
           </>
-        ) : (
-          <>
-            <OptionalProgressColor label="Aktive Stufe" value={progress.colors.active} fallback={resolved.active} onChange={value => patchColor("active", value)} />
-            <OptionalProgressColor label="Erledigte Stufe" value={progress.colors.completed} fallback={resolved.completed} onChange={value => patchColor("completed", value)} />
-            <OptionalProgressColor label="Kommende Stufe" value={progress.colors.upcoming} fallback={resolved.upcoming} onChange={value => patchColor("upcoming", value)} />
-            <OptionalProgressColor label="Balken / Linie" value={progress.colors.track} fallback={resolved.track} onChange={value => patchColor("track", value)} />
-            <OptionalProgressColor label="Stufentext" value={progress.colors.text} fallback={resolved.text} onChange={value => patchColor("text", value)} />
-            <OptionalProgressColor label="Nebentext" value={progress.colors.muted} fallback={resolved.muted} onChange={value => patchColor("muted", value)} />
-          </>
-        )}
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+function ProgressColorFields({
+  segments,
+  colors,
+  resolved,
+  onChange,
+}: {
+  segments: boolean;
+  colors: FunnelConfig["progress"]["colors"];
+  resolved: ReturnType<typeof resolveProgressColors>;
+  onChange: (key: keyof FunnelConfig["progress"]["colors"], value: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {segments ? (
+        <>
+          <OptionalProgressColor label="Aktiver Balken" value={colors.active} fallback={resolved.active} onChange={value => onChange("active", value)} />
+          <OptionalProgressColor label="Erledigter Balken" value={colors.completed} fallback={resolved.completed} onChange={value => onChange("completed", value)} />
+          <OptionalProgressColor label="Leerer Balken" value={colors.upcoming} fallback={resolved.upcoming} onChange={value => onChange("upcoming", value)} />
+          <OptionalProgressColor label="Beschriftung" value={colors.muted} fallback={resolved.muted} onChange={value => onChange("muted", value)} />
+        </>
+      ) : (
+        <>
+          <OptionalProgressColor label="Aktive Stufe" value={colors.active} fallback={resolved.active} onChange={value => onChange("active", value)} />
+          <OptionalProgressColor label="Erledigte Stufe" value={colors.completed} fallback={resolved.completed} onChange={value => onChange("completed", value)} />
+          <OptionalProgressColor label="Kommende Stufe" value={colors.upcoming} fallback={resolved.upcoming} onChange={value => onChange("upcoming", value)} />
+          <OptionalProgressColor label="Balken / Linie" value={colors.track} fallback={resolved.track} onChange={value => onChange("track", value)} />
+          <OptionalProgressColor label="Stufentext" value={colors.text} fallback={resolved.text} onChange={value => onChange("text", value)} />
+          <OptionalProgressColor label="Nebentext" value={colors.muted} fallback={resolved.muted} onChange={value => onChange("muted", value)} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function StepsHeaderSettings({
+  config,
+  changeConfig,
+  uploading,
+  onUpload,
+}: {
+  config: FunnelConfig;
+  changeConfig: (updater: (current: FunnelConfig) => FunnelConfig, immediate?: boolean) => void;
+  uploading: boolean;
+  onUpload: (file?: File) => void;
+}) {
+  const steps = { ...EMPTY_STEPS_HEADER, ...config.brand.stepsHeader };
+  const patch = (value: Partial<typeof steps>, immediate = true) => changeConfig(current => ({
+    ...current,
+    brand: { ...current.brand, stepsHeader: { ...EMPTY_STEPS_HEADER, ...current.brand.stepsHeader, ...value } },
+  }), immediate);
+  const previewUrl = steps.logoUrl || config.brand.logoUrl;
+  return (
+    <div className="grid gap-3 rounded-xl border bg-white p-3">
+      <label className="flex items-center justify-between gap-3">
+        <span><strong className="block text-sm">Anderes Logo ab Seite 2</strong><small className="text-muted-foreground">Für Folgeseiten mit hellem Hintergrund, wenn die Startseite farbig ist. Aus = überall wie auf der Startseite.</small></span>
+        <Switch checked={steps.enabled} onCheckedChange={enabled => patch({ enabled })} />
+      </label>
+      {steps.enabled ? (
+        <div className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+          {previewUrl ? <LogoPreviewTile url={previewUrl} alt={config.brand.logoAlt || "Logo-Vorschau"} tint={steps.logoTint} /> : <div className="grid h-16 place-items-center overflow-hidden rounded-2xl border bg-white px-2 shadow-sm"><ImageIcon className="size-7 text-slate-400" aria-hidden="true" /></div>}
+          <div className="grid gap-3">
+            <FormRow label="Logo ab Seite 2" hint="Optional. Leer = dasselbe Logo wie auf der Startseite, ggf. über „Logo-Farbe“ umgefärbt.">
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border bg-white px-3 text-sm font-medium shadow-xs transition hover:bg-slate-100">
+                  <UploadCloud className="size-4" />{uploading ? "Wird hochgeladen …" : "Logo hochladen"}
+                  <input className="sr-only" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" disabled={uploading} onChange={event => { onUpload(event.target.files?.[0]); event.target.value = ""; }} />
+                </label>
+                {steps.logoUrl && <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => patch({ logoUrl: "" })}><X className="size-4" />Entfernen</Button>}
+              </div>
+            </FormRow>
+            <FormRow label="Oder Logo-URL">
+              <Input value={steps.logoUrl} placeholder="Leer = Logo der Startseite" onChange={event => patch({ logoUrl: event.target.value }, false)} />
+            </FormRow>
+            <LogoTintPicker label="Logo-Farbe ab Seite 2" value={steps.logoTint} onChange={logoTint => patch({ logoTint })} />
+            <OptionalStartColor label="„SSL-verschlüsselt“ ab Seite 2" value={steps.securityTextColor} fallback={config.brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe." onChange={securityTextColor => patch({ securityTextColor })} />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

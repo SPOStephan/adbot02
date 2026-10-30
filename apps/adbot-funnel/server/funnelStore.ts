@@ -23,6 +23,7 @@ import type {
   StartPage,
 } from "@shared/funnel";
 import { clampCopySizeStep } from "@shared/copySize";
+import { normalizeStepsHeader, resolveLogoTint } from "@shared/funnelHeader";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { normalizeFunnelLegal } from "@shared/legalPages";
 import { resolveStartRequirements } from "@shared/startRequirements";
@@ -274,7 +275,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
   return {
     ...publicConfig,
     purpose: normalizeFunnelPurpose(config.purpose),
-    brand: { ...defaultFunnel.brand, ...(config.brand ?? {}) },
+    brand: normalizeBrand(config.brand),
     progress: normalizeProgress(config.progress),
     legal: normalizeFunnelLegal(config.legal),
     postSubmit: { ...defaultFunnel.postSubmit, ...(config.postSubmit ?? {}) },
@@ -288,6 +289,13 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
     status,
     isPublished: status === "published",
   } as FunnelConfig;
+}
+
+function normalizeBrand(brand?: Partial<FunnelBrand>): FunnelBrand {
+  const merged = { ...defaultFunnel.brand, ...(brand ?? {}) } as FunnelBrand;
+  if (merged.logoTint !== undefined) merged.logoTint = resolveLogoTint(merged.logoTint);
+  if (merged.stepsHeader !== undefined) merged.stepsHeader = normalizeStepsHeader(merged.stepsHeader);
+  return merged;
 }
 
 function normalizeConfig(row: Record<string, unknown>): FunnelConfig {
