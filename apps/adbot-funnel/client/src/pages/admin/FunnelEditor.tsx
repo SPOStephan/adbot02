@@ -660,6 +660,13 @@ function StartPageFields({
           <FormRow label="Hinweis unter dem Button">
             <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
+          <OptionalStartColor
+            label="Hinweis – Textfarbe"
+            value={page.trustNoteColor ?? ""}
+            fallback={brandTextColor}
+            emptyHint="Leer = abgeschwächte Textfarbe."
+            onChange={trustNoteColor => patch({ trustNoteColor } as Partial<FunnelPage>)}
+          />
         </>
       )}
 
@@ -695,6 +702,13 @@ function StartPageFields({
           <FormRow label="Hinweis unter dem Button im Kopfbereich">
             <Input value={page.trustNote} onChange={event => patch({ trustNote: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
+          <OptionalStartColor
+            label="Hinweis – Textfarbe"
+            value={page.trustNoteColor ?? ""}
+            fallback={brandTextColor}
+            emptyHint="Leer = abgeschwächte Textfarbe."
+            onChange={trustNoteColor => patch({ trustNoteColor } as Partial<FunnelPage>)}
+          />
           <BenefitsTileLayoutPicker
             value={tileLayout}
             onChange={benefitsTileLayout => patch({ benefitsTileLayout } as Partial<FunnelPage>)}

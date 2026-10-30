@@ -292,10 +292,14 @@ export type StartBadgeIconPosition = "left" | "right";
 export type StartBadge = {
   id: string;
   label: string;
-  /** Optional badge fill. Empty/undefined uses a light chip. */
+  /** Optional badge fill (#RRGGBB or "transparent"). Empty/undefined uses a light chip. */
   backgroundColor?: string;
   /** Optional badge text. Empty/undefined uses contrast on the fill or body text. */
   textColor?: string;
+  /** Optional outline color. Empty/undefined follows the fill. */
+  borderColor?: string;
+  /** Outline width in px (0–8). Undefined = 1 px. */
+  borderWidth?: number;
   /** Optional catalog icon. Empty means text only. */
   icon?: string;
   /** Default is left of the label. */
@@ -333,6 +337,8 @@ export type StartPage = FunnelPageBase & {
   eyebrowBoxBackground: string;
   /** Empty = automatic contrast to eyebrowBoxBackground. Ignored without eyebrowBoxBackground. */
   eyebrowBoxColor: string;
+  /** Empty = muted body text. Text color of the note under the header button. */
+  trustNoteColor?: string;
   badges: StartBadge[];
   heroBackgroundAssetId: string;
   heroBackgroundDesktopUrl: string;

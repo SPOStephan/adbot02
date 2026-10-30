@@ -24,7 +24,7 @@ import type {
 import { clampCopySizeStep } from "@shared/copySize";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { normalizeFunnelLegal } from "@shared/legalPages";
-import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, normalizeBadgeBackground, resolveBadgeBorderWidth, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { snapshotApplicationAnswerLabels, snapshotApplicationQuestionLabels } from "@shared/applicationAnswers";
 import { snapshotApplicationContactLabels } from "@shared/contactFields";
@@ -197,6 +197,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroSectionBackgroundMid?: string;
         eyebrowBoxBackground?: string;
         eyebrowBoxColor?: string;
+        trustNoteColor?: string;
         heroImageLayout?: string;
         heroImageRadius?: number;
         badges?: StartBadge[];
@@ -229,12 +230,15 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroSectionBackgroundMid: optionalHex(startPage.heroSectionBackgroundMid) || "",
         eyebrowBoxBackground: optionalHex(startPage.eyebrowBoxBackground) || "",
         eyebrowBoxColor: optionalHex(startPage.eyebrowBoxColor) || "",
+        trustNoteColor: optionalHex(startPage.trustNoteColor) || "",
         badges: Array.isArray(startPage.badges)
           ? startPage.badges.slice(0, MAX_START_BADGES).map(badge => ({
             id: badge.id || randomUUID(),
             label: String(badge.label ?? "").trim().slice(0, 80) || "Badge",
-            backgroundColor: optionalHex(badge.backgroundColor),
+            backgroundColor: normalizeBadgeBackground(badge.backgroundColor) || undefined,
             textColor: optionalHex(badge.textColor),
+            borderColor: optionalHex(badge.borderColor),
+            borderWidth: typeof badge.borderWidth === "number" ? resolveBadgeBorderWidth(badge.borderWidth) : undefined,
             icon: typeof badge.icon === "string" && isSelectableFunnelIcon(badge.icon) ? badge.icon : "",
             iconPosition: badge.iconPosition === "right" ? "right" : "left",
           }))

@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { ArrowLeftRight, GripVertical, Trash2 } from "lucide-react";
 import type { StartBadge } from "@shared/funnel";
-import { badgeFromTemplate, emptyStartBadge, MAX_START_BADGES, moveStartBadge, patchStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, START_BADGE_TEMPLATES } from "@shared/startLayout";
+import { badgeFromTemplate, emptyStartBadge, MAX_START_BADGES, moveStartBadge, patchStartBadge, MAX_BADGE_BORDER_WIDTH, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, START_BADGE_TEMPLATES } from "@shared/startLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,7 +78,7 @@ export function StartBadgesField({
               <li
                 key={badge.id}
                 className={`inline-flex max-w-full items-center gap-1 rounded-full border px-1 py-1 ${isDropTarget ? "ring-2 ring-[#0165c3]" : ""} ${isDragging ? "opacity-50" : ""} ${isEditing ? "ring-2 ring-slate-400" : ""}`}
-                style={{ background: colors.background, color: colors.text, borderColor: badge.backgroundColor || "color-mix(in srgb, #10253f 14%, transparent)", "--badge-fg": colors.text } as CSSProperties}
+                style={{ background: colors.background, color: colors.text, borderColor: resolveBadgeBorderColor(badge, colors.text, "color-mix(in srgb, #10253f 14%, transparent)"), borderWidth: resolveBadgeBorderWidth(badge.borderWidth), "--badge-fg": colors.text } as CSSProperties}
                 onDragOver={event => {
                   if (!draggingId) return;
                   event.preventDefault();
@@ -187,6 +187,7 @@ export function StartBadgesField({
               label="Hintergrund"
               value={editing.backgroundColor}
               brandColor="#ffffff"
+              allowTransparent
               onChange={color => patch(editing.id, { backgroundColor: color })}
             />
             <IconColorField
@@ -197,10 +198,43 @@ export function StartBadgesField({
               resetLabel="Automatisch verwenden"
               onChange={color => patch(editing.id, { textColor: color })}
             />
+            <IconColorField
+              label="Randfarbe"
+              value={editing.borderColor}
+              brandColor={defaultBorderHex(editing, fallbackTextColor, brandColor)}
+              presetLabel="Wie Hintergrund"
+              resetLabel="Wie Hintergrund verwenden"
+              onChange={color => patch(editing.id, { borderColor: color })}
+            />
+            <div className="grid content-start gap-2">
+              <Label htmlFor={`badge-border-width-${editing.id}`}>Randbreite (px)</Label>
+              <Input
+                id={`badge-border-width-${editing.id}`}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={MAX_BADGE_BORDER_WIDTH}
+                step={1}
+                className="bg-white"
+                value={resolveBadgeBorderWidth(editing.borderWidth)}
+                onChange={event => {
+                  if (event.target.value === "") return;
+                  patch(editing.id, { borderWidth: resolveBadgeBorderWidth(Number(event.target.value)) });
+                }}
+              />
+              <p className="text-xs text-muted-foreground">0 = kein Rand, maximal {MAX_BADGE_BORDER_WIDTH} px.</p>
+            </div>
           </div>
         </div>
       ) : null}
       {atLimit ? <p className="text-xs text-muted-foreground">Maximal {MAX_START_BADGES} Badges.</p> : null}
     </div>
   );
+}
+
+/** Hex shown in the outline picker while it follows the fill. */
+function defaultBorderHex(badge: StartBadge, fallbackTextColor: string, brandColor: string): string {
+  const colors = resolveBadgeColors(badge, fallbackTextColor, brandColor);
+  const border = resolveBadgeBorderColor({ backgroundColor: badge.backgroundColor }, colors.text, "#E2E5EA");
+  return border.startsWith("#") ? border : colors.text;
 }

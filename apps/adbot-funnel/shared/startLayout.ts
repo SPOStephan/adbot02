@@ -182,13 +182,29 @@ export function patchStartBadge(badges: StartBadge[], id: string, next: Partial<
   return badges.map(item => item.id === id ? { ...item, ...next } : item);
 }
 
+/** Stored as badge backgroundColor: no fill, the section background (e.g. a gradient) shows through. */
+export const BADGE_TRANSPARENT_BACKGROUND = "transparent";
+
+export function isTransparentBadgeBackground(value?: string | null): boolean {
+  return typeof value === "string" && value.trim().toLowerCase() === BADGE_TRANSPARENT_BACKGROUND;
+}
+
+/** Valid hex, "transparent", or "" (default light chip). */
+export function normalizeBadgeBackground(value?: string | null): string {
+  if (isTransparentBadgeBackground(value)) return BADGE_TRANSPARENT_BACKGROUND;
+  return optionalStartHex(value);
+}
+
 export function resolveBadgeColors(
   badge: Pick<StartBadge, "backgroundColor" | "textColor">,
   fallbackText: string,
   brandAccent?: string,
 ): { background: string; text: string } {
-  const background = optionalStartHex(badge.backgroundColor) || "#FFFFFF";
   const explicit = optionalStartHex(badge.textColor);
+  if (isTransparentBadgeBackground(badge.backgroundColor)) {
+    return { background: BADGE_TRANSPARENT_BACKGROUND, text: explicit || optionalStartHex(fallbackText) || "#10253F" };
+  }
+  const background = optionalStartHex(badge.backgroundColor) || "#FFFFFF";
   if (explicit) return { background, text: explicit };
   const hasCustomBackground = Boolean(optionalStartHex(badge.backgroundColor));
   const accent = optionalStartHex(brandAccent);
@@ -197,6 +213,27 @@ export function resolveBadgeColors(
     return { background, text: contrastOnAccent(background) };
   }
   return { background, text: optionalStartHex(fallbackText) || "#10253F" };
+}
+
+/** Chip outline: own color, else the fill for custom colors, a soft text-colored line when transparent, else the given default. */
+export function resolveBadgeBorderColor(
+  badge: Pick<StartBadge, "backgroundColor" | "borderColor">,
+  textColor: string,
+  fallback: string,
+): string {
+  const own = optionalStartHex(badge.borderColor);
+  if (own) return own;
+  if (isTransparentBadgeBackground(badge.backgroundColor)) return `color-mix(in srgb, ${textColor} 35%, transparent)`;
+  return optionalStartHex(badge.backgroundColor) || fallback;
+}
+
+export const DEFAULT_BADGE_BORDER_WIDTH = 1;
+export const MAX_BADGE_BORDER_WIDTH = 8;
+
+/** Whole pixels 0–8; missing/invalid = 1 px (previous fixed outline). */
+export function resolveBadgeBorderWidth(value?: number | null): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_BADGE_BORDER_WIDTH;
+  return Math.min(MAX_BADGE_BORDER_WIDTH, Math.max(0, Math.round(value)));
 }
 
 export function defaultStartBenefits(createId: () => string = () => crypto.randomUUID()): StartBenefit[] {

@@ -7,7 +7,7 @@ import { notificationEmailsAreValid } from "./notificationEmails";
 import { CONTACT_FIELD_KEY_PATTERN, CONTACT_FIELD_MAX_LENGTH, CONTACT_MESSAGE_MAX_LENGTH, MAX_CONTACT_FIELDS } from "./contactFields";
 import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
-import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
+import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_BADGE_BORDER_WIDTH, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
 
@@ -69,8 +69,10 @@ const startBenefitSchema = z.object({
 const startBadgeSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1).max(80),
-  backgroundColor: optionalHexColorSchema.optional(),
+  backgroundColor: z.union([z.literal("transparent"), optionalHexColorSchema]).optional(),
   textColor: optionalHexColorSchema.optional(),
+  borderColor: optionalHexColorSchema.optional(),
+  borderWidth: z.number().int().min(0).max(MAX_BADGE_BORDER_WIDTH).optional(),
   icon: z.string().max(64).default("").refine(value => value === "" || isSelectableFunnelIcon(value), "Unbekanntes Icon."),
   iconPosition: z.enum(["left", "right"]).default("left"),
 });
@@ -102,6 +104,7 @@ const startPageSchema = pageBaseSchema.extend({
   heroSectionBackgroundMid: optionalHexColorSchema.default(""),
   eyebrowBoxBackground: optionalHexColorSchema.default(""),
   eyebrowBoxColor: optionalHexColorSchema.default(""),
+  trustNoteColor: optionalHexColorSchema.default(""),
   badges: z.array(startBadgeSchema).max(MAX_START_BADGES).default([]),
   heroBackgroundAssetId: z.string().max(80).default(""),
   heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),
