@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBlankFormattedText, sanitizeFormattedText, stripFormattedText } from "@shared/formattedText";
+import { hasLightTextColor, isBlankFormattedText, sanitizeFormattedText, stripFormattedText } from "@shared/formattedText";
 
 describe("formatierter Funnel-Text", () => {
   it("lässt Fett, Kursiv, Unterstrich, Klein und Hexfarbe zu", () => {
@@ -51,5 +51,12 @@ describe("formatierter Funnel-Text", () => {
     expect(sanitizeFormattedText(sanitizeFormattedText("Bau & Montage"))).toBe("Bau &amp; Montage");
     expect(stripFormattedText("Bau &amp; Montage")).toBe("Bau & Montage");
     expect(stripFormattedText("<b>Bau &amp;amp; Montage</b>")).toBe("Bau & Montage");
+  });
+
+  it("erkennt helle Schriftfarben für die Editor-Lesbarkeit", () => {
+    expect(hasLightTextColor(sanitizeFormattedText('<span style="color: rgb(255, 255, 255)">Weiß</span>'))).toBe(true);
+    expect(hasLightTextColor('<span style="color:#FFF">Weiß</span>')).toBe(true);
+    expect(hasLightTextColor('<span style="color:#10253F">Dunkel</span>')).toBe(false);
+    expect(hasLightTextColor("Ohne Farbe")).toBe(false);
   });
 });
