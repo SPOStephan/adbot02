@@ -10,6 +10,7 @@ import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LAB
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
 import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, resolveStartLayout } from "@shared/startLayout";
+import { resolveStartRequirements } from "@shared/startRequirements";
 import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ import { ProgressStagesField } from "@/components/admin/ProgressStagesField";
 import { BenefitsTileGapPicker } from "@/components/admin/BenefitsTileGapPicker";
 import { BenefitsTileLayoutPicker } from "@/components/admin/BenefitsTileLayoutPicker";
 import { StartBadgesField } from "@/components/admin/StartBadgesField";
+import { StartRequirementsField } from "@/components/admin/StartRequirementsField";
 import { StartLayoutPicker } from "@/components/admin/StartLayoutPicker";
 import { LegalPagesFields } from "@/components/admin/LegalPagesFields";
 import { NotificationEmailsField } from "@/components/admin/NotificationEmailsField";
@@ -694,6 +696,14 @@ function StartPageFields({
             fallbackTextColor={brandTextColor}
             onChange={update => patch(current => ({
               badges: update(current.type === "start" ? current.badges ?? [] : []),
+            }))}
+          />
+          <StartRequirementsField
+            value={page.requirements}
+            brandColor={brandColor}
+            brandTextColor={brandTextColor}
+            onChange={update => patch(current => ({
+              requirements: update(resolveStartRequirements(current.type === "start" ? current.requirements : undefined)),
             }))}
           />
           <FormRow label="Trenner-Überschrift" hint="Volle Fläche in der Brandingfarbe, z. B. „Deine Vorteile bei uns“.">
