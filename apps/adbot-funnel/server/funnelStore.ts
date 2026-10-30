@@ -187,6 +187,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         benefitsSectionBackground?: string;
         benefitsCardBackground?: string;
         heroSectionBackground?: string;
+        heroSectionBackgroundEnd?: string;
+        heroSectionBackgroundMid?: string;
         heroImageLayout?: string;
         heroImageRadius?: number;
         badges?: StartBadge[];
@@ -211,6 +213,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         benefitsSectionBackground: optionalHex(startPage.benefitsSectionBackground) || "",
         benefitsCardBackground: optionalHex(startPage.benefitsCardBackground) || "",
         heroSectionBackground: optionalHex(startPage.heroSectionBackground) || "",
+        heroSectionBackgroundEnd: optionalHex(startPage.heroSectionBackgroundEnd) || "",
+        heroSectionBackgroundMid: optionalHex(startPage.heroSectionBackgroundMid) || "",
         badges: Array.isArray(startPage.badges)
           ? startPage.badges.slice(0, MAX_START_BADGES).map(badge => ({
             id: badge.id || randomUUID(),

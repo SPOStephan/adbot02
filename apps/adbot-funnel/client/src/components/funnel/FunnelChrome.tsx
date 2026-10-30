@@ -1,4 +1,4 @@
-import type { CSSProperties, PropsWithChildren } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type PropsWithChildren } from "react";
 import type { FunnelBrand, FunnelConfig, FunnelSocialProof } from "@shared/funnel";
 import { DEFAULT_PROGRESS } from "@shared/progressLayout";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
@@ -19,6 +19,8 @@ type FunnelChromeProps = PropsWithChildren<{
   fullBleed?: boolean;
   /** Optional fill for logo + progress on the benefits start page. */
   topBackground?: string;
+  /** Optional CSS gradient spanning logo, progress and the start hero as one surface. */
+  topGradient?: string;
   pages?: FunnelConfig["pages"];
   progress?: FunnelConfig["progress"];
   onBack?: () => void;
@@ -38,6 +40,7 @@ export function FunnelChrome({
   showProgress,
   fullBleed = false,
   topBackground,
+  topGradient,
   pages,
   progress,
   onBack,
@@ -58,6 +61,8 @@ export function FunnelChrome({
     "--funnel-choice-selected-text": brand.choiceSelectedTextColor,
     "--funnel-choice-selected-border": brand.choiceSelectedBorderColor,
   } as CSSProperties;
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const gradientHeight = useHeroFillHeight(canvasRef, fullBleed ? topGradient : undefined);
   const top = (
     <>
       <header className="funnel-header" aria-label="Funnel-Kopfbereich">
@@ -87,8 +92,11 @@ export function FunnelChrome({
     </>
   );
   return (
-    <div className={`funnel-canvas${fullBleed ? " funnel-canvas-benefits" : ""}${fullBleed && topBackground ? " has-hero-color" : ""}`} lang="de" style={brandStyle}>
+    <div ref={canvasRef} className={`funnel-canvas${fullBleed ? " funnel-canvas-benefits" : ""}${fullBleed && (topBackground || topGradient) ? " has-hero-color" : ""}`} lang="de" style={brandStyle}>
       <a className="funnel-skip-link" href="#funnel-content">Zum Hauptinhalt springen</a>
+      {fullBleed && topGradient && gradientHeight > 0 ? (
+        <div className="funnel-top-gradient" aria-hidden="true" style={{ background: topGradient, height: gradientHeight }} />
+      ) : null}
       {fullBleed ? (
         <div className="funnel-start-top" style={topBackground ? { background: topBackground } : undefined}>
           {top}
@@ -111,4 +119,30 @@ export function FunnelChrome({
       </footer>
     </div>
   );
+}
+
+/** Height from the canvas top to the bottom of the start hero, so one gradient covers both. */
+function useHeroFillHeight(canvasRef: { current: HTMLDivElement | null }, gradient: string | undefined) {
+  const enabled = Boolean(gradient);
+  const [height, setHeight] = useState(0);
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!enabled || !canvas) return;
+    const measure = () => {
+      const hero = canvas.querySelector<HTMLElement>(".funnel-start-benefits-hero");
+      if (!hero) return setHeight(0);
+      // offsetTop ignores CSS transforms, so the scaled editor preview measures correctly.
+      let top = 0;
+      for (let node: HTMLElement | null = hero; node && node !== canvas; node = node.offsetParent as HTMLElement | null) top += node.offsetTop;
+      setHeight(top + hero.offsetHeight);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(canvas);
+    const hero = canvas.querySelector(".funnel-start-benefits-hero");
+    if (hero) observer.observe(hero);
+    return () => observer.disconnect();
+  }, [canvasRef, enabled, gradient]);
+  return enabled ? height : 0;
 }

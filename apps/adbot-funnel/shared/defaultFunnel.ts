@@ -95,6 +95,8 @@ export const defaultFunnel: FunnelConfig = {
       benefitsSectionBackground: "",
       benefitsCardBackground: "",
       heroSectionBackground: "",
+      heroSectionBackgroundEnd: "",
+      heroSectionBackgroundMid: "",
       badges: [],
       heroBackgroundAssetId: "",
       heroBackgroundDesktopUrl: "",

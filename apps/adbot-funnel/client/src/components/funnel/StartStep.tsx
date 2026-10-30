@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { copySizeCssVars } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
-import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -76,12 +76,14 @@ function BenefitsStartStep({
   const cardBackground = cards ? resolveBenefitsCardBackground(page.benefitsCardBackground) : undefined;
   const imageLayout = resolveHeroImageLayout(page.heroImageLayout);
   const imageRadius = clampHeroImageRadius(page.heroImageRadius);
-  const heroBackground = customHeroSectionBackground(page.heroSectionBackground);
+  const heroFill = customHeroSectionFill(page.heroSectionBackground, page.heroSectionBackgroundEnd, page.heroSectionBackgroundMid);
+  // A gradient is painted by FunnelChrome across logo, progress and hero, so the hero stays transparent.
+  const heroBackground = heroFill.solid;
 
   return (
     <section className="funnel-start-benefits" aria-labelledby={`${page.id}-title`} style={copySizeCssVars(page) as CSSProperties}>
       <div
-        className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? ` has-portrait is-image-${imageLayout}` : ""}${backgroundUrl ? " has-background" : ""}${heroBackground ? " has-hero-color" : ""}`}
+        className={`funnel-start-benefits-hero${page.heroImageUrl.trim() ? ` has-portrait is-image-${imageLayout}` : ""}${backgroundUrl ? " has-background" : ""}${heroFill.solid || heroFill.gradient ? " has-hero-color" : ""}`}
         style={heroBackground ? { background: heroBackground } : undefined}
       >
         {backgroundUrl && (

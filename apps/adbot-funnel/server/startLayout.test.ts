@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, patchStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
+import { badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, patchStartBadge, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -115,6 +115,12 @@ describe("Startseiten-Layouts", () => {
     expect(resolveHeroSectionBackground("#FFF4E5", "#F4F8FC")).toBe("#FFF4E5");
     expect(customHeroSectionBackground("")).toBeUndefined();
     expect(customHeroSectionBackground("#fff4e5")).toBe("#FFF4E5");
+    expect(customHeroSectionFill("", "")).toEqual({});
+    expect(customHeroSectionFill("#fff4e5", "")).toEqual({ solid: "#FFF4E5" });
+    expect(customHeroSectionFill("#fff4e5", "", "#0165C3")).toEqual({ solid: "#FFF4E5" });
+    expect(customHeroSectionFill("", "#0165C3")).toEqual({});
+    expect(customHeroSectionFill("#fff4e5", "#0165c3")).toEqual({ gradient: "linear-gradient(170deg, #FFF4E5 0%, #0165C3 100%)" });
+    expect(customHeroSectionFill("#e8f3ff", "#003d75", "#0165c3")).toEqual({ gradient: "linear-gradient(170deg, #E8F3FF 0%, #0165C3 40%, #003D75 100%)" });
     expect(start.benefitsTileGap).toBe("medium");
     expect(start.badges.map(badge => badge.label)).toEqual(["Homeoffice", "10.000 €"]);
     expect(start.badges[0]).toMatchObject({ icon: "", iconPosition: "left" });

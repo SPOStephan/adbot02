@@ -646,12 +646,12 @@ function StartPageFields({
 
       {layout === "benefits" && (
         <>
-          <OptionalStartColor
-            label="Hintergrund oben"
-            value={page.heroSectionBackground}
+          <HeroSectionBackgroundField
+            start={page.heroSectionBackground}
+            end={page.heroSectionBackgroundEnd ?? ""}
+            mid={page.heroSectionBackgroundMid ?? ""}
             fallback={brandBackground}
-            emptyHint="Leer = allgemeine Hintergrundfarbe."
-            onChange={heroSectionBackground => patch({ heroSectionBackground } as Partial<FunnelPage>)}
+            onChange={next => patch(next as Partial<FunnelPage>)}
           />
           <HeroBackgroundField funnelId={funnelId} page={page} onChange={next => patch(next as Partial<FunnelPage>)} />
           <HeroImageField
@@ -854,6 +854,56 @@ function OptionalStartColor({
     <div className="grid gap-1">
       <BrandColorField label={label} value={value || fallback} onChange={onChange} hint={value ? "Eigene Farbe für dieses Element." : (emptyHint ?? "Leer = Standard der Vorlage.")} />
       {value ? <Button type="button" size="sm" variant="ghost" className="justify-start px-0" onClick={() => onChange("")}>Standard verwenden</Button> : null}
+    </div>
+  );
+}
+
+function HeroSectionBackgroundField({
+  start,
+  end,
+  mid,
+  fallback,
+  onChange,
+}: {
+  start: string;
+  end: string;
+  mid: string;
+  fallback: string;
+  onChange: (value: { heroSectionBackground?: string; heroSectionBackgroundEnd?: string; heroSectionBackgroundMid?: string }) => void;
+}) {
+  const gradient = Boolean(end);
+  const setGradient = (enabled: boolean) => onChange(enabled
+    // Verlauf startet bei der aktuellen Farbe, damit sich beim Einschalten nichts sprunghaft ändert.
+    ? { heroSectionBackground: start || fallback, heroSectionBackgroundEnd: start || fallback }
+    : { heroSectionBackgroundEnd: "", heroSectionBackgroundMid: "" });
+  return (
+    <div className="grid gap-2">
+      <label className="flex items-center justify-between rounded-xl border p-3">
+        <span><strong className="block text-sm">Farbverlauf oben</strong><small className="text-muted-foreground">Linear, 170° (hellste Ecke oben rechts), über Logo, Fortschritt und Kopfbereich.</small></span>
+        <Switch checked={gradient} onCheckedChange={setGradient} />
+      </label>
+      {gradient ? (
+        <div className="grid gap-3">
+          <BrandColorField label="Hintergrund oben – Startfarbe" value={start || fallback} onChange={heroSectionBackground => onChange({ heroSectionBackground })} />
+          <OptionalStartColor
+            label="Hintergrund oben – Mittelfarbe bei 40 %"
+            value={mid}
+            fallback={end}
+            emptyHint="Leer = direkter Verlauf ohne Zwischenstufe."
+            onChange={heroSectionBackgroundMid => onChange({ heroSectionBackgroundMid })}
+          />
+          <BrandColorField label="Hintergrund oben – Endfarbe" value={end} onChange={heroSectionBackgroundEnd => onChange({ heroSectionBackgroundEnd })} />
+        </div>
+      ) : (
+        <OptionalStartColor
+          label="Hintergrund oben"
+          value={start}
+          fallback={fallback}
+          emptyHint="Leer = allgemeine Hintergrundfarbe."
+          onChange={heroSectionBackground => onChange({ heroSectionBackground })}
+        />
+      )}
+      {gradient ? <Button type="button" size="sm" variant="ghost" className="justify-start px-0" onClick={() => onChange({ heroSectionBackground: "", heroSectionBackgroundEnd: "", heroSectionBackgroundMid: "" })}>Standard verwenden</Button> : null}
     </div>
   );
 }

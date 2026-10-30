@@ -186,6 +186,10 @@ describe("StartStep Layouts", () => {
     const fallback = renderToStaticMarkup(<StartStep page={{ ...page, heroSectionBackground: "" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
     expect(fallback).not.toContain("has-hero-color");
     expect(fallback).not.toContain("background:#FFF4E5");
+    const gradient = renderToStaticMarkup(<StartStep page={{ ...page, heroSectionBackgroundEnd: "#0165C3" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(gradient).toContain("has-hero-color");
+    // The gradient is painted once by FunnelChrome across header and hero, not by the hero itself.
+    expect(gradient).not.toContain("linear-gradient");
   });
 
   it("nimmt die Badge-Schriftfarbe, sonst die Brandingfarbe auf eigener Fläche", () => {

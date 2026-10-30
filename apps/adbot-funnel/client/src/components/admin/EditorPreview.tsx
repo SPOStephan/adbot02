@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { isFunnelPageHidden, visibleFunnelPages, type ContactPage, type FunnelConfig, type FunnelPage } from "@shared/funnel";
 import { legalFooterLinks } from "@shared/legalPages";
-import { customHeroSectionBackground, resolveStartLayout } from "@shared/startLayout";
+import { customHeroSectionFill, resolveStartLayout } from "@shared/startLayout";
 import { FunnelChrome } from "@/components/funnel/FunnelChrome";
 import { StartStep } from "@/components/funnel/StartStep";
 import { ChoiceStep } from "@/components/funnel/ChoiceStep";
@@ -16,6 +16,8 @@ export function EditorPreview({ config, page }: { config: FunnelConfig; page: Fu
     const selected = current[key] ?? [];
     return { ...current, [key]: multiple ? (selected.includes(value) ? selected.filter(item => item !== value) : [...selected, value]) : [value] };
   });
+  const benefitsStart = page.type === "start" && resolveStartLayout(page) === "benefits";
+  const topFill = page.type === "start" && benefitsStart ? customHeroSectionFill(page.heroSectionBackground, page.heroSectionBackgroundEnd, page.heroSectionBackgroundMid) : {};
   return (
     <div className={`admin-live-preview ${hidden ? "opacity-60 grayscale" : ""}`}>
       {hidden ? (
@@ -23,7 +25,7 @@ export function EditorPreview({ config, page }: { config: FunnelConfig; page: Fu
           Vorschau einer ausgeblendeten Seite – Besucher sehen sie nicht.
         </p>
       ) : null}
-      <FunnelChrome brand={config.brand} socialProof={config.socialProof} {...legalFooterLinks(config, { imprintUrl: `/f/${config.slug}/impressum`, privacyUrl: `/f/${config.slug}/datenschutz` })} step={step} totalSteps={visible.length} showProgress={!hidden} pages={visible} progress={config.progress} fullBleed={page.type === "start" && resolveStartLayout(page) === "benefits"} topBackground={page.type === "start" && resolveStartLayout(page) === "benefits" ? customHeroSectionBackground(page.heroSectionBackground) : undefined}>
+      <FunnelChrome brand={config.brand} socialProof={config.socialProof} {...legalFooterLinks(config, { imprintUrl: `/f/${config.slug}/impressum`, privacyUrl: `/f/${config.slug}/datenschutz` })} step={step} totalSteps={visible.length} showProgress={!hidden} pages={visible} progress={config.progress} fullBleed={benefitsStart} topBackground={topFill.solid} topGradient={topFill.gradient}>
         {page.type === "start" ? (
           <StartStep page={page} brand={config.brand} onContinue={() => undefined} />
         ) : page.type === "choice-grid" || page.type === "choice-list" ? (
