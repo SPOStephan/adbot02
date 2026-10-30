@@ -1,12 +1,13 @@
 import type { CSSProperties } from "react";
-import { copySizeCssVars } from "@shared/copySize";
-import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
+import { copySizeCssVars, copySizeScale } from "@shared/copySize";
+import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage, type StartRequirements } from "@shared/funnel";
 import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveStartLayout, startAlignClass, buttonOverrideVars } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
 import { StartBadgeContent } from "./StartBadgeContent";
 import { stripFormattedText } from "@shared/formattedText";
+import { visibleStartRequirements } from "@shared/startRequirements";
 
 export function StartStep({
   page,
@@ -139,6 +140,8 @@ function BenefitsStartStep({
         </div>
       </div>
 
+      <StartRequirementsSection page={page} accent={accent} />
+
       {stripFormattedText(page.benefitsBandTitle) && (
         <div className="funnel-start-benefits-band" style={{ background: bandColor, color: bandText }}>
           <FormattedText as="h2" value={page.benefitsBandTitle} />
@@ -176,6 +179,51 @@ function BenefitsStartStep({
         <button className="funnel-primary-button funnel-start-benefits-button" type="button" style={buttonOverrideVars(page.secondaryButtonColor, page.secondaryButtonTextColor) as CSSProperties | undefined} onClick={onContinue}>
           {bottomLabel}
         </button>
+      </div>
+    </section>
+  );
+}
+
+function StartRequirementsSection({ page, accent }: { page: StartPage; accent: string }) {
+  const requirements = visibleStartRequirements(page);
+  if (!requirements) return null;
+  return <StartRequirementsList requirements={requirements} accent={accent} headingId={`${page.id}-requirements`} />;
+}
+
+function StartRequirementsList({ requirements, accent, headingId }: { requirements: StartRequirements; accent: string; headingId: string }) {
+  const filled = requirements.iconStyle !== "plain";
+  const iconColor = requirements.iconColor || accent;
+  const glyphColor = filled ? requirements.iconGlyphColor || contrastOnAccent(iconColor) : iconColor;
+  const hasTitle = Boolean(stripFormattedText(requirements.title));
+  return (
+    <section
+      className="funnel-start-requirements"
+      aria-labelledby={hasTitle ? headingId : undefined}
+      style={{
+        background: requirements.background || undefined,
+        "--fs-req-title": String(copySizeScale(requirements.titleSizeStep)),
+        "--fs-req-text": String(copySizeScale(requirements.textSizeStep)),
+      } as CSSProperties}
+    >
+      <div className="funnel-start-requirements-inner">
+        {hasTitle && (
+          <FormattedText
+            as="h2"
+            id={headingId}
+            value={requirements.title}
+            style={requirements.titleColor ? { color: requirements.titleColor } : undefined}
+          />
+        )}
+        <ul style={requirements.textColor ? { color: requirements.textColor } : undefined}>
+          {requirements.items.map(item => (
+            <li key={item.id}>
+              <span className={`funnel-start-requirements-icon${filled ? " is-filled" : ""}`} style={filled ? { background: iconColor } : undefined} aria-hidden="true">
+                <FunnelIcon name={requirements.icon} color={glyphColor} fit="picker" />
+              </span>
+              <FormattedText as="span" className="funnel-start-requirements-text" value={item.text} />
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

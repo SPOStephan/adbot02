@@ -7,6 +7,7 @@ import { notificationEmailsAreValid } from "./notificationEmails";
 import { CONTACT_FIELD_KEY_PATTERN, CONTACT_FIELD_MAX_LENGTH, CONTACT_MESSAGE_MAX_LENGTH, MAX_CONTACT_FIELDS } from "./contactFields";
 import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
+import { MAX_START_REQUIREMENT_TEXT, MAX_START_REQUIREMENTS } from "./startRequirements";
 import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_BADGE_BORDER_WIDTH, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
@@ -77,6 +78,26 @@ const startBadgeSchema = z.object({
   iconPosition: z.enum(["left", "right"]).default("left"),
 });
 
+const copySizeStepSchema = z.number().int().min(MIN_COPY_SIZE_STEP).max(MAX_COPY_SIZE_STEP).default(DEFAULT_COPY_SIZE_STEP);
+
+const startRequirementsSchema = z.object({
+  enabled: z.boolean().default(false),
+  title: formattedTextSchema(200).default(""),
+  items: z.array(z.object({
+    id: z.string().min(1),
+    text: formattedTextSchema(MAX_START_REQUIREMENT_TEXT),
+  })).max(MAX_START_REQUIREMENTS).default([]),
+  icon: iconSchema.default("check"),
+  iconStyle: z.enum(["filled", "plain"]).default("filled"),
+  iconColor: optionalHexColorSchema.default(""),
+  iconGlyphColor: optionalHexColorSchema.default(""),
+  titleColor: optionalHexColorSchema.default(""),
+  textColor: optionalHexColorSchema.default(""),
+  background: optionalHexColorSchema.default(""),
+  titleSizeStep: copySizeStepSchema,
+  textSizeStep: copySizeStepSchema,
+});
+
 const optionalAssetUrlSchema = z.string().max(2048).refine(
   value => value === "" || value.startsWith("/") || /^https:\/\//i.test(value),
   "Es ist nur eine interne oder HTTPS-Adresse zulässig.",
@@ -109,6 +130,7 @@ const startPageSchema = pageBaseSchema.extend({
   descriptionAlign: z.enum(["center", "left"]).optional(),
   badgesAlign: z.enum(["center", "left"]).optional(),
   badges: z.array(startBadgeSchema).max(MAX_START_BADGES).default([]),
+  requirements: startRequirementsSchema.optional(),
   heroBackgroundAssetId: z.string().max(80).default(""),
   heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),
   heroBackgroundMobileUrl: optionalAssetUrlSchema.default(""),

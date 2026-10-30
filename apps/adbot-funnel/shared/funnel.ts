@@ -292,6 +292,36 @@ export type StartBadgeIconPosition = "left" | "right";
 /** Horizontal alignment in the "benefits" start header. Undefined = centered (previous fixed look). */
 export type StartTextAlign = "center" | "left";
 
+export type StartRequirementsIconStyle = "filled" | "plain";
+
+export type StartRequirementItem = {
+  id: string;
+  text: string;
+};
+
+/** Optional checklist above the Vorteile band ("Das bringst Du mit"). */
+export type StartRequirements = {
+  enabled: boolean;
+  title: string;
+  items: StartRequirementItem[];
+  /** Catalog icon shown before every item. */
+  icon: string;
+  /** "filled" = icon in a round colored circle, "plain" = icon only. */
+  iconStyle: StartRequirementsIconStyle;
+  /** Circle fill (filled) or icon color (plain). Empty = branding accent. */
+  iconColor: string;
+  /** Icon color inside the circle. Empty = automatic contrast. Ignored for plain. */
+  iconGlyphColor: string;
+  /** Empty = brand text color. */
+  titleColor: string;
+  /** Empty = brand text color. */
+  textColor: string;
+  /** Empty = white surface. */
+  background: string;
+  titleSizeStep: number;
+  textSizeStep: number;
+};
+
 export type StartBadge = {
   id: string;
   label: string;
@@ -347,6 +377,8 @@ export type StartPage = FunnelPageBase & {
   descriptionAlign?: StartTextAlign;
   badgesAlign?: StartTextAlign;
   badges: StartBadge[];
+  /** Missing on older funnels; treated as switched off. */
+  requirements?: StartRequirements;
   heroBackgroundAssetId: string;
   heroBackgroundDesktopUrl: string;
   heroBackgroundMobileUrl: string;

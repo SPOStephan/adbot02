@@ -19,11 +19,13 @@ import type {
   LeadQuality,
   StartBadge,
   StartBenefit,
+  StartRequirements,
   StartPage,
 } from "@shared/funnel";
 import { clampCopySizeStep } from "@shared/copySize";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { normalizeFunnelLegal } from "@shared/legalPages";
+import { resolveStartRequirements } from "@shared/startRequirements";
 import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, normalizeBadgeBackground, resolveBadgeBorderWidth, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout, resolveStartTextAlign } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { snapshotApplicationAnswerLabels, snapshotApplicationQuestionLabels } from "@shared/applicationAnswers";
@@ -204,6 +206,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroImageLayout?: string;
         heroImageRadius?: number;
         badges?: StartBadge[];
+        requirements?: Partial<StartRequirements>;
         benefitsBandTitle?: string;
         secondaryButtonLabel?: string;
         secondaryButtonColor?: string;
@@ -249,6 +252,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
             iconPosition: badge.iconPosition === "right" ? "right" : "left",
           }))
           : [],
+        ...(startPage.requirements ? { requirements: resolveStartRequirements(startPage.requirements) } : {}),
         benefits: Array.isArray(startPage.benefits)
           ? startPage.benefits.slice(0, 12).map(benefit => ({
             id: benefit.id || randomUUID(),
@@ -674,6 +678,7 @@ function regeneratePages(config: FunnelConfig): FunnelConfig["pages"] {
         ...base,
         benefits: (base.benefits ?? []).map(benefit => ({ ...benefit, id: randomUUID() })),
         badges: (base.badges ?? []).map(badge => ({ ...badge, id: randomUUID() })),
+        ...(base.requirements ? { requirements: { ...base.requirements, items: base.requirements.items.map(item => ({ ...item, id: randomUUID() })) } } : {}),
       };
     }
     if (base.type !== "choice-grid" && base.type !== "choice-list") return base;
