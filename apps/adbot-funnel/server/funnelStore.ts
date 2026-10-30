@@ -189,6 +189,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroSectionBackground?: string;
         heroSectionBackgroundEnd?: string;
         heroSectionBackgroundMid?: string;
+        eyebrowBoxBackground?: string;
+        eyebrowBoxColor?: string;
         heroImageLayout?: string;
         heroImageRadius?: number;
         badges?: StartBadge[];
@@ -215,6 +217,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         heroSectionBackground: optionalHex(startPage.heroSectionBackground) || "",
         heroSectionBackgroundEnd: optionalHex(startPage.heroSectionBackgroundEnd) || "",
         heroSectionBackgroundMid: optionalHex(startPage.heroSectionBackgroundMid) || "",
+        eyebrowBoxBackground: optionalHex(startPage.eyebrowBoxBackground) || "",
+        eyebrowBoxColor: optionalHex(startPage.eyebrowBoxColor) || "",
         badges: Array.isArray(startPage.badges)
           ? startPage.badges.slice(0, MAX_START_BADGES).map(badge => ({
             id: badge.id || randomUUID(),

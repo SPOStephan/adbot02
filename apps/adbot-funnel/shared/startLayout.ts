@@ -115,6 +115,18 @@ export function customHeroSectionFill(start?: string | null, end?: string | null
   return { gradient: `linear-gradient(${HERO_GRADIENT_ANGLE}deg, ${stops.join(", ")})` };
 }
 
+export const DEFAULT_EYEBROW_BOX_BACKGROUND = "#FFCB2E";
+
+/**
+ * Colored box around the Überzeile of a start page ("Wir suchen Dich!").
+ * Without a valid box color the Überzeile stays plain text, so existing funnels are unchanged.
+ */
+export function resolveEyebrowBox(background?: string | null, text?: string | null): { background: string; color: string } | undefined {
+  const fill = optionalStartHex(background);
+  if (!fill) return undefined;
+  return { background: fill, color: optionalStartHex(text) || contrastOnAccent(fill) };
+}
+
 export function resolveBenefitsCardBackground(value?: string | null): string {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
     ? value.toUpperCase()

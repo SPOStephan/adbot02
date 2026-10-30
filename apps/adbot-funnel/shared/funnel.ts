@@ -323,6 +323,10 @@ export type StartPage = FunnelPageBase & {
   heroSectionBackgroundEnd: string;
   /** Optional middle gradient stop at 40 %. Ignored without heroSectionBackgroundEnd. */
   heroSectionBackgroundMid: string;
+  /** Empty = Überzeile as plain text. Otherwise the Überzeile sits in a colored box ("Wir suchen Dich!"). */
+  eyebrowBoxBackground: string;
+  /** Empty = automatic contrast to eyebrowBoxBackground. Ignored without eyebrowBoxBackground. */
+  eyebrowBoxColor: string;
   badges: StartBadge[];
   heroBackgroundAssetId: string;
   heroBackgroundDesktopUrl: string;

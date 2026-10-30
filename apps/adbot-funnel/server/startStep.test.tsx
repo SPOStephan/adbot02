@@ -95,6 +95,24 @@ describe("StartStep Layouts", () => {
     expect(benefits).toContain("--fs-title:1.12");
   });
 
+  it("setzt die Überzeile optional in einen farbigen Kasten", () => {
+    const page: StartPage = {
+      ...getStartPage(),
+      layout: "benefits",
+      eyebrow: "Wir suchen Dich!",
+      benefits: defaultStartBenefits(() => "tile"),
+    };
+    const plain = renderToStaticMarkup(<StartStep page={page} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(plain).toContain("funnel-start-benefits-kicker");
+    expect(plain).not.toContain("is-boxed");
+    const boxed = renderToStaticMarkup(<StartStep page={{ ...page, eyebrowBoxBackground: "#FFCB2E", eyebrowBoxColor: "#0B2A4A" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(boxed).toContain("funnel-start-benefits-kicker is-boxed");
+    expect(boxed).toContain("background:#FFCB2E;color:#0B2A4A");
+    const classic = renderToStaticMarkup(<StartStep page={{ ...page, layout: "classic", eyebrowBoxBackground: "#0165C3" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(classic).toContain("funnel-eyebrow is-boxed");
+    expect(classic).toContain("background:#0165C3;color:#ffffff");
+  });
+
   it("blendet Überzeile und Beschreibung der Startseite aus", () => {
     const page: StartPage = {
       ...getStartPage(),
