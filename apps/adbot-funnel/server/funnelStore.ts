@@ -26,7 +26,7 @@ import { clampCopySizeStep } from "@shared/copySize";
 import { defaultProgressIcon, normalizeProgress } from "@shared/progressLayout";
 import { normalizeFunnelLegal } from "@shared/legalPages";
 import { resolveStartRequirements } from "@shared/startRequirements";
-import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, normalizeBadgeBackground, resolveBadgeBorderWidth, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveStartLayout, resolveStartTextAlign } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroBackgroundOpacity, clampHeroImageRadius, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, normalizeBadgeBackground, resolveBadgeBorderWidth, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveHeroImageLayout, resolveButtonRadius, resolveStartButtonAlign, resolveStartLayout, resolveStartTextAlign } from "@shared/startLayout";
 import { computeApplicationLeadValue, parseLeadValue } from "@shared/leadValue";
 import { snapshotApplicationAnswerLabels, snapshotApplicationQuestionLabels } from "@shared/applicationAnswers";
 import { snapshotApplicationContactLabels } from "@shared/contactFields";
@@ -173,6 +173,7 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
       progressIcon,
       buttonColor: storedHexColor(page.buttonColor),
       buttonTextColor: storedHexColor(page.buttonTextColor),
+      buttonRadius: resolveButtonRadius(page.buttonRadius),
     };
     if (page.type === "choice-grid" || page.type === "choice-list") {
       return {
@@ -211,6 +212,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         secondaryButtonLabel?: string;
         secondaryButtonColor?: string;
         secondaryButtonTextColor?: string;
+        secondaryButtonRadius?: number;
+        buttonAlign?: string;
       };
       const optionalHex = (value: unknown) => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toUpperCase() : undefined;
       return {
@@ -220,6 +223,8 @@ export function normalizeFunnelConfig(config: LegacyFunnelConfig, published?: bo
         secondaryButtonLabel: typeof startPage.secondaryButtonLabel === "string" ? startPage.secondaryButtonLabel : "",
         secondaryButtonColor: storedHexColor(startPage.secondaryButtonColor),
         secondaryButtonTextColor: storedHexColor(startPage.secondaryButtonTextColor),
+        secondaryButtonRadius: resolveButtonRadius(startPage.secondaryButtonRadius),
+        buttonAlign: resolveStartButtonAlign(startPage.buttonAlign),
         heroBackgroundAssetId: typeof startPage.heroBackgroundAssetId === "string" ? startPage.heroBackgroundAssetId : "",
         heroBackgroundDesktopUrl: typeof startPage.heroBackgroundDesktopUrl === "string" ? startPage.heroBackgroundDesktopUrl : "",
         heroBackgroundMobileUrl: typeof startPage.heroBackgroundMobileUrl === "string" ? startPage.heroBackgroundMobileUrl : "",

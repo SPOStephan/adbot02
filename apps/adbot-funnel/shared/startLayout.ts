@@ -1,4 +1,4 @@
-import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type HeroImageLayout, type StartBadge, type StartBadgeIconPosition, type StartBenefit, type StartPage, type StartPageLayout, type StartTextAlign } from "./funnel";
+import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type HeroImageLayout, type StartBadge, type StartBadgeIconPosition, type StartBenefit, type StartPage, type StartButtonAlign, type StartPageLayout, type StartTextAlign } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
@@ -306,13 +306,27 @@ export function resolveButtonColors(brand: { accentColor: string; buttonColor?: 
  * CSS variables for one button that overrides the global button colors.
  * Empty values keep the inherited Branding → Buttons setting.
  */
-export function buttonOverrideVars(color?: string, textColor?: string): Record<string, string> | undefined {
+export const MAX_BUTTON_RADIUS = 60;
+
+/** Whole px 0–60; anything else = undefined (layout default: 14 px, pill on the benefits start page). */
+export function resolveButtonRadius(value?: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return Math.min(MAX_BUTTON_RADIUS, Math.max(0, Math.round(value)));
+}
+
+export function resolveStartButtonAlign(value?: string | null): StartButtonAlign {
+  return value === "left" || value === "full" ? value : "center";
+}
+
+export function buttonOverrideVars(color?: string, textColor?: string, radius?: number): Record<string, string> | undefined {
   const background = color?.trim() ?? "";
   const text = textColor?.trim() || (background ? contrastOnAccent(background) : "");
-  if (!background && !text) return undefined;
+  const corner = resolveButtonRadius(radius);
+  if (!background && !text && corner === undefined) return undefined;
   return {
     ...(background ? { "--funnel-button": background, "--funnel-button-hover": `color-mix(in srgb, ${background} 82%, black)` } : {}),
     ...(text ? { "--funnel-button-text": text } : {}),
+    ...(corner !== undefined ? { borderRadius: `${corner}px` } : {}),
   };
 }
 

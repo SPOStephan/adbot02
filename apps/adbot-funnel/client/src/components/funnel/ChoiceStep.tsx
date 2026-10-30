@@ -64,7 +64,7 @@ export function ChoiceStep({ page, selected, onSelect, onBack, onContinue }: Cho
       <div className="funnel-step-actions">
         <button className="funnel-secondary-button" type="button" onClick={onBack}><ArrowLeft size={18} />Zurück</button>
         {page.allowMultiple && (
-          <button className="funnel-primary-button" type="button" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor) as CSSProperties | undefined} onClick={onContinue} disabled={selected.length === 0}>{page.buttonLabel}<ArrowRight size={18} /></button>
+          <button className="funnel-primary-button" type="button" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor, page.buttonRadius) as CSSProperties | undefined} onClick={onContinue} disabled={selected.length === 0}>{page.buttonLabel}<ArrowRight size={18} /></button>
         )}
       </div>
     </section>

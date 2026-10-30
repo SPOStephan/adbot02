@@ -223,6 +223,8 @@ type FunnelPageBase = {
   /** Per-page button colors; empty or missing uses the global Branding → Buttons setting. */
   buttonColor?: string;
   buttonTextColor?: string;
+  /** Corner radius of this page's button in px. Undefined = layout default. */
+  buttonRadius?: number;
   /** Short public label in the progress indicator. Empty falls back to the page name. */
   progressTitle: string;
   /** Optional second line under the progress title. */
@@ -291,6 +293,7 @@ export type StartBadgeIconPosition = "left" | "right";
 
 /** Horizontal alignment in the "benefits" start header. Undefined = centered (previous fixed look). */
 export type StartTextAlign = "center" | "left";
+export type StartButtonAlign = "center" | "left" | "full";
 
 export type StartRequirementsIconStyle = "filled" | "plain";
 
@@ -353,6 +356,9 @@ export type StartPage = FunnelPageBase & {
   /** Bottom button colors; empty or missing uses the global Branding → Buttons setting. */
   secondaryButtonColor?: string;
   secondaryButtonTextColor?: string;
+  secondaryButtonRadius?: number;
+  /** Header button in the "benefits" layout. Undefined = centered. */
+  buttonAlign?: StartButtonAlign;
   benefits: StartBenefit[];
   benefitsTileLayout: BenefitsTileLayout;
   benefitsTileGap: BenefitsTileGap;

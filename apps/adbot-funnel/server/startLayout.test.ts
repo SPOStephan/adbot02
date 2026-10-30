@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { badgeEditorBackground, badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, normalizeBadgeBackground, patchStartBadge, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, buttonOverrideVars, resolveEyebrowBox, resolveHeroImageLayout, resolveHeroSectionBackground, resolveStartLayout, resolveStartTextAlign } from "@shared/startLayout";
+import { badgeEditorBackground, badgeFromTemplate, benefitsFromBullets, clampHeroImageRadius, contrastOnAccent, customHeroSectionBackground, customHeroSectionFill, defaultStartBenefits, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, moveStartBadge, normalizeBadgeBackground, patchStartBadge, resolveBadgeBorderColor, resolveBadgeBorderWidth, resolveBadgeColors, resolveBadgeIcon, resolveBadgeIconPosition, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveButtonColors, buttonOverrideVars, resolveEyebrowBox, resolveHeroImageLayout, resolveHeroSectionBackground, resolveButtonRadius, resolveStartButtonAlign, resolveStartLayout, resolveStartTextAlign } from "@shared/startLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
 describe("Startseiten-Layouts", () => {
@@ -182,6 +182,12 @@ describe("Startseiten-Layouts", () => {
     expect(badgeEditorBackground({ backgroundColor: "#0165C3" }, "#FFFFFF", "#0165C3")).toBe("#0165C3");
     expect(resolveStartTextAlign("left")).toBe("left");
     expect(resolveStartTextAlign(undefined)).toBe("center");
+    expect(resolveStartButtonAlign("full")).toBe("full");
+    expect(resolveStartButtonAlign("rechts")).toBe("center");
+    expect(resolveButtonRadius(80)).toBe(60);
+    expect(resolveButtonRadius("8")).toBeUndefined();
+    expect(buttonOverrideVars(undefined, undefined, 8)).toEqual({ borderRadius: "8px" });
+    expect(buttonOverrideVars()).toBeUndefined();
     expect(normalizeBadgeBackground("#0165c3")).toBe("#0165C3");
     expect(normalizeBadgeBackground("rgba(0,0,0,0)")).toBe("");
     expect(moveStartBadge(start.badges, "badge-2", "badge-1").map(badge => badge.id)).toEqual(["badge-2", "badge-1"]);
