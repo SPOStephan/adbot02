@@ -8,6 +8,15 @@ export const MAX_START_REQUIREMENT_TEXT = 240;
 export const DEFAULT_REQUIREMENTS_ICON = "check";
 export const DEFAULT_REQUIREMENTS_ICON_STYLE: StartRequirementsIconStyle = "filled";
 export const DEFAULT_REQUIREMENTS_TITLE = "Das bringst Du mit:";
+export const MAX_REQUIREMENTS_SIDE_PADDING = 64;
+
+/** Undefined = template default, otherwise whole px within 0–64. */
+export function resolveRequirementsSidePadding(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return undefined;
+  return Math.max(0, Math.min(MAX_REQUIREMENTS_SIDE_PADDING, Math.round(numeric)));
+}
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -62,6 +71,7 @@ export function resolveStartRequirements(value: Partial<StartRequirements> | nul
     background: hexOrEmpty(value.background),
     titleSizeStep: clampCopySizeStep(value.titleSizeStep),
     textSizeStep: clampCopySizeStep(value.textSizeStep),
+    sidePadding: resolveRequirementsSidePadding(value.sidePadding),
   };
 }
 

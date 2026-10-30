@@ -323,6 +323,8 @@ export type StartRequirements = {
   background: string;
   titleSizeStep: number;
   textSizeStep: number;
+  /** Left/right padding in px. Undefined = same as the sections above and below. */
+  sidePadding?: number;
 };
 
 export type StartBadge = {

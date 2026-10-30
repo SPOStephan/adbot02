@@ -702,7 +702,8 @@
   .funnel-start-requirements-inner {
     width: min(100%, 640px);
     margin: 0 auto;
-    padding: 28px 20px 30px;
+    /* Seitenabstand wie im Kopfbereich; --req-pad-x kommt aus dem Editor. */
+    padding: 28px var(--req-pad-x, 20px) 30px;
   }
   .funnel-start-requirements h2 {
     margin: 0 0 16px;
@@ -890,7 +891,7 @@
     .funnel-start-benefits-tiles.is-cards { gap: 14px; padding-inline: 32px; }
     .funnel-start-benefits-hero h1 { font-size: calc(clamp(2.2rem, 4vw, 3.4rem) * var(--fs-title, 1)); max-width: 16ch; }
     .funnel-start-benefits-band { padding: 28px 32px; }
-    .funnel-start-requirements-inner { padding: 40px 32px; }
+    .funnel-start-requirements-inner { padding: 40px var(--req-pad-x, 32px); }
     .funnel-start-benefits-tiles { padding: 56px 32px 12px; }
     .funnel-start-benefits-tiles.is-two-column.is-gap-small { gap: 42px 48px; }
     .funnel-start-benefits-tiles.is-two-column.is-gap-medium { gap: 42px 64px; }
@@ -970,6 +971,7 @@
 .admin-live-preview .funnel-start-benefits-portrait.is-wide { width: 100%; height: auto; margin-bottom: 12px; }
 .admin-live-preview .funnel-start-benefits-hero h1 { font-size: calc(1.55rem * var(--fs-title, 1)); }
 .admin-live-preview .funnel-start-benefits-tiles { padding: 18px 10px 4px; }
+.admin-live-preview .funnel-start-requirements-inner { padding: 22px var(--req-pad-x, 12px) 24px; }
 .admin-live-preview .funnel-start-benefits-tiles.is-one-column { gap: 18px; }
 .admin-live-preview .funnel-start-benefits-tiles.is-cards { gap: 10px; }
 .admin-live-preview .funnel-start-benefits-tiles.is-two-column.is-gap-small { gap: 18px 10px; }
