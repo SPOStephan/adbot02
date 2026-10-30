@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrandColorField } from "@/components/admin/BrandColorField";
+import { StartAlignPicker } from "@/components/admin/StartAlignPicker";
 import { EditorPreview } from "@/components/admin/EditorPreview";
 import { HeroBackgroundField } from "@/components/admin/HeroBackgroundField";
 import { HeroImageField } from "@/components/admin/HeroImageField";
@@ -516,6 +517,7 @@ export default function FunnelEditor() {
                 <div><p className="text-sm font-bold">Grundfarben</p><p className="text-xs text-muted-foreground">Hintergrund und Text des gesamten Funnels.</p></div>
                 <FormRow label="Akzentfarbe" hint="Verbindliche Markenfarbe für Fortschritt und Akzente; Buttons nutzen sie, solange unten keine eigene Button-Farbe gesetzt ist."><div className="flex items-center gap-3"><span className="size-10 rounded-xl border shadow-sm" style={{ background: "#0165c3" }} /><Input value="#0165c3" readOnly /></div></FormRow>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><BrandColorField label="Hintergrund" value={config.brand.backgroundColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, backgroundColor: value } }))} /><BrandColorField label="Textfarbe" value={config.brand.textColor} onChange={value => changeConfig(current => ({ ...current, brand: { ...current.brand, textColor: value } }))} /></div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><OptionalStartColor label="„SSL-verschlüsselt“ – Textfarbe" value={config.brand.securityTextColor ?? ""} fallback={config.brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe. Hinweis oben rechts neben dem Logo." onChange={securityTextColor => changeConfig(current => ({ ...current, brand: { ...current.brand, securityTextColor } }))} /></div>
               </div>
               <div className="grid gap-4 rounded-2xl border p-4">
                 <div><p className="text-sm font-bold">Buttons</p><p className="text-xs text-muted-foreground">Farbe der Haupt-Buttons (z. B. „Jetzt rausfinden“), unabhängig vom Fortschrittsbalken. Leer = Akzentfarbe wie bisher.</p></div>
@@ -686,6 +688,10 @@ function StartPageFields({
             layout={page.heroImageLayout}
             radius={page.heroImageRadius}
             showLayout
+            onChange={next => patch(next as Partial<FunnelPage>)}
+          />
+          <StartAlignPicker
+            values={{ headlineAlign: page.headlineAlign, descriptionAlign: page.descriptionAlign, badgesAlign: page.badgesAlign }}
             onChange={next => patch(next as Partial<FunnelPage>)}
           />
           <StartBadgesField

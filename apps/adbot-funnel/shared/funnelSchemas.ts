@@ -105,6 +105,9 @@ const startPageSchema = pageBaseSchema.extend({
   eyebrowBoxBackground: optionalHexColorSchema.default(""),
   eyebrowBoxColor: optionalHexColorSchema.default(""),
   trustNoteColor: optionalHexColorSchema.default(""),
+  headlineAlign: z.enum(["center", "left"]).optional(),
+  descriptionAlign: z.enum(["center", "left"]).optional(),
+  badgesAlign: z.enum(["center", "left"]).optional(),
   badges: z.array(startBadgeSchema).max(MAX_START_BADGES).default([]),
   heroBackgroundAssetId: z.string().max(80).default(""),
   heroBackgroundDesktopUrl: optionalAssetUrlSchema.default(""),
@@ -208,6 +211,7 @@ export const funnelConfigSchema = z
       choiceSelectedBorderColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
       buttonColor: optionalHexColorSchema.default(""),
       buttonTextColor: optionalHexColorSchema.default(""),
+      securityTextColor: optionalHexColorSchema.default(""),
     }),
     socialProof: z.object({
       enabled: z.boolean(),

@@ -1,4 +1,4 @@
-import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type HeroImageLayout, type StartBadge, type StartBadgeIconPosition, type StartBenefit, type StartPage, type StartPageLayout } from "./funnel";
+import { BENEFITS_TILE_LAYOUTS, type BenefitsTileGap, type BenefitsTileLayout, type FunnelOptionIcon, type HeroImageLayout, type StartBadge, type StartBadgeIconPosition, type StartBenefit, type StartPage, type StartPageLayout, type StartTextAlign } from "./funnel";
 import { isSelectableFunnelIcon } from "./funnelIconCatalog";
 
 export const DEFAULT_START_LAYOUT: StartPageLayout = "classic";
@@ -225,6 +225,26 @@ export function resolveBadgeBorderColor(
   if (own) return own;
   if (isTransparentBadgeBackground(badge.backgroundColor)) return `color-mix(in srgb, ${textColor} 35%, transparent)`;
   return optionalStartHex(badge.backgroundColor) || fallback;
+}
+
+/** Editor-only chip fill: a transparent badge with light text would vanish on the white editor, so it gets a dark backdrop. */
+export function badgeEditorBackground(badge: Pick<StartBadge, "backgroundColor">, textColor: string, background: string): string {
+  if (!isTransparentBadgeBackground(badge.backgroundColor)) return background;
+  return isLightColor(textColor) ? "#334155" : background;
+}
+
+/** Light hex (e.g. white text) that would be unreadable on white. */
+export function isLightColor(value: string): boolean {
+  return contrastOnAccent(value) !== "#ffffff";
+}
+
+export function resolveStartTextAlign(value?: string | null): StartTextAlign {
+  return value === "left" ? "left" : "center";
+}
+
+/** Extra class for left-aligned header elements; centered stays class-free. */
+export function startAlignClass(value?: string | null): string {
+  return resolveStartTextAlign(value) === "left" ? " is-align-left" : "";
 }
 
 export const DEFAULT_BADGE_BORDER_WIDTH = 1;

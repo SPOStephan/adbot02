@@ -225,4 +225,15 @@ describe("StartStep Layouts", () => {
     expect(html).toContain("--badge-fg:#0165C3");
     expect(html).toContain("--badge-fg:#C8102E");
   });
+
+  it("richtet Überschrift, Beschreibung und Badges nur auf Wunsch linksbündig aus", () => {
+    const base: StartPage = { ...getStartPage(), layout: "benefits", subtitle: "Sub", description: "Beschreibung", badges: [{ id: "b", label: "Remote" }] };
+    const centered = renderToStaticMarkup(<StartStep page={base} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(centered).not.toContain("is-align-left");
+    const left = renderToStaticMarkup(<StartStep page={{ ...base, headlineAlign: "left", badgesAlign: "left" }} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(left).toContain("funnel-start-benefits-subtitle is-align-left");
+    expect(left).toContain("funnel-start-benefits-badges is-align-left");
+    expect(left).toMatch(/<h1[^>]*class="is-align-left[ "]/);
+    expect(left).not.toContain("funnel-start-benefits-lead is-align-left");
+  });
 });

@@ -81,7 +81,7 @@ export function FunnelChrome({
             </div>
           )}
         </div>
-        <div className="funnel-security"><LockKeyhole size={14} /> SSL-verschlüsselt</div>
+        <div className="funnel-security" style={brand.securityTextColor ? { color: brand.securityTextColor } : undefined}><LockKeyhole size={14} /> SSL-verschlüsselt</div>
       </header>
 
       {showProgress && pages ? (
