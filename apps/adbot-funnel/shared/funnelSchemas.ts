@@ -7,7 +7,7 @@ import { notificationEmailsAreValid } from "./notificationEmails";
 import { CONTACT_FIELD_KEY_PATTERN, CONTACT_FIELD_MAX_LENGTH, CONTACT_MESSAGE_MAX_LENGTH, MAX_CONTACT_FIELDS } from "./contactFields";
 import { DEFAULT_COPY_SIZE_STEP, MAX_COPY_SIZE_STEP, MIN_COPY_SIZE_STEP } from "./copySize";
 import { DEFAULT_PROGRESS_CONTENT_GAP_PX, DEFAULT_PROGRESS_LAYOUT, EMPTY_PROGRESS_COLORS, MAX_PROGRESS_CONTENT_GAP_PX, MIN_PROGRESS_CONTENT_GAP_PX } from "./progressLayout";
-import { MAX_START_REQUIREMENT_TEXT, MAX_START_REQUIREMENTS } from "./startRequirements";
+import { MAX_REQUIREMENTS_SIDE_PADDING, MAX_START_REQUIREMENT_TEXT, MAX_START_REQUIREMENTS } from "./startRequirements";
 import { DEFAULT_BENEFITS_TILE_GAP, DEFAULT_BENEFITS_TILE_LAYOUT, DEFAULT_HERO_BACKGROUND_FOCUS_X, DEFAULT_HERO_BACKGROUND_OPACITY, DEFAULT_HERO_IMAGE_LAYOUT, DEFAULT_HERO_IMAGE_RADIUS, MAX_BADGE_BORDER_WIDTH, MAX_BUTTON_RADIUS, MAX_HERO_IMAGE_RADIUS, MAX_START_BADGES, MAX_START_BENEFIT_TEXT, MAX_START_BENEFITS } from "./startLayout";
 
 const iconSchema = z.string().min(1).max(64).refine(isSelectableFunnelIcon, "Unbekanntes Icon.");
@@ -97,6 +97,7 @@ const startRequirementsSchema = z.object({
   background: optionalHexColorSchema.default(""),
   titleSizeStep: copySizeStepSchema,
   textSizeStep: copySizeStepSchema,
+  sidePadding: z.number().int().min(0).max(MAX_REQUIREMENTS_SIDE_PADDING).optional(),
 });
 
 const optionalAssetUrlSchema = z.string().max(2048).refine(

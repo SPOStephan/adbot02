@@ -1,8 +1,9 @@
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import type { StartRequirements } from "@shared/funnel";
 import { contrastOnAccent } from "@shared/startLayout";
-import { emptyStartRequirementItem, MAX_START_REQUIREMENTS, resolveStartRequirements } from "@shared/startRequirements";
+import { emptyStartRequirementItem, MAX_REQUIREMENTS_SIDE_PADDING, MAX_START_REQUIREMENTS, resolveRequirementsSidePadding, resolveStartRequirements } from "@shared/startRequirements";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CopySizeStepper } from "@/components/admin/CopySizeStepper";
@@ -159,6 +160,27 @@ export function StartRequirementsField({
               resetLabel="Weiß verwenden"
               onChange={background => set({ background: background ?? "" })}
             />
+          </div>
+
+          <div className="grid gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="requirements-side-padding">Seitenabstand</Label>
+              {requirements.sidePadding === undefined
+                ? <span className="text-[11px] font-medium text-muted-foreground">Wie die anderen Bereiche</span>
+                : <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => set({ sidePadding: undefined })}>Standard verwenden</Button>}
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="requirements-side-padding"
+                className="h-9 w-24 bg-white font-mono"
+                inputMode="numeric"
+                placeholder="Auto"
+                value={requirements.sidePadding === undefined ? "" : String(requirements.sidePadding)}
+                aria-label="Seitenabstand in Pixel"
+                onChange={event => set({ sidePadding: resolveRequirementsSidePadding(event.target.value.replace(/[^\d]/g, "")) })}
+              />
+              <span className="text-xs text-muted-foreground">px links und rechts · leer = gleich wie darüber und darunter, max. {MAX_REQUIREMENTS_SIDE_PADDING}</span>
+            </div>
           </div>
         </>
       )}

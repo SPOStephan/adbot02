@@ -63,3 +63,15 @@ describe("Checkliste „Das bringst Du mit“", () => {
     expect(funnelConfigSchema.safeParse(config).success).toBe(true);
   });
 });
+
+describe("Seitenabstand der Checkliste", () => {
+  it("nutzt ohne Einstellung den Standard und setzt sonst eine eigene Variable", () => {
+    const requirements = { ...defaultStartRequirements(() => "r"), enabled: true };
+    const plain = renderToStaticMarkup(<StartStep page={benefitsPage({ requirements })} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(plain).not.toContain("--req-pad-x");
+    const custom = renderToStaticMarkup(<StartStep page={benefitsPage({ requirements: { ...requirements, sidePadding: 8 } })} brand={defaultFunnel.brand} onContinue={vi.fn()} />);
+    expect(custom).toContain("--req-pad-x:8px");
+    expect(resolveStartRequirements({ sidePadding: 500 }).sidePadding).toBe(64);
+    expect(resolveStartRequirements({}).sidePadding).toBeUndefined();
+  });
+});

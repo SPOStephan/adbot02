@@ -203,6 +203,7 @@ function StartRequirementsList({ requirements, accent, headingId }: { requiremen
         background: requirements.background || undefined,
         "--fs-req-title": String(copySizeScale(requirements.titleSizeStep)),
         "--fs-req-text": String(copySizeScale(requirements.textSizeStep)),
+        ...(requirements.sidePadding !== undefined ? { "--req-pad-x": `${requirements.sidePadding}px` } : {}),
       } as CSSProperties}
     >
       <div className="funnel-start-requirements-inner">
