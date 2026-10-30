@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { copySizeCssVars } from "@shared/copySize";
 import { isPageDescriptionShown, isPageEyebrowShown, isPageSubtitleShown, isPageTitleShown, type FunnelBrand, type StartPage } from "@shared/funnel";
-import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveStartLayout } from "@shared/startLayout";
+import { clampHeroBackgroundFocusX, clampHeroImageRadius, contrastOnAccent, customHeroSectionFill, resolveBadgeColors, resolveBenefitsCardBackground, resolveBenefitsSectionBackground, resolveBenefitsTileGap, resolveBenefitsTileLayout, resolveEyebrowBox, resolveHeroImageLayout, resolveStartLayout, buttonOverrideVars } from "@shared/startLayout";
 import { ArrowRight, Check } from "lucide-react";
 import { FunnelIcon } from "./FunnelIcon";
 import { FormattedText } from "./FormattedText";
@@ -32,7 +32,7 @@ export function StartStep({
         <ul className="funnel-benefits">
           {page.bullets.map(bullet => <li key={bullet}><Check size={17} />{bullet}</li>)}
         </ul>
-        <button className="funnel-primary-button" type="button" onClick={onContinue}>
+        <button className="funnel-primary-button" type="button" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor) as CSSProperties | undefined} onClick={onContinue}>
           {page.buttonLabel}<ArrowRight size={19} />
         </button>
         {page.trustNote && <p className="funnel-trust-note">{page.trustNote}</p>}
@@ -130,7 +130,7 @@ function BenefitsStartStep({
             </ul>
           )}
           {isPageDescriptionShown(page) && <FormattedText as="p" className="funnel-start-benefits-lead" value={page.description} />}
-          <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
+          <button className="funnel-primary-button funnel-start-benefits-button" type="button" style={buttonOverrideVars(page.buttonColor, page.buttonTextColor) as CSSProperties | undefined} onClick={onContinue}>
             {page.buttonLabel}
           </button>
           {page.trustNote && <p className="funnel-trust-note">{page.trustNote}</p>}
@@ -171,7 +171,7 @@ function BenefitsStartStep({
       )}
 
       <div className="funnel-start-benefits-cta-wrap" style={cards ? { background: sectionBackground } : undefined}>
-        <button className="funnel-primary-button funnel-start-benefits-button" type="button" onClick={onContinue}>
+        <button className="funnel-primary-button funnel-start-benefits-button" type="button" style={buttonOverrideVars(page.secondaryButtonColor, page.secondaryButtonTextColor) as CSSProperties | undefined} onClick={onContinue}>
           {bottomLabel}
         </button>
       </div>

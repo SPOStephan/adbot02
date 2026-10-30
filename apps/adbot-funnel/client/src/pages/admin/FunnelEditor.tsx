@@ -427,7 +427,14 @@ export default function FunnelEditor() {
               >
                 <FormattedTextField value={selectedPage.description} rows={3} onChange={value => patchPage({ description: value }, false)} />
               </FormRow>
-              <FormRow label="Button-Beschriftung"><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
+              <FormRow label={selectedPage.type === "start" ? "Button-Beschriftung (oben)" : "Button-Beschriftung"}><Input value={selectedPage.buttonLabel} onChange={event => patchPage({ buttonLabel: event.target.value }, false)} /></FormRow>
+              <ButtonColorFields
+                label={selectedPage.type === "start" ? "Button oben" : "Button"}
+                brand={config.brand}
+                color={selectedPage.buttonColor ?? ""}
+                textColor={selectedPage.buttonTextColor ?? ""}
+                onChange={value => patchPage(value as Partial<FunnelPage>)}
+              />
               {resolveProgressLayout(config.progress?.layout) === "segments" ? (
                 <div className="grid gap-2 rounded-2xl border p-4">
                   <p className="text-sm font-bold">Stufe in der Fortschrittsanzeige</p>
@@ -460,6 +467,7 @@ export default function FunnelEditor() {
                   brandColor={config.brand.accentColor}
                   brandBackground={config.brand.backgroundColor}
                   brandTextColor={config.brand.textColor}
+                  brand={config.brand}
                   patch={patchPage}
                 />
               )}
@@ -616,6 +624,7 @@ function StartPageFields({
   brandColor,
   brandBackground,
   brandTextColor,
+  brand,
   patch,
 }: {
   funnelId: string;
@@ -623,6 +632,7 @@ function StartPageFields({
   brandColor: string;
   brandBackground: string;
   brandTextColor: string;
+  brand: FunnelConfig["brand"];
   patch: (value: FunnelPagePatch, immediate?: boolean) => void;
 }) {
   const layout = resolveStartLayout(page);
@@ -688,6 +698,16 @@ function StartPageFields({
           <FormRow label="Unterer Button" hint="Leer = gleiche Beschriftung wie der Button oben.">
             <Input value={page.secondaryButtonLabel} placeholder={page.buttonLabel} onChange={event => patch({ secondaryButtonLabel: event.target.value } as Partial<FunnelPage>, false)} />
           </FormRow>
+          <ButtonColorFields
+            label="Button unten"
+            brand={brand}
+            color={page.secondaryButtonColor ?? ""}
+            textColor={page.secondaryButtonTextColor ?? ""}
+            onChange={value => patch({
+              ...(value.buttonColor !== undefined ? { secondaryButtonColor: value.buttonColor } : {}),
+              ...(value.buttonTextColor !== undefined ? { secondaryButtonTextColor: value.buttonTextColor } : {}),
+            } as Partial<FunnelPage>)}
+          />
           <BenefitsTileLayoutPicker
             value={tileLayout}
             onChange={benefitsTileLayout => patch({ benefitsTileLayout } as Partial<FunnelPage>)}
@@ -842,6 +862,29 @@ function ProgressSettings({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function ButtonColorFields({
+  label,
+  brand,
+  color,
+  textColor,
+  onChange,
+}: {
+  label: string;
+  brand: FunnelConfig["brand"];
+  color: string;
+  textColor: string;
+  onChange: (value: { buttonColor?: string; buttonTextColor?: string }) => void;
+}) {
+  const global = resolveButtonColors(brand);
+  const textFallback = color ? contrastOnAccent(color) : global.text;
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <OptionalStartColor label={`${label} – Farbe`} value={color} fallback={global.background} emptyHint="Leer = globale Button-Farbe (Branding)." onChange={buttonColor => onChange({ buttonColor })} />
+      <OptionalStartColor label={`${label} – Schriftfarbe`} value={textColor} fallback={textFallback} emptyHint={color ? "Leer = automatisch passend zur Button-Farbe." : "Leer = globale Button-Schriftfarbe (Branding)."} onChange={buttonTextColor => onChange({ buttonTextColor })} />
     </div>
   );
 }

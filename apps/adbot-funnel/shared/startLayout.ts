@@ -245,6 +245,20 @@ export function resolveButtonColors(brand: { accentColor: string; buttonColor?: 
   return { background, text, hover: custom ? `color-mix(in srgb, ${custom} 82%, black)` : undefined };
 }
 
+/**
+ * CSS variables for one button that overrides the global button colors.
+ * Empty values keep the inherited Branding → Buttons setting.
+ */
+export function buttonOverrideVars(color?: string, textColor?: string): Record<string, string> | undefined {
+  const background = color?.trim() ?? "";
+  const text = textColor?.trim() || (background ? contrastOnAccent(background) : "");
+  if (!background && !text) return undefined;
+  return {
+    ...(background ? { "--funnel-button": background, "--funnel-button-hover": `color-mix(in srgb, ${background} 82%, black)` } : {}),
+    ...(text ? { "--funnel-button-text": text } : {}),
+  };
+}
+
 export function contrastOnAccent(accentColor: string) {
   const hex = accentColor.replace("#", "");
   if (hex.length !== 6) return "#ffffff";
