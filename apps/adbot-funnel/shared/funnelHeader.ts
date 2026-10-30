@@ -47,6 +47,7 @@ export function logoTintFilter(tint?: string | null): string | undefined {
 export function normalizeStepsHeader(input?: Partial<FunnelStepsHeader> | null): FunnelStepsHeader {
   return {
     enabled: input?.enabled === true,
+    ...(typeof input?.securityColorsEnabled === "boolean" ? { securityColorsEnabled: input.securityColorsEnabled } : {}),
     logoUrl: typeof input?.logoUrl === "string" ? input.logoUrl.trim().slice(0, 2048) : "",
     logoTint: resolveLogoTint(input?.logoTint),
     securityTextColor: hexOrEmpty(input?.securityTextColor),
@@ -84,12 +85,19 @@ export function resolveFunnelHeader(brand: FunnelBrand, isStartPage: boolean): R
     securityIconColor: brand.securityIconColor ?? "",
   };
   const steps = brand.stepsHeader;
-  if (isStartPage || !steps?.enabled) return start;
-  return {
-    ...start,
-    logoUrl: steps.logoUrl || brand.logoUrl,
-    logoTint: resolveLogoTint(steps.logoTint),
-    securityTextColor: steps.securityTextColor ?? "",
-    securityIconColor: steps.securityIconColor ?? "",
-  };
+  if (isStartPage || !steps) return start;
+  const header = { ...start };
+  if (steps.enabled) {
+    header.logoUrl = steps.logoUrl || brand.logoUrl;
+    header.logoTint = resolveLogoTint(steps.logoTint);
+  }
+  if (stepsSecurityColorsEnabled(steps)) {
+    header.securityTextColor = steps.securityTextColor ?? "";
+    header.securityIconColor = steps.securityIconColor ?? "";
+  }
+  return header;
+}
+
+export function stepsSecurityColorsEnabled(steps?: Pick<FunnelStepsHeader, "enabled" | "securityColorsEnabled"> | null): boolean {
+  return steps?.securityColorsEnabled ?? steps?.enabled === true;
 }

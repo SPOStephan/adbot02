@@ -464,7 +464,10 @@ export const LOGO_TINTS = ["original", "white", "dark"] as const;
 export type LogoTint = (typeof LOGO_TINTS)[number];
 
 export type FunnelStepsHeader = {
+  /** Switches the logo settings below on for later pages. */
   enabled: boolean;
+  /** Switches the note colors below on for later pages, independent of the logo. Missing = follows `enabled` (older funnels). */
+  securityColorsEnabled?: boolean;
   /** Empty = the start page logo. */
   logoUrl: string;
   logoTint: LogoTint;

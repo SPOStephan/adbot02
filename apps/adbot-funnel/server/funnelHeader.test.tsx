@@ -4,7 +4,7 @@ import { FunnelChrome } from "../client/src/components/funnel/FunnelChrome";
 import { defaultFunnel } from "@shared/defaultFunnel";
 import type { FunnelConfig } from "@shared/funnel";
 import { funnelConfigSchema } from "@shared/funnelSchemas";
-import { logoTintFilter, resolveFunnelHeader } from "@shared/funnelHeader";
+import { EMPTY_STEPS_HEADER, logoTintFilter, resolveFunnelHeader, stepsSecurityColorsEnabled } from "@shared/funnelHeader";
 import { normalizeProgress, progressColorsForPage } from "@shared/progressLayout";
 import { normalizeFunnelConfig } from "./funnelStore";
 
@@ -119,6 +119,17 @@ describe("Hinweis oben rechts", () => {
     config.brand.stepsHeader = { ...config.brand.stepsHeader!, securityIconColor: "#0165C3" };
     expect(resolveFunnelHeader(config.brand, true)).toMatchObject({ securityText: "Sicher", securityIconColor: WHITE });
     expect(resolveFunnelHeader(config.brand, false)).toMatchObject({ securityText: "Sicher", securityIconColor: "#0165C3" });
+  });
+
+  it("schaltet Hinweis-Farben ab Seite 2 unabhängig vom Logo", () => {
+    const base = { ...defaultFunnel.brand, logoUrl: "/logo.png", logoTint: "white" as const, securityTextColor: WHITE };
+    const colorsOnly = { ...base, stepsHeader: { ...EMPTY_STEPS_HEADER, securityColorsEnabled: true, securityTextColor: "#10253F" } };
+    expect(resolveFunnelHeader(colorsOnly, false)).toMatchObject({ logoTint: "white", securityTextColor: "#10253F" });
+    const logoOnly = { ...base, stepsHeader: { ...EMPTY_STEPS_HEADER, enabled: true, securityColorsEnabled: false, securityTextColor: "#10253F" } };
+    expect(resolveFunnelHeader(logoOnly, false)).toMatchObject({ logoTint: "original", securityTextColor: WHITE });
+    expect(stepsSecurityColorsEnabled({ enabled: true })).toBe(true);
+    expect(stepsSecurityColorsEnabled({ enabled: false })).toBe(false);
+    expect(funnelConfigSchema.parse({ ...defaultFunnel, brand: colorsOnly }).brand.stepsHeader?.securityColorsEnabled).toBe(true);
   });
 
   it("validiert und normalisiert die Felder", () => {

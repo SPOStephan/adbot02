@@ -254,6 +254,7 @@ export const funnelConfigSchema = z
       logoTint: z.enum(LOGO_TINTS).optional(),
       stepsHeader: z.object({
         enabled: z.boolean().default(false),
+        securityColorsEnabled: z.boolean().optional(),
         logoUrl: z.string().max(2048).refine(value => value === "" || value.startsWith("/") || /^https?:\/\//i.test(value), "Logo muss eine HTTPS-/HTTP- oder interne URL sein.").default(""),
         logoTint: z.enum(LOGO_TINTS).default("original"),
         securityTextColor: optionalHexColorSchema.default(""),

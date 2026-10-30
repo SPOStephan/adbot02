@@ -9,7 +9,7 @@ import { createEditorSaveController } from "@/lib/editorSave";
 import { birthYearRange, BUILTIN_CONTACT_FIELD_LABELS, CONTACT_FIELD_CHARSET_LABELS, CONTACT_FIELD_MAX_LENGTH, CONTACT_FIELD_PRESETS, contactFieldCharset, createCustomContactField, isBuiltinContactFieldKey, MAX_CONTACT_FIELDS, postalCodeMaxLength, type ContactFieldPresetKey } from "@shared/contactFields";
 import { SETTINGS_QUERY_OPTIONS } from "@/lib/settingsHydration";
 import { clampProgressContentGapPx, DEFAULT_PROGRESS, DEFAULT_PROGRESS_CONTENT_GAP_PX, defaultProgressStages, EMPTY_PROGRESS_COLORS, normalizeProgress, resolveProgressColors, resolveProgressLayout } from "@shared/progressLayout";
-import { DEFAULT_SECURITY_TEXT, EMPTY_STEPS_HEADER, MAX_SECURITY_TEXT, resolveSecurityIcon } from "@shared/funnelHeader";
+import { DEFAULT_SECURITY_TEXT, EMPTY_STEPS_HEADER, MAX_SECURITY_TEXT, resolveSecurityIcon, stepsSecurityColorsEnabled } from "@shared/funnelHeader";
 import { benefitsFromBullets, contrastOnAccent, DEFAULT_BENEFITS_CARD_BACKGROUND, DEFAULT_EYEBROW_BOX_BACKGROUND, DEFAULT_BENEFITS_SECTION_BACKGROUND, emptyStartBenefit, MAX_START_BENEFITS, resolveBenefitsTileGap, resolveBenefitsTileLayout, MAX_BUTTON_RADIUS, resolveButtonColors, resolveButtonRadius, resolveStartLayout } from "@shared/startLayout";
 import { resolveStartRequirements } from "@shared/startRequirements";
 import { preferredPublicFunnelUrl } from "@shared/funnelHostResolve";
@@ -961,9 +961,19 @@ function SecurityNoteSettings({
   const text = brand.securityText ?? DEFAULT_SECURITY_TEXT;
   const icon = resolveSecurityIcon(brand.securityIcon);
   const textColor = brand.securityTextColor ?? "";
+  const steps = { ...EMPTY_STEPS_HEADER, ...brand.stepsHeader };
+  const stepsColors = stepsSecurityColorsEnabled(brand.stepsHeader);
+  const patchSteps = (value: Partial<typeof steps>) => changeConfig(current => ({
+    ...current,
+    brand: {
+      ...current.brand,
+      // Pin the switch explicitly so older funnels stop following the logo switch.
+      stepsHeader: { ...EMPTY_STEPS_HEADER, ...current.brand.stepsHeader, securityColorsEnabled: stepsSecurityColorsEnabled(current.brand.stepsHeader), ...value },
+    },
+  }));
   return (
     <div className="grid gap-4 rounded-2xl border p-4">
-      <div><p className="text-sm font-bold">Hinweis oben rechts</p><p className="text-xs text-muted-foreground">Standard: Schloss-Icon und „{DEFAULT_SECURITY_TEXT}“ neben dem Logo. Text und Icon lassen sich einzeln ändern oder ausblenden. Farben ab Seite 2 stellen Sie unter „Anderes Logo ab Seite 2“ ein.</p></div>
+      <div><p className="text-sm font-bold">Hinweis oben rechts</p><p className="text-xs text-muted-foreground">Standard: Schloss-Icon und „{DEFAULT_SECURITY_TEXT}“ neben dem Logo. Text und Icon lassen sich einzeln ändern oder ausblenden.</p></div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormRow label="Text" hint={`Leer = kein Text, nur das Icon. Maximal ${MAX_SECURITY_TEXT} Zeichen.`}>
           <div className="flex gap-2">
@@ -974,8 +984,20 @@ function SecurityNoteSettings({
         <FormRow label="Icon" hint="„Kein Icon“ blendet es aus.">
           <IconPicker value={icon} allowEmpty emptyLabel="Kein Icon" color={brand.securityIconColor || textColor || brand.textColor} onChange={securityIcon => patch({ securityIcon })} />
         </FormRow>
-        <OptionalStartColor label="Textfarbe" value={textColor} fallback={brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe." onChange={securityTextColor => patch({ securityTextColor })} />
-        <OptionalStartColor label="Icon-Farbe" value={brand.securityIconColor ?? ""} fallback={textColor || brand.textColor} emptyHint="Leer = wie die Textfarbe." onChange={securityIconColor => patch({ securityIconColor })} />
+        <OptionalStartColor label={stepsColors ? "Textfarbe Startseite" : "Textfarbe"} value={textColor} fallback={brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe." onChange={securityTextColor => patch({ securityTextColor })} />
+        <OptionalStartColor label={stepsColors ? "Icon-Farbe Startseite" : "Icon-Farbe"} value={brand.securityIconColor ?? ""} fallback={textColor || brand.textColor} emptyHint="Leer = wie die Textfarbe." onChange={securityIconColor => patch({ securityIconColor })} />
+      </div>
+      <div className="grid gap-3 rounded-xl border bg-slate-50/70 p-3">
+        <label className="flex items-center justify-between gap-3">
+          <span><strong className="block text-sm">Andere Farben ab Seite 2</strong><small className="text-muted-foreground">Z. B. weiß auf der blauen Startseite, danach dunkel auf hellem Grund. Text und Icon bleiben gleich.</small></span>
+          <Switch checked={stepsColors} onCheckedChange={securityColorsEnabled => patchSteps({ securityColorsEnabled })} />
+        </label>
+        {stepsColors ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <OptionalStartColor label="Textfarbe ab Seite 2" value={steps.securityTextColor} fallback={brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe." onChange={securityTextColor => patchSteps({ securityTextColor })} />
+            <OptionalStartColor label="Icon-Farbe ab Seite 2" value={steps.securityIconColor ?? ""} fallback={steps.securityTextColor || brand.textColor} emptyHint="Leer = wie die Textfarbe ab Seite 2." onChange={securityIconColor => patchSteps({ securityIconColor })} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -995,7 +1017,7 @@ function StepsHeaderSettings({
   const steps = { ...EMPTY_STEPS_HEADER, ...config.brand.stepsHeader };
   const patch = (value: Partial<typeof steps>, immediate = true) => changeConfig(current => ({
     ...current,
-    brand: { ...current.brand, stepsHeader: { ...EMPTY_STEPS_HEADER, ...current.brand.stepsHeader, ...value } },
+    brand: { ...current.brand, stepsHeader: { ...EMPTY_STEPS_HEADER, ...current.brand.stepsHeader, securityColorsEnabled: stepsSecurityColorsEnabled(current.brand.stepsHeader), ...value } },
   }), immediate);
   const previewUrl = steps.logoUrl || config.brand.logoUrl;
   return (
@@ -1021,8 +1043,6 @@ function StepsHeaderSettings({
               <Input value={steps.logoUrl} placeholder="Leer = Logo der Startseite" onChange={event => patch({ logoUrl: event.target.value }, false)} />
             </FormRow>
             <LogoTintPicker label="Logo-Farbe ab Seite 2" value={steps.logoTint} onChange={logoTint => patch({ logoTint })} />
-            <OptionalStartColor label="Hinweis oben rechts ab Seite 2 – Textfarbe" value={steps.securityTextColor} fallback={config.brand.textColor} emptyHint="Leer = abgeschwächte Textfarbe." onChange={securityTextColor => patch({ securityTextColor })} />
-            <OptionalStartColor label="Hinweis oben rechts ab Seite 2 – Icon-Farbe" value={steps.securityIconColor ?? ""} fallback={steps.securityTextColor || config.brand.textColor} emptyHint="Leer = wie die Textfarbe." onChange={securityIconColor => patch({ securityIconColor })} />
           </div>
         </div>
       ) : null}
