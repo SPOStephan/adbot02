@@ -352,6 +352,14 @@ export function TrafficLaunchCanary({
     initialDestinationUrl?.trim() ?? "",
   );
   const [dailyBudget, setDailyBudget] = useState("20.00");
+  const suggestedCampaignName = `${funnelPurposeHint?.title || "Adbot Traffic-Kampagne"} – Landingpage-Aufrufe`;
+  const [campaignNameOverride, setCampaignNameOverride] = useState<string | null>(
+    null,
+  );
+  const campaignName =
+    campaignNameOverride === null
+      ? suggestedCampaignName
+      : campaignNameOverride.trim();
   const [facebookPageId, setFacebookPageId] = useState(
     initialFacebookPageId &&
       facebookPages.some((page) => page.id === initialFacebookPageId)
@@ -673,6 +681,9 @@ export function TrafficLaunchCanary({
       if (!assetId) {
         throw new Error("Bitte ein hochgeladenes Creative wählen.");
       }
+      if (!campaignName) {
+        throw new Error("Bitte einen Kampagnennamen eingeben.");
+      }
       if (facebookPages.length > 0 && !facebookPageId) {
         throw new Error("Bitte die Facebook-Seite für die Anzeige wählen.");
       }
@@ -745,7 +756,7 @@ export function TrafficLaunchCanary({
         budgetOwnerType: "AD_SET",
         dailyBudget,
         destinationUrl: landing.href,
-        campaignName: `Adbot Traffic ${stamp}`,
+        campaignName,
         adSetName: `Traffic AdSet ${stamp}`,
         creativeName: `Traffic Creative ${stamp}`,
         adName: `Traffic Ad ${stamp}`,
@@ -980,6 +991,7 @@ export function TrafficLaunchCanary({
     setHeldPlan(null);
     setPendingStudyPlanId(null);
     setNotice(null);
+    setCampaignNameOverride(null);
   }
 
   const inputClass =
@@ -1112,6 +1124,27 @@ export function TrafficLaunchCanary({
       </ul>
 
       <form className="mt-6 grid gap-4 lg:grid-cols-2" onSubmit={prepare}>
+        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Kampagnenname
+          <input
+            className={inputClass}
+            disabled={pending || Boolean(heldPlan)}
+            maxLength={240}
+            onBlur={() => {
+              if (campaignNameOverride !== null && !campaignNameOverride.trim()) {
+                setCampaignNameOverride(null);
+              }
+            }}
+            onChange={(event) => setCampaignNameOverride(event.target.value)}
+            required
+            value={campaignNameOverride ?? suggestedCampaignName}
+          />
+          <span className="mt-1 block text-xs font-medium text-slate-500">
+            Dieser Name wird für die Kampagne im Meta Werbeanzeigenmanager verwendet.
+            Ohne Änderung schlägt Adbot einen Namen aus dem gewählten Funnel vor;
+            zur sicheren technischen Zuordnung ergänzt Adbot nur eine kurze Kennung.
+          </span>
+        </label>
         {facebookPages.length > 0 ? (
           <label className="text-sm font-bold text-slate-800">
             Facebook-Seite (Werbetreibender)
