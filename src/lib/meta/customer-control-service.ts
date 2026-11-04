@@ -22,6 +22,7 @@ import {
   type LaunchApprovalCommand,
   type LaunchCommand,
   type PixelCommand,
+  type PixelSignalCommand,
   type OrganicBoostApprovalCommand,
   type OrganicBoostPrepareCommand,
   type PolicyCommand,
@@ -54,13 +55,18 @@ import {
 import { ensureLaunchMarketingReady } from "@/lib/meta/launch-marketing-ensure";
 import { pushSoftMetaPixelToFunnel } from "@/lib/funnel-meta-sync";
 import { pushSoftMetaPixelToFreebie } from "@/lib/freebie-meta-sync";
-import { metaLaunchConversionEventIssue } from "@/lib/meta/conversion-events";
+import {
+  findMetaConversionEvent,
+  metaLaunchConversionEventIssue,
+  pixelEventSignal,
+} from "@/lib/meta/conversion-events";
 import {
   isConnectionCapiLoadError,
   listConnectionAdAccountPixels,
   listPixelsEmptyMessage,
   loadConnectionCapiCredentials,
   probeConnectionCapi,
+  readConnectionPixelEventStats,
 } from "@/lib/meta/connection-capi";
 import type { ConnectionPixel } from "@/lib/meta/conversions-api";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -817,6 +823,89 @@ async function requireConnectionCapiCredentials(customer: MetaCustomer) {
     serviceError(credentials.error, 409, credentials.message);
   }
   return credentials;
+}
+
+export type PixelSignalResult = {
+  pixelId: string;
+  customEventType: string;
+  pixelEventName: string;
+  days: number;
+  status: "received" | "missing" | "unknown";
+  count: number | null;
+  message: string;
+};
+
+/**
+ * Read-only Signal-Check für Launch-Warnungen: Ist das gewählte Ereignis in
+ * den letzten 7 Tagen am bestätigten Pixel angekommen? Kein Freeze, keine
+ * Meta-Writes, keine DB-Writes. Fehler werden als „unknown“ gemeldet, damit
+ * der Launch nie daran scheitert.
+ */
+export async function checkCustomerPixelEventSignal(
+  customer: MetaCustomer,
+  command: PixelSignalCommand,
+): Promise<PixelSignalResult> {
+  const days = 7;
+  const event = findMetaConversionEvent(command.customEventType);
+  const pixelEventName = event?.pixelEventName ?? command.customEventType;
+  const unknown = (message: string): PixelSignalResult => ({
+    pixelId: command.pixelId,
+    customEventType: command.customEventType,
+    pixelEventName,
+    days,
+    status: "unknown",
+    count: null,
+    message,
+  });
+
+  const admin = createAdminClient();
+  const { data: pixel, error } = await admin
+    .from("meta_confirmed_pixels")
+    .select("pixel_id")
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .eq("pixel_id", command.pixelId)
+    .eq("status", "CONFIRMED")
+    .is("revoked_at", null)
+    .limit(1)
+    .maybeSingle();
+  if (error || !pixel) {
+    serviceError("pixel_not_confirmed", 404, "Dieses Pixel ist nicht bestätigt.");
+  }
+
+  const credentials = await loadConnectionCapiCredentials({
+    userId: customer.userId,
+    platformAccountId: customer.platformAccountId,
+  });
+  if (isConnectionCapiLoadError(credentials)) {
+    return unknown("Signal konnte nicht geprüft werden: " + credentials.message);
+  }
+  const read = await readConnectionPixelEventStats({
+    credentials,
+    pixelId: command.pixelId,
+    days,
+  });
+  if (!read.ok) {
+    return unknown(
+      read.status === "denied"
+        ? "Meta erlaubt Adbot nicht, die Pixel-Statistik zu lesen. Prüfe das Ereignis im Events Manager."
+        : "Die Pixel-Statistik ist gerade nicht erreichbar. Prüfe das Ereignis im Events Manager.",
+    );
+  }
+  const signal = pixelEventSignal(read.stats, command.customEventType);
+  const count = signal?.count ?? 0;
+  return {
+    pixelId: command.pixelId,
+    customEventType: command.customEventType,
+    pixelEventName,
+    days,
+    status: count > 0 ? "received" : "missing",
+    count,
+    message:
+      count > 0
+        ? `„${pixelEventName}“ kam in den letzten ${days} Tagen ${count}× am Pixel an.`
+        : `„${pixelEventName}“ ist in den letzten ${days} Tagen nicht am Pixel angekommen. Meta braucht dieses Signal zum Optimieren – prüfe, ob deine Website das Ereignis sendet.`,
+  };
 }
 
 export async function applyCustomerPixelCommand(

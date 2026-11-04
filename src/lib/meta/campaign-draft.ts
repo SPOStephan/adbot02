@@ -138,6 +138,10 @@ export function normalizeMetaCampaignDraftPayload(value: unknown): MetaCampaignD
     pixelRowId: id(payload.pixelRowId, "Das Pixel"),
     performanceGoal: choice(payload.performanceGoal, "Das Performance-Ziel", PERFORMANCE_GOALS),
     conversionEventType: conversionEventType(payload.conversionEventType),
+    urlTagsEnabled:
+      payload.urlTagsEnabled === undefined
+        ? false
+        : boolean(payload.urlTagsEnabled, "Die UTM-Auswahl"),
     geo: normalizeGeo(payload.geo),
   };
   if (JSON.stringify(normalized).length > 65_536) {

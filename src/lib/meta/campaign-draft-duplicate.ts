@@ -153,6 +153,7 @@ export function draftPayloadFromLaunchPlan(
     pixelRowId: UUID.test(pixelRowId) ? pixelRowId : "",
     performanceGoal: text(adSet?.optimization_goal) === "QUALITY_LEAD" ? "quality" : "volume",
     conversionEventType: launchConversionEventType(adSet),
+    urlTagsEnabled: Boolean(text(record(payload.creative)?.url_tags)),
     geo: null,
   };
 }
