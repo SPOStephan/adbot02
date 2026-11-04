@@ -12,6 +12,7 @@ import type {
   MetaAdPreviewCombination,
   MetaAdPreviewCombinationResult,
 } from "./ad-preview-combinations";
+import type { MetaConversionReport } from "./conversion-events";
 
 export type CampaignKind = "lead" | "traffic" | "boost" | "other";
 export type CampaignLifecycle = "active" | "archived";
@@ -68,6 +69,16 @@ export type CampaignAdOverviewItem = {
   impressions: number | null;
   linkClicks: number | null;
   leads: number | null;
+  /**
+   * promoted_object.custom_event_type of the Adbot launch (null for campaigns
+   * without an Adbot launch or without promoted_object, e.g. Traffic).
+   */
+  optimizationEventType: string | null;
+  /**
+   * Reporting for that event; filled by the loader (needs raw actions), null
+   * keeps the previous display.
+   */
+  conversion: MetaConversionReport | null;
   currency: string;
   adCount: number;
   previewMode: CampaignPreviewMode;
@@ -250,6 +261,7 @@ type ParsedPlan = {
   variantDestinationUrl: string | null;
   brandAssetIds: string[];
   creatives: PlanCopy[];
+  conversionEventType: string | null;
 };
 
 function textVariants(spec: Row | null, key: string): string[] {
@@ -309,6 +321,9 @@ function parsePlan(row: Row): ParsedPlan | null {
         )
       : [],
     creatives,
+    conversionEventType: upper(
+      record(record(payload.ad_set)?.promoted_object)?.custom_event_type,
+    ),
   };
 }
 
@@ -591,6 +606,8 @@ export function buildCampaignAdOverview(
       impressions: finite(performance?.impressions),
       linkClicks: finite(performance?.inline_link_clicks),
       leads: finite(performance?.leads),
+      optimizationEventType: plan?.isOrganicBoost ? null : plan?.conversionEventType ?? null,
+      conversion: null,
       currency: text(performance?.currency) ?? input.currency,
       adCount: ads.length,
       autoPauseNote: (() => {

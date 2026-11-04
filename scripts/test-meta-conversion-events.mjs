@@ -6,6 +6,7 @@ import {
   META_CONVERSION_EVENTS,
   findMetaConversionEvent,
   isKnownMetaCustomEventType,
+  metaConversionReport,
   metaLaunchConversionEventIssue,
   metaOptimizationGoalsForEvent,
   metaPixelEventNameForCustomEventType,
@@ -243,5 +244,86 @@ const guardEnd = after.indexOf("  group by");
 assert.ok(guardStart > 0 && guardEnd > guardStart);
 assert.equal(after.slice(0, guardStart) + after.slice(guardEnd), before, "nur die Ereignis-Bedingung darf neu sein");
 assert.match(after, /'LEAD'\n\s*\)\)\) <> 'LEAD'/);
+
+// ---- Teil 3: Reporting ----
+
+// Altkampagnen ohne Ereignis: kein Report (Anzeige wie bisher).
+assert.equal(metaConversionReport({ customEventType: null, spend: 10, leads: 2 }), null);
+assert.equal(metaConversionReport({ customEventType: "FOO", spend: 10, leads: 2 }), null);
+
+// LEAD: exakt die bisherige Lead-Zahl, kein Wert.
+assert.deepEqual(
+  metaConversionReport({ customEventType: "LEAD", spend: "50", leads: "4", actions: { lead: 99 } }),
+  {
+    customEventType: "LEAD",
+    pixelEventName: "Lead",
+    labelDe: "Lead",
+    conversions: 4,
+    costPerConversion: 12.5,
+    conversionValue: null,
+    roas: null,
+  },
+);
+
+// COMPLETE_REGISTRATION: Registrierungen + Kosten pro Registrierung, keine Doppelzählung.
+const registration = metaConversionReport({
+  customEventType: "COMPLETE_REGISTRATION",
+  spend: 60,
+  leads: 1,
+  actions: {
+    complete_registration: 5,
+    "offsite_conversion.fb_pixel_complete_registration": 3,
+    lead: 1,
+  },
+});
+assert.equal(registration.conversions, 5);
+assert.equal(registration.costPerConversion, 12);
+assert.equal(registration.conversionValue, null);
+assert.equal(registration.roas, null);
+// Keine Aktionen gemeldet → 0; keine Daten → null.
+assert.equal(metaConversionReport({ customEventType: "COMPLETE_REGISTRATION", spend: 5, actions: {} }).conversions, 0);
+assert.equal(metaConversionReport({ customEventType: "COMPLETE_REGISTRATION", spend: 5, actions: null }).conversions, null);
+assert.equal(metaConversionReport({ customEventType: "COMPLETE_REGISTRATION", spend: 5, actions: {} }).costPerConversion, null);
+
+// PURCHASE: bisherige Kauf-Spalten, Umsatz und ROAS.
+const purchase = metaConversionReport({
+  customEventType: "PURCHASE",
+  spend: 100,
+  purchases: 4,
+  purchaseValue: 350,
+});
+assert.equal(purchase.conversions, 4);
+assert.equal(purchase.costPerConversion, 25);
+assert.equal(purchase.conversionValue, 350);
+assert.equal(purchase.roas, 3.5);
+
+// SUBSCRIBE: aus Roh-Aktionen inkl. Wert.
+const subscribe = metaConversionReport({
+  customEventType: "SUBSCRIBE",
+  spend: 40,
+  actions: { subscribe_total: 2, subscribe_website: 2 },
+  actionValues: { subscribe_total: 198 },
+});
+assert.equal(subscribe.conversions, 2);
+assert.equal(subscribe.conversionValue, 198);
+assert.equal(subscribe.roas, 4.95);
+
+// Übersicht: Ereignis kommt aus dem Launch-Plan, Beitrag-Push bleibt ohne.
+const overview = read("src/lib/meta/campaign-ad-overview.ts");
+assert.match(overview, /record\(record\(payload\.ad_set\)\?\.promoted_object\)\?\.custom_event_type/);
+assert.match(overview, /optimizationEventType: plan\?\.isOrganicBoost \? null/);
+const loader = read("src/lib/dashboard/load-campaign-ad-overview.ts");
+assert.match(loader, /COLUMN_BACKED_EVENTS = new Set\(\["LEAD", "PURCHASE"\]\)/);
+assert.match(loader, /catch \(error\) \{\n\s*console\.warn\("\[campaign-ad-overview\] conversion actions unavailable"/);
+const card = read("src/components/CampaignAdOverview.tsx");
+assert.match(card, /item\.conversion && item\.conversion\.customEventType !== "LEAD"/);
+
+// View: rein additiv, gleiches Fenster wie meta_campaign_performance_30d.
+const viewSql = read("supabase/migrations/20261104140000_meta_campaign_conversion_actions_30d.sql");
+assert.match(viewSql, /create or replace view public\.meta_campaign_conversion_actions_30d/);
+assert.match(viewSql, /pd\.date between anchor\.window_end - 29 and anchor\.window_end/);
+assert.match(viewSql, /security_invoker = true/);
+assert.doesNotMatch(viewSql, /meta_campaign_performance_30d\s+(with|as)/);
+assert.doesNotMatch(viewSql, /\b(insert|update|delete|alter table|drop)\b/i);
 
 console.log("meta conversion events: ok");

@@ -5,6 +5,7 @@ import {
   buildCampaignAdOverview,
   type CampaignAdOverviewItem,
 } from "@/lib/meta/campaign-ad-overview";
+import { metaConversionReport } from "@/lib/meta/conversion-events";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const MAX_CAMPAIGNS = 200;
@@ -59,6 +60,68 @@ function planAssetIds(plans: readonly Row[]): string[] {
       (assetId): assetId is string =>
         typeof assetId === "string" && /^[0-9a-f-]{36}$/i.test(assetId),
     );
+  });
+}
+
+/** Events whose counts already live in performance_data columns. */
+const COLUMN_BACKED_EVENTS = new Set(["LEAD", "PURCHASE"]);
+
+/**
+ * Adds reporting for each campaign's stored optimization event. Raw action
+ * sums come from meta_campaign_conversion_actions_30d and are only read for
+ * campaigns optimised on another event than LEAD/PURCHASE. Any read problem
+ * (e.g. view not yet migrated) leaves those reports without counts instead of
+ * failing the overview.
+ */
+async function attachConversionReports(
+  admin: AdminClient,
+  userId: string,
+  items: CampaignAdOverviewItem[],
+  performance: readonly Row[],
+): Promise<CampaignAdOverviewItem[]> {
+  const withEvent = items.filter((item) => item.optimizationEventType);
+  if (withEvent.length === 0) return items;
+  const performanceByCampaign = new Map(
+    performance.map((row) => [String(row.campaign_id ?? ""), row]),
+  );
+  const actionCampaignIds = withEvent
+    .filter((item) => !COLUMN_BACKED_EVENTS.has(item.optimizationEventType ?? ""))
+    .map((item) => item.id);
+  const actionsByCampaign = new Map<string, Row>();
+  if (actionCampaignIds.length > 0) {
+    try {
+      const rows = await selectIn(actionCampaignIds, (chunk) =>
+        admin
+          .from("meta_campaign_conversion_actions_30d")
+          .select("campaign_id,actions,action_values")
+          .eq("user_id", userId)
+          .in("campaign_id", chunk),
+      );
+      for (const row of rows) actionsByCampaign.set(String(row.campaign_id ?? ""), row);
+    } catch (error) {
+      console.warn("[campaign-ad-overview] conversion actions unavailable", error);
+    }
+  }
+  const asMap = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  return items.map((item) => {
+    if (!item.optimizationEventType) return item;
+    const perf = performanceByCampaign.get(item.id);
+    const actions = actionsByCampaign.get(item.id);
+    return {
+      ...item,
+      conversion: metaConversionReport({
+        customEventType: item.optimizationEventType,
+        spend: perf?.spend,
+        leads: perf?.leads,
+        purchases: perf?.purchases,
+        purchaseValue: perf?.purchase_value,
+        actions: asMap(actions?.actions),
+        actionValues: asMap(actions?.action_values),
+      }),
+    };
   });
 }
 
@@ -195,7 +258,9 @@ export async function loadCampaignAdOverview(input: {
       selectIn(campaignIds, (chunk) =>
         admin
           .from("meta_campaign_performance_30d")
-          .select("campaign_id,currency,spend,impressions,inline_link_clicks,leads")
+          .select(
+            "campaign_id,currency,spend,impressions,inline_link_clicks,leads,purchases,purchase_value",
+          )
           .eq("user_id", input.userId)
           .in("campaign_id", chunk),
       ),
@@ -253,7 +318,13 @@ export async function loadCampaignAdOverview(input: {
           : (signedImages.get(assetId) ?? null),
       buildCombinations: buildMetaAdPreviewCombinations,
     });
-    return { items, advertiserName, error: false };
+    const withConversions = await attachConversionReports(
+      admin,
+      input.userId,
+      items,
+      performance,
+    );
+    return { items: withConversions, advertiserName, error: false };
   } catch (error) {
     console.error("[campaign-ad-overview] load failed", error);
     return { ...empty, error: true };
