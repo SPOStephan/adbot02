@@ -57,6 +57,10 @@ function formatNumber(value: number | null) {
   return value === null ? "—" : new Intl.NumberFormat("de-DE").format(value);
 }
 
+function formatRoas(value: number) {
+  return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(value)}×`;
+}
+
 function formatDate(value: string | null) {
   if (!value) return null;
   return new Date(value).toLocaleDateString("de-DE", {
@@ -296,10 +300,43 @@ export function CampaignAdOverviewCard({
             <dt className="font-semibold text-slate-500">Link-Klicks</dt>
             <dd className="font-extrabold text-slate-900">{formatNumber(item.linkClicks)}</dd>
           </div>
-          <div>
-            <dt className="font-semibold text-slate-500">Leads</dt>
-            <dd className="font-extrabold text-slate-900">{formatNumber(item.leads)}</dd>
-          </div>
+          {item.conversion && item.conversion.customEventType !== "LEAD" ? (
+            <>
+              <div>
+                <dt className="font-semibold text-slate-500">{item.conversion.labelDe}</dt>
+                <dd className="font-extrabold text-slate-900">
+                  {formatNumber(item.conversion.conversions)}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-slate-500">Kosten / Ereignis</dt>
+                <dd className="font-extrabold text-slate-900">
+                  {formatMoney(item.conversion.costPerConversion, item.currency)}
+                </dd>
+              </div>
+              {item.conversion.conversionValue !== null ? (
+                <div>
+                  <dt className="font-semibold text-slate-500">Umsatz</dt>
+                  <dd className="font-extrabold text-slate-900">
+                    {formatMoney(item.conversion.conversionValue, item.currency)}
+                  </dd>
+                </div>
+              ) : null}
+              {item.conversion.roas !== null ? (
+                <div>
+                  <dt className="font-semibold text-slate-500">ROAS</dt>
+                  <dd className="font-extrabold text-slate-900">
+                    {formatRoas(item.conversion.roas)}
+                  </dd>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div>
+              <dt className="font-semibold text-slate-500">Leads</dt>
+              <dd className="font-extrabold text-slate-900">{formatNumber(item.leads)}</dd>
+            </div>
+          )}
         </dl>
       </summary>
       <div className="border-t border-slate-200 bg-white p-4">

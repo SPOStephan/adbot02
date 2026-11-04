@@ -275,3 +275,89 @@ export function metaLaunchConversionEventIssue(input: {
   }
   return null;
 }
+
+export type MetaConversionReport = {
+  customEventType: string;
+  pixelEventName: string;
+  labelDe: string;
+  /** Anzahl des Optimierungsereignisses im Zeitraum (null = keine Daten). */
+  conversions: number | null;
+  costPerConversion: number | null;
+  /** Conversion-Wert (z. B. Umsatz) – nur wenn Meta Werte meldet. */
+  conversionValue: number | null;
+  /** Wert / Ausgaben, nur bei Wert-Ereignissen mit Wert > 0. */
+  roas: number | null;
+};
+
+function finiteNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Größter Wert unter den action_types des Ereignisses. Meta meldet dieselben
+ * Conversions oft parallel unter mehreren Typen (z. B. `omni_…` und
+ * `offsite_conversion.fb_pixel_…`); das Maximum zählt sie nicht doppelt.
+ */
+function maxActionValue(
+  map: Readonly<Record<string, unknown>> | null | undefined,
+  actionTypes: readonly string[],
+): number | null {
+  if (!map) return null;
+  let best: number | null = null;
+  for (const type of actionTypes) {
+    const value = finiteNumber(map[type]);
+    if (value !== null && (best === null || value > best)) best = value;
+  }
+  return best;
+}
+
+/**
+ * Reporting für das gespeicherte Optimierungsereignis einer Kampagne.
+ * - kein/unbekanntes Ereignis → `null` (Altkampagnen: Anzeige wie bisher)
+ * - LEAD → bisherige Lead-Zahl (`leads`), unverändert
+ * - PURCHASE → bisherige Kauf-Zahl/-Wert (`purchases`, `purchaseValue`)
+ * - alle anderen → aus den summierten Roh-`actions`/`action_values`
+ */
+export function metaConversionReport(input: {
+  customEventType: string | null | undefined;
+  spend: unknown;
+  leads?: unknown;
+  purchases?: unknown;
+  purchaseValue?: unknown;
+  actions?: Readonly<Record<string, unknown>> | null;
+  actionValues?: Readonly<Record<string, unknown>> | null;
+}): MetaConversionReport | null {
+  const event = findMetaConversionEvent(input.customEventType);
+  if (!event) return null;
+  const spend = finiteNumber(input.spend);
+  let conversions: number | null;
+  let conversionValue: number | null;
+  if (event.customEventType === "LEAD") {
+    conversions = finiteNumber(input.leads);
+    conversionValue = null;
+  } else if (event.customEventType === "PURCHASE") {
+    conversions = finiteNumber(input.purchases);
+    conversionValue = finiteNumber(input.purchaseValue);
+  } else {
+    conversions = maxActionValue(input.actions, event.insightsActionTypes);
+    if (conversions === null && input.actions) conversions = 0;
+    conversionValue = maxActionValue(input.actionValues, event.insightsActionTypes);
+  }
+  const costPerConversion =
+    spend !== null && conversions !== null && conversions > 0 ? spend / conversions : null;
+  const roas =
+    event.expectsValue && conversionValue !== null && conversionValue > 0 && spend !== null && spend > 0
+      ? conversionValue / spend
+      : null;
+  return {
+    customEventType: event.customEventType,
+    pixelEventName: event.pixelEventName,
+    labelDe: event.labelDe,
+    conversions,
+    costPerConversion,
+    conversionValue: event.expectsValue ? conversionValue : null,
+    roas,
+  };
+}
