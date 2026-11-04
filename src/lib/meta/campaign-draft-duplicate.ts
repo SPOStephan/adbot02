@@ -28,6 +28,12 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** promoted_object.custom_event_type of the launched ad set; LEAD when absent. */
+function launchConversionEventType(adSet: Row | null): string {
+  const raw = text(record(adSet?.promoted_object)?.custom_event_type).toUpperCase();
+  return /^[A-Z][A-Z0-9_]{0,63}$/.test(raw) ? raw : "LEAD";
+}
+
 function metaId(value: unknown): string {
   const id = text(value);
   return /^\d{1,64}$/.test(id) ? id : "";
@@ -146,6 +152,7 @@ export function draftPayloadFromLaunchPlan(
     ad2Description: (second?.descriptions[0] ?? "").slice(0, 255),
     pixelRowId: UUID.test(pixelRowId) ? pixelRowId : "",
     performanceGoal: text(adSet?.optimization_goal) === "QUALITY_LEAD" ? "quality" : "volume",
+    conversionEventType: launchConversionEventType(adSet),
     geo: null,
   };
 }

@@ -1761,6 +1761,14 @@ async function loadCustomerDashboardImpl(
           : null,
       objective:
         typeof payload.objective === "string" ? payload.objective : null,
+      customEventType: (() => {
+        const adSet = payload.ad_set;
+        if (!adSet || typeof adSet !== "object" || Array.isArray(adSet)) return null;
+        const promoted = (adSet as Record<string, unknown>).promoted_object;
+        if (!promoted || typeof promoted !== "object" || Array.isArray(promoted)) return null;
+        const event = (promoted as Record<string, unknown>).custom_event_type;
+        return typeof event === "string" && event.trim() ? event.trim() : null;
+      })(),
       destinationUrl:
         typeof payload.destination_url === "string"
           ? payload.destination_url

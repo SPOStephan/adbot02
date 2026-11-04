@@ -54,6 +54,7 @@ import {
 import { ensureLaunchMarketingReady } from "@/lib/meta/launch-marketing-ensure";
 import { pushSoftMetaPixelToFunnel } from "@/lib/funnel-meta-sync";
 import { pushSoftMetaPixelToFreebie } from "@/lib/freebie-meta-sync";
+import { metaLaunchConversionEventIssue } from "@/lib/meta/conversion-events";
 import {
   isConnectionCapiLoadError,
   listConnectionAdAccountPixels,
@@ -2249,12 +2250,54 @@ async function currentBudgetExposureBreakdown(
   return ` Vor diesem neuen Start entfallen ${formatExposureMinor(delivering)} auf aktive, von Adbot gestartete Kampagnen und ${formatExposureMinor(prepared)} auf noch nicht gestartete Adbot-Vorbereitungen.`;
 }
 
+async function assertLaunchConversionEventFitsBlueprint(
+  customer: MetaCustomer,
+  command: LaunchCommand,
+): Promise<void> {
+  const eventType = command.launchInputs.promoted_object?.custom_event_type;
+  if (!eventType || eventType === "LEAD") return;
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("objective_blueprints")
+    .select("objective, payload_template")
+    .eq("id", command.blueprintId)
+    .eq("user_id", customer.userId)
+    .eq("platform_account_id", customer.platformAccountId)
+    .maybeSingle();
+  if (error || !data) {
+    serviceError(
+      "launch_preparation_not_ready",
+      409,
+      "Der Kampagnen-Blueprint für dieses Conversion-Ereignis wurde nicht gefunden.",
+    );
+  }
+  const template =
+    data.payload_template && typeof data.payload_template === "object"
+      ? (data.payload_template as Record<string, unknown>)
+      : {};
+  const adSet =
+    template.ad_set && typeof template.ad_set === "object"
+      ? (template.ad_set as Record<string, unknown>)
+      : {};
+  const issue = metaLaunchConversionEventIssue({
+    objective: typeof data.objective === "string" ? data.objective : null,
+    optimizationGoal:
+      typeof adSet.optimization_goal === "string" ? adSet.optimization_goal : null,
+    customEventType: eventType,
+  });
+  if (issue) serviceError(issue.code, 422, issue.message);
+}
+
 export async function materializeCustomerLaunch(
   customer: MetaCustomer,
   command: LaunchCommand,
 ): Promise<CustomerLaunchResult> {
   requireWriteReadyCustomer(customer, "einen Aktiv-Launch vorbereitest");
   const readyCustomer = await refreshCustomerMarketingForLaunch(customer);
+  // Before any freeze: a non-LEAD conversion event must fit the blueprint's
+  // objective and optimization goal. LEAD launches skip this read entirely,
+  // so existing Lead launches behave exactly as before.
+  await assertLaunchConversionEventFitsBlueprint(readyCustomer, command);
   // Materialize SQL requires FREEZE_WRITES only for the prepare RPC window.
   // Capture prior mode and always restore Freigeben afterwards when Beitrag-Push
   // AUTO is on — otherwise Traffic/Lead prepare strands organic Meta writes.

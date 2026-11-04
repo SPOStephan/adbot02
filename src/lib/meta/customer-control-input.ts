@@ -543,6 +543,48 @@ function requiredCustomEventType(value: unknown): string {
   return text;
 }
 
+/**
+ * Launch events allowed as promoted_object.custom_event_type. Mirror of
+ * META_CONVERSION_EVENTS in src/lib/meta/conversion-events.ts (this file stays
+ * import-free for the standalone test transpiles; scripts/test-meta-conversion-events.mjs
+ * asserts both lists match).
+ */
+const LAUNCH_CUSTOM_EVENT_TYPES = [
+  "LEAD",
+  "COMPLETE_REGISTRATION",
+  "CONTACT",
+  "SUBMIT_APPLICATION",
+  "SCHEDULE",
+  "PURCHASE",
+  "SUBSCRIBE",
+  "START_TRIAL",
+  "INITIATED_CHECKOUT",
+  "ADD_PAYMENT_INFO",
+  "ADD_TO_CART",
+  "SEARCH",
+  "CONTENT_VIEW",
+] as const;
+const LAUNCH_CUSTOM_EVENT_TYPE_ALIASES: Readonly<Record<string, string>> = {
+  VIEW_CONTENT: "CONTENT_VIEW",
+  INITIATE_CHECKOUT: "INITIATED_CHECKOUT",
+};
+
+/**
+ * Launch event: validated against the central conversion event table
+ * (not only the regex). Empty stays LEAD; aliases resolve to the Meta enum.
+ */
+function requiredLaunchCustomEventType(value: unknown): string {
+  const text = requiredCustomEventType(value);
+  const canonical = LAUNCH_CUSTOM_EVENT_TYPE_ALIASES[text] ?? text;
+  if (!(LAUNCH_CUSTOM_EVENT_TYPES as readonly string[]).includes(canonical)) {
+    inputError(
+      "invalid_custom_event_type",
+      `Das Conversion-Event ${text} wird nicht unterstützt. Erlaubt: ${LAUNCH_CUSTOM_EVENT_TYPES.join(", ")}.`,
+    );
+  }
+  return canonical;
+}
+
 function optionalTestEventCode(value: unknown): string {
   const text = optionalText(value, "Der Test-Event-Code", 160);
   if (!text) return "";
@@ -1300,7 +1342,7 @@ export function parseLaunchCommand(value: unknown): LaunchCommand {
   const promotedObject = hasPixel
     ? {
         pixel_id: requiredPixelId(pixelIdRaw, "Die Pixel-ID"),
-        custom_event_type: requiredCustomEventType(body.customEventType),
+        custom_event_type: requiredLaunchCustomEventType(body.customEventType),
       }
     : undefined;
   if (

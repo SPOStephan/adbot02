@@ -216,3 +216,62 @@ export function metaPixelEventNameForCustomEventType(
 ): string {
   return findMetaConversionEvent(customEventType)?.pixelEventName ?? DEFAULT_META_PIXEL_EVENT_NAME;
 }
+
+/** Kanonisches Meta-Enum (Alias/Pixel-Name aufgelöst) oder `null`, wenn unbekannt. */
+export function normalizeMetaCustomEventType(value: string | null | undefined): string | null {
+  return findMetaConversionEvent(value)?.customEventType ?? null;
+}
+
+/**
+ * Zulässige Ad-Set-`optimization_goal`s für ein Ereignis.
+ * `QUALITY_LEAD` nur bei `LEAD`; alle anderen Ereignisse `OFFSITE_CONVERSIONS`.
+ */
+export function metaOptimizationGoalsForEvent(
+  customEventType: string | null | undefined,
+): readonly string[] {
+  const event = findMetaConversionEvent(customEventType);
+  if (!event) return [];
+  return event.customEventType === "LEAD"
+    ? ["OFFSITE_CONVERSIONS", "QUALITY_LEAD"]
+    : ["OFFSITE_CONVERSIONS"];
+}
+
+export type MetaLaunchConversionEventIssue = {
+  code: "unknown_conversion_event" | "conversion_event_objective_mismatch" | "conversion_event_goal_mismatch";
+  message: string;
+};
+
+/**
+ * Prüft, ob Ereignis, Kampagnenziel und Optimierungsziel eines Launches
+ * zusammenpassen. Nur Lead- und Sales-Ziele werden geprüft; andere Ziele
+ * (z. B. Traffic) bleiben unverändert erlaubt.
+ */
+export function metaLaunchConversionEventIssue(input: {
+  objective: string | null | undefined;
+  optimizationGoal: string | null | undefined;
+  customEventType: string | null | undefined;
+}): MetaLaunchConversionEventIssue | null {
+  const event = findMetaConversionEvent(input.customEventType);
+  if (!event) {
+    return {
+      code: "unknown_conversion_event",
+      message: "Dieses Conversion-Ereignis wird von Adbot nicht unterstützt.",
+    };
+  }
+  const objective = (input.objective ?? "").trim().toUpperCase();
+  if (objective !== "OUTCOME_LEADS" && objective !== "OUTCOME_SALES") return null;
+  if (objective !== event.campaignObjective) {
+    return {
+      code: "conversion_event_objective_mismatch",
+      message: `„${event.labelDe}“ (${event.pixelEventName}) gehört zum Kampagnenziel ${event.campaignObjective}, nicht ${objective}.`,
+    };
+  }
+  const goal = (input.optimizationGoal ?? "").trim().toUpperCase();
+  if (goal && !metaOptimizationGoalsForEvent(event.customEventType).includes(goal)) {
+    return {
+      code: "conversion_event_goal_mismatch",
+      message: `Das Optimierungsziel ${goal} passt nicht zu „${event.labelDe}“. Erlaubt: ${metaOptimizationGoalsForEvent(event.customEventType).join(", ")}.`,
+    };
+  }
+  return null;
+}

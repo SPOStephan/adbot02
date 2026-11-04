@@ -57,6 +57,12 @@ import {
   type LaunchLibraryAsset,
 } from "@/lib/meta/creative-image-variants";
 import {
+  DEFAULT_META_CONVERSION_EVENT_TYPE,
+  META_CONVERSION_EVENTS,
+  findMetaConversionEvent,
+  normalizeMetaCustomEventType,
+} from "@/lib/meta/conversion-events";
+import {
   canUseQualifiedLeadOptimization,
   metaOptimizationGoal,
   type LeadPerformanceGoal,
@@ -137,6 +143,7 @@ type AdPreviewPlan = Pick<
 
 function objectiveLabel(objective: string): string {
   if (objective === "OUTCOME_LEADS") return "Lead-Generierung";
+  if (objective === "OUTCOME_SALES") return "Umsatz (Conversions)";
   if (objective === "OUTCOME_TRAFFIC") return "Traffic (Link-Klicks)";
   return objective;
 }
@@ -201,6 +208,18 @@ const DEFAULT_LEAD_BLUEPRINT = {
   },
   ad: {},
 };
+
+/** Lead and Sales launches share this form; the event decides the objective. */
+function isConversionObjective(
+  objective: string | null | undefined,
+): objective is "OUTCOME_LEADS" | "OUTCOME_SALES" {
+  return objective === "OUTCOME_LEADS" || objective === "OUTCOME_SALES";
+}
+
+function conversionEventLabel(customEventType: string): string {
+  const event = findMetaConversionEvent(customEventType);
+  return event ? `${event.labelDe} (${event.pixelEventName})` : customEventType;
+}
 
 /** Protocol-only; never shown in the customer dashboard. */
 const PROTOCOL_APPROVE_REASON =
@@ -390,7 +409,7 @@ function toHeldFromRecent(
   if (
     !planLooksHeld(plan) ||
     !plan.payloadHash ||
-    plan.objective !== "OUTCOME_LEADS" ||
+    !isConversionObjective(plan.objective) ||
     !plan.destinationUrl ||
     plan.targetStatus !== "ACTIVE" ||
     plan.budgetType !== "DAILY" ||
@@ -420,7 +439,7 @@ function toHeldFromRecent(
     budgetOwnerType: plan.budgetOwnerType,
     dailyBudgetMinor: plan.dailyBudgetMinor,
     pixelId: pixel.pixelId,
-    customEventType: pixel.customEventType,
+    customEventType: plan.customEventType || pixel.customEventType,
     primaryTexts:
       plan.primaryTexts?.length
         ? plan.primaryTexts
@@ -702,6 +721,23 @@ export function LeadLaunchCanary({
     adAccounts.length > 1 && !adAccounts.some((account) => account.selectedForAds);
   const [performanceGoal, setPerformanceGoal] =
     useState<LeadPerformanceGoal>(initialDraftPayload?.performanceGoal ?? "volume");
+  // Optimierungsereignis pro Kampagne. Default bleibt LEAD (bzw. das am Pixel
+  // bestätigte Ereignis), damit bestehende Lead-Starts unverändert bleiben.
+  const [conversionEventType, setConversionEventType] = useState<string>(
+    () =>
+      normalizeMetaCustomEventType(initialDraftPayload?.conversionEventType) ??
+      normalizeMetaCustomEventType(selectedPixel?.customEventType) ??
+      DEFAULT_META_CONVERSION_EVENT_TYPE,
+  );
+  const selectedConversionEvent =
+    findMetaConversionEvent(conversionEventType) ??
+    findMetaConversionEvent(DEFAULT_META_CONVERSION_EVENT_TYPE)!;
+  const isLeadEvent = selectedConversionEvent.customEventType === "LEAD";
+  // QUALITY_LEAD gibt es nur für LEAD; alle anderen Ereignisse: OFFSITE_CONVERSIONS.
+  const effectivePerformanceGoal: LeadPerformanceGoal = isLeadEvent
+    ? performanceGoal
+    : "volume";
+  const launchObjective = selectedConversionEvent.campaignObjective;
   const qualityCapiReady = canUseQualifiedLeadOptimization(selectedPixel);
   const funnelTracking = detectedPurposeHint?.metaTracking;
   const funnelTrackingReady =
@@ -745,6 +781,7 @@ export function LeadLaunchCanary({
       ad2Description,
       pixelRowId,
       performanceGoal,
+      conversionEventType: selectedConversionEvent.customEventType,
       geo: campaignGeo,
     }),
     [
@@ -756,6 +793,7 @@ export function LeadLaunchCanary({
       campaignName,
       dailyBudget,
       descriptions,
+      selectedConversionEvent.customEventType,
       destinationUrl,
       dynamicCreativeImages,
       effectiveAdCategory,
@@ -994,7 +1032,7 @@ export function LeadLaunchCanary({
   async function ensureLeadBlueprint(): Promise<string> {
     const template = structuredClone(DEFAULT_LEAD_BLUEPRINT);
     const employment = effectiveAdCategory === "employment";
-    template.ad_set.optimization_goal = metaOptimizationGoal(performanceGoal);
+    template.ad_set.optimization_goal = metaOptimizationGoal(effectivePerformanceGoal);
     const parts = buildLinkCreativeBlueprintParts({
       primaryTexts: structuralOn
         ? [primaryTexts[0] ?? (employment ? "Jetzt bewerben." : "Jetzt mehr erfahren.")]
@@ -1036,8 +1074,9 @@ export function LeadLaunchCanary({
       "/api/meta/automation/blueprint",
       {
         action: "save",
-        objective: "OUTCOME_LEADS",
-        name: "Lead-Kampagne",
+        objective: launchObjective,
+        name:
+          launchObjective === "OUTCOME_SALES" ? "Conversion-Kampagne" : "Lead-Kampagne",
         payloadTemplate: template,
         requiredInputs: ["destination_url"],
       },
@@ -1259,7 +1298,7 @@ export function LeadLaunchCanary({
         creativeName: `Werbemittel ${stamp}`,
         adName: `Anzeige ${stamp}`,
         pixelId: selectedPixel.pixelId,
-        customEventType: selectedPixel.customEventType,
+        customEventType: selectedConversionEvent.customEventType,
         reason: PROTOCOL_APPROVE_REASON,
         confirmation: "AKTIV-LAUNCH VORBEREITEN",
         ...(structuralOn
@@ -1302,7 +1341,7 @@ export function LeadLaunchCanary({
         !result.planId ||
         result.status !== "HELD" ||
         !result.payloadHash ||
-        result.objective !== "OUTCOME_LEADS" ||
+        result.objective !== launchObjective ||
         !result.destinationUrl ||
         result.targetStatus !== "ACTIVE" ||
         result.budgetType !== "DAILY" ||
@@ -1332,7 +1371,7 @@ export function LeadLaunchCanary({
         budgetOwnerType: result.budgetOwnerType,
         dailyBudgetMinor: result.dailyBudgetMinor,
         pixelId: selectedPixel.pixelId,
-        customEventType: selectedPixel.customEventType,
+        customEventType: selectedConversionEvent.customEventType,
         primaryTexts: structuralOn
           ? [structuralAds![0].message]
           : primaryTexts,
@@ -1558,7 +1597,7 @@ export function LeadLaunchCanary({
   const currentPreviewPlan: AdPreviewPlan | null =
     previewRequested && selectedPixel && assetId
       ? {
-          objective: "OUTCOME_LEADS",
+          objective: launchObjective,
           destinationUrl: destinationUrl.trim(),
           campaignName,
           brandAssetIds: structuralOn
@@ -1574,7 +1613,7 @@ export function LeadLaunchCanary({
             }
           })(),
           pixelId: selectedPixel.pixelId,
-          customEventType: selectedPixel.customEventType,
+          customEventType: selectedConversionEvent.customEventType,
           primaryTexts: structuralOn
             ? [currentStructuralAds![0].message]
             : primaryTexts,
@@ -2081,22 +2120,61 @@ export function LeadLaunchCanary({
           />
         </label>
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">
-          Performance-Ziel
+          Optimierungsereignis
           <select
             className={inputClass}
             disabled={pending}
+            onChange={(event) => setConversionEventType(event.target.value)}
+            value={selectedConversionEvent.customEventType}
+          >
+            <optgroup label="Lead-Kampagne (OUTCOME_LEADS)">
+              {META_CONVERSION_EVENTS.filter(
+                (event) => event.campaignObjective === "OUTCOME_LEADS",
+              ).map((event) => (
+                <option key={event.customEventType} value={event.customEventType}>
+                  {event.labelDe} ({event.pixelEventName})
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Conversion-Kampagne (OUTCOME_SALES)">
+              {META_CONVERSION_EVENTS.filter(
+                (event) => event.campaignObjective === "OUTCOME_SALES",
+              ).map((event) => (
+                <option key={event.customEventType} value={event.customEventType}>
+                  {event.labelDe} ({event.pixelEventName})
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          <span className="mt-1 block text-xs font-medium text-slate-500">
+            {isLeadEvent
+              ? "Standard: Meta optimiert auf das Pixel-Ereignis „Lead“."
+              : `Meta optimiert auf „${selectedConversionEvent.pixelEventName}“ (${selectedConversionEvent.campaignObjective}, OFFSITE_CONVERSIONS). Dieses Ereignis muss auf deiner Website am Pixel ankommen, sonst fehlt Meta das Signal.`}
+          </span>
+        </label>
+        <label className="text-sm font-bold text-slate-800 lg:col-span-2">
+          Performance-Ziel
+          <select
+            className={inputClass}
+            disabled={pending || !isLeadEvent}
             onChange={(event) =>
               setPerformanceGoal(event.target.value as LeadPerformanceGoal)
             }
-            value={performanceGoal}
+            value={effectivePerformanceGoal}
           >
-            <option value="volume">Möglichst viele Leads (Start ohne Qualitätsdaten)</option>
-            <option disabled={!qualityCapiReady} value="quality">
+            <option value="volume">
+              {isLeadEvent
+                ? "Möglichst viele Leads (Start ohne Qualitätsdaten)"
+                : `Möglichst viele „${selectedConversionEvent.labelDe}“`}
+            </option>
+            <option disabled={!qualityCapiReady || !isLeadEvent} value="quality">
               Möglichst viele qualifizierte Leads (CAPI-Feedback aktiv)
             </option>
           </select>
           <span className="mt-1 block text-xs font-medium text-slate-500">
-            {performanceGoal === "quality"
+            {!isLeadEvent
+              ? "Qualifizierte Leads gibt es nur beim Ereignis „Lead“."
+              : performanceGoal === "quality"
               ? "Meta optimiert dieses neue Ad Set auf Personen, die nach dem Absenden als guter Lead bewertet werden."
               : qualityCapiReady
                 ? "Für neue Kampagnen mit genügend Bewertungsdaten kannst du später „qualifizierte Leads“ wählen. Bestehende Ad Sets werden nicht automatisch verändert."
@@ -2738,7 +2816,8 @@ export function LeadLaunchCanary({
             <div>
               <dt className="font-bold text-slate-500">Pixel</dt>
               <dd>
-                {previewPlan.pixelId} · {previewPlan.customEventType}
+                {previewPlan.pixelId} ·{" "}
+                {conversionEventLabel(previewPlan.customEventType)}
               </dd>
             </div>
             <div>
