@@ -38,6 +38,10 @@ import { fetchCampaignGeoTarget } from "@/lib/campaign-geo/client";
 import type { FunnelPurposeHint } from "@/lib/funnel-purpose-hint-types";
 import { buildLinkCreativeBlueprintParts } from "@/lib/meta/creative-text-variants";
 import {
+  DEFAULT_META_URL_TAGS,
+  metaUrlTagsForDestinations,
+} from "@/lib/meta/conversion-events";
+import {
   MAX_DYNAMIC_CREATIVE_IMAGES,
   normalizeLaunchAssetIds,
   resolveDynamicCreativeAssetIds,
@@ -378,6 +382,8 @@ export function TrafficLaunchCanary({
   >("off");
   const structuralOn = structuralMode !== "off";
   const [variantDestinationUrl, setVariantDestinationUrl] = useState("");
+  // UTM-Parameter: standardmäßig an, pro Kampagne abschaltbar.
+  const [urlTagsEnabled, setUrlTagsEnabled] = useState(true);
   const [useMetaExperiment, setUseMetaExperiment] = useState(false);
   const [pendingStudyPlanId, setPendingStudyPlanId] = useState<string | null>(
     null,
@@ -571,6 +577,15 @@ export function TrafficLaunchCanary({
         resolvedDynamicAssets.assetIds.length > 1,
     });
     template.creative.object_story_spec = parts.objectStorySpec as typeof template.creative.object_story_spec;
+    const urlTags = urlTagsEnabled
+      ? metaUrlTagsForDestinations([
+          destinationUrl,
+          structuralMode === "funnel_split" ? variantDestinationUrl : null,
+        ])
+      : null;
+    if (urlTags) {
+      (template.creative as Record<string, unknown>).url_tags = urlTags;
+    }
     if (!structuralOn && parts.assetFeedSpec) {
       (template.creative as Record<string, unknown>).asset_feed_spec =
         parts.assetFeedSpec;
@@ -1221,6 +1236,25 @@ export function TrafficLaunchCanary({
             type="url"
             value={destinationUrl}
           />
+        </label>
+        <label className="flex items-start gap-2 text-sm font-bold text-slate-800 lg:col-span-2">
+          <input
+            checked={urlTagsEnabled}
+            className="mt-1"
+            disabled={pending || Boolean(heldPlan)}
+            onChange={(event) => setUrlTagsEnabled(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            UTM-Parameter an die Anzeigen-Links hängen (empfohlen)
+            <span className="mt-1 block text-xs font-medium text-slate-500">
+              {DEFAULT_META_URL_TAGS}
+            </span>
+            <span className="mt-1 block text-xs font-medium text-slate-500">
+              utm-Parameter, die schon in der Ziel-URL stehen, werden nicht überschrieben.
+              Bereits laufende Anzeigen bleiben unverändert.
+            </span>
+          </span>
         </label>
         <div className="lg:col-span-2">
           <button

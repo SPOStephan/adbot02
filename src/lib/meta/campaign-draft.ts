@@ -140,7 +140,7 @@ export function normalizeMetaCampaignDraftPayload(value: unknown): MetaCampaignD
     conversionEventType: conversionEventType(payload.conversionEventType),
     urlTagsEnabled:
       payload.urlTagsEnabled === undefined
-        ? false
+        ? true
         : boolean(payload.urlTagsEnabled, "Die UTM-Auswahl"),
     geo: normalizeGeo(payload.geo),
   };

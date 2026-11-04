@@ -364,10 +364,53 @@ export function metaConversionReport(input: {
 
 /**
  * Standard-UTM-Parameter für Anzeigen (Meta ersetzt die {{…}}-Makros).
- * Wird nur gesetzt, wenn die Option pro Kampagne aktiv ist.
+ * Bei neuen Launches standardmäßig an, pro Kampagne abschaltbar.
  */
 export const DEFAULT_META_URL_TAGS =
-  "utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.id}}";
+  "utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}";
+
+function utmKeysInUrl(raw: string): Set<string> {
+  const keys = new Set<string>();
+  const trimmed = raw.trim();
+  const hashStart = trimmed.indexOf("#");
+  const value = hashStart < 0 ? trimmed : trimmed.slice(0, hashStart);
+  const queryStart = value.indexOf("?");
+  if (queryStart < 0) return keys;
+  const query = value.slice(queryStart + 1);
+  for (const pair of query.split("&")) {
+    const rawKey = pair.split("=")[0] ?? "";
+    let key = rawKey;
+    try {
+      key = decodeURIComponent(rawKey.replace(/\+/g, " "));
+    } catch {
+      // ungültiges Encoding: Rohschlüssel verwenden
+    }
+    key = key.trim().toLowerCase();
+    if (key.startsWith("utm_")) keys.add(key);
+  }
+  return keys;
+}
+
+/**
+ * url_tags für die Anzeigen dieses Launches: Standard-UTM-Parameter ohne die
+ * utm-Schlüssel, die eine der Ziel-URLs bereits trägt (vorhandene Werte werden
+ * nie überschrieben). `null`, wenn nichts mehr übrig bleibt.
+ */
+export function metaUrlTagsForDestinations(
+  destinationUrls: ReadonlyArray<string | null | undefined>,
+  urlTags: string = DEFAULT_META_URL_TAGS,
+): string | null {
+  const present = new Set<string>();
+  for (const url of destinationUrls) {
+    if (typeof url !== "string") continue;
+    for (const key of utmKeysInUrl(url)) present.add(key);
+  }
+  const kept = urlTags
+    .split("&")
+    .filter((pair) => pair.length > 0)
+    .filter((pair) => !present.has((pair.split("=")[0] ?? "").trim().toLowerCase()));
+  return kept.length > 0 ? kept.join("&") : null;
+}
 
 /**
  * Antwort von `GET /{pixel_id}/stats?aggregation=event` → Summe je Pixel-
