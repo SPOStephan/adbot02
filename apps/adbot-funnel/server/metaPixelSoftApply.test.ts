@@ -4,6 +4,7 @@ import {
   mapPortalCustomEventToFunnelEventName,
   softApplyMetaPixel,
 } from "@shared/metaPixelSoftApply";
+import { META_CONVERSION_EVENTS } from "@shared/metaConversionEvents";
 
 describe("softApplyMetaPixel", () => {
   const empty = defaultFunnel.metaTracking;
@@ -47,5 +48,25 @@ describe("mapPortalCustomEventToFunnelEventName", () => {
   it("mappt LEAD auf Lead", () => {
     expect(mapPortalCustomEventToFunnelEventName("LEAD")).toBe("Lead");
     expect(mapPortalCustomEventToFunnelEventName("lead")).toBe("Lead");
+    expect(mapPortalCustomEventToFunnelEventName("")).toBe("Lead");
+    expect(mapPortalCustomEventToFunnelEventName(null)).toBe("Lead");
+  });
+
+  it("mappt COMPLETE_REGISTRATION auf CompleteRegistration", () => {
+    expect(mapPortalCustomEventToFunnelEventName("COMPLETE_REGISTRATION")).toBe(
+      "CompleteRegistration",
+    );
+  });
+
+  it("mappt alle Tabellenereignisse auf den Pixel-Namen", () => {
+    for (const event of META_CONVERSION_EVENTS) {
+      expect(mapPortalCustomEventToFunnelEventName(event.customEventType)).toBe(
+        event.pixelEventName,
+      );
+    }
+  });
+
+  it("fällt bei unbekannten Werten auf Lead zurück", () => {
+    expect(mapPortalCustomEventToFunnelEventName("FOO_BAR")).toBe("Lead");
   });
 });

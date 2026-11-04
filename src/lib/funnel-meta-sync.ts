@@ -3,6 +3,7 @@ import "server-only";
 import { createHmac, randomBytes } from "node:crypto";
 
 import { getFunnelSsoSecret } from "@/lib/funnel-sso";
+import { metaPixelEventNameForCustomEventType } from "@/lib/meta/conversion-events";
 import { createFunnelUrl } from "@/lib/site-urls";
 
 const SYNC_TTL_SECONDS = 5 * 60;
@@ -27,18 +28,15 @@ function hmacBase64Url(value: string, secret: string): string {
   return createHmac("sha256", secret).update(value).digest("base64url");
 }
 
-/** Map portal Ads custom_event_type (LEAD) → Funnel Pixel/CAPI event (Lead). */
+/**
+ * Map portal Ads custom_event_type (LEAD, COMPLETE_REGISTRATION, …) → Funnel
+ * Pixel/CAPI event (Lead, CompleteRegistration, …). Derived from the central
+ * conversion event table; empty/unknown stays "Lead".
+ */
 export function mapPortalCustomEventToFunnelEventName(
   customEventType: string | null | undefined,
 ): string {
-  const raw = (customEventType ?? "").trim();
-  if (!raw) return "Lead";
-  if (raw.toUpperCase() === "LEAD") return "Lead";
-  if (/^[A-Z][A-Z0-9_]*$/.test(raw)) {
-    return raw.charAt(0) + raw.slice(1).toLowerCase();
-  }
-  if (/^[A-Za-z][A-Za-z0-9_]*$/.test(raw)) return raw;
-  return "Lead";
+  return metaPixelEventNameForCustomEventType(customEventType);
 }
 
 export function createFunnelMetaPixelSyncToken(input: {

@@ -1,4 +1,5 @@
 import type { FunnelMetaTracking } from "./funnel";
+import { metaPixelEventNameForCustomEventType } from "./metaConversionEvents";
 
 export type MetaPixelSoftApplyAction =
   | "set_and_enable"
@@ -61,17 +62,13 @@ export function softApplyMetaPixel(
   return { action: "skip", next: current };
 }
 
-/** Map portal Ads custom_event_type (e.g. LEAD) to Pixel/CAPI event_name (Lead). */
+/**
+ * Map portal Ads custom_event_type (e.g. LEAD, COMPLETE_REGISTRATION) to
+ * Pixel/CAPI event_name (Lead, CompleteRegistration). Derived from the central
+ * conversion event table; empty/unknown stays "Lead".
+ */
 export function mapPortalCustomEventToFunnelEventName(
   customEventType: string | null | undefined,
 ): string {
-  const raw = (customEventType ?? "").trim();
-  if (!raw) return "Lead";
-  if (raw.toUpperCase() === "LEAD") return "Lead";
-  // Meta Ads often uses ALL_CAPS; Pixel/CAPI standard events use Title Case.
-  if (/^[A-Z][A-Z0-9_]*$/.test(raw)) {
-    return raw.charAt(0) + raw.slice(1).toLowerCase();
-  }
-  if (/^[A-Za-z][A-Za-z0-9_]*$/.test(raw)) return raw;
-  return "Lead";
+  return metaPixelEventNameForCustomEventType(customEventType);
 }
