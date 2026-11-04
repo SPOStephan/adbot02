@@ -12,6 +12,7 @@ import {
   metaPixelEventNameForCustomEventType,
   normalizeMetaCustomEventType,
   DEFAULT_META_URL_TAGS,
+  metaUrlTagsForDestinations,
   parsePixelEventStats,
   pixelEventSignal,
 } from "../src/lib/meta/conversion-events.ts";
@@ -361,8 +362,30 @@ assert.equal(pixelEventSignal(stats, "FOO"), null);
 
 assert.equal(
   DEFAULT_META_URL_TAGS,
-  "utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.id}}",
+  "utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}",
 );
+// Vorhandene utm-Parameter in einer Ziel-URL werden nie überschrieben.
+assert.equal(metaUrlTagsForDestinations(["https://example.de/angebot"]), DEFAULT_META_URL_TAGS);
+assert.equal(metaUrlTagsForDestinations([]), DEFAULT_META_URL_TAGS);
+assert.equal(
+  metaUrlTagsForDestinations(["https://example.de/?utm_source=newsletter&x=1#top"]),
+  "utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}",
+);
+assert.equal(
+  metaUrlTagsForDestinations([
+    "https://a.de/?UTM_CAMPAIGN=herbst",
+    null,
+    "https://b.de/?utm_content=b",
+  ]),
+  "utm_source=meta&utm_medium=paid_social",
+);
+assert.equal(
+  metaUrlTagsForDestinations([
+    "https://a.de/?utm_source=x&utm_medium=y&utm_campaign=z&utm_content=w",
+  ]),
+  null,
+);
+assert.equal(metaUrlTagsForDestinations(["https://a.de/#?utm_source=x"]), DEFAULT_META_URL_TAGS);
 
 // Signal-Check ist rein lesend und blockiert nie.
 const capi = read("src/lib/meta/connection-capi.ts");
@@ -380,10 +403,19 @@ assert.match(signalRoute, /readControlJson\(request\)/);
 assert.match(signalRoute, /authenticateMetaCustomer\(\)/);
 assert.ok(signalRoute.indexOf("readControlJson(request)") < signalRoute.indexOf("authenticateMetaCustomer()"));
 
-// UI: Warnung ohne Hard-Block, LEAD ohne Zusatzabfrage, UTM standardmäßig aus.
+// UI: Warnung ohne Hard-Block, LEAD ohne Zusatzabfrage, UTM standardmäßig an.
 assert.match(ui, /if \(!signalPixelId \|\| signalEventType === "LEAD"\) return;/);
-assert.match(ui, /initialDraftPayload\?\.urlTagsEnabled === true/);
-assert.match(ui, /if \(urlTagsEnabled\) \{\n\s*\(template\.creative as Record<string, unknown>\)\.url_tags = DEFAULT_META_URL_TAGS;/);
+assert.match(ui, /initialDraftPayload\?\.urlTagsEnabled !== false/);
+for (const launchUi of [ui, read("src/components/TrafficLaunchCanary.tsx")]) {
+  assert.match(launchUi, /const urlTags = urlTagsEnabled\n\s*\? metaUrlTagsForDestinations\(\[/);
+  assert.match(launchUi, /structuralMode === "funnel_split" \? variantDestinationUrl : null/);
+  assert.match(launchUi, /if \(urlTags\) \{\n\s*\(template\.creative as Record<string, unknown>\)\.url_tags = urlTags;/);
+  assert.match(launchUi, /onChange=\{\(event\) => setUrlTagsEnabled\(event\.target\.checked\)\}/);
+}
+assert.match(read("src/components/TrafficLaunchCanary.tsx"), /useState\(true\);/);
+// Draft: fehlendes Feld → an; Duplikat (neue Kampagne) → an.
+assert.match(read("src/lib/meta/campaign-draft.ts"), /payload\.urlTagsEnabled === undefined\n\s*\? true/);
+assert.match(read("src/lib/meta/campaign-draft-duplicate.ts"), /urlTagsEnabled: true,/);
 assert.doesNotMatch(ui, /currentEventSignal[^\n]*gatesReady|gates[^\n]*currentEventSignal/);
 
 console.log("meta conversion events: ok");

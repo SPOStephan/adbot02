@@ -59,6 +59,7 @@ import {
 import {
   DEFAULT_META_CONVERSION_EVENT_TYPE,
   DEFAULT_META_URL_TAGS,
+  metaUrlTagsForDestinations,
   META_CONVERSION_EVENTS,
   findMetaConversionEvent,
   normalizeMetaCustomEventType,
@@ -741,7 +742,7 @@ export function LeadLaunchCanary({
   const launchObjective = selectedConversionEvent.campaignObjective;
   // UTM-Parameter an den Anzeigen: pro Kampagne, Default aus (bisheriges Verhalten).
   const [urlTagsEnabled, setUrlTagsEnabled] = useState<boolean>(
-    initialDraftPayload?.urlTagsEnabled === true,
+    initialDraftPayload?.urlTagsEnabled !== false,
   );
   // Read-only Signal-Check (kein Hard-Block): kam das Ereignis am Pixel an?
   const [eventSignal, setEventSignal] = useState<{
@@ -1119,8 +1120,14 @@ export function LeadLaunchCanary({
     });
     template.creative.object_story_spec =
       parts.objectStorySpec as typeof template.creative.object_story_spec;
-    if (urlTagsEnabled) {
-      (template.creative as Record<string, unknown>).url_tags = DEFAULT_META_URL_TAGS;
+    const urlTags = urlTagsEnabled
+      ? metaUrlTagsForDestinations([
+          destinationUrl,
+          structuralMode === "funnel_split" ? variantDestinationUrl : null,
+        ])
+      : null;
+    if (urlTags) {
+      (template.creative as Record<string, unknown>).url_tags = urlTags;
     }
     if (!structuralOn && parts.assetFeedSpec) {
       (template.creative as Record<string, unknown>).asset_feed_spec =
@@ -2241,9 +2248,13 @@ export function LeadLaunchCanary({
             type="checkbox"
           />
           <span>
-            UTM-Parameter an die Anzeigen-Links hängen
+            UTM-Parameter an die Anzeigen-Links hängen (empfohlen)
             <span className="mt-1 block text-xs font-medium text-slate-500">
               {DEFAULT_META_URL_TAGS}
+            </span>
+            <span className="mt-1 block text-xs font-medium text-slate-500">
+              utm-Parameter, die schon in der Ziel-URL stehen, werden nicht überschrieben.
+              Bereits laufende Anzeigen bleiben unverändert.
             </span>
           </span>
         </label>
