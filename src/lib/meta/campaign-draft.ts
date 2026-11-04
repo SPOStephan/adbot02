@@ -100,6 +100,16 @@ function normalizeGeo(value: unknown): CampaignGeoTarget | null {
   };
 }
 
+/** Older drafts have no event: LEAD. The launch route validates against the event table. */
+function conversionEventType(value: unknown): string {
+  if (value === undefined || value === null || value === "") return "LEAD";
+  const parsed = text(value, "Das Conversion-Ereignis", 64).trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(parsed)) {
+    throw new Error("Das Conversion-Ereignis ist ungültig.");
+  }
+  return parsed;
+}
+
 export function normalizeMetaCampaignDraftPayload(value: unknown): MetaCampaignDraftPayload {
   const payload = object(value, "Der Kampagnenentwurf");
   const normalized: MetaCampaignDraftPayload = {
@@ -127,6 +137,7 @@ export function normalizeMetaCampaignDraftPayload(value: unknown): MetaCampaignD
     ad2Description: text(payload.ad2Description, "Die zweite Beschreibung", 255),
     pixelRowId: id(payload.pixelRowId, "Das Pixel"),
     performanceGoal: choice(payload.performanceGoal, "Das Performance-Ziel", PERFORMANCE_GOALS),
+    conversionEventType: conversionEventType(payload.conversionEventType),
     geo: normalizeGeo(payload.geo),
   };
   if (JSON.stringify(normalized).length > 65_536) {

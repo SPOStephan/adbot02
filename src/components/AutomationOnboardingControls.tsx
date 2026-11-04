@@ -69,6 +69,8 @@ export type RecentLaunchPlanView = {
   notBefore: string | null;
   payloadHash: string | null;
   objective: string | null;
+  /** ad_set.promoted_object.custom_event_type of the planned launch, if any. */
+  customEventType?: string | null;
   destinationUrl: string | null;
   targetStatus: "ACTIVE" | null;
   budgetType: "DAILY" | "LIFETIME" | null;

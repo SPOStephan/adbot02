@@ -24,6 +24,11 @@ export type MetaCampaignDraftPayload = {
   ad2Description: string;
   pixelRowId: string;
   performanceGoal: LeadPerformanceGoal;
+  /**
+   * Meta promoted_object.custom_event_type for this launch (e.g. LEAD,
+   * COMPLETE_REGISTRATION). Older drafts without the field load as LEAD.
+   */
+  conversionEventType: string;
   geo: CampaignGeoTarget | null;
 };
 

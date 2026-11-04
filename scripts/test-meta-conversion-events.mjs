@@ -6,7 +6,10 @@ import {
   META_CONVERSION_EVENTS,
   findMetaConversionEvent,
   isKnownMetaCustomEventType,
+  metaLaunchConversionEventIssue,
+  metaOptimizationGoalsForEvent,
   metaPixelEventNameForCustomEventType,
+  normalizeMetaCustomEventType,
 } from "../src/lib/meta/conversion-events.ts";
 
 // Gleiche Funktion wie in src/lib/funnel-meta-sync.ts und der Funnel-App
@@ -133,5 +136,112 @@ assert.doesNotMatch(portalSync, /slice\(1\)\.toLowerCase\(\)/);
 const funnelSoftApply = read("apps/adbot-funnel/shared/metaPixelSoftApply.ts");
 assert.match(funnelSoftApply, /return metaPixelEventNameForCustomEventType\(customEventType\);/);
 assert.doesNotMatch(funnelSoftApply, /slice\(1\)\.toLowerCase\(\)/);
+
+// Freebie-Sync nutzt ebenfalls die Tabelle.
+const freebieSync = read("src/lib/freebie-meta-sync.ts");
+assert.match(freebieSync, /return metaPixelEventNameForCustomEventType\(customEventType\);/);
+assert.doesNotMatch(freebieSync, /slice\(1\)\.toLowerCase\(\)/);
+
+// ---- Teil 2: Launch ----
+
+// Normalisierung + Optimierungsziele.
+assert.equal(normalizeMetaCustomEventType("view_content"), "CONTENT_VIEW");
+assert.equal(normalizeMetaCustomEventType("CompleteRegistration"), "COMPLETE_REGISTRATION");
+assert.equal(normalizeMetaCustomEventType("FOO"), null);
+assert.deepEqual(metaOptimizationGoalsForEvent("LEAD"), ["OFFSITE_CONVERSIONS", "QUALITY_LEAD"]);
+for (const e of META_CONVERSION_EVENTS.filter((e) => e.customEventType !== "LEAD")) {
+  assert.deepEqual(metaOptimizationGoalsForEvent(e.customEventType), ["OFFSITE_CONVERSIONS"]);
+}
+
+// Abnahme 1: COMPLETE_REGISTRATION unter OUTCOME_LEADS mit OFFSITE_CONVERSIONS ist gültig.
+assert.equal(
+  metaLaunchConversionEventIssue({
+    objective: "OUTCOME_LEADS",
+    optimizationGoal: "OFFSITE_CONVERSIONS",
+    customEventType: "COMPLETE_REGISTRATION",
+  }),
+  null,
+);
+// QUALITY_LEAD nur bei LEAD.
+assert.equal(
+  metaLaunchConversionEventIssue({
+    objective: "OUTCOME_LEADS",
+    optimizationGoal: "QUALITY_LEAD",
+    customEventType: "COMPLETE_REGISTRATION",
+  })?.code,
+  "conversion_event_goal_mismatch",
+);
+// LEAD-Regression: beide bisherigen Ziele weiterhin gültig.
+for (const goal of ["OFFSITE_CONVERSIONS", "QUALITY_LEAD"]) {
+  assert.equal(
+    metaLaunchConversionEventIssue({ objective: "OUTCOME_LEADS", optimizationGoal: goal, customEventType: "LEAD" }),
+    null,
+  );
+}
+// Kauf/Abo verlangen OUTCOME_SALES.
+for (const type of ["PURCHASE", "SUBSCRIBE"]) {
+  assert.equal(
+    metaLaunchConversionEventIssue({ objective: "OUTCOME_SALES", optimizationGoal: "OFFSITE_CONVERSIONS", customEventType: type }),
+    null,
+  );
+  assert.equal(
+    metaLaunchConversionEventIssue({ objective: "OUTCOME_LEADS", optimizationGoal: "OFFSITE_CONVERSIONS", customEventType: type })?.code,
+    "conversion_event_objective_mismatch",
+  );
+}
+// Andere Ziele (z. B. Traffic) werden nicht angefasst.
+assert.equal(
+  metaLaunchConversionEventIssue({ objective: "OUTCOME_TRAFFIC", optimizationGoal: "LINK_CLICKS", customEventType: "LEAD" }),
+  null,
+);
+assert.equal(
+  metaLaunchConversionEventIssue({ objective: "OUTCOME_LEADS", optimizationGoal: "OFFSITE_CONVERSIONS", customEventType: "FOO" })?.code,
+  "unknown_conversion_event",
+);
+
+// Launch-Parser: gespiegelte Liste == Tabelle.
+const input = read("src/lib/meta/customer-control-input.ts");
+const launchList = input.match(/const LAUNCH_CUSTOM_EVENT_TYPES = \[([\s\S]*?)\] as const;/);
+assert.ok(launchList, "LAUNCH_CUSTOM_EVENT_TYPES fehlt");
+assert.deepEqual(
+  [...launchList[1].matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]),
+  META_CONVERSION_EVENTS.map((e) => e.customEventType),
+);
+assert.match(input, /custom_event_type: requiredLaunchCustomEventType\(body\.customEventType\)/);
+// Pixel-Bestätigung bleibt unverändert (Regex, Default LEAD).
+assert.match(input, /customEventType: requiredCustomEventType\(body\.customEventType\)/);
+
+// Service: Prüfung vor dem Freeze, LEAD liest nichts zusätzlich.
+const service = read("src/lib/meta/customer-control-service.ts");
+assert.match(service, /if \(!eventType \|\| eventType === "LEAD"\) return;/);
+const launchFn = service.slice(service.indexOf("export async function materializeCustomerLaunch("));
+assert.ok(
+  launchFn.indexOf("assertLaunchConversionEventFitsBlueprint") <
+    launchFn.indexOf("ensureFreezeWritesForLaunch(readyCustomer)"),
+  "Ereignisprüfung muss vor dem Freeze laufen",
+);
+
+// UI: Default LEAD, Ziel aus Tabelle, QUALITY_LEAD nur bei LEAD.
+const ui = read("src/components/LeadLaunchCanary.tsx");
+assert.match(ui, /DEFAULT_META_CONVERSION_EVENT_TYPE,\n\s*\);/);
+assert.match(ui, /objective: launchObjective,/);
+assert.match(ui, /metaOptimizationGoal\(effectivePerformanceGoal\)/);
+assert.match(ui, /const effectivePerformanceGoal: LeadPerformanceGoal = isLeadEvent/);
+assert.match(ui, /customEventType: selectedConversionEvent\.customEventType,\n\s*reason: PROTOCOL_APPROVE_REASON/);
+
+// Migration: Lead-Underperformer nur für LEAD-Launches, Rest unverändert.
+const windowSql = read("supabase/migrations/20261104120000_meta_lead_window_conversion_event.sql");
+const originalSql = read("supabase/migrations/20261026120000_meta_customer_campaign_status.sql");
+const fnBody = (sql) => {
+  const start = sql.indexOf("create or replace function public.meta_lead_campaign_window(");
+  return sql.slice(start, sql.indexOf("$$;", start));
+};
+const before = fnBody(originalSql);
+const after = fnBody(windowSql);
+const guardStart = after.indexOf("    -- lead_window_lead_event_only");
+const guardEnd = after.indexOf("  group by");
+assert.ok(guardStart > 0 && guardEnd > guardStart);
+assert.equal(after.slice(0, guardStart) + after.slice(guardEnd), before, "nur die Ereignis-Bedingung darf neu sein");
+assert.match(after, /'LEAD'\n\s*\)\)\) <> 'LEAD'/);
 
 console.log("meta conversion events: ok");
