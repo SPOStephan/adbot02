@@ -361,3 +361,56 @@ export function metaConversionReport(input: {
     roas,
   };
 }
+
+/**
+ * Standard-UTM-Parameter für Anzeigen (Meta ersetzt die {{…}}-Makros).
+ * Wird nur gesetzt, wenn die Option pro Kampagne aktiv ist.
+ */
+export const DEFAULT_META_URL_TAGS =
+  "utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.id}}";
+
+/**
+ * Antwort von `GET /{pixel_id}/stats?aggregation=event` → Summe je Pixel-
+ * Ereignisname (z. B. `{ PageView: 120, Lead: 4 }`). Unbekannte Formen → `{}`.
+ */
+export function parsePixelEventStats(value: unknown): Record<string, number> {
+  const totals: Record<string, number> = {};
+  const root = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  const buckets = Array.isArray(root?.data) ? root.data : [];
+  for (const bucket of buckets) {
+    const entries =
+      bucket && typeof bucket === "object" && Array.isArray((bucket as Record<string, unknown>).data)
+        ? ((bucket as Record<string, unknown>).data as unknown[])
+        : [];
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object") continue;
+      const name = (entry as Record<string, unknown>).value;
+      const count = finiteNumber((entry as Record<string, unknown>).count);
+      if (typeof name !== "string" || !name.trim() || count === null) continue;
+      totals[name.trim()] = (totals[name.trim()] ?? 0) + count;
+    }
+  }
+  return totals;
+}
+
+export type PixelEventSignal = {
+  pixelEventName: string;
+  /** Anzahl im Zeitraum; 0 = kein Signal. */
+  count: number;
+  received: boolean;
+};
+
+/** Ist das gewählte Ereignis laut Pixel-Statistik angekommen? */
+export function pixelEventSignal(
+  stats: Readonly<Record<string, number>>,
+  customEventType: string | null | undefined,
+): PixelEventSignal | null {
+  const event = findMetaConversionEvent(customEventType);
+  if (!event) return null;
+  const wanted = event.pixelEventName.toUpperCase();
+  let count = 0;
+  for (const [name, value] of Object.entries(stats)) {
+    if (name.toUpperCase() === wanted) count += value;
+  }
+  return { pixelEventName: event.pixelEventName, count, received: count > 0 };
+}

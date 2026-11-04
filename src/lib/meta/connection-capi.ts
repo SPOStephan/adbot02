@@ -14,6 +14,7 @@ import {
   type CapiProbeStatus,
   type ConnectionPixel,
 } from "@/lib/meta/conversions-api";
+import { parsePixelEventStats } from "@/lib/meta/conversion-events";
 import { createAppSecretProof, decryptAccessToken } from "@/lib/meta/crypto";
 import { META_GRAPH_VERSION } from "@/lib/meta/client";
 import { getMetaSyncEnv } from "@/lib/meta/env";
@@ -349,3 +350,56 @@ export async function probeConnectionCapi(input: {
 }
 
 export { listPixelsEmptyMessage };
+
+/**
+ * Read-only: Events-Manager-Statistik eines Pixels (`/{pixel_id}/stats`,
+ * aggregation=event) für die letzten `days` Tage. Keine Writes an Meta.
+ */
+export async function readConnectionPixelEventStats(input: {
+  credentials: ConnectionCapiCredentials;
+  pixelId: string;
+  days?: number;
+  now?: number;
+}): Promise<
+  | { ok: true; stats: Record<string, number> }
+  | { ok: false; status: "denied" | "error" }
+> {
+  const now = Math.floor((input.now ?? Date.now()) / 1000);
+  const days = Math.min(Math.max(input.days ?? 7, 1), 28);
+  const url = new URL(
+    `/${META_GRAPH_VERSION}/${encodeURIComponent(input.pixelId)}/stats`,
+    META_GRAPH_ORIGIN,
+  );
+  url.searchParams.set("aggregation", "event");
+  url.searchParams.set("start_time", String(now - days * 24 * 60 * 60));
+  url.searchParams.set("end_time", String(now));
+  url.searchParams.set(
+    "appsecret_proof",
+    createAppSecretProof(input.credentials.accessToken, input.credentials.appSecret),
+  );
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${input.credentials.accessToken}`,
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const parsed = parseCapiGraphResponse(body);
+      return {
+        ok: false,
+        status: classifyCapiGraphFailure({
+          httpStatus: response.status,
+          code: parsed.error?.code,
+        }),
+      };
+    }
+    return { ok: true, stats: parsePixelEventStats(body) };
+  } catch {
+    return { ok: false, status: "error" };
+  }
+}

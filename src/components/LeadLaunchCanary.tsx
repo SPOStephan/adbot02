@@ -58,6 +58,7 @@ import {
 } from "@/lib/meta/creative-image-variants";
 import {
   DEFAULT_META_CONVERSION_EVENT_TYPE,
+  DEFAULT_META_URL_TAGS,
   META_CONVERSION_EVENTS,
   findMetaConversionEvent,
   normalizeMetaCustomEventType,
@@ -738,6 +739,69 @@ export function LeadLaunchCanary({
     ? performanceGoal
     : "volume";
   const launchObjective = selectedConversionEvent.campaignObjective;
+  // UTM-Parameter an den Anzeigen: pro Kampagne, Default aus (bisheriges Verhalten).
+  const [urlTagsEnabled, setUrlTagsEnabled] = useState<boolean>(
+    initialDraftPayload?.urlTagsEnabled === true,
+  );
+  // Read-only Signal-Check (kein Hard-Block): kam das Ereignis am Pixel an?
+  const [eventSignal, setEventSignal] = useState<{
+    key: string;
+    status: "received" | "missing" | "unknown";
+    message: string;
+  } | null>(null);
+  const signalPixelId = selectedPixel?.pixelId ?? "";
+  const signalEventType = selectedConversionEvent.customEventType;
+  const signalKey = `${signalPixelId}:${signalEventType}`;
+  useEffect(() => {
+    if (!signalPixelId || signalEventType === "LEAD") return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch("/api/meta/automation/pixel-signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pixelId: signalPixelId,
+          customEventType: signalEventType,
+        }),
+      })
+        .then((response) => response.json().catch(() => ({})))
+        .then((result: { ok?: boolean; status?: string; message?: string }) => {
+          if (cancelled) return;
+          const status =
+            result.ok &&
+            (result.status === "received" ||
+              result.status === "missing" ||
+              result.status === "unknown")
+              ? result.status
+              : "unknown";
+          setEventSignal({
+            key: `${signalPixelId}:${signalEventType}`,
+            status,
+            message:
+              typeof result.message === "string"
+                ? result.message
+                : "Signal konnte nicht geprüft werden. Prüfe das Ereignis im Events Manager.",
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setEventSignal({
+            key: `${signalPixelId}:${signalEventType}`,
+            status: "unknown",
+            message:
+              "Signal konnte nicht geprüft werden. Prüfe das Ereignis im Events Manager.",
+          });
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [signalPixelId, signalEventType]);
+  const currentEventSignal =
+    eventSignal && eventSignal.key === signalKey && signalEventType !== "LEAD"
+      ? eventSignal
+      : null;
   const qualityCapiReady = canUseQualifiedLeadOptimization(selectedPixel);
   const funnelTracking = detectedPurposeHint?.metaTracking;
   const funnelTrackingReady =
@@ -782,6 +846,7 @@ export function LeadLaunchCanary({
       pixelRowId,
       performanceGoal,
       conversionEventType: selectedConversionEvent.customEventType,
+      urlTagsEnabled,
       geo: campaignGeo,
     }),
     [
@@ -794,6 +859,7 @@ export function LeadLaunchCanary({
       dailyBudget,
       descriptions,
       selectedConversionEvent.customEventType,
+      urlTagsEnabled,
       destinationUrl,
       dynamicCreativeImages,
       effectiveAdCategory,
@@ -1053,6 +1119,9 @@ export function LeadLaunchCanary({
     });
     template.creative.object_story_spec =
       parts.objectStorySpec as typeof template.creative.object_story_spec;
+    if (urlTagsEnabled) {
+      (template.creative as Record<string, unknown>).url_tags = DEFAULT_META_URL_TAGS;
+    }
     if (!structuralOn && parts.assetFeedSpec) {
       (template.creative as Record<string, unknown>).asset_feed_spec =
         parts.assetFeedSpec;
@@ -2150,6 +2219,32 @@ export function LeadLaunchCanary({
             {isLeadEvent
               ? "Standard: Meta optimiert auf das Pixel-Ereignis „Lead“."
               : `Meta optimiert auf „${selectedConversionEvent.pixelEventName}“ (${selectedConversionEvent.campaignObjective}, OFFSITE_CONVERSIONS). Dieses Ereignis muss auf deiner Website am Pixel ankommen, sonst fehlt Meta das Signal.`}
+          </span>
+          {currentEventSignal ? (
+            <span
+              className={`mt-2 block rounded-lg border px-3 py-2 text-xs font-medium ${
+                currentEventSignal.status === "received"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
+              }`}
+            >
+              {currentEventSignal.message}
+            </span>
+          ) : null}
+        </label>
+        <label className="flex items-start gap-2 text-sm font-bold text-slate-800 lg:col-span-2">
+          <input
+            checked={urlTagsEnabled}
+            className="mt-1"
+            disabled={pending}
+            onChange={(event) => setUrlTagsEnabled(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            UTM-Parameter an die Anzeigen-Links hängen
+            <span className="mt-1 block text-xs font-medium text-slate-500">
+              {DEFAULT_META_URL_TAGS}
+            </span>
           </span>
         </label>
         <label className="text-sm font-bold text-slate-800 lg:col-span-2">

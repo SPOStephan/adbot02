@@ -29,6 +29,8 @@ export type MetaCampaignDraftPayload = {
    * COMPLETE_REGISTRATION). Older drafts without the field load as LEAD.
    */
   conversionEventType: string;
+  /** UTM url_tags on the ads (older drafts: false). */
+  urlTagsEnabled: boolean;
   geo: CampaignGeoTarget | null;
 };
 

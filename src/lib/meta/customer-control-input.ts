@@ -585,6 +585,21 @@ function requiredLaunchCustomEventType(value: unknown): string {
   return canonical;
 }
 
+export type PixelSignalCommand = {
+  pixelId: string;
+  customEventType: string;
+};
+
+/** Read-only check: did the chosen event reach the pixel recently? */
+export function parsePixelSignalCommand(value: unknown): PixelSignalCommand {
+  const body = asJsonObject(value);
+  assertExactKeys(body, ["pixelId", "customEventType"], "Die Pixel-Signal-Prüfung");
+  return {
+    pixelId: requiredPixelId(body.pixelId, "Die Pixel-ID"),
+    customEventType: requiredLaunchCustomEventType(body.customEventType),
+  };
+}
+
 function optionalTestEventCode(value: unknown): string {
   const text = optionalText(value, "Der Test-Event-Code", 160);
   if (!text) return "";

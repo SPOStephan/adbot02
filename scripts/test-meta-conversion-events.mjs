@@ -11,6 +11,9 @@ import {
   metaOptimizationGoalsForEvent,
   metaPixelEventNameForCustomEventType,
   normalizeMetaCustomEventType,
+  DEFAULT_META_URL_TAGS,
+  parsePixelEventStats,
+  pixelEventSignal,
 } from "../src/lib/meta/conversion-events.ts";
 
 // Gleiche Funktion wie in src/lib/funnel-meta-sync.ts und der Funnel-App
@@ -325,5 +328,62 @@ assert.match(viewSql, /pd\.date between anchor\.window_end - 29 and anchor\.wind
 assert.match(viewSql, /security_invoker = true/);
 assert.doesNotMatch(viewSql, /meta_campaign_performance_30d\s+(with|as)/);
 assert.doesNotMatch(viewSql, /\b(insert|update|delete|alter table|drop)\b/i);
+
+// ---- Teil 4: Pixel-Signal + url_tags ----
+
+const stats = parsePixelEventStats({
+  data: [
+    { start_time: "2026-11-01T00:00:00+0000", aggregation: "event", data: [
+      { value: "PageView", count: 120 },
+      { value: "CompleteRegistration", count: 3 },
+    ] },
+    { start_time: "2026-11-02T00:00:00+0000", aggregation: "event", data: [
+      { value: "CompleteRegistration", count: "2" },
+      { value: "", count: 9 },
+      { value: "Lead" },
+    ] },
+  ],
+});
+assert.deepEqual(stats, { PageView: 120, CompleteRegistration: 5 });
+assert.deepEqual(parsePixelEventStats(null), {});
+assert.deepEqual(parsePixelEventStats({ data: "x" }), {});
+assert.deepEqual(pixelEventSignal(stats, "COMPLETE_REGISTRATION"), {
+  pixelEventName: "CompleteRegistration",
+  count: 5,
+  received: true,
+});
+assert.deepEqual(pixelEventSignal(stats, "PURCHASE"), {
+  pixelEventName: "Purchase",
+  count: 0,
+  received: false,
+});
+assert.equal(pixelEventSignal(stats, "FOO"), null);
+
+assert.equal(
+  DEFAULT_META_URL_TAGS,
+  "utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.id}}",
+);
+
+// Signal-Check ist rein lesend und blockiert nie.
+const capi = read("src/lib/meta/connection-capi.ts");
+const statsFn = capi.slice(capi.indexOf("export async function readConnectionPixelEventStats"));
+assert.match(statsFn, /\/stats`/);
+assert.match(statsFn, /method: "GET"/);
+const signalFn = service.slice(
+  service.indexOf("export async function checkCustomerPixelEventSignal"),
+  service.indexOf("export async function applyCustomerPixelCommand"),
+);
+assert.ok(signalFn.length > 0);
+assert.doesNotMatch(signalFn, /ensureFreezeWritesForLaunch|\.update\(|\.insert\(|\.upsert\(|\.rpc\(/);
+const signalRoute = read("src/app/api/meta/automation/pixel-signal/route.ts");
+assert.match(signalRoute, /readControlJson\(request\)/);
+assert.match(signalRoute, /authenticateMetaCustomer\(\)/);
+assert.ok(signalRoute.indexOf("readControlJson(request)") < signalRoute.indexOf("authenticateMetaCustomer()"));
+
+// UI: Warnung ohne Hard-Block, LEAD ohne Zusatzabfrage, UTM standardmäßig aus.
+assert.match(ui, /if \(!signalPixelId \|\| signalEventType === "LEAD"\) return;/);
+assert.match(ui, /initialDraftPayload\?\.urlTagsEnabled === true/);
+assert.match(ui, /if \(urlTagsEnabled\) \{\n\s*\(template\.creative as Record<string, unknown>\)\.url_tags = DEFAULT_META_URL_TAGS;/);
+assert.doesNotMatch(ui, /currentEventSignal[^\n]*gatesReady|gates[^\n]*currentEventSignal/);
 
 console.log("meta conversion events: ok");
