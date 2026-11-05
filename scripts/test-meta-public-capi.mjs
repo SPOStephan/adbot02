@@ -273,3 +273,57 @@ assert.deepEqual(
 );
 
 console.log("meta public capi endpoint: ok");
+
+// ---------------------------------------------------------------------------
+// Teil 4: Tracking-UI + Verwaltung
+// ---------------------------------------------------------------------------
+assert.deepEqual(lib.parsePublicCapiHostnameList("kiready.co, https://www.kiready.co/x ; KIREADY.co"), { ok: true, hostnames: ["kiready.co", "www.kiready.co"] });
+assert.equal(lib.parsePublicCapiHostnameList("").ok, false);
+assert.equal(lib.parsePublicCapiHostnameList("not a domain").ok, false);
+assert.equal(lib.parsePublicCapiHostnameList(Array.from({ length: 21 }, (_, i) => `d${i}.de`)).ok, false);
+assert.equal(lib.parsePublicCapiKeyLabel("  kiready.co Produktion\n "), "kiready.co Produktion");
+
+const nowMs = Date.parse("2026-11-05T12:00:00Z");
+const stats = lib.summarizePublicCapiLog([
+  { event_name: "Lead", status: "sent", created_at: "2026-11-05T11:00:00Z", error_code: null, error_reason: null },
+  { event_name: "Lead", status: "meta_error", created_at: "2026-11-03T11:00:00Z", error_code: "100", error_reason: "OAuthException" },
+  { event_name: "Lead", status: "pending", created_at: "2026-11-05T11:30:00Z", error_code: null, error_reason: null },
+  { event_name: "Purchase", status: "sent", created_at: "2026-10-20T11:00:00Z", error_code: null, error_reason: null },
+], nowMs);
+assert.equal(stats.length, 1, "älter als 7 Tage und pending zählen nicht");
+assert.equal(stats[0].eventName, "Lead");
+assert.equal(stats[0].last24h, 1);
+assert.equal(stats[0].last7d, 2);
+assert.equal(stats[0].errorRate7d, 0.5);
+assert.equal(stats[0].lastError.code, "100");
+assert.equal(stats[0].lastReceivedAt, "2026-11-05T11:00:00.000Z");
+
+const admin = read("src/lib/meta/public-capi-admin.ts");
+const uiRoute = read("src/app/api/meta/automation/pixel/conversions-api/route.ts");
+const ui = read("src/components/PublicCapiSettings.tsx");
+// Same-Origin-Prüfung + Anmeldung wie die übrigen Dashboard-Aktionen.
+assert.match(uiRoute, /readControlJson\(request\)/);
+assert.match(uiRoute, /authenticateMetaCustomer\(\)/);
+// Jede Abfrage ist auf den Kunden beschränkt.
+for (const table of ["meta_public_capi_pixels", "meta_capi_event_keys", "meta_conversion_events_log"]) {
+  const uses = admin.split(`.from("${table}")`).slice(1);
+  assert.ok(uses.length > 0, table);
+  for (const use of uses) {
+    const stmt = use.split(/;\n/)[0];
+    if (/\.insert\(/.test(stmt) || /\.upsert\(/.test(stmt)) {
+      assert.match(stmt, /user_id: customer\.userId|userId: customer\.userId/, `${table} insert ohne user_id`);
+    } else {
+      assert.match(stmt, /\.eq\("user_id", customer\.userId\)/, `${table} ohne user_id-Filter`);
+    }
+  }
+}
+// Schlüssel: nur Hash speichern, Klartext nur in der Erzeugungs-Antwort.
+assert.match(admin, /key_hash: generated\.hash/);
+assert.ok(!/key: generated\.key,\n\s*key_prefix/.test(admin));
+assert.ok(!/select\([^)]*key_hash/.test(admin), "key_hash wird nie gelesen");
+// Standard aus: Schalter nur durch Kundenaktion, UI zeigt Schlüssel nur, wenn zugeschaltet.
+assert.match(admin, /const enabled = input\.enabled === true;/);
+assert.match(ui, /\{pixel\.enabled \? \(/);
+assert.match(read("src/app/dashboard/tracking/page.tsx"), /<PublicCapiSettings \/>/);
+
+console.log("meta public capi tracking ui: ok");

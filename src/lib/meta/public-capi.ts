@@ -576,7 +576,7 @@ export function publicCapiAllowedEventNames(
 // ---------------------------------------------------------------------------
 
 export type PublicCapiLogRow = {
-  key_id: string;
+  key_id: string | null;
   user_id: string;
   pixel_id: string;
   event_name: string;
@@ -601,7 +601,7 @@ function clip(value: string | null | undefined, max: number): string | null {
  * im Protokoll landet.
  */
 export function publicCapiLogRow(input: {
-  keyId: string;
+  keyId: string | null;
   userId: string;
   pixelId: string;
   eventName: string;
@@ -656,4 +656,112 @@ export function publicCapiStatusFromSend(
   result: PublicCapiBatchSendResult,
 ): "sent" | "meta_error" {
   return result.status === "sent" ? "sent" : "meta_error";
+}
+
+// ---------------------------------------------------------------------------
+// Tracking-Bereich: Eingaben + Statistik
+// ---------------------------------------------------------------------------
+
+export const PUBLIC_CAPI_MAX_HOSTNAMES = 20;
+export const PUBLIC_CAPI_MAX_ACTIVE_KEYS_PER_PIXEL = 10;
+
+/** Domains aus der UI: normalisiert, ohne Schema/Pfad, ohne Duplikate. */
+export function parsePublicCapiHostnameList(
+  input: unknown,
+): { ok: true; hostnames: string[] } | { ok: false; message: string } {
+  const list = Array.isArray(input)
+    ? input
+    : typeof input === "string"
+      ? input.split(/[\s,;]+/)
+      : [];
+  const out: string[] = [];
+  for (const raw of list) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    let value = raw.trim().toLowerCase();
+    if (/^https?:\/\//.test(value)) {
+      try {
+        value = new URL(value).hostname;
+      } catch {
+        return { ok: false, message: `Ungültige Domain: ${raw.slice(0, 80)}` };
+      }
+    }
+    const host = normalizePublicCapiHostname(value);
+    if (!host) return { ok: false, message: `Ungültige Domain: ${raw.slice(0, 80)}` };
+    if (!out.includes(host)) out.push(host);
+  }
+  if (out.length === 0) {
+    return { ok: false, message: "Mindestens eine erlaubte Domain eintragen." };
+  }
+  if (out.length > PUBLIC_CAPI_MAX_HOSTNAMES) {
+    return { ok: false, message: `Höchstens ${PUBLIC_CAPI_MAX_HOSTNAMES} Domains je Schlüssel.` };
+  }
+  return { ok: true, hostnames: out };
+}
+
+export function parsePublicCapiKeyLabel(input: unknown): string {
+  return typeof input === "string" ? input.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 120) : "";
+}
+
+export type PublicCapiLogStatRow = {
+  event_name: string;
+  status: string;
+  created_at: string;
+  error_code: string | null;
+  error_reason: string | null;
+};
+
+export type PublicCapiEventStats = {
+  eventName: string;
+  last24h: number;
+  last7d: number;
+  lastReceivedAt: string | null;
+  errorRate7d: number;
+  lastError: { code: string | null; reason: string | null; at: string } | null;
+};
+
+/** Statistik je Ereignistyp (24 h / 7 Tage, letzter Eingang, Fehlerquote). */
+export function summarizePublicCapiLog(
+  rows: readonly PublicCapiLogStatRow[],
+  nowMs: number,
+): PublicCapiEventStats[] {
+  const dayAgo = nowMs - 24 * 60 * 60 * 1000;
+  const weekAgo = nowMs - 7 * 24 * 60 * 60 * 1000;
+  const byName = new Map<string, PublicCapiEventStats & { errors7d: number }>();
+  for (const row of rows) {
+    const at = Date.parse(row.created_at);
+    if (!Number.isFinite(at) || at < weekAgo || row.status === "pending") continue;
+    const stats =
+      byName.get(row.event_name) ??
+      {
+        eventName: row.event_name,
+        last24h: 0,
+        last7d: 0,
+        lastReceivedAt: null,
+        errorRate7d: 0,
+        lastError: null,
+        errors7d: 0,
+      };
+    stats.last7d += 1;
+    if (at >= dayAgo) stats.last24h += 1;
+    if (!stats.lastReceivedAt || at > Date.parse(stats.lastReceivedAt)) {
+      stats.lastReceivedAt = new Date(at).toISOString();
+    }
+    if (row.status === "meta_error" || row.status === "invalid") {
+      stats.errors7d += 1;
+      if (!stats.lastError || at > Date.parse(stats.lastError.at)) {
+        stats.lastError = {
+          code: row.error_code,
+          reason: row.error_reason,
+          at: new Date(at).toISOString(),
+        };
+      }
+    }
+    byName.set(row.event_name, stats);
+  }
+  return [...byName.values()]
+    .map(({ errors7d, ...stats }) => ({
+      ...stats,
+      errorRate7d: stats.last7d ? Math.round((errors7d / stats.last7d) * 1000) / 1000 : 0,
+    }))
+    .sort((a, b) => b.last7d - a.last7d || a.eventName.localeCompare(b.eventName));
 }
