@@ -15,6 +15,10 @@ import {
   type ConnectionPixel,
 } from "@/lib/meta/conversions-api";
 import { parsePixelEventStats } from "@/lib/meta/conversion-events";
+import {
+  publicCapiShouldRetry,
+  type PublicCapiBatchSendResult,
+} from "@/lib/meta/public-capi";
 import { createAppSecretProof, decryptAccessToken } from "@/lib/meta/crypto";
 import { META_GRAPH_VERSION } from "@/lib/meta/client";
 import { getMetaSyncEnv } from "@/lib/meta/env";
@@ -314,6 +318,75 @@ export async function sendConnectionCapiEvent(input: {
   }
 
   return lastFailure;
+}
+
+/**
+ * Batch-Versand (bis 100 Ereignisse) für die Conversions API (erweitert).
+ * Gleicher Weg wie `sendConnectionCapiEvent` (Connection-Token,
+ * appsecret_proof, META_GRAPH_VERSION); liefert zusätzlich fbtrace_id und
+ * Meta-Fehlercode. Wiederholt nur bei 429/5xx/Netzwerkfehler.
+ * `sendConnectionCapiEvent` bleibt unverändert (Funnel-Relay, Probe).
+ */
+export async function sendConnectionCapiEvents(input: {
+  credentials: ConnectionCapiCredentials;
+  pixelId: string;
+  events: Record<string, unknown>[];
+  testEventCode?: string | null;
+}): Promise<PublicCapiBatchSendResult> {
+  if (input.events.length === 0) return { status: "sent", eventsReceived: 0, attempts: 0 };
+  const url = graphEventsUrl(
+    input.pixelId,
+    input.credentials.accessToken,
+    input.credentials.appSecret,
+  );
+  const body = JSON.stringify({
+    data: input.events,
+    access_token: input.credentials.accessToken,
+    ...(input.testEventCode ? { test_event_code: input.testEventCode } : {}),
+  });
+  let last: PublicCapiBatchSendResult = { status: "failed", attempts: 0 };
+
+  for (let attempt = 0; attempt < CAPI_MAX_ATTEMPTS; attempt += 1) {
+    const delay = CAPI_RETRY_DELAYS_MS[attempt] ?? 0;
+    if (delay > 0) await sleep(delay);
+    let httpStatus: number | undefined;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${input.credentials.accessToken}`,
+        },
+        body,
+        cache: "no-store",
+        signal: AbortSignal.timeout(8_000),
+      });
+      httpStatus = response.status;
+      const parsed = parseCapiGraphResponse(await response.json().catch(() => ({})));
+      const ok =
+        response.ok &&
+        typeof parsed.eventsReceived === "number" &&
+        parsed.eventsReceived >= input.events.length;
+      last = {
+        status: ok ? "sent" : "failed",
+        httpStatus,
+        eventsReceived: parsed.eventsReceived,
+        traceId: parsed.traceId ?? parsed.error?.traceId,
+        errorCode: parsed.error?.code,
+        errorSubcode: parsed.error?.subcode,
+        errorType: parsed.error?.type,
+        attempts: attempt + 1,
+      };
+      if (ok) return last;
+    } catch {
+      last = { status: "failed", errorType: "network", attempts: attempt + 1 };
+    }
+    if (!publicCapiShouldRetry(httpStatus) || attempt === CAPI_MAX_ATTEMPTS - 1) {
+      return last;
+    }
+  }
+  return last;
 }
 
 export async function probeConnectionCapi(input: {
