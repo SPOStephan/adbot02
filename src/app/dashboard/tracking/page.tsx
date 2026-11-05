@@ -8,6 +8,7 @@ import {
 } from "@/components/DashboardPageHeader";
 import { LiveSetupChecklist } from "@/components/LiveSetupGuide";
 import { MetaPixelBinding } from "@/components/MetaPixelBinding";
+import { PublicCapiSettings } from "@/components/PublicCapiSettings";
 import { loadCustomerDashboard } from "@/lib/dashboard/load-customer-dashboard";
 import { DASHBOARD_PAGE_COPY } from "@/lib/dashboard/page-copy";
 import {
@@ -101,6 +102,8 @@ async function TrackingBody() {
           </Link>
         </div>
       </section>
+
+      <PublicCapiSettings />
     </div>
   );
 }
