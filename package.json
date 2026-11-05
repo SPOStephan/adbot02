@@ -29,7 +29,7 @@
     "test:meta-mutation-executor": "node scripts/test-meta-mutation-executor.mjs",
     "test:meta-launch-queue-resume": "node scripts/test-meta-launch-queue-resume.mjs",
     "test:meta-conversion-events": "node --experimental-strip-types scripts/test-meta-conversion-events.mjs",
-    "test:meta-public-capi": "node scripts/test-meta-public-capi.mjs",
+    "test:meta-public-capi": "node --experimental-strip-types scripts/test-meta-public-capi.mjs",
     "test:meta-customer-controls": "node scripts/test-meta-customer-controls.mjs",
     "test:campaign-assistant-brief": "node scripts/test-campaign-assistant-brief.mjs",
     "test:campaign-idea-pipeline": "node scripts/test-campaign-idea-pipeline.mjs",
