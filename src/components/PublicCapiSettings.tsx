@@ -413,6 +413,10 @@ export function PublicCapiSettings() {
           {status ? (
             <p className="mt-2 text-xs text-slate-500">
               Endpunkt: <code className="break-all">{status.endpointUrl}</code> ·{" "}
+              <a className="font-semibold underline underline-offset-2" href="/dashboard/tracking/erweiterte-messung">
+                Einrichtung
+              </a>{" "}
+              ·{" "}
               <a className="font-semibold underline underline-offset-2" href={status.docsUrl} rel="noreferrer" target="_blank">
                 API-Doku (OpenAPI)
               </a>

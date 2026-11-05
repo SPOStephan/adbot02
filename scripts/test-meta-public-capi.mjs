@@ -327,3 +327,24 @@ assert.match(ui, /\{pixel\.enabled \? \(/);
 assert.match(read("src/app/dashboard/tracking/page.tsx"), /<PublicCapiSettings \/>/);
 
 console.log("meta public capi tracking ui: ok");
+
+// ---------------------------------------------------------------------------
+// Teil 5: Kunden-Doku
+// ---------------------------------------------------------------------------
+const customerDoc = read("docs/customer/CONVERSIONS_API_ERWEITERT.md");
+const guidePage = read("src/app/dashboard/tracking/erweiterte-messung/page.tsx");
+for (const text of [customerDoc, guidePage]) {
+  assert.ok(text.includes("/api/v1/conversions/events"));
+  assert.ok(text.includes("consent"));
+  assert.ok(text.includes("eventID"), "Deduplizierung erklärt");
+  assert.ok(text.includes("DisqualifiedLead"));
+  for (const status of ["sent", "skipped_no_consent", "duplicate", "invalid", "meta_error"]) {
+    assert.ok(text.includes(status), status);
+  }
+}
+// Doku nennt genau die erlaubten Ereignisnamen.
+for (const name of allowedEventNames) assert.ok(customerDoc.includes(`\`${name}\``), `Doku: ${name}`);
+assert.match(read("src/components/PublicCapiSettings.tsx"), /href="\/dashboard\/tracking\/erweiterte-messung"/);
+assert.match(guidePage, /redirect\("\/login\?next=\/dashboard\/tracking\/erweiterte-messung"\)/);
+
+console.log("meta public capi docs: ok");
