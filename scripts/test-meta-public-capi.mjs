@@ -230,3 +230,46 @@ assert.match(connectionCapi, /export async function sendConnectionCapiEvents\(/)
 assert.ok(!read("src/app/api/internal/funnel-capi/route.ts").includes("sendConnectionCapiEvents"), "Funnel-Relay unverändert");
 
 console.log("meta public capi send logic: ok");
+
+// ---------------------------------------------------------------------------
+// Teil 3: Endpunkt, Cron, OpenAPI (statisch)
+// ---------------------------------------------------------------------------
+const route = read("src/app/api/v1/conversions/events/route.ts");
+const service = read("src/lib/meta/public-capi-service.ts");
+// Ebene 1: ohne Env-Flag 404 vor jeder Verarbeitung.
+assert.match(service, /process\.env\.ADBOT_PUBLIC_CAPI_ENABLED === "true"/);
+assert.match(route, /export async function POST[\s\S]*?if \(!publicCapiEndpointEnabled\(\)\) return notFound\(\);/);
+assert.ok(!/Access-Control-Allow/i.test(route), "kein CORS");
+// Ebene 2: Schalter je Pixel + bestätigter Pixel.
+assert.match(service, /toggle\.enabled !== true/);
+assert.match(service, /pixel\.status !== "CONFIRMED"/);
+assert.match(service, /\.is\("revoked_at", null\)/);
+// Bestehender Versandweg, kein zweiter.
+assert.match(service, /sendConnectionCapiEvents\(/);
+assert.ok(!service.includes("graph.facebook.com"), "kein eigener Graph-Aufruf");
+// Keine Rohdaten in Logs/DB: Protokoll nur über publicCapiLogRow, kein Logging von Body/Schlüssel.
+for (const call of (service + route).match(/console\.\w+\([^;]*\);/g) ?? []) {
+  assert.match(call, /^console\.\w+\("[^"]*"\);$/, `Logging nur mit festem Text: ${call}`);
+}
+assert.ok(!/insert\((?!row\)|auditRows\))/.test(service), "Protokoll nur aus publicCapiLogRow");
+// Idempotenz + Rate-Limit.
+assert.match(service, /error\?\.code !== "23505"/);
+assert.match(service, /meta_capi_rate_limit_hit/);
+// Cron.
+const vercel = JSON.parse(read("vercel.json"));
+assert.ok(vercel.crons.some((c) => c.path === "/api/cron/conversion-events-cleanup"));
+assert.match(read("src/app/api/cron/conversion-events-cleanup/route.ts"), /constantTimeEqual\(supplied, `Bearer \$\{cronSecret\}`\)/);
+// OpenAPI passt zur Logik.
+const spec = JSON.parse(read("public/api-docs/conversions-v1.openapi.json"));
+const op = spec.paths["/api/v1/conversions/events"].post;
+assert.equal(op.requestBody.content["application/json"].schema.properties.events.maxItems, lib.PUBLIC_CAPI_MAX_EVENTS_PER_REQUEST);
+assert.deepEqual(
+  op.responses["200"].content["application/json"].schema.properties.events.items.properties.status.enum,
+  ["sent", "skipped_no_consent", "duplicate", "invalid", "meta_error"],
+);
+assert.deepEqual(
+  spec.components.schemas.Event.properties.action_source.enum,
+  [...lib.PUBLIC_CAPI_ACTION_SOURCES],
+);
+
+console.log("meta public capi endpoint: ok");
