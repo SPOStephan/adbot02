@@ -1,0 +1,606 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Adbot Conversions API (erweitert)",
+    "version": "1.0.0",
+    "description": "Server-zu-Server-Endpunkt für Conversion-Ereignisse externer Kunden-Websites. Adbot leitet sie über die bestehende Meta-Verbindung an den bestätigten Pixel weiter (kein eigener Meta-Zugriffsschlüssel nötig). Browser-Aufrufe (CORS) werden nicht unterstützt."
+  },
+  "servers": [
+    {
+      "url": "https://app.adbot.one"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "eventKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Ereignis-Schlüssel adb_ev_live_… oder adb_ev_test_… (Test-Schlüssel nur mit test_event_code)."
+      }
+    },
+    "schemas": {
+      "Event": {
+        "type": "object",
+        "required": [
+          "event_name",
+          "event_id",
+          "consent"
+        ],
+        "properties": {
+          "event_name": {
+            "type": "string",
+            "description": "Standard-Ereignis aus der Adbot-Ereignis-Tabelle (z. B. Lead, CompleteRegistration, Purchase, Subscribe) oder DisqualifiedLead"
+          },
+          "event_id": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Pflicht. Gleich wie eventID im Browser-Pixel für die Deduplizierung."
+          },
+          "event_time": {
+            "type": "integer",
+            "description": "Unix-Sekunden, höchstens 7 Tage alt. Standard: jetzt."
+          },
+          "action_source": {
+            "type": "string",
+            "enum": [
+              "website",
+              "system_generated",
+              "email",
+              "app",
+              "phone_call",
+              "chat",
+              "physical_store",
+              "business_messaging",
+              "other"
+            ],
+            "default": "website"
+          },
+          "event_source_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Pflicht bei website. Host muss zu den erlaubten Domains des Schlüssels passen (Subdomains erlaubt)."
+          },
+          "consent": {
+            "type": "object",
+            "required": [
+              "marketing"
+            ],
+            "properties": {
+              "marketing": {
+                "type": "boolean",
+                "description": "Nur bei true wird an Meta gesendet."
+              }
+            }
+          },
+          "user_data": {
+            "type": "object",
+            "description": "Rohwerte werden von Adbot normalisiert und per SHA-256 gehasht, bereits gehashte Werte (64 hex) bleiben unverändert. Nichts davon wird gespeichert.",
+            "properties": {
+              "email": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "em": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "phone": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "ph": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "first_name": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "fn": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "last_name": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "ln": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "city": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "ct": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "state": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "st": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "zip": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "zp": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "country": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "gender": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "ge": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "date_of_birth": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "db": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "external_id": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  }
+                ]
+              },
+              "client_ip_address": {
+                "type": "string"
+              },
+              "client_user_agent": {
+                "type": "string",
+                "description": "Pflicht bei action_source=website"
+              },
+              "fbp": {
+                "type": "string"
+              },
+              "fbc": {
+                "type": "string"
+              }
+            }
+          },
+          "custom_data": {
+            "type": "object",
+            "description": "Max. 8 KB. value verlangt currency (ISO 4217).",
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "content_name": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          },
+          "original_event_data": {
+            "type": "object",
+            "description": "Für Qualitäts-Rückmeldungen (z. B. Subscribe oder DisqualifiedLead zu einem früheren Lead).",
+            "required": [
+              "event_name"
+            ],
+            "properties": {
+              "event_name": {
+                "type": "string"
+              },
+              "event_id": {
+                "type": "string"
+              },
+              "event_time": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "eventKey": []
+    }
+  ],
+  "paths": {
+    "/api/v1/conversions/events": {
+      "post": {
+        "summary": "Conversion-Ereignisse senden",
+        "operationId": "sendConversionEvents",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "events"
+                ],
+                "properties": {
+                  "test_event_code": {
+                    "type": "string",
+                    "description": "Meta-Testcode aus dem Events Manager"
+                  },
+                  "events": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "$ref": "#/components/schemas/Event"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ergebnis je Ereignis",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "test": {
+                      "type": "boolean"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "sent",
+                              "skipped_no_consent",
+                              "duplicate",
+                              "invalid",
+                              "meta_error"
+                            ]
+                          },
+                          "event_name": {
+                            "type": "string"
+                          },
+                          "event_id": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "oneOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "fbtrace_id": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Anfrage ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Schlüssel fehlt/ungültig/widerrufen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Option für den Pixel nicht zugeschaltet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Endpunkt nicht aktiviert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body größer als 1 MB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate-Limit (1000 Ereignisse/Minute je Schlüssel)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Vorübergehend nicht verfügbar, später erneut senden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
